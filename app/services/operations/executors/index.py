@@ -26,7 +26,7 @@ from app.core.borg_router import BorgRouter
 from app.database.models import Archive, Repository, SystemSettings, utc_now
 from app.services.operations import executors
 from app.services.operations.backup_facade import (
-    link_archive_to_backup,
+    link_archives_to_backups,
     take_added_sizes,
 )
 from app.services.operations.followups import (
@@ -116,6 +116,7 @@ def apply_listing(
     }
     seen: set[str] = set()
     new_rows: list[Archive] = []
+    listed: list[Archive] = []
     now = utc_now()
     prefixes = series_prefixes_for_repository(db, repository)
     for entry in entries:
@@ -131,7 +132,6 @@ def apply_listing(
         row = existing.get(fields["borg_id"])
         if row is None:
             row = Archive(repository_id=repository.id, first_seen_at=now, **fields)
-            link_archive_to_backup(db, row)
             db.add(row)
             new_rows.append(row)
         else:
@@ -146,6 +146,7 @@ def apply_listing(
                 if key == "series" and value != row.series:
                     row.history_state = "pending"
                 setattr(row, key, value)
+        listed.append(row)
         # Every row one listing saw shares its newest stamp, which is how
         # readers tell them from rows it did not see: always advance it,
         # including when the wall clock moves backward.
@@ -155,11 +156,11 @@ def apply_listing(
             else now
         )
     removed = [a.id for borg_id, a in existing.items() if borg_id not in seen]
+    # also rows stored before their backup ended, or before it could be linked
+    link_archives_to_backups(db, repository.id, listed, borg2=is_borg2(repository))
     if is_borg2(repository):
         # also rows listed before their backup's figure was taken over
-        take_added_sizes(
-            db, new_rows + [a for borg_id, a in existing.items() if borg_id in seen]
-        )
+        take_added_sizes(db, listed)
     db.commit()
     for row in new_rows:
         db.refresh(row)

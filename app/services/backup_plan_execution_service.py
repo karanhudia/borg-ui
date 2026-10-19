@@ -604,6 +604,12 @@ def _remote_script_body(script: str, env: dict[str, str]) -> str:
 
 
 class BackupPlanExecutionService:
+    def __init__(self) -> None:
+        # Runs this process started and is still executing: the startup sweep
+        # (`cleanup_orphaned_jobs`) runs once the runner holds its lease and
+        # must not fail them as interrupted by the restart (#1398).
+        self.live_run_ids: set[int] = set()
+
     @staticmethod
     def _next_plan_run(plan: BackupPlan, now: datetime) -> Optional[datetime]:
         """Return the next due time for either scheduling mode."""
@@ -865,8 +871,14 @@ class BackupPlanExecutionService:
             )
 
         db.commit()
-        asyncio.create_task(self.execute_run(run.id))
+        self._launch(run.id)
         return run.id
+
+    def _launch(self, run_id: int) -> None:
+        task = asyncio.create_task(self.execute_run(run_id))
+        if asyncio.isfuture(task):  # not a test's patched create_task
+            self.live_run_ids.add(run_id)
+            task.add_done_callback(lambda _task: self.live_run_ids.discard(run_id))
 
     def retry_failed_run(
         self,
@@ -986,7 +998,7 @@ class BackupPlanExecutionService:
             )
         )
         db.commit()
-        asyncio.create_task(self.execute_run(retry_run.id))
+        self._launch(retry_run.id)
         return retry_run.id
 
     async def execute_run(self, run_id: int) -> None:

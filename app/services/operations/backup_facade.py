@@ -753,34 +753,93 @@ def _nearest_start(rows, anchor):
     return min(rows, key=lambda r: (abs(r.start - anchor), -r.id))
 
 
-def link_archive_to_backup(db: Session, archive: Archive) -> None:
-    """Record which backup made a newly listed archive (spec 6.4).
+def failed_after_create(status: Optional[str], error_message: Optional[str]) -> bool:
+    """Whether a backup ended failed although its `borg create` succeeded,
+    which only a post-backup hook failure reports (POST_CREATE_FAILURE_KEYS)."""
+    if status != "failed":
+        return False
+    try:
+        parsed = json.loads(error_message or "")
+    except (TypeError, ValueError):
+        return False
+    key = parsed.get("key") if isinstance(parsed, dict) else None
+    return isinstance(key, str) and key in POST_CREATE_FAILURE_KEYS
 
-    Borg reports no operation id, so the match is by name: the completed
-    backup in the repository with that archive name that no stored archive
-    claims yet, nearest in start time when a Borg 2 series repeats the name.
+
+def link_archives_to_backups(
+    db: Session, repository_id: int, archives: list[Archive], *, borg2: bool
+) -> None:
+    """Record which backup made each listed archive that has none (spec 6.4).
+
+    A backup that recorded the id `borg create --json` reported made that
+    archive, whatever its final status. A Borg 2 series repeats names, so a
+    Borg 2 archive is matched by that id only. A Borg 1 name is unique in
+    its repository, so a Borg 1 backup without an id is matched by name when
+    its `borg create` succeeded, the nearest start first. A backup no stored
+    archive claims yet, and one claim each. Rows stored before their backup
+    ended are linked by a later listing, so the backups are read for the
+    unlinked rows in chunks rather than once per row.
     """
-    claimed = db.query(Archive.backup_operation_id).filter(
-        Archive.repository_id == archive.repository_id,
-        Archive.backup_operation_id.isnot(None),
-    )
-    candidates = (
-        db.query(Operation.id, Operation.started_at.label("start"))
+    unlinked = [a for a in archives if a.backup_operation_id is None]
+    if not unlinked:
+        return
+    claimed = {
+        operation_id
+        for (operation_id,) in db.query(Archive.backup_operation_id).filter(
+            Archive.repository_id == repository_id,
+            Archive.backup_operation_id.isnot(None),
+        )
+    }
+    query = (
+        db.query(
+            Operation.id,
+            Operation.started_at.label("start"),
+            Operation.status,
+            Operation.error_message,
+            OperationBackupDetails.archive_name,
+            OperationBackupDetails.archive_id,
+        )
         .join(
             OperationBackupDetails, OperationBackupDetails.operation_id == Operation.id
         )
         .filter(
-            Operation.repository_id == archive.repository_id,
+            Operation.repository_id == repository_id,
             Operation.kind == "backup",
-            Operation.status.in_(("completed", "completed_with_warnings")),
-            Operation.started_at.isnot(None),
-            OperationBackupDetails.archive_name == archive.name,
-            Operation.id.notin_(claimed),
         )
-        .all()
     )
-    if candidates:
-        archive.backup_operation_id = _nearest_start(candidates, archive.start).id
+    lookups = [(OperationBackupDetails.archive_id, {a.borg_id for a in unlinked})]
+    if not borg2:
+        lookups.append(
+            (OperationBackupDetails.archive_name, {a.name for a in unlinked})
+        )
+    by_id: dict = {}
+    by_name: dict = {}
+    for column, values in lookups:
+        values = sorted(values)
+        for start in range(0, len(values), IN_CHUNK):
+            for row in query.filter(column.in_(values[start : start + IN_CHUNK])):
+                if row.id in claimed:
+                    continue
+                if row.archive_id:
+                    # it made the archive it recorded, and no other
+                    by_id.setdefault(row.archive_id, row)
+                elif row.start is not None and (
+                    row.status in ("completed", "completed_with_warnings")
+                    or failed_after_create(row.status, row.error_message)
+                ):
+                    by_name.setdefault(row.archive_name, {})[row.id] = row
+    for archive in unlinked:
+        row = by_id.get(archive.borg_id)
+        if row is None or row.id in claimed:
+            candidates = [
+                row
+                for row in by_name.get(archive.name, {}).values()
+                if row.id not in claimed
+            ]
+            row = _nearest_start(candidates, archive.start) if candidates else None
+        if row is not None:
+            archive.backup_operation_id = row.id
+            claimed.add(row.id)
 
 
 def take_added_sizes(db: Session, archives: list[Archive]) -> None:
@@ -814,8 +873,8 @@ def take_added_sizes(db: Session, archives: list[Archive]) -> None:
 def archive_borg_id_for(db: Session, job: "BackupJobFacade") -> Optional[str]:
     """The stored archive's borg id for a backup, or None if none is stored.
 
-    The sync links each new archive to its backup; rows stored before that
-    link existed fall back to the same-name row nearest the job's start.
+    The sync links each listed archive to its backup; rows it cannot link
+    fall back to the same-name row nearest the job's start.
     `Archive.name` is the full name for both Borg versions.
     """
     return archive_borg_ids_for(db, [job])[job.id]

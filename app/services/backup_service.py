@@ -39,7 +39,10 @@ from app.services.filesystem_snapshot_service import (
     build_filesystem_snapshot_plans,
 )
 from app.utils.borg_flags import parse_borg_flags
-from app.utils.fs import remove_tree_without_crossing_mounts
+from app.utils.fs import (
+    mount_points_covering,
+    remove_tree_without_crossing_mounts,
+)
 from app.utils.ssh_paths import resolve_sshfs_source_path
 from app.utils.source_locations import (
     decode_source_locations,
@@ -126,6 +129,24 @@ def _uses_remote_execution(job) -> bool:
     return (job.execution_mode or "").strip().lower() in REMOTE_EXECUTION_MODES or (
         job.route_strategy or ""
     ).strip().lower() == "remote_direct"
+
+
+def _restore_canary_error(key: str, **params: str) -> RuntimeError:
+    """Source preparation failure carrying a translatable error key."""
+    return RuntimeError(
+        json.dumps({"key": f"backend.errors.service.{key}", "params": params})
+    )
+
+
+def _remote_path_of_mount(mount_point: str, temp_root: str) -> str:
+    """Remote path an SSHFS mount under the shared temp root stands for."""
+    for root in (os.path.abspath(temp_root), os.path.realpath(temp_root)):
+        relative = os.path.relpath(mount_point, root)
+        if relative == ".":
+            return "/"
+        if relative != ".." and not relative.startswith("../"):
+            return "/" + relative
+    return mount_point
 
 
 class BackupService:
@@ -1047,11 +1068,42 @@ class BackupService:
                 if canary_archive_path and shared_ssh_temp_root:
                     source = Path(local_path)
                     target = Path(shared_ssh_temp_root) / canary_archive_path
+                    # An SSH source mounted at or above the target (remote "/"
+                    # mounts at the temp root) puts it on the source host.
+                    covering = mount_points_covering(str(target), shared_ssh_temp_root)
+                    if covering is None:
+                        logger.error(
+                            "Refusing to stage restore canary: mount table unavailable",
+                            staged_path=str(target),
+                            job_id=job_id,
+                        )
+                        raise _restore_canary_error(
+                            "restoreCanaryMountTableUnavailable"
+                        )
+                    if covering:
+                        remote_path = _remote_path_of_mount(
+                            covering[0], shared_ssh_temp_root
+                        )
+                        logger.error(
+                            "Refusing to stage restore canary inside an SSH source mount",
+                            staged_path=str(target),
+                            mount_point=covering[0],
+                            remote_path=remote_path,
+                            job_id=job_id,
+                        )
+                        raise _restore_canary_error(
+                            "restoreCanaryInsideSshMount", remotePath=remote_path
+                        )
                     target.parent.mkdir(parents=True, exist_ok=True)
                     # The SSHFS mounts live under the same root.
                     if not remove_tree_without_crossing_mounts(str(target)):
-                        raise RuntimeError(
-                            f"Could not replace staged restore canary: {target}"
+                        logger.error(
+                            "Could not replace staged restore canary",
+                            staged_path=str(target),
+                            job_id=job_id,
+                        )
+                        raise _restore_canary_error(
+                            "restoreCanaryReplaceFailed", path=str(target)
                         )
                     if source.is_dir():
                         shutil.copytree(source, target)
