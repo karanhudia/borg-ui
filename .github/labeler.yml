@@ -1,0 +1,65 @@
+# Pull request labels applied by .github/workflows/labeler.yml.
+#
+# destructive-path: the pull request changes a file that deletes or overwrites
+# data on a backup source, a repository or a host. Such a pull request needs a
+# test proving nothing outside the expected path is touched, and a second
+# reviewer before merge. The label asks the reviewer to check; it does not
+# claim the change is destructive. Not covered: temporary files and directories
+# the app creates and removes itself (key files, download and restore-check
+# staging), log rotation and job-history retention.
+#
+# tests/unit/test_labeler_config.py fails when a glob here matches no tracked
+# file, so update this list in the pull request that renames or removes one.
+destructive-path:
+  - changed-files:
+      - any-glob-to-any-file:
+          # The gate itself
+          - .github/labeler.yml
+          - .github/workflows/labeler.yml
+          # SSHFS source temp root cleanup, restore canary staging
+          - app/utils/fs.py
+          - app/services/mount_service.py
+          - app/services/backup_service.py
+          # Database dump cleanup and rotation on source hosts
+          - app/api/source_discovery.py
+          - app/app_templates/*.sh
+          # Archive delete, repository wipe, prune, compact: endpoints, schedules,
+          # executors and services
+          - app/api/archives.py
+          - app/api/v2/archives.py
+          - app/api/v2/backups.py
+          - app/api/schedule.py
+          - app/services/delete_archive_service.py
+          - app/services/v2/delete_archive_service.py
+          - app/services/repository_wipe_service.py
+          - app/services/prune_service.py
+          - app/services/compact_service.py
+          - app/services/v2/prune_service.py
+          - app/services/v2/compact_service.py
+          - app/services/operations/executors/maintenance.py
+          - app/services/operations/executors/wipe.py
+          # Borg command dispatch on the server and the agent; lock breaking
+          - app/core/borg_router.py
+          - app/core/borg.py
+          - app/core/borg2.py
+          - app/utils/process_utils.py
+          - agent/borg_ui_agent/repository_ops.py
+          # Repository endpoints: permanent delete, wipe, prune, compact, rclone,
+          # break-lock
+          - app/api/repositories.py
+          # rclone mirror sync and hydrate
+          - app/services/rclone_repository_service.py
+          - app/services/rclone_service.py
+          - app/services/operations/executors/rclone.py
+          # Restore, including restore into existing files
+          - app/api/restore.py
+          - app/services/restore_service.py
+          - app/services/v2/restore_service.py
+          - app/services/operations/executors/restore.py
+          # Agent install, upgrade and uninstall scripts
+          - app/api/agent_installer.py
+          # Server install and upgrade, container start (key and SSH directories)
+          - scripts/install.sh
+          - entrypoint.sh
+          # Filesystem snapshot delete (btrfs, ZFS)
+          - app/services/filesystem_snapshot_service.py
