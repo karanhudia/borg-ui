@@ -790,6 +790,41 @@ def _sync_backup_progress(agent_job: AgentJob, backup_job) -> None:
     )
 
 
+def _sync_running_backup_progress(agent_job: AgentJob, backup_job) -> None:
+    """A progress report on a backup: `running` and the figures, unless the
+    operation already carries a verdict, as for the maintenance jobs
+    (`_sync_repository_operation_progress`, #1366). The backup executor
+    reads the operation once the agent job is final and fails a backup it
+    finds `running` with "backup returned no result" (#1404)."""
+    if backup_job.operation.status in TERMINAL_STATUSES:
+        return
+    backup_job.status = "running"
+    _sync_backup_progress(agent_job, backup_job)
+
+
+def _claim_progress_write(job: AgentJob, db: Session) -> bool:
+    """Guarded write, ahead of every other write of a progress report. The
+    outcome travels apart from the report (REST /complete, recorded in a
+    worker thread with its own session), so it may have been committed since
+    this handler loaded the job. As in `_claim_terminal_transition`, the
+    WHERE guard decides on the row, not on this copy: a job that is final by
+    now keeps its outcome, the final archive counters included, and the
+    report writes nothing. A job still active stays locked until the report
+    commits, so a completion recorded meanwhile lands after it (#1404)."""
+    claimed = (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.id == job.id,
+            AgentJob.status.notin_(FINAL_AGENT_JOB_STATUSES),
+        )
+        .update({AgentJob.updated_at: _now_utc()}, synchronize_session=False)
+    )
+    if not claimed:
+        db.expire(job)
+        return False
+    return True
+
+
 def _finish_linked_backup_job(
     agent_job: AgentJob,
     db: Session,
@@ -1125,6 +1160,8 @@ def _apply_agent_job_progress(
 ) -> None:
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return
+    if not _claim_progress_write(job, db):
+        return
     percent = progress.get("progress_percent")
     if percent is not None and not _is_finite_number(percent):
         # infinity or NaN cannot be stored or served as a percentage
@@ -1137,8 +1174,7 @@ def _apply_agent_job_progress(
         job.progress = progress
     backup_job = _get_linked_backup_job(job, db)
     if backup_job:
-        backup_job.status = "running"
-        _sync_backup_progress(job, backup_job)
+        _sync_running_backup_progress(job, backup_job)
     else:
         _sync_repository_operation_progress(job, db)
     job.updated_at = _now_utc()
@@ -2071,6 +2107,9 @@ async def update_job_progress(
 ):
     job = _get_agent_job(job_id, current_agent, db)
     _reject_final_job(job)
+    if not _claim_progress_write(job, db):
+        db.commit()
+        return AgentJobStatusResponse(id=job.id, status=job.status)
 
     progress = payload.model_dump(exclude_none=True)
     for field_name, value in progress.items():
@@ -2080,8 +2119,7 @@ async def update_job_progress(
         job.progress = progress
     backup_job = _get_linked_backup_job(job, db)
     if backup_job:
-        backup_job.status = "running"
-        _sync_backup_progress(job, backup_job)
+        _sync_running_backup_progress(job, backup_job)
     else:
         _sync_repository_operation_progress(job, db)
     job.updated_at = _now_utc()

@@ -1278,21 +1278,42 @@ def cancel_agent_backup_job(
         )
 
     now = now or datetime.utcnow()
-    if agent_job.status == "queued":
-        agent_job.status = "canceled"
-        agent_job.completed_at = now
-        backup_job.status = "cancelled"
-        backup_job.completed_at = now
-    elif agent_job.status in ("claimed", "running", "cancel_requested"):
-        agent_job.status = "cancel_requested"
-        backup_job.status = "running"
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"key": "backend.errors.backup.canOnlyCancelRunningJobs"},
+    for _ in range(ABANDON_ATTEMPTS):
+        observed = agent_job.status
+        if observed == "queued":
+            values = {
+                AgentJob.status: "canceled",
+                AgentJob.completed_at: now,
+                AgentJob.updated_at: now,
+            }
+        elif observed in ("claimed", "running", "cancel_requested"):
+            values = {AgentJob.status: "cancel_requested", AgentJob.updated_at: now}
+        else:
+            break
+        # Conditional on the status just read, as for maintenance
+        # (`_request_agent_cancel`): the completion is recorded in a worker
+        # thread with its own session and may have committed since this copy
+        # was read, and a final job keeps its outcome. A claim between read
+        # and write still gets the cancel, so a lost race reads again.
+        changed = (
+            db.query(AgentJob)
+            .filter(AgentJob.id == agent_job.id, AgentJob.status == observed)
+            .update(values, synchronize_session=False)
         )
-    agent_job.updated_at = now
-    return agent_job, False
+        if not changed:
+            db.expire(agent_job)
+            continue
+        db.refresh(agent_job)
+        if observed == "queued":
+            backup_job.status = "cancelled"
+            backup_job.completed_at = now
+        else:
+            backup_job.status = "running"
+        return agent_job, False
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={"key": "backend.errors.backup.canOnlyCancelRunningJobs"},
+    )
 
 
 async def wait_for_agent_backup_job(
@@ -1311,8 +1332,14 @@ async def wait_for_agent_backup_job(
             return "failed"
 
         if is_cancelled() and agent_job.status not in TERMINAL_AGENT_STATUSES:
-            cancel_agent_backup_job(db, backup_job)
-            db.commit()
+            try:
+                cancel_agent_backup_job(db, backup_job)
+            except HTTPException:
+                # The job became final since it was read: the rollback
+                # expires this copy, and the check below reads the outcome.
+                db.rollback()
+            else:
+                db.commit()
 
         if agent_job.status in TERMINAL_AGENT_STATUSES:
             return backup_job.status or (
