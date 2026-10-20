@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 import structlog
@@ -12,8 +12,28 @@ from app.services.agent_connection_manager import agent_connection_manager
 logger = structlog.get_logger()
 
 
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def agent_job_attempt(job: AgentJob) -> Optional[int]:
+    """The run of `job` the agent is working on: its claim time in whole
+    microseconds since the epoch, or None while no run holds it.
+
+    Each dispatch claims the job anew and a requeue clears the claim, so a
+    line the agent sends with an older value is from a run that was given
+    up (#1383). Kept on the existing column, so it needs no schema change.
+    """
+    claimed_at = job.claimed_at
+    if claimed_at is None:
+        return None
+    if claimed_at.tzinfo is None:
+        # SQLite hands the stored naive UTC value back without a zone.
+        claimed_at = claimed_at.replace(tzinfo=timezone.utc)
+    return (claimed_at - _EPOCH) // timedelta(microseconds=1)
 
 
 def agent_job_kind(job: AgentJob) -> str:
@@ -81,6 +101,7 @@ async def dispatch_agent_job_if_connected(
             job_id=job.id,
             timeout_seconds=timeout_seconds,
             wait_for_result=False,
+            attempt=agent_job_attempt(job),
         )
     except Exception as exc:
         # Back on the queue, unless a cancel landed meanwhile.

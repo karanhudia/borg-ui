@@ -407,6 +407,20 @@ The first implementation supports:
   directories where it found `borg`, `borg2` and `rclone` to the launchd jobs'
   PATH, in the installer's PATH order, so a Borg installed outside the fixed
   directories (a pipx `~/.local/bin`, say) is the one the agent runs (#1290)
+- from 0.1.21 a session agent (`run`; not the `once` polling path) keeps a
+  job's outcome until the server has acknowledged it, retrying while the
+  server is away, and lists such a job in `running_job_ids`, so the server
+  does not run a finished job again (#1377);
+  the outcome lives in the agent process, so a restart before the server is
+  back still loses it; before its first hello the agent ends the process
+  groups a dead agent process left running (launchd stops only the agent's
+  own group), recorded in `children/` beside the config; the session
+  heartbeat lists the jobs the process runs;
+  and every log line of a session job carries the attempt the server
+  dispatched, so a line of an earlier run is not stored as the retry's
+  (#1383). It also carries #1387: a
+  job naming a present but falsey Borg major (`0`, `""`) is refused instead of
+  run as Borg 1
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing

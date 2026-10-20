@@ -1382,9 +1382,10 @@ def test_session_runtime_sends_app_heartbeat_while_idle(monkeypatch):
     )
     runtime.run_session(max_messages=1)
 
-    # hello first, then the idle heartbeat; the protocol ping is also sent.
+    # hello first, then the idle heartbeat with the jobs this process runs
+    # (none); the protocol ping is also sent.
     assert socket.sent[0]["type"] == "hello"
-    assert {"type": "heartbeat"} in socket.sent
+    assert {"type": "heartbeat", "running_job_ids": []} in socket.sent
     assert socket.pings >= 1
     # Both writes ran under the full session timeout, not the recv poll interval.
     assert set(socket.send_timeouts) == {30}
@@ -2041,7 +2042,7 @@ def test_session_runtime_sends_ping_on_idle_recv_timeout(monkeypatch):
     # Idle recv timeout now emits an app-level heartbeat before the ping, so the
     # command handshake follows it.
     assert socket.sent[0]["type"] == "hello"
-    assert socket.sent[1] == {"type": "heartbeat"}
+    assert socket.sent[1] == {"type": "heartbeat", "running_job_ids": []}
     assert socket.sent[2]["type"] == "command_ack"
     assert socket.sent[3]["type"] == "command_result"
 
@@ -2111,14 +2112,14 @@ def test_session_runtime_resets_backoff_after_healthy_session(monkeypatch):
 
 
 @pytest.mark.unit
-def test_runtime_run_forever_uses_websocket_session(monkeypatch):
+def test_runtime_run_forever_uses_websocket_session(monkeypatch, tmp_path):
     from agent.borg_ui_agent import session as session_module
 
     calls = []
 
     class FakeSessionRuntime:
-        def __init__(self, config):
-            calls.append(("init", config))
+        def __init__(self, config, *, children_dir=None):
+            calls.append(("init", config, children_dir))
 
         def run_forever(
             self,
@@ -2139,14 +2140,14 @@ def test_runtime_run_forever_uses_websocket_session(monkeypatch):
     monkeypatch.setattr(session_module, "AgentSessionRuntime", FakeSessionRuntime)
     config = AgentConfig("https://borgui.example.com", "agt_123", "secret")
 
-    AgentRuntime(config).run_forever(
+    AgentRuntime(config, children_dir=tmp_path).run_forever(
         max_iterations=2,
         initial_backoff_seconds=3,
         max_backoff_seconds=9,
     )
 
     assert calls == [
-        ("init", config),
+        ("init", config, tmp_path),
         ("run_forever", 2, 3, 9),
     ]
 

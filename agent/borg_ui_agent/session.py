@@ -9,15 +9,25 @@ import threading
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse, urlunparse
 
 from agent.borg_ui_agent import __version__
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
 from agent.borg_ui_agent.cancel import SELF_CANCELLING_JOB_KINDS
-from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
+from agent.borg_ui_agent.children import ChildRegistry, install
+from agent.borg_ui_agent.client import (
+    AGENT_AUTH_HEADER,
+    REFUSED,
+    RETRY,
+    UNANSWERED,
+    AgentClient,
+    report_answer,
+)
 from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import FilesystemBrowseError, browse_filesystem
+from agent.borg_ui_agent.outcomes import KeptOutcomes
 from agent.borg_ui_agent.runtime import get_capabilities, get_job_handler
 from agent.borg_ui_agent.scripts import list_allowed_scripts
 from agent.borg_ui_agent.self_upgrade import check_self_upgrade
@@ -41,6 +51,18 @@ except Exception:  # pragma: no cover - only used when optional dep is unavailab
 OUTBOX_POLL_SECONDS = 1.0
 # How often an idle session emits its application heartbeat + protocol ping.
 KEEPALIVE_INTERVAL_SECONDS = 30.0
+# How long an outcome the server did not take waits before the next delivery,
+# doubling up to the maximum while the server stays away.
+OUTCOME_RETRY_INITIAL_SECONDS = 1.0
+OUTCOME_RETRY_MAX_SECONDS = 60.0
+# How long the server may answer a kept outcome with an error it might lift
+# (5xx, 401, 403, 408, 429) before a plain failure takes its place: as long as
+# its reaper waits for a silent job (AGENT_JOB_REAP_AFTER). A server that does
+# not answer at all is waited for without a limit.
+OUTCOME_RETRY_LIMIT_SECONDS = 15 * 60
+# How much of a refused report's error ends up in the failure sent instead.
+REFUSED_MESSAGE_LIMIT = 500
+DELIVERED = "delivered"
 # Outbox capacity. Frames are drained once per poll interval, so this only fills
 # up if the socket has stopped accepting writes; frames are then dropped rather
 # than growing without bound.
@@ -81,6 +103,83 @@ def _open_tcp_connection(host: str, port: int, timeout_seconds: float) -> None:
     connection.close()
 
 
+def _send_outcome(
+    client: AgentClient, job_id: int, kind: str, body: dict[str, Any]
+) -> None:
+    """Report a kept job outcome over the REST job API."""
+    if kind == "complete":
+        client.complete_job(job_id, result=body.get("result") or {})
+    elif kind == "fail":
+        client.fail_job(job_id, **body)
+    elif kind == "cancel":
+        client.cancel_job(job_id)
+    elif kind == "refused":
+        client.fail_job(job_id, error_message=body["error_message"])
+    else:  # pragma: no cover - written by this module only
+        raise ValueError(f"unknown outcome kind {kind!r}")
+
+
+def _deliver_kept_outcome(
+    client: AgentClient,
+    store: KeptOutcomes,
+    job_id: int,
+    kind: str,
+    body: dict[str, Any],
+) -> str:
+    """Send an outcome `store` keeps and settle it by the answer. Returns
+    DELIVERED, or the report_answer of a report that did not settle it (the
+    outcome stays for the next attempt)."""
+    try:
+        _send_outcome(client, job_id, kind, body)
+    except Exception as exc:  # noqa: BLE001 - classified below
+        answer = report_answer(exc)
+        if answer == UNANSWERED:
+            return answer
+        reason = "refused the agent's report"
+        if answer == RETRY:
+            now = time.time()
+            if now - store.retrying_since(job_id, now) < OUTCOME_RETRY_LIMIT_SECONDS:
+                return answer
+            # Kept, the report would keep the job listed, and so active
+            # with its repository held, for good.
+            answer = REFUSED
+            reason = (
+                f"did not take the agent's report for "
+                f"{OUTCOME_RETRY_LIMIT_SECONDS // 60} minutes"
+            )
+        if answer == REFUSED and kind in ("complete", "fail"):
+            # The server or a proxy will never take this report, yet the
+            # job must still end rather than run again: a plain failure
+            # takes its place.
+            logger.warning(
+                "Server %s for job %s; reporting a failure instead: %s",
+                reason,
+                job_id,
+                exc,
+            )
+            store.keep(
+                job_id,
+                "refused",
+                {
+                    "error_message": (f"The server {reason}: {exc}")[
+                        :REFUSED_MESSAGE_LIMIT
+                    ]
+                },
+            )
+            return REFUSED
+        logger.warning("Dropped the outcome of job %s: %s", job_id, exc)
+    store.acknowledge(job_id)
+    return DELIVERED
+
+
+def _parse_attempt(value: Any) -> Optional[int]:
+    """The attempt the server named for a job, or None (a server before it
+    sends none, and a malformed one is not echoed)."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return None
+
+
 class SessionCommandClient:
     """Command-scoped client handed to a job handler in a worker thread.
 
@@ -99,6 +198,9 @@ class SessionCommandClient:
         artifact_uploader: Optional[Callable[[int, Any], dict[str, Any]]] = None,
         http_client: Optional[AgentClient] = None,
         http_lock: Optional[threading.Lock] = None,
+        kept_outcomes: Optional[KeptOutcomes] = None,
+        attempt: Optional[int] = None,
+        on_outcome_pending: Optional[Callable[[], None]] = None,
     ):
         self.command_id = command_id
         self.job_id = job_id
@@ -116,6 +218,13 @@ class SessionCommandClient:
         # serialized under http_lock.
         self._http_client = http_client
         self._http_lock = http_lock or threading.Lock()
+        # Keeps a terminal outcome until the server acknowledges it; the
+        # session runtime redelivers what is left (on_outcome_pending).
+        self._kept_outcomes = kept_outcomes
+        self._on_outcome_pending = on_outcome_pending
+        # The run of the job the server dispatched, echoed with every log
+        # line so the server can drop a line of an earlier run (#1383).
+        self.attempt = attempt
 
     def upload_artifact(self, job_id: int, data: Any) -> dict[str, Any]:
         """Stream a binary job artifact to the server over HTTP (not the WS)."""
@@ -137,16 +246,21 @@ class SessionCommandClient:
         stream: str = "stdout",
     ) -> dict[str, Any]:
         self._ensure_started(job_id)
+        frame: dict[str, Any] = {
+            "type": "log",
+            "job_id": job_id,
+            "sequence": sequence,
+            "stream": stream,
+            "message": message,
+        }
+        rest_fields: dict[str, Any] = {}
+        if self.attempt is not None:
+            frame["attempt"] = self.attempt
+            rest_fields["attempt"] = self.attempt
         self._send(
-            {
-                "type": "log",
-                "job_id": job_id,
-                "sequence": sequence,
-                "stream": stream,
-                "message": message,
-            },
+            frame,
             lambda c: c.send_log(
-                job_id, sequence=sequence, stream=stream, message=message
+                job_id, sequence=sequence, stream=stream, message=message, **rest_fields
             ),
         )
         return {"accepted": True}
@@ -164,7 +278,9 @@ class SessionCommandClient:
         self.finished = True
         self._deliver_terminal(
             {"type": "command_result", "job_id": job_id, "result": result},
-            lambda c: c.complete_job(job_id, result=result),
+            job_id,
+            "complete",
+            {"result": result},
         )
         return {"id": job_id, "status": "completed"}
 
@@ -188,21 +304,21 @@ class SessionCommandClient:
             error["failure_kind"] = failure_kind
         self._deliver_terminal(
             {"type": "command_error", "job_id": job_id, "error": error},
-            lambda c: c.fail_job(
-                job_id,
-                error_message=error_message,
-                return_code=return_code,
-                stderr_tail=stderr_tail,
-                failure_kind=failure_kind,
-            ),
+            job_id,
+            "fail",
+            {
+                "error_message": error_message,
+                "return_code": return_code,
+                "stderr_tail": stderr_tail,
+                "failure_kind": failure_kind,
+            },
         )
         return {"id": job_id, "status": "failed"}
 
     def cancel_job(self, job_id: int) -> dict[str, Any]:
         self.finished = True
         self._deliver_terminal(
-            {"type": "job_canceled", "job_id": job_id},
-            lambda c: c.cancel_job(job_id),
+            {"type": "job_canceled", "job_id": job_id}, job_id, "cancel", {}
         )
         return {"id": job_id, "status": "canceled"}
 
@@ -210,7 +326,9 @@ class SessionCommandClient:
         self.finished = True
         self._deliver_terminal(
             {"type": "command_result", "job_id": self.job_id, "result": result},
-            lambda c: c.complete_job(self.job_id, result=result),
+            self.job_id,
+            "complete",
+            {"result": result},
         )
 
     def send_error(
@@ -226,15 +344,17 @@ class SessionCommandClient:
             error["return_code"] = return_code
         self._deliver_terminal(
             {"type": "command_error", "job_id": self.job_id, "error": error},
-            lambda c: c.fail_job(
-                self.job_id, error_message=message, return_code=return_code
-            ),
+            self.job_id,
+            "fail",
+            {"error_message": message, "return_code": return_code},
         )
 
     def _deliver_terminal(
         self,
         ws_payload: dict[str, Any],
-        http_call: Callable[[AgentClient], Any],
+        job_id: Optional[int],
+        kind: str,
+        body: dict[str, Any],
     ) -> None:
         """Deliver a terminal outcome (result/error/canceled).
 
@@ -247,24 +367,47 @@ class SessionCommandClient:
         cleans it up 15 minutes later. The client wraps one requests.Session
         shared by all worker threads, so calls are serialized under _http_lock.
 
+        The outcome is kept (``kept_outcomes``) before it is sent, and dropped
+        only once the server has answered it. Until then the job stays in
+        ``running_job_ids``, so a hello or heartbeat does not report it as
+        gone and the server does not run it again (#1377); the session
+        runtime redelivers it.
+
         An **ephemeral** command (``job_id`` is None, e.g. an interactive
         filesystem browse) has no job row, so its result is correlated by
         command_id and must come back over the same session that carries the
         pending request. It is queued for the session thread like any other frame.
         """
         if self.job_id is not None and self._http_client is not None:
+            if job_id is None:
+                job_id = self.job_id
+            store = self._kept_outcomes
+            if store is None:
+                with self._http_lock:
+                    try:
+                        _send_outcome(self._http_client, job_id, kind, body)
+                    except Exception:
+                        logger.warning(
+                            "Failed to deliver terminal job outcome over REST "
+                            "for job %s",
+                            job_id,
+                            exc_info=True,
+                        )
+                return
+            store.keep(job_id, kind, body)
             with self._http_lock:
-                try:
-                    http_call(self._http_client)
-                except Exception:
-                    # Outcome is dropped until the server-side reaper reconciles
-                    # it (~15 min); log the job id + traceback so that window is
-                    # diagnosable.
-                    logger.warning(
-                        "Failed to deliver terminal job outcome over REST for job %s",
-                        self.job_id,
-                        exc_info=True,
-                    )
+                answer = _deliver_kept_outcome(
+                    self._http_client, store, job_id, kind, body
+                )
+            if answer != DELIVERED:
+                logger.warning(
+                    "Server did not take the outcome of job %s (%s); kept for "
+                    "redelivery",
+                    job_id,
+                    answer,
+                )
+                if self._on_outcome_pending is not None:
+                    self._on_outcome_pending()
             return
         self.enqueue(ws_payload)
 
@@ -329,6 +472,11 @@ class AgentSessionRuntime:
         sleep: Callable[[float], None] = time.sleep,
         timeout_seconds: int = 30,
         http_client: Optional[AgentClient] = None,
+        children_dir: Optional[Path] = None,
+        outcome_retry_seconds: tuple[float, float] = (
+            OUTCOME_RETRY_INITIAL_SECONDS,
+            OUTCOME_RETRY_MAX_SECONDS,
+        ),
     ):
         self.config = config
         self.connect = connect or _default_connect
@@ -355,6 +503,15 @@ class AgentSessionRuntime:
         # _registry_lock, the same lock the cancel registry uses, so the check
         # and the reservation are one atomic step.
         self._upgrading_until: Optional[float] = None
+        # Outcomes the server has not acknowledged yet (see outcomes).
+        self._kept_outcomes = KeptOutcomes()
+        # The children this process starts, so the next agent process can
+        # end what a crash leaves running (see children).
+        self._children = ChildRegistry(children_dir)
+        self._leftovers_ended = False
+        self._outcome_retry_seconds = outcome_retry_seconds
+        self._outcome_wake = threading.Event()
+        self._outcome_thread: Optional[threading.Thread] = None
 
     def run_forever(
         self,
@@ -397,6 +554,7 @@ class AgentSessionRuntime:
         keeps auto-ponging the server's keepalive pings and the session survives
         long backups and checks.
         """
+        self._prepare_hello()
         socket = self.connect(
             _session_url(self.config.server_url),
             header=[f"{AGENT_AUTH_HEADER}: Bearer {self.config.agent_token}"],
@@ -503,6 +661,65 @@ class AgentSessionRuntime:
         finally:
             self._set_socket_timeout(socket, OUTBOX_POLL_SECONDS)
 
+    def _prepare_hello(self) -> None:
+        """Before a hello: on the first one, end the process groups a dead
+        agent process left running, so the server does not start a job
+        again next to its old hook; then try to deliver every kept outcome,
+        so the hello finds those jobs finished. One left over is listed."""
+        if not self._leftovers_ended:
+            self._leftovers_ended = True
+            install(self._children)
+            try:
+                self._children.end_leftovers()
+            except Exception:  # noqa: BLE001 - must not keep the agent offline
+                logger.warning("Could not end leftover processes", exc_info=True)
+        if self._deliver_pending_outcomes():
+            self._wake_outcome_delivery()
+
+    def _deliver_pending_outcomes(self) -> int:
+        """Send every kept outcome once; returns how many are still kept.
+        Stops when the server does not answer at all (it is away); a job
+        whose report it answered with an error does not hold up the next."""
+        for job_id, kind, body in self._kept_outcomes.pending():
+            with self._http_lock:
+                answer = _deliver_kept_outcome(
+                    self._http_client, self._kept_outcomes, job_id, kind, body
+                )
+            if answer == UNANSWERED:
+                break
+        return len(self._kept_outcomes.pending())
+
+    def _wake_outcome_delivery(self) -> None:
+        """Make sure the delivery thread runs and looks at the kept outcomes."""
+        with self._registry_lock:
+            if self._outcome_thread is None or not self._outcome_thread.is_alive():
+                self._outcome_thread = threading.Thread(
+                    target=self._outcome_delivery_loop,
+                    name="borg-ui-agent-outcomes",
+                    daemon=True,
+                )
+                self._outcome_thread.start()
+        self._outcome_wake.set()
+
+    def _outcome_delivery_loop(self) -> None:
+        """Redeliver kept outcomes with a growing delay until the server has
+        them all, then wait until a delivery fails again."""
+        initial, maximum = self._outcome_retry_seconds
+        delay = initial
+        pause = threading.Event()
+        while True:
+            if not self._kept_outcomes.pending():
+                self._outcome_wake.wait()
+                delay = initial
+            self._outcome_wake.clear()
+            pause.wait(delay)
+            try:
+                remaining = self._deliver_pending_outcomes()
+            except Exception:  # noqa: BLE001 - the thread must outlive a bug
+                logger.warning("Outcome delivery failed", exc_info=True)
+                remaining = 1
+            delay = min(delay * 2, maximum) if remaining else initial
+
     def _flush_outbox(self, socket, outbox: "queue.Queue[str]") -> None:
         """Write every queued worker frame. Session thread only — see the
         single-writer invariant on run_session. A failing write propagates so
@@ -532,7 +749,16 @@ class AgentSessionRuntime:
         idle-but-healthy agent looks stale."""
         with self._writing(socket):
             try:
-                socket.send(json.dumps({"type": "heartbeat"}))
+                # The jobs this process runs, as in the hello: the server
+                # settles a job that has left the list (0.1.21).
+                socket.send(
+                    json.dumps(
+                        {
+                            "type": "heartbeat",
+                            "running_job_ids": self._running_job_ids(),
+                        }
+                    )
+                )
             except Exception:
                 pass
             ping = getattr(socket, "ping", None)
@@ -561,7 +787,8 @@ class AgentSessionRuntime:
                 # socket and keeps running here. Reporting an empty list on
                 # reconnect would tell the server "I have nothing," and it would
                 # requeue and redispatch a job this agent is still executing —
-                # double-running a durable operation.
+                # double-running a durable operation. A job whose outcome the
+                # server has not acknowledged is listed for the same reason.
                 "running_job_ids": self._running_job_ids(),
             }
         )
@@ -569,12 +796,15 @@ class AgentSessionRuntime:
             socket.send(message)
 
     def _running_job_ids(self) -> list[int]:
-        """Snapshot of job ids with a live worker on this agent instance right
-        now (registered in _register_cancel, cleared in _unregister_cancel's
-        finally). Taken under _registry_lock; the lock is released before this
-        returns so hello's I/O never runs while holding it."""
+        """Snapshot of the jobs this agent must not be asked to run again:
+        those with a live worker on this agent instance right now (registered
+        in _register_cancel, cleared in _unregister_cancel's finally) and
+        those whose outcome the server has not acknowledged. Taken under
+        _registry_lock; the lock is released before this returns so hello's
+        I/O never runs while holding it."""
         with self._registry_lock:
-            return sorted(self._cancel_events.keys())
+            running = set(self._cancel_events.keys())
+        return sorted(running | self._kept_outcomes.job_ids())
 
     @staticmethod
     def _job_id_for_dispatch(message: dict[str, Any]) -> Optional[int]:
@@ -637,6 +867,7 @@ class AgentSessionRuntime:
         payload = (
             message.get("payload") if isinstance(message.get("payload"), dict) else {}
         )
+        attempt = _parse_attempt(message.get("attempt"))
         client = SessionCommandClient(
             command_id=command_id,
             job_id=job_id,
@@ -645,6 +876,9 @@ class AgentSessionRuntime:
             artifact_uploader=self._artifact_client.upload_artifact,
             http_client=self._http_client,
             http_lock=self._http_lock,
+            kept_outcomes=self._kept_outcomes,
+            attempt=attempt,
+            on_outcome_pending=self._wake_outcome_delivery,
         )
 
         client.enqueue({"type": "command_ack", "job_id": job_id})
@@ -679,7 +913,13 @@ class AgentSessionRuntime:
             # send_result — that routes through complete_job and would wrongly
             # finalize the target job as completed. The server dispatches cancel
             # fire-and-forget (wait_for_result=False), so no response is expected.
-            if job_id is not None and not self._signal_cancel(job_id):
+            # A job whose outcome is kept for redelivery has finished: a
+            # canceled report would take the place of its real outcome.
+            if (
+                job_id is not None
+                and not self._signal_cancel(job_id)
+                and not self._kept_outcomes.has(job_id)
+            ):
                 client.cancel_job(job_id)
             return
 
@@ -712,34 +952,35 @@ class AgentSessionRuntime:
         # caller invoked this method directly without doing that (e.g. a test).
         if cancel_event is None:
             cancel_event = self._register_cancel(job_id, command=command)
+        # The outcome is reported before the worker leaves the registry
+        # (finally): between the two the job would be in neither list.
         try:
             result = handler(
                 {"id": job_id, "type": command, "payload": payload},
                 client,
                 should_cancel=cancel_event.is_set,
             )
+            if client.finished:
+                return
+            status = getattr(result, "status", "")
+            message_text = getattr(result, "message", "") or f"{command} finished"
+            return_code = getattr(result, "return_code", None)
+            if status == "completed":
+                client.complete_job(job_id, result={"message": message_text})
+            elif status == "canceled":
+                client.cancel_job(job_id)
+            else:
+                client.fail_job(
+                    job_id,
+                    error_message=message_text,
+                    return_code=return_code,
+                )
         except Exception as exc:
             logger.exception("Agent session command failed", extra={"command": command})
             client.send_error(f"{command} failed: {exc}")
-            return
         finally:
             self._unregister_cancel(job_id)
-
-        if client.finished:
-            return
-        status = getattr(result, "status", "")
-        message_text = getattr(result, "message", "") or f"{command} finished"
-        return_code = getattr(result, "return_code", None)
-        if status == "completed":
-            client.complete_job(job_id, result={"message": message_text})
-        elif status == "canceled":
-            client.cancel_job(job_id)
-        else:
-            client.fail_job(
-                job_id,
-                error_message=message_text,
-                return_code=return_code,
-            )
+            self._children.forget_ended()
 
     def _upgrade_claimed(self) -> bool:
         """Whether an upgrade currently owns this session."""

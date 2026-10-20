@@ -4,6 +4,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from agent.borg_ui_agent import __version__
@@ -117,9 +118,17 @@ def get_job_handler(job_kind: str):
 
 
 class AgentRuntime:
-    def __init__(self, config: AgentConfig, client: Optional[AgentClient] = None):
+    def __init__(
+        self,
+        config: AgentConfig,
+        client: Optional[AgentClient] = None,
+        *,
+        children_dir: Optional[Path] = None,
+    ):
         self.config = config
         self.client = client or AgentClient.from_config(config)
+        # Where the session records the children it starts (see children).
+        self.children_dir = children_dir
 
     def heartbeat(self, *, running_job_ids: Optional[list[int]] = None) -> dict:
         machine = detect_platform()
@@ -177,7 +186,7 @@ class AgentRuntime:
         from agent.borg_ui_agent.session import AgentSessionRuntime
 
         _ = poll_interval_seconds
-        AgentSessionRuntime(self.config).run_forever(
+        AgentSessionRuntime(self.config, children_dir=self.children_dir).run_forever(
             max_iterations=max_iterations,
             initial_backoff_seconds=initial_backoff_seconds,
             max_backoff_seconds=max_backoff_seconds,
