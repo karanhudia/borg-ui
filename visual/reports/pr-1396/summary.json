@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-10-20T06:07:44.837Z",
+  "generatedAt": "2026-10-20T08:58:28.755Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1396 visual report",
-    "commitSha": "f9712ffc1987",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/39378482781"
+    "commitSha": "8e990ddd0e22",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/39397084649"
   },
   "totals": {
     "baseline": 1206,
     "actual": 1214,
     "compared": 1206,
-    "changed": 6,
+    "changed": 4,
     "added": 8,
     "removed": 0,
-    "unchanged": 1200
+    "unchanged": 1202
   },
   "changed": [
     {
@@ -35,49 +35,13 @@
       }
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
-      "diffPixels": 1656,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0016171875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "pages-cloudstorage--add-guided-remote--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote--mobile.png",
-      "diffPixels": 779,
-      "totalPixels": 329160,
-      "diffRatio": 0.002366630210232106,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPixels": 629,
+      "diffPixels": 523,
       "totalPixels": 329160,
-      "diffRatio": 0.0019109247782233565,
+      "diffRatio": 0.00158889293960384,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -93,9 +57,9 @@
       "baselinePath": "images/baseline/pages-cloudstorage--editing-remote--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--editing-remote--mobile.png",
       "diffPath": "images/diff/pages-cloudstorage--editing-remote--mobile.png",
-      "diffPixels": 2077,
+      "diffPixels": 1927,
       "totalPixels": 329160,
-      "diffRatio": 0.006310001215214485,
+      "diffRatio": 0.005854295783205736,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -2640,6 +2604,9 @@
       "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png"
     },
     {
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
+    },
+    {
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png"
     },
     {
@@ -3136,6 +3103,9 @@
     },
     {
       "fileName": "pages-backup-plans-content--skipped-repository.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
