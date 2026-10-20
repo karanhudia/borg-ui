@@ -30,6 +30,7 @@ import time
 from typing import Any, Callable, Optional
 from urllib.parse import unquote, urlsplit
 
+from agent.borg_ui_agent.children import track_child
 from agent.borg_ui_agent.paths import is_darwin
 
 SOURCE_BORG2_INDEX = "borg2_index"
@@ -257,6 +258,7 @@ def _run(
         env=env,
         start_new_session=os.name == "posix",
     )
+    track_child(process)
     deadline = time.monotonic() + timeout
     cancelled = False
     try:

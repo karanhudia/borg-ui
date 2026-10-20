@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 
 from agent.borg_ui_agent.borg import is_warning_return_code
 from agent.borg_ui_agent.borg_flags import parse_borg_flags
+from agent.borg_ui_agent.children import track_child
 from agent.borg_ui_agent.cancel import (
     cancel_requested,
     start_cancel_poller,
@@ -535,6 +536,7 @@ def execute_backup_create_job(
         if os.name == "posix":
             popen_kwargs["start_new_session"] = True
         process = subprocess.Popen(cmd, **popen_kwargs)
+        track_child(process)
     except OSError as exc:
         error_message = f"Failed to start borg create: {exc}"
         client.send_log(

@@ -18,7 +18,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import structlog
@@ -61,6 +61,7 @@ from app.services.agent_connection_manager import (
     agent_connection_manager,
 )
 from app.services.agent_job_dispatcher import (
+    agent_job_attempt,
     agent_job_kind as live_agent_job_kind,
     dispatch_agent_job_best_effort,
 )
@@ -308,11 +309,15 @@ class AgentJobLogRequest(BaseModel):
     stream: str = "stdout"
     message: str
     created_at: Optional[datetime] = None
+    # The run the line belongs to, as dispatched (agent 0.1.21 on).
+    attempt: Optional[StrictInt] = None
 
 
 class AgentJobLogResponse(BaseModel):
     accepted: bool
     duplicate: bool = False
+    # Set when the line was from an earlier run of the job and dropped.
+    superseded: Optional[bool] = None
 
 
 class AgentJobCompleteRequest(BaseModel):
@@ -1165,6 +1170,32 @@ def _append_agent_job_log(
     return True
 
 
+def _is_superseded_attempt(job: AgentJob, attempt: Any) -> bool:
+    """Whether a line the agent sent for `attempt` is from a run of the job
+    that has been given up: the job was requeued (and maybe dispatched
+    again) since. The agent numbers every run's lines from 0, so such a line
+    would be stored as the current run's and push that run's own line out as
+    a duplicate (#1383). A line without an attempt (an agent before 0.1.21)
+    is taken as before."""
+    if not isinstance(attempt, int) or isinstance(attempt, bool):
+        return False
+    return agent_job_attempt(job) != attempt
+
+
+def _reported_running_job_ids(message: dict[str, Any]) -> Optional[list[int]]:
+    """The running_job_ids of a session heartbeat (agent 0.1.21 on), or None
+    when the heartbeat has none or a malformed one: such a list proves
+    nothing about what the process runs."""
+    running = message.get("running_job_ids")
+    if not isinstance(running, list):
+        return None
+    if not all(
+        isinstance(job_id, int) and not isinstance(job_id, bool) for job_id in running
+    ):
+        return None
+    return running
+
+
 def _claim_terminal_transition(
     job: AgentJob, db: Session, values: dict[Any, Any]
 ) -> bool:
@@ -1480,6 +1511,8 @@ async def _handle_agent_session_message(
     db: Session,
     agent_machine_id: int,
     message: dict[str, Any],
+    *,
+    connection: Optional[AgentConnection] = None,
 ) -> None:
     message_type = str(message.get("type") or "")
     command_id = str(message.get("command_id") or "")
@@ -1498,6 +1531,34 @@ async def _handle_agent_session_message(
             synchronize_session=False,
         )
         db.commit()
+        # From agent 0.1.21 the heartbeat lists the jobs the process runs,
+        # and a started job that has left the list is settled as on the REST
+        # heartbeat, inside the same window, instead of by the reaper; a job
+        # on the list counts as active. Only
+        # the agent's current session speaks for it: a session its newer
+        # connection replaced belongs to another process.
+        running_job_ids = _reported_running_job_ids(message)
+        if (
+            running_job_ids is not None
+            and connection is not None
+            and agent_connection_manager.get(agent_machine_id) is connection
+        ):
+            current_agent = db.get(AgentMachine, agent_machine_id)
+            if current_agent is not None:
+                _requeue_stale_agent_jobs(
+                    db, current_agent, now=now, running_job_ids=running_job_ids
+                )
+                if running_job_ids:
+                    # A listed job is not orphaned, however silent: a hook
+                    # that prints nothing, or an outcome the agent keeps
+                    # while its report does not get through. The reaper
+                    # must not fail it meanwhile.
+                    db.query(AgentJob).filter(
+                        AgentJob.agent_machine_id == agent_machine_id,
+                        AgentJob.id.in_(running_job_ids),
+                        AgentJob.status.in_(("claimed", "running", "cancel_requested")),
+                    ).update({AgentJob.updated_at: now}, synchronize_session=False)
+                db.commit()
         # The agent is idle and listening: a job left queued past the grace
         # has no other sender in this process before the next reconnect.
         await _dispatch_queued_agent_jobs(
@@ -1563,7 +1624,11 @@ async def _handle_agent_session_message(
             command_id=command_id or None,
             job_id=_parse_int(job_id, default=0) or None,
         )
-        if job:
+        if job and _is_superseded_attempt(job, message.get("attempt")):
+            # End the read's transaction: the session would hold its
+            # connection until the next message otherwise.
+            db.rollback()
+        elif job:
             agent_job_id = job.id
             job_payload = job.payload
             appended = _append_agent_job_log(
@@ -1864,7 +1929,9 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
         while True:
             message = await websocket.receive_json()
             if isinstance(message, dict):
-                await _handle_agent_session_message(db, current_agent.id, message)
+                await _handle_agent_session_message(
+                    db, current_agent.id, message, connection=connection
+                )
     except WebSocketDisconnect:
         pass
     finally:
@@ -2006,7 +2073,11 @@ async def update_job_progress(
     return AgentJobStatusResponse(id=job.id, status=job.status)
 
 
-@router.post("/jobs/{job_id}/logs", response_model=AgentJobLogResponse)
+@router.post(
+    "/jobs/{job_id}/logs",
+    response_model=AgentJobLogResponse,
+    response_model_exclude_none=True,
+)
 def upload_job_log(
     job_id: int,
     payload: AgentJobLogRequest,
@@ -2014,6 +2085,9 @@ def upload_job_log(
     db: Session = Depends(get_db),
 ):
     job = _get_agent_job(job_id, current_agent, db)
+    if _is_superseded_attempt(job, payload.attempt):
+        # Acknowledged, so the agent does not send it again.
+        return AgentJobLogResponse(accepted=True, superseded=True)
     existing_log = (
         db.query(AgentJobLog)
         .filter(

@@ -10,6 +10,7 @@ import truststore
 
 from agent.borg_ui_agent import __version__
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
+from agent.borg_ui_agent.children import default_children_dir
 from agent.borg_ui_agent.client import AgentClient, AgentClientError
 from agent.borg_ui_agent.config import (
     AgentConfig,
@@ -196,7 +197,7 @@ def _record_names_another_server(server_url: str) -> bool:
 
 def _run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    AgentRuntime(config).run_forever(
+    AgentRuntime(config, children_dir=default_children_dir(args.config)).run_forever(
         poll_interval_seconds=args.poll_interval,
         max_iterations=args.max_iterations,
         initial_backoff_seconds=args.initial_backoff,
