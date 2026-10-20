@@ -610,6 +610,34 @@ class TestPasswordSetupFlow:
 
 @pytest.mark.unit
 class TestPasskeyErrors:
+    def test_passkey_registration_options_require_user_verification(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.post(
+            "/api/auth/passkeys/register/options",
+            headers=admin_headers,
+            json={"current_password": "admin123"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["ceremony_token"]
+        selection = body["options"]["authenticatorSelection"]
+        assert selection["userVerification"] == "required"
+        assert selection["residentKey"] == "required"
+
+    def test_passkey_authentication_options_require_user_verification(
+        self, test_client: TestClient
+    ):
+        response = test_client.post("/api/auth/passkeys/authenticate/options")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["ceremony_token"]
+        options = body["options"]
+        assert options["userVerification"] == "required"
+        assert options["allowCredentials"] == []
+
     def test_passkey_registration_requires_user_verification(
         self, test_client: TestClient, admin_headers, admin_user, monkeypatch
     ):
@@ -624,6 +652,7 @@ class TestPasskeyErrors:
                 pass
 
             def verify_registration_response(**kwargs):
+                assert kwargs["require_user_verification"] is True
                 raise InvalidRegistrationResponse(
                     "User verification is required but user was not verified during attestation"
                 )
@@ -715,6 +744,7 @@ class TestPasskeyErrors:
                 pass
 
             def verify_authentication_response(**kwargs):
+                assert kwargs["require_user_verification"] is True
                 raise InvalidAuthenticationResponse(
                     "User verification is required but user was not verified during authentication"
                 )
