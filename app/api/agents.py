@@ -19,6 +19,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field, StrictInt
+from sqlalchemy import case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import structlog
@@ -1086,6 +1087,34 @@ def _mark_agent_job_started(
     requeued job that reconnects does not notify again)."""
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return None
+    # Guarded write, ahead of every other write: the outcome travels apart
+    # from this report (REST /complete, recorded in a worker thread with its
+    # own session), so it may have been committed since this handler loaded
+    # the job. As in _claim_terminal_transition, the WHERE guard decides on
+    # the row, not on this copy: a job that is final by now stays final and
+    # this report writes nothing else, and a cancel request committed
+    # meanwhile is kept. The job row is locked before the linked operation's,
+    # the order the completion takes as well.
+    moved = (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.id == job.id,
+            AgentJob.status.notin_(FINAL_AGENT_JOB_STATUSES),
+        )
+        .update(
+            {
+                AgentJob.status: case(
+                    (AgentJob.status == "cancel_requested", AgentJob.status),
+                    else_="running",
+                )
+            },
+            synchronize_session=False,
+        )
+    )
+    if not moved:
+        db.expire(job)
+        return None
+    db.expire(job, ["status"])
     now = _now_utc()
     if job.claimed_at is None:
         job.claimed_at = now
@@ -1105,8 +1134,6 @@ def _mark_agent_job_started(
         .update({AgentJob.start_notified_at: started}, synchronize_session=False)
     )
     db.expire(job, ["start_notified_at"])
-    if job.status != "cancel_requested":
-        job.status = "running"
     newly_started_backup_job = None
     backup_job = _get_linked_backup_job(job, db)
     if backup_job:
