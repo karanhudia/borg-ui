@@ -773,10 +773,11 @@ def _log_reason_line(rows: list, *, stream: Optional[str]) -> Optional[str]:
     sentence and follows it with a traceback.
 
     Sequence 0 is the agent's own "Starting <kind>: <command>" preamble, never
-    a reason - it is what the job was about to run, not why it stopped.
+    a reason - it is what the job was about to run, not why it stopped. Below
+    0 is the server's note that the job was requeued, which is not one either.
     """
     for sequence, row_stream, message in rows:
-        if sequence == 0 or (stream is not None and row_stream != stream):
+        if sequence <= 0 or (stream is not None and row_stream != stream):
             continue
         lines = [line.strip() for line in (message or "").splitlines() if line.strip()]
         if lines:
