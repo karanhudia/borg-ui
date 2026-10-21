@@ -16,6 +16,7 @@ import structlog
 
 from app.api.archive_download import extract_file_download
 from app.api.archives import (
+    agent_file_download,
     _content_disposition_attachment,
     _stream_agent_archive_tar,
     _tar_strip_components,
@@ -599,7 +600,14 @@ async def delete_archive(
         )
 
     repo = _get_v2_repo(repository, db, current_user)
-    archive_name = await _resolve_archive_name(repo, archive_id, db)
+    # An agent repository's archive is addressed by its id: the name lookup
+    # runs Borg on the server, and `aid:` names exactly one archive of a
+    # series, as the v1 route sends it.
+    archive_name = (
+        _get_archive_selector(archive_id)
+        if is_agent_executor(repo)
+        else await _resolve_archive_name(repo, archive_id, db)
+    )
 
     # Deletes are rejected per archive, not per repository (spec section 13
     # phase 5): two different archives may be removed at once, the same one
@@ -652,6 +660,9 @@ async def download_file_from_archive(
     repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive)
     try:
+        if is_agent_executor(repo):
+            # extracted on the agent, as by the v1 route
+            return await agent_file_download(db, repo, archive_selector, file_path)
 
         async def extract(temp_dir: str):
             if _repo_needs_custom_env(repo):

@@ -37,6 +37,10 @@ from app.services.operations.backup_facade import (
     wait_out_backup_operation,
 )
 from app.services.operations.maintenance_start import start_maintenance
+from app.services.repository_executor import (
+    is_agent_executor,
+    validate_agent_backup_repository,
+)
 from app.services.v2.prune_service import prune_v2_service
 
 logger = structlog.get_logger()
@@ -133,6 +137,10 @@ async def run_backup(
             detail={"key": "backend.errors.backup.noSourceDirectories"},
         )
 
+    # The executor follows the repository, as on the v1 manual route.
+    agent = is_agent_executor(repo)
+    if agent:
+        validate_agent_backup_repository(db, repo)
     # The row now waits on the repository lane, so a request blocked behind a
     # wipe would hang until the wipe ends; admission answers 409 instead.
     ensure_repository_admission(db, repo, OPERATION_BACKUP)
@@ -140,9 +148,13 @@ async def run_backup(
         db,
         repo,
         trigger="manual",
-        executor="server",
+        executor="agent" if agent else "server",
         user_id=current_user.id,
-        params={"archive_name": data.archive_name},
+        # Borg 2's unnamed manual backup is one series on the server; the
+        # agent path names it the same rather than by the hour
+        params={
+            "archive_name": data.archive_name or ("manual-backup" if agent else None)
+        },
     )
     # A read of the backup that fails is waited out: the answer is the
     # backup's own outcome, not a 500 while it goes on. The wait polls on a
@@ -228,6 +240,10 @@ async def prune_archives(
             "message": "backend.success.repo.pruneJobStarted",
         }
 
+    if is_agent_executor(repo):
+        # The dry run runs on the agent, as on the v1 route.
+        return await _agent_prune_dry_run(db, repo, data, keep_within, current_user)
+
     result = await prune_v2_service.run_prune(
         repo=repo,
         keep_hourly=data.keep_hourly,
@@ -261,6 +277,53 @@ async def prune_archives(
             "success": True,
             "stdout": stdout,
             "stderr": result.get("stderr", "") or "",
+        },
+    }
+
+
+async def _agent_prune_dry_run(
+    db: Session,
+    repo: Repository,
+    data: PruneV2Request,
+    keep_within: Optional[str],
+    current_user: User,
+) -> dict:
+    from app.services.prune_preview import Retention, run_prune_dry_run
+
+    try:
+        prune_job, stdout = await run_prune_dry_run(
+            db,
+            repo,
+            Retention(
+                keep_hourly=data.keep_hourly,
+                keep_daily=data.keep_daily,
+                keep_weekly=data.keep_weekly,
+                keep_monthly=data.keep_monthly,
+                keep_quarterly=data.keep_quarterly,
+                keep_yearly=data.keep_yearly,
+                keep_within=keep_within,
+            ),
+            user_id=current_user.id,
+        )
+        # a Borg warning (exit 1) is a dry run that ran
+        succeeded = prune_job.status in ("completed", "completed_with_warnings")
+        error = None if succeeded else prune_job.error_message or ""
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error = str(exc)
+    if error is not None:
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.prune.failed", "params": {"error": error}},
+        )
+    return {
+        "success": True,
+        "dry_run": True,
+        "prune_result": {
+            "success": True,
+            "stdout": stdout,
+            "stderr": "",
         },
     }
 

@@ -154,6 +154,13 @@ async def preview_restore(
             restore_request.repository,
             RESTORE_ROLE,
         )
+        if is_agent_executor(repo):
+            # The preview is Borg's extract dry run, and the agent's restore
+            # has none yet: refused rather than run on the server.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"key": "backend.errors.restore.agentPreviewUnsupported"},
+            )
 
         if (
             repo.repository_type == "ssh"

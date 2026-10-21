@@ -24,7 +24,10 @@ from app.core.security import (
 from app.database.database import get_db
 from app.database.models import AgentMachine, Repository, User
 from app.services.agent_artifact_relay import agent_artifact_relay
-from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.agent_job_dispatcher import (
+    dispatch_agent_cancel_if_connected,
+    dispatch_agent_job_best_effort,
+)
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import resolve_maintenance_job
@@ -32,6 +35,8 @@ from app.services.operations.maintenance_start import active_delete_for_archive
 from app.services.repository_executor import (
     abandon_agent_repository_operation_job,
     agent_operation_failed_detail,
+    agent_timezone_for_repository,
+    cancel_unclaimed_agent_repository_job,
     is_agent_executor,
     queue_agent_repository_operation_job,
     wait_for_agent_repository_operation_job,
@@ -154,6 +159,56 @@ def _archive_extract_selector(archive: str, repo: Repository) -> str:
     if archive.startswith("aid:"):
         return archive
     return f"aid:{archive}" if _ARCHIVE_ID_RE.fullmatch(archive) else archive
+
+
+async def agent_file_download(
+    db: Session, repo: Repository, archive: str, file_path: str
+):
+    """Download one file of an agent repository's archive, extracted on the
+    agent. `archive` is the exact selector (`aid:<hex>` for Borg 2).
+
+    New agents stream the file straight through; older agents return it
+    base64-encoded in their job result."""
+    agent = _repo_bound_agent(repo, db)
+    if agent and ARTIFACT_UPLOAD_CAPABILITY in (agent.capabilities or []):
+        return await _stream_agent_archive_file(db, repo, archive, file_path)
+
+    async def extract(temp_dir: str):
+        agent_job = queue_agent_repository_operation_job(
+            db,
+            repo,
+            job_kind="repository.extract_archive_file",
+            operation={"archive": archive, "file_path": file_path},
+        )
+        await dispatch_agent_job_best_effort(
+            db,
+            agent_job,
+            repository_id=repo.id,
+            archive=archive,
+            file_path=file_path,
+        )
+        try:
+            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
+                # nobody waits for the file any more: take the job back
+                abandoned = abandon_agent_repository_operation_job(db, agent_job.id)
+                if abandoned is not None and abandoned.status == "cancel_requested":
+                    await dispatch_agent_cancel_if_connected(abandoned)
+            raise
+        return _write_agent_extracted_file(
+            result,
+            temp_dir=temp_dir,
+            file_path=file_path,
+        )
+
+    return await extract_file_download(
+        file_path,
+        extract,
+        temp_dir_factory=tempfile.mkdtemp,
+        path_exists=os.path.exists,
+        file_response_factory=FileResponse,
+    )
 
 
 async def _stream_agent_archive_file(
@@ -342,6 +397,43 @@ async def _stream_server_archive_tar(
     )
 
 
+async def _agent_read_result(
+    db: Session,
+    repo: Repository,
+    job_kind: str,
+    *,
+    operation: dict | None = None,
+    timeout_key: str,
+) -> dict:
+    """Run a read job of an agent repository on its agent and return the
+    result: the deprecated routes' agent path (#1393)."""
+    from app.api.repositories import get_operation_timeouts
+
+    agent_job = queue_agent_repository_operation_job(
+        db, repo, job_kind=job_kind, operation=operation
+    )
+    await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo.id)
+    try:
+        return await wait_for_agent_repository_operation_job(
+            db, agent_job.id, timeout_seconds=get_operation_timeouts(db)[timeout_key]
+        )
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
+            # Left queued (the agent was not connected to take it), the job
+            # would count as the repository's active work until the agent
+            # comes back; one the agent claimed runs to its end.
+            cancel_unclaimed_agent_repository_job(db, agent_job.id)
+        raise
+
+
+def _read_succeeded(result: dict) -> bool:
+    """A server result says `success`; an agent result carries Borg's
+    return code."""
+    return (
+        result.get("success", True) is not False and result.get("return_code", 0) == 0
+    )
+
+
 @router.get("/list")
 async def list_archives(
     repository: str,
@@ -353,28 +445,33 @@ async def list_archives(
     try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
-        env, temp_key_file = _build_repo_env(repo, db)
-        try:
-            result = await borg.list_archives(
-                repo.path,
-                remote_path=effective_repository_remote_path(repo),
-                passphrase=repo.passphrase,
-                bypass_lock=repo.bypass_lock,
-                env=env,
+        if is_agent_executor(repo):
+            result = await _agent_read_result(
+                db, repo, "repository.list_archives", timeout_key="list_timeout"
             )
-        finally:
-            cleanup_temp_key_file(temp_key_file)
-        if not result["success"]:
+        else:
+            env, temp_key_file = _build_repo_env(repo, db)
+            try:
+                result = await borg.list_archives(
+                    repo.path,
+                    remote_path=effective_repository_remote_path(repo),
+                    passphrase=repo.passphrase,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
+            finally:
+                cleanup_temp_key_file(temp_key_file)
+        if not _read_succeeded(result):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list archives: {result['stderr']}",
+                detail=f"Failed to list archives: {result.get('stderr', '')}",
             )
 
         response.headers["Deprecation"] = "true"
         response.headers["Link"] = (
             f'</api/repositories/{repo.id}/archives>; rel="successor-version"'
         )
-        return {"archives": result["stdout"]}
+        return {"archives": result.get("stdout", "")}
     except HTTPException:
         raise
     except Exception as e:
@@ -398,27 +495,41 @@ async def get_archive_info(
     try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
-        env, temp_key_file = _build_repo_env(repo, db)
-        try:
-            result = await borg.info_archive(
-                repo.path,
-                archive_id,
-                remote_path=effective_repository_remote_path(repo),
-                passphrase=repo.passphrase,
-                bypass_lock=repo.bypass_lock,
-                env=env,
+        agent = is_agent_executor(repo)
+        if agent:
+            archive_id = _archive_extract_selector(archive_id, repo)
+            result = await _agent_read_result(
+                db,
+                repo,
+                "repository.archive_info",
+                operation={"archive": archive_id},
+                timeout_key="info_timeout",
             )
-        finally:
-            cleanup_temp_key_file(temp_key_file)
-        if not result["success"]:
+        else:
+            env, temp_key_file = _build_repo_env(repo, db)
+            try:
+                result = await borg.info_archive(
+                    repo.path,
+                    archive_id,
+                    remote_path=effective_repository_remote_path(repo),
+                    passphrase=repo.passphrase,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
+            finally:
+                cleanup_temp_key_file(temp_key_file)
+        # An agent renders Borg's times in its own zone; the server's
+        # wrapper runs under TZ=UTC.
+        time_zone = agent_timezone_for_repository(db, repo) if agent else "UTC"
+        if not _read_succeeded(result):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get archive info: {result['stderr']}",
+                detail=f"Failed to get archive info: {result.get('stderr', '')}",
             )
 
         # Parse JSON output from Borg
         try:
-            archive_data = json.loads(result["stdout"])
+            archive_data = json.loads(result.get("stdout") or "")
 
             # Extract archive information
             if "archives" in archive_data and len(archive_data["archives"]) > 0:
@@ -430,13 +541,13 @@ async def get_archive_info(
             enhanced_info = {
                 "name": archive_info.get("name"),
                 "id": archive_info.get("id"),
-                # info_archive runs under TZ=UTC; re-render with an explicit
-                # offset so the frontend does not read the value as local time.
+                # Re-rendered with an explicit offset so the frontend does
+                # not read the value as local time.
                 "start": serialize_borg_archive_time(
-                    archive_info.get("start"), timezone_name="UTC"
+                    archive_info.get("start"), timezone_name=time_zone
                 ),
                 "end": serialize_borg_archive_time(
-                    archive_info.get("end"), timezone_name="UTC"
+                    archive_info.get("end"), timezone_name=time_zone
                 ),
                 "duration": archive_info.get("duration"),
                 "stats": archive_info.get("stats", {}),
@@ -458,23 +569,48 @@ async def get_archive_info(
 
             # Optionally fetch file listing
             if include_files:
-                env, temp_key_file = _build_repo_env(repo, db)
-                try:
-                    list_result = await borg.list_archive_contents(
-                        repo.path,
-                        archive_id,
-                        remote_path=effective_repository_remote_path(repo),
-                        passphrase=repo.passphrase,
-                        bypass_lock=repo.bypass_lock,
-                        env=env,
-                    )
-                finally:
-                    cleanup_temp_key_file(temp_key_file)
-                if list_result["success"]:
+                if agent:
+                    try:
+                        list_result = await _agent_read_result(
+                            db,
+                            repo,
+                            "repository.list_archive_contents",
+                            # No line cap: the agent ends a listing at its
+                            # cap with a failure. `file_limit` cuts it below,
+                            # as on the server.
+                            operation={"archive": archive_id, "path": ""},
+                            timeout_key="list_timeout",
+                        )
+                    except HTTPException as exc:
+                        # the files are best effort, as on the server: the
+                        # archive info stands without them
+                        logger.warning(
+                            "Agent file listing for archive info failed",
+                            repository_id=repo.id,
+                            archive=archive_id,
+                            status_code=exc.status_code,
+                        )
+                        list_result = {"success": False}
+                else:
+                    env, temp_key_file = _build_repo_env(repo, db)
+                    try:
+                        list_result = await borg.list_archive_contents(
+                            repo.path,
+                            archive_id,
+                            remote_path=effective_repository_remote_path(repo),
+                            passphrase=repo.passphrase,
+                            bypass_lock=repo.bypass_lock,
+                            env=env,
+                        )
+                    finally:
+                        cleanup_temp_key_file(temp_key_file)
+                if _read_succeeded(list_result):
                     try:
                         # Parse JSON-lines output
                         files = []
-                        for line in list_result["stdout"].strip().split("\n"):
+                        for line in (
+                            (list_result.get("stdout") or "").strip().split("\n")
+                        ):
                             if line and len(files) < file_limit:
                                 try:
                                     file_obj = json.loads(line)
@@ -486,12 +622,11 @@ async def get_archive_info(
                                             "user": file_obj.get("user"),
                                             "group": file_obj.get("group"),
                                             "size": file_obj.get("size"),
-                                            # Contents listing ran under
-                                            # TZ=UTC (server wrapper); re-render
-                                            # the mtime with an explicit offset.
+                                            # Re-rendered with an explicit
+                                            # offset, as the times above.
                                             "mtime": serialize_borg_archive_time(
                                                 file_obj.get("mtime"),
-                                                timezone_name="UTC",
+                                                timezone_name=time_zone,
                                             ),
                                             "healthy": file_obj.get("healthy", True),
                                         }
@@ -513,7 +648,7 @@ async def get_archive_info(
         except json.JSONDecodeError:
             # Fallback to raw output if not JSON
             logger.warning("Archive info is not JSON, returning raw output")
-            return {"info": result["stdout"]}
+            return {"info": result.get("stdout", "")}
 
     except HTTPException:
         raise
@@ -537,26 +672,38 @@ async def get_archive_contents(
     try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
-        env, temp_key_file = _build_repo_env(repo, db)
-        try:
-            result = await borg.list_archive_contents(
-                repo.path,
-                archive_id,
-                path,
-                remote_path=effective_repository_remote_path(repo),
-                passphrase=repo.passphrase,
-                bypass_lock=repo.bypass_lock,
-                env=env,
+        if is_agent_executor(repo):
+            result = await _agent_read_result(
+                db,
+                repo,
+                "repository.list_archive_contents",
+                operation={
+                    "archive": _archive_extract_selector(archive_id, repo),
+                    "path": path,
+                },
+                timeout_key="list_timeout",
             )
-        finally:
-            cleanup_temp_key_file(temp_key_file)
-        if not result["success"]:
+        else:
+            env, temp_key_file = _build_repo_env(repo, db)
+            try:
+                result = await borg.list_archive_contents(
+                    repo.path,
+                    archive_id,
+                    path,
+                    remote_path=effective_repository_remote_path(repo),
+                    passphrase=repo.passphrase,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
+            finally:
+                cleanup_temp_key_file(temp_key_file)
+        if not _read_succeeded(result):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get archive contents: {result['stderr']}",
+                detail=f"Failed to get archive contents: {result.get('stderr', '')}",
             )
 
-        return {"contents": result["stdout"]}
+        return {"contents": result.get("stdout", "")}
     except HTTPException:
         raise
     except Exception as e:
@@ -652,35 +799,10 @@ async def download_file_from_archive(
         # archive in a series; a bare id would be read as a name → 0-byte file.
         archive = _archive_extract_selector(archive, repo)
 
-        # New agents stream the file straight through; older agents (and
-        # server-side repos) fall through to the base64/local path below.
         if is_agent_executor(repo):
-            agent = _repo_bound_agent(repo, db)
-            if agent and ARTIFACT_UPLOAD_CAPABILITY in (agent.capabilities or []):
-                return await _stream_agent_archive_file(db, repo, archive, file_path)
+            return await agent_file_download(db, repo, archive, file_path)
 
         async def extract(temp_dir: str):
-            if is_agent_executor(repo):
-                agent_job = queue_agent_repository_operation_job(
-                    db,
-                    repo,
-                    job_kind="repository.extract_archive_file",
-                    operation={"archive": archive, "file_path": file_path},
-                )
-                await dispatch_agent_job_best_effort(
-                    db,
-                    agent_job,
-                    repository_id=repo.id,
-                    archive=archive,
-                    file_path=file_path,
-                )
-                result = await wait_for_agent_repository_operation_job(db, agent_job.id)
-                return _write_agent_extracted_file(
-                    result,
-                    temp_dir=temp_dir,
-                    file_path=file_path,
-                )
-
             env, temp_key_file = _build_repo_env(repo, db)
             try:
                 return await borg.extract_archive(

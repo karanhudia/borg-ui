@@ -19,6 +19,7 @@ transport has notified is notified from here.
 import asyncio
 import json
 from datetime import datetime
+from typing import Optional
 
 import structlog
 
@@ -55,8 +56,10 @@ from app.services.job_admission import (
     ensure_repository_admission,
 )
 from app.services.repository_executor import (
+    EXECUTOR_AGENT,
     cancel_agent_backup_job,
     get_agent_job_for_backup,
+    is_agent_executor,
     queue_agent_backup_job,
     wait_for_agent_backup_job,
 )
@@ -350,6 +353,61 @@ async def _run_agent_backup(ctx, job, repository, params) -> None:
         await notify_backup_job_finished(db, job)
 
 
+def _backup_executor(ctx, job, repository) -> str:
+    """Where the backup runs, decided now from the repository's current
+    executor rather than the one it was queued with: a repository moved to
+    an agent (or back) while the backup waited has its Borg on the other
+    side now. A backup resumed after a restart whose agent job is still live
+    stays with that job."""
+    if is_agent_executor(repository):
+        return EXECUTOR_AGENT
+    if ctx.params.get("executor") == EXECUTOR_AGENT:
+        live_job = get_agent_job_for_backup(ctx.db, job)
+        if live_job is not None and live_job.status in ACTIVE_AGENT_STATUSES:
+            return EXECUTOR_AGENT
+    return "server"
+
+
+def _record_backup_executor(ctx, job, repository, executor: str) -> None:
+    """Store a changed executor on the row, with the execution mode the
+    creation site would have given it, so the cancel path and the UI read
+    where the backup runs."""
+    from app.services.backup_route_planner import apply_repository_route_to_backup_job
+
+    operation = ctx.db.get(Operation, ctx.operation_id)
+    logger.info(
+        "Backup executor follows the repository",
+        operation_id=ctx.operation_id,
+        repository_id=repository.id,
+        queued_executor=ctx.params.get("executor"),
+        executor=executor,
+    )
+    operation.params = {**(operation.params or {}), "executor": executor}
+    if executor == EXECUTOR_AGENT:
+        job.route_strategy = None
+        job.execution_mode = EXECUTOR_AGENT
+    else:
+        job.execution_mode = "local"
+        apply_repository_route_to_backup_job(job, repository)
+    ctx.db.commit()
+
+
+def _sources_refusal(repository, params) -> Optional[str]:
+    """The error a backup that changes executor gets for the source
+    locations it was queued with (a plan's), or None. An agent's paths are
+    no server paths, nor the other way round, so they are checked against
+    the repository's new executor as the plan route checks them."""
+    from app.services.backup_route_planner import plan_repository_route
+
+    source_locations = params.get("source_locations")
+    if not source_locations:
+        return None
+    route = plan_repository_route(repository, source_locations)
+    if route.supported:
+        return None
+    return json.dumps({"key": route.reason_key, "params": route.display_params})
+
+
 async def run_backup(ctx) -> Outcome:
     from app.services.backup_service import backup_service
 
@@ -364,7 +422,17 @@ async def run_backup(ctx) -> Outcome:
     params = ctx.params
     job = BackupJobFacade(ctx.db, ctx.db.get(Operation, ctx.operation_id))
 
-    if params.get("executor") == "agent":
+    executor = _backup_executor(ctx, job, repository)
+    if executor != (params.get("executor") or "server"):
+        refusal = _sources_refusal(repository, params)
+        if refusal is not None:
+            job.status = "failed"
+            job.error_message = refusal
+            job.completed_at = datetime.utcnow()
+            ctx.db.commit()
+            return Outcome(status="failed", error_message=refusal)
+        _record_backup_executor(ctx, job, repository, executor)
+    if executor == EXECUTOR_AGENT:
         await _run_agent_backup(ctx, job, repository, params)
     else:
         watcher = asyncio.create_task(cancel_watcher(ctx, _cancel_server_backup))

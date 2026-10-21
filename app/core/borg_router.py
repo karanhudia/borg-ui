@@ -114,10 +114,34 @@ def _cancel_unqueued_maintenance_job(
         raise
 
 
+class ServerBorgRefused(RuntimeError):
+    """A server-side Borg run asked for a repository a managed agent runs.
+
+    The agent's machine holds the repository's credentials and reaches it;
+    the server must not run Borg on it, not even when it happens to reach
+    the repository too. Raised by the `BorgRouter` methods that have no
+    agent path (yet); a caller that offers the operation for an agent
+    repository routes it to the agent before it gets here."""
+
+    def __init__(self, operation: str, repository_id: Any = None):
+        self.operation = operation
+        self.repository_id = repository_id
+        super().__init__(
+            f"{operation} runs Borg on the server, and repository "
+            f"{repository_id} is run by an agent"
+        )
+
+
 class BorgRouter:
     def __init__(self, repo):
         self.repo = repo
         self.is_v2 = is_borg2(repo)
+
+    def _refuse_agent_repository(self, operation: str) -> None:
+        """Raise `ServerBorgRefused` for an agent repository: the method that
+        calls this runs Borg on the server and has no agent path."""
+        if self._is_agent():
+            raise ServerBorgRefused(operation, getattr(self.repo, "id", None))
 
     def validate_local_repository_access(self) -> None:
         """Fail fast for clearly invalid local repository paths.
@@ -126,6 +150,7 @@ class BorgRouter:
         For Borg 2, avoid Borg 1 layout assumptions and only assert that the
         repository path exists as a directory.
         """
+        self._refuse_agent_repository("validate_local_repository_access")
         if self.is_v2:
             from app.services.v2.backup_service import backup_v2_service
 
@@ -490,7 +515,11 @@ class BorgRouter:
         return await borg.break_lock(self.repo.path, **kwargs)
 
     async def run_wipe_delete(self, *, dry_run: bool, env: dict = None) -> dict:
-        """Run the version-aware repository contents wipe delete command."""
+        """Run the version-aware repository contents wipe delete command.
+
+        Server-side only: an agent repository's wipe deletes its archives
+        one by one on the agent (`repository_wipe_service`)."""
+        self._refuse_agent_repository("run_wipe_delete")
         cmd = self.build_wipe_delete_command(dry_run=dry_run)
         if self.is_v2:
             from app.core.borg2 import borg2
@@ -502,7 +531,10 @@ class BorgRouter:
         return await borg._execute_command(cmd, env=env)
 
     async def run_wipe_compact(self, *, env: dict = None) -> dict:
-        """Run the version-aware compact command used after wipe delete."""
+        """Run the version-aware compact command used after wipe delete.
+
+        Server-side only, like `run_wipe_delete`."""
+        self._refuse_agent_repository("run_wipe_compact")
         cmd = self.build_wipe_compact_command()
         if self.is_v2:
             from app.core.borg2 import borg2
@@ -516,6 +548,9 @@ class BorgRouter:
     async def preview_restore(
         self, archive: str, paths: List[str], destination: str, env: dict = None
     ) -> dict:
+        """Server-side only: the agent's restore has no dry run yet, and the
+        preview route refuses an agent repository."""
+        self._refuse_agent_repository("preview_restore")
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
@@ -551,6 +586,9 @@ class BorgRouter:
         browse_depth: Optional[int] = None,
         env: dict = None,
     ) -> dict:
+        """Server-side only: the browse routes list an agent repository's
+        archive with `repository.list_archive_contents`."""
+        self._refuse_agent_repository("list_archive_contents")
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
@@ -583,7 +621,9 @@ class BorgRouter:
         self, archive_a: str, archive_b: str, *, env: dict = None, timeout: int = 3600
     ):
         """Stream diff lines. Pass `aid:<id>` references for Borg 2 and
-        archive names for Borg 1."""
+        archive names for Borg 1. Server-side only: the history index reads
+        an agent repository through `AgentChangeStream`."""
+        self._refuse_agent_repository("diff_archives")
         if self.is_v2:
             from app.core.borg2 import borg2
 
@@ -612,6 +652,8 @@ class BorgRouter:
     def list_archive_lines(
         self, archive: str, *, env: dict = None, timeout: int = 3600
     ):
+        """Server-side only, like `diff_archives`."""
+        self._refuse_agent_repository("list_archive_lines")
         if self.is_v2:
             from app.core.borg2 import borg2
 
@@ -1227,7 +1269,11 @@ class BorgRouter:
         must not treat that as "the repository has no archives": see
         `list_archives`, which collapses both cases into an empty list and is
         only safe for callers that just need a best-effort listing.
+
+        Server-side only: the archive index and the wipe list an agent
+        repository with `repository.list_archives`.
         """
+        self._refuse_agent_repository("list_archives")
         import json
 
         def _parse_archives_payload(payload) -> list:
@@ -1355,7 +1401,11 @@ class BorgRouter:
         )
 
     async def export_keyfile(self, output_path: str) -> dict:
-        """Export the repository keyfile through the version-aware service layer."""
+        """Export the repository keyfile through the version-aware service layer.
+
+        Server-side only: the agent has no key export, and the keyfile route
+        refuses an agent repository."""
+        self._refuse_agent_repository("export_keyfile")
         if self.is_v2:
             from app.services.v2.repository_service import repository_v2_service
 
