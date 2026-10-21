@@ -5,6 +5,9 @@ the version the installer pins as PINNED_AGENT_VERSION — comes from pyproject'
 [project] version, not from borg_ui_agent.__version__. Bumping only one drifts
 silently: __init__.py read 0.1.3 while the wheel shipped 0.1.2, so a server built
 from that tree offered every node an agent a release behind its own code.
+
+Neither is edited by hand: scripts/agent_version.py moves both at release time
+and on edge builds.
 """
 
 from __future__ import annotations
@@ -12,8 +15,6 @@ from __future__ import annotations
 import re
 import tomllib
 from pathlib import Path
-
-from app.core.agent_versions import compute_agent_upgrade_status
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -38,147 +39,4 @@ def test_agent_wheel_version_matches_the_package_version():
         f"pyproject.toml pins {pyproject}, but borg_ui_agent.__version__ is "
         f"{dunder}. The built wheel takes the pyproject version, so the installer "
         "would ship an agent that disagrees with the code."
-    )
-
-
-def test_an_agent_from_before_the_borg1_lock_wait_change_is_offered_an_upgrade():
-    """#1220 changed the agent's Borg 1 command lines (--lock-wait) without
-    moving the version, so a server built from that tree kept telling a 0.1.10
-    agent it was up to date and never sent it the fix (#1231). The served
-    version is the wheel's, so the pyproject version is the one compared.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.10", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_from_before_the_borg_flag_allowlist_is_offered_an_upgrade():
-    """The agent validates custom borg flags itself from 0.1.12, so a server
-    built from this tree must offer 0.1.11 agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.11", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_from_before_the_system_trust_store_change_is_offered_an_upgrade():
-    """From 0.1.13 the agent verifies TLS against the machine's trust store, so
-    a self-signed server certificate installed there works (#1272). A server
-    built from this tree must offer 0.1.12 agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.12", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_from_before_macos_support_is_offered_an_upgrade():
-    """From 0.1.14 the agent runs on macOS, so a server built from this tree
-    must offer 0.1.13 agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.13", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_from_before_the_borg2_b25_adoption_is_offered_an_upgrade():
-    """From 0.1.15 the agent speaks Borg 2.0.0b25 (BORG_REMOTE_PATH in place
-    of --remote-path, the repository key for the index size, rest:// and the
-    unencrypted mode refused) and `repository.disk_usage` runs `du -A -sk` on
-    macOS and reports bytes (#1291), so a server built from this tree must
-    offer 0.1.14 agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.14", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_from_before_the_upgrade_record_comparison_is_offered_an_upgrade():
-    """From 0.1.16 the agent compares its server with the upgrade record, so a
-    server built from this tree must offer 0.1.15 agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.15", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_from_before_the_per_major_flag_checks_is_offered_an_upgrade():
-    """From 0.1.17 the agent checks custom flags against the job's Borg major
-    and leaves the upload limit out of a Borg 2 backup (#1263), so a server
-    built from this tree must offer 0.1.16 agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.16", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_from_before_the_rclone_upload_limit_is_offered_an_upgrade():
-    """From 0.1.18 a Borg 2 backup behind rclone takes its upload limit as
-    RCLONE_BWLIMIT (#1307), so a server built from this tree must offer 0.1.17
-    agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.17", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_from_before_set_server_moves_the_record_is_offered_an_upgrade():
-    """From 0.1.19 `set-server` moves the upgrade record along with the config
-    when it may write it (#1253), so a server built from this tree must offer
-    0.1.18 agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.18", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_from_before_the_macos_service_path_fix_is_offered_an_upgrade():
-    """From 0.1.20 a macOS install names the directories it found Borg in on
-    the launchd jobs' PATH (#1290), so a server built from this tree must offer
-    0.1.19 agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.19", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
-    )
-
-
-def test_an_agent_that_drops_an_undelivered_outcome_is_offered_an_upgrade():
-    """From 0.1.21 the agent keeps a job's outcome until the server has it
-    (#1377) and names the run its log lines belong to (#1383), so a server
-    built from this tree must offer 0.1.20 agents the upgrade.
-    """
-    assert (
-        compute_agent_upgrade_status(
-            reported="0.1.20", desired=None, available=_pyproject_version()
-        )
-        == "outdated"
     )

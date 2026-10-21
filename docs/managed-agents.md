@@ -269,7 +269,7 @@ a chip on the agent card:
 | --- | --- |
 | No chip | The agent runs the version this server serves. Nothing to do. |
 | **Update available** | The agent is older than the version this server serves. Use the Upgrade action on the row, or reinstall it with the plain `--reinstall` command above. |
-| **Ahead of server** | The agent is newer than the version this server serves, which happens after a server rollback. Upgrade the server rather than downgrading the agent. |
+| **Ahead of server** | The agent is newer than the version this server serves, which happens after a server rollback or after moving from the `edge` image to a release. Upgrade the server rather than downgrading the agent. |
 | **Pinned** | The agent is held at a specific version and will not follow the server. |
 | **Version unknown** | The agent has not reported a version yet, or the version cannot be compared. A freshly enrolled agent shows this until its first check-in. |
 

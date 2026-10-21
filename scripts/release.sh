@@ -28,7 +28,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-git fetch origin main
+git fetch --tags origin main
 
 if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
   echo "Error: local main must exactly match origin/main before a release." >&2
@@ -46,6 +46,8 @@ VERSION="${TAG#v}"
 echo "Preparing release $TAG from $(git rev-parse --short HEAD)..."
 npm --prefix frontend version "$VERSION" --no-git-tag-version
 printf '%s\n' "$VERSION" > VERSION
+AGENT_VERSION="$(python3 scripts/agent_version.py release)"
+echo "Agent version: $AGENT_VERSION"
 
 # app/config.py and app/main.py used to be rewritten here as well. They read
 # VERSION now, so there is nothing left to keep in step -- which is the point:
@@ -58,7 +60,8 @@ npm --prefix frontend run check:locales
 npm --prefix frontend run typecheck
 npm --prefix frontend run format:check
 
-git add VERSION frontend/package.json frontend/package-lock.json app/config.py app/main.py
+git add VERSION frontend/package.json frontend/package-lock.json app/config.py app/main.py \
+  pyproject.toml agent/borg_ui_agent/__init__.py
 git commit -m "chore(release): bump version to $VERSION"
 git tag -a "$TAG" -m "Release $TAG"
 
