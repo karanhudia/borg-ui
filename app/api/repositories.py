@@ -26,6 +26,7 @@ from app.database.models import (
     OperationRcloneDetails,
     RcloneRemote,
     Repository,
+    RepositoryScript,
     RepositoryStorage,
     ScheduledJob,
     ScheduledJobRepository,
@@ -2645,6 +2646,68 @@ def _reject_agent_borg2_payload(
         )
 
 
+def _agent_repository_scripts_refused() -> HTTPException:
+    # The server cannot run a shell script for an agent repository: it would
+    # act on the wrong machine. Its hooks are scripts its agent publishes.
+    return HTTPException(
+        status_code=400,
+        detail={"key": "backend.errors.scripts.agentRepositoryRunsAgentScripts"},
+    )
+
+
+def _reject_scripts_the_executor_cannot_run(
+    db: Session,
+    repository: Repository,
+    repo_data: RepositoryUpdate,
+    target_executor_type: str,
+) -> None:
+    """Refuse an update that leaves a repository with hooks its executor
+    cannot run: an inline shell script or a library script on an agent
+    repository, an agent script on a server repository. A stored inline
+    script sent back unchanged is not a new one."""
+    was_agent = repository_executor_type(repository) == "agent"
+    fields = ("pre_backup_script", "post_backup_script")
+    if target_executor_type == "agent":
+        sent = {f: getattr(repo_data, f) for f in fields}
+        if any(
+            value is not None
+            and value.strip()
+            and value != (getattr(repository, f) or "")
+            for f, value in sent.items()
+        ):
+            raise _agent_repository_scripts_refused()
+        if not was_agent:
+            kept_inline = any(
+                (
+                    sent[f] if sent[f] is not None else getattr(repository, f) or ""
+                ).strip()
+                for f in fields
+            )
+            library_hooks = (
+                db.query(RepositoryScript.id)
+                .filter(
+                    RepositoryScript.repository_id == repository.id,
+                    RepositoryScript.enabled == True,  # noqa: E712
+                    RepositoryScript.script_id.isnot(None),
+                )
+                .first()
+            )
+            if kept_inline or library_hooks:
+                raise _agent_repository_scripts_refused()
+    elif was_agent and (
+        db.query(RepositoryScript.id)
+        .filter(
+            RepositoryScript.repository_id == repository.id,
+            RepositoryScript.agent_script_name.isnot(None),
+        )
+        .first()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.scripts.agentScriptNeedsAgentRepository"},
+        )
+
+
 async def _create_agent_repository_record(
     repo_data: Union[RepositoryCreate, RepositoryImport],
     current_user: User,
@@ -2652,6 +2715,10 @@ async def _create_agent_repository_record(
     *,
     imported: bool,
 ):
+    if (repo_data.pre_backup_script or "").strip() or (
+        repo_data.post_backup_script or ""
+    ).strip():
+        raise _agent_repository_scripts_refused()
     # Borg 2 by version or by a Borg-2-only encryption, as the server path
     # decides; the row and the agent's jobs carry this major.
     borg_version = 2 if _uses_borg2_payload(repo_data) else 1
@@ -4920,6 +4987,9 @@ async def update_repository(
                 "executor_type" in update_data or repo_data.execution_target is not None
             )
             else repository_executor_type(repository)
+        )
+        _reject_scripts_the_executor_cannot_run(
+            db, repository, repo_data, target_executor_type
         )
 
         target_connection_id = (

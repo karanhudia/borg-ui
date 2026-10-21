@@ -119,6 +119,7 @@ vi.mock('../AdvancedRepositoryOptions', () => ({
     onRemotePathChange,
     onCustomFlagsChange,
     onUploadRatelimitMbChange = () => {},
+    agentRepository = false,
   }: {
     remotePath: string
     customFlags: string
@@ -126,8 +127,10 @@ vi.mock('../AdvancedRepositoryOptions', () => ({
     onRemotePathChange: (value: string) => void
     onCustomFlagsChange: (value: string) => void
     onUploadRatelimitMbChange?: (value: string) => void
+    agentRepository?: boolean
   }) => (
     <div data-testid="advanced-options">
+      <span data-testid="scripts-agent-repository">{String(agentRepository)}</span>
       <label htmlFor="remote-borg-path">Remote Borg Path</label>
       <input
         id="remote-borg-path"
@@ -1549,6 +1552,40 @@ describe('RepositoryWizard', () => {
 
       await waitFor(() => {
         expect(screen.getByLabelText(/Upload speed limit/i)).toHaveValue('1.5')
+      })
+    })
+
+    it("offers the saved executor's hooks while an edit switches it", async () => {
+      const user = userEvent.setup()
+      renderWizard('edit', {
+        id: 13,
+        name: 'Server Repo',
+        path: '/backups/server-repo',
+        mode: 'full',
+        repository_type: 'local',
+        storage_backend: 'local',
+        execution_target: 'local',
+        executor_type: 'server',
+        borg_version: 1,
+        encryption: 'none',
+        compression: 'lz4',
+        connection_id: null,
+        rclone_storage: null,
+      })
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Server Repo')
+      })
+
+      // switched to an agent in the form, not saved yet
+      await chooseDestination(user, /Managed Agent/i)
+      const advancedStep = screen.getByText('Advanced').closest('div')
+      expect(advancedStep).not.toBeNull()
+      fireEvent.click(advancedStep!)
+
+      // a hook is assigned to the saved repository at once: the server's
+      // hooks stay on offer until the switch is saved
+      await waitFor(() => {
+        expect(screen.getByTestId('scripts-agent-repository')).toHaveTextContent('false')
       })
     })
 

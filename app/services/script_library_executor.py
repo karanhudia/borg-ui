@@ -185,6 +185,8 @@ class ScriptLibraryExecutor:
                 RepositoryScript.repository_id == repository_id,
                 RepositoryScript.hook_type == hook_type,
                 RepositoryScript.enabled == True,
+                # agent scripts run on the agent, never here
+                RepositoryScript.script_id.isnot(None),
             )
             .options(joinedload(RepositoryScript.script))
             .order_by(RepositoryScript.execution_order)
