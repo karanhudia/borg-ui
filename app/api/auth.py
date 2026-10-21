@@ -1920,7 +1920,7 @@ async def begin_passkey_registration(
         exclude_credentials=existing_credentials,
         authenticator_selection=webauthn["AuthenticatorSelectionCriteria"](
             resident_key=webauthn["ResidentKeyRequirement"].REQUIRED,
-            user_verification=webauthn["UserVerificationRequirement"].PREFERRED,
+            user_verification=webauthn["UserVerificationRequirement"].REQUIRED,
         ),
     )
     options_json = webauthn["options_to_json"](options)
@@ -2049,7 +2049,7 @@ async def begin_passkey_authentication(request: Request, db: Session = Depends(g
     origin, rp_id = resolve_origin_and_rp_id(request)
     options = webauthn["generate_authentication_options"](
         rp_id=rp_id,
-        user_verification=webauthn["UserVerificationRequirement"].PREFERRED,
+        user_verification=webauthn["UserVerificationRequirement"].REQUIRED,
     )
     options_json = webauthn["options_to_json"](options)
     options_dict = parse_options_json(options_json)
