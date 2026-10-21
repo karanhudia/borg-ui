@@ -6261,6 +6261,8 @@
         "backupCompletedWithWarning": "Copia de seguridad completada con advertencia (código de salida {{exitCode}})",
         "backupWarningPostHooksFailed": "La copia de seguridad se completó con advertencia pero los hooks post-copia fallaron: {{failed}}/{{total}} scripts fallaron",
         "containerRestartedDuringBackup": "El contenedor se reinició durante la operación de copia de seguridad",
+        "postBackupHooksAfterCancel": "Esta ejecución se canceló después de que se ejecutaran sus hooks pre-copia. Sus hooks post-copia de seguridad se ejecutan cuando terminan sus copias de seguridad; si este mensaje permanece, no pudieron ejecutarse o fallaron. Comprueba qué detuvieron los hooks pre-copia.",
+        "postBackupHooksAfterRestart": "Un reinicio interrumpió esta ejecución después de que se ejecutaran sus hooks pre-copia. Si este mensaje permanece, sus hooks post-copia de seguridad no pudieron ejecutarse tras el reinicio o fallaron. Comprueba qué detuvieron los hooks pre-copia.",
         "containerRestartedDuringOperation": "El contenedor se reinició durante la operación",
         "containerRestartedDuringRestore": "El contenedor se reinició durante la operación de restauración",
         "failedCreateDestinationDir": "Error al crear el directorio de destino: {{error}}",

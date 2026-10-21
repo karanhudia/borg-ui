@@ -6261,6 +6261,8 @@
         "backupCompletedWithWarning": "Sicherung mit Warnung abgeschlossen (Exitcode {{exitCode}})",
         "backupWarningPostHooksFailed": "Sicherung mit Warnung abgeschlossen, aber Post-Sicherungs-Hooks fehlgeschlagen: {{failed}}/{{total}} Skripte fehlgeschlagen",
         "containerRestartedDuringBackup": "Container wurde während der Sicherungsoperation neu gestartet",
+        "postBackupHooksAfterCancel": "Dieser Lauf wurde abgebrochen, nachdem seine Pre-Backup-Hooks gelaufen sind. Seine Post-Backup-Hooks laufen, sobald seine Sicherungen beendet sind. Bleibt diese Meldung stehen, konnten sie nicht laufen oder sind fehlgeschlagen. Prüfe, was die Pre-Backup-Hooks angehalten haben.",
+        "postBackupHooksAfterRestart": "Ein Neustart hat diesen Lauf unterbrochen, nachdem seine Pre-Backup-Hooks gelaufen sind. Bleibt diese Meldung stehen, konnten seine Post-Backup-Hooks nach dem Neustart nicht laufen oder sind fehlgeschlagen. Prüfe, was die Pre-Backup-Hooks angehalten haben.",
         "containerRestartedDuringOperation": "Container wurde während des Vorgangs neu gestartet",
         "containerRestartedDuringRestore": "Container wurde während der Wiederherstellungsoperation neu gestartet",
         "failedCreateDestinationDir": "Zielverzeichnis konnte nicht erstellt werden: {{error}}",

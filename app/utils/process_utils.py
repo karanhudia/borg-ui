@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 import structlog
 from datetime import datetime, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, object_session
 from app.config import settings
 from app.core.borg_router import BorgRouter
@@ -25,6 +25,7 @@ from app.database.models import (
     BackupPlanRunRepository,
     Operation,
     Repository,
+    ScriptExecution,
 )
 from app.services.operations.backup_facade import backup_jobs_in_maintenance
 from app.utils.backup_maintenance import (
@@ -48,6 +49,24 @@ CONTAINER_RESTARTED_DURING_BACKUP = json.dumps(
 CONTAINER_RESTARTED_DURING_OPERATION = json.dumps(
     {"key": "backend.errors.service.containerRestartedDuringOperation"}
 )
+# On a run a restart interrupted after its pre-backup scripts ran, until its
+# post-backup scripts ran after the restart without a failure (#1385).
+POST_BACKUP_HOOKS_AFTER_RESTART = json.dumps(
+    {"key": "backend.errors.service.postBackupHooksAfterRestart"}
+)
+# On a run cancelled after its pre-backup scripts ran, until its post-backup
+# scripts ran without a failure.
+POST_BACKUP_HOOKS_AFTER_CANCEL = json.dumps(
+    {"key": "backend.errors.service.postBackupHooksAfterCancel"}
+)
+POST_BACKUP_HOOK_MARKERS = (
+    POST_BACKUP_HOOKS_AFTER_RESTART,
+    POST_BACKUP_HOOKS_AFTER_CANCEL,
+)
+# The script executions the pre-backup and the post-backup scripts of a plan
+# run leave, each before it starts.
+PRE_BACKUP_SCRIPT_HOOK_TYPES = ("pre-backup", "source-pre-backup")
+POST_BACKUP_SCRIPT_HOOK_TYPES = ("post-backup", "source-post-backup")
 
 
 def _plan_repository_failed(status: Optional[str]) -> bool:
@@ -100,12 +119,84 @@ def _finalize_interrupted_backup_plan_run(
     run.completed_at = run.completed_at or now
 
 
+def pre_backup_scripts_started(db: Session, run_id: int) -> bool:
+    """Whether a pre-backup script of the run started, from the script
+    execution each records before it starts."""
+    return (
+        db.query(ScriptExecution.id)
+        .filter(
+            ScriptExecution.backup_plan_run_id == run_id,
+            ScriptExecution.hook_type.in_(PRE_BACKUP_SCRIPT_HOOK_TYPES),
+        )
+        .first()
+        is not None
+    )
+
+
+def _post_backup_scripts_after_restart(db: Session, run_id: int) -> Optional[str]:
+    """What the restart left of the run's post-backup scripts, from the
+    script executions each leaves before it starts: "pending" when a
+    pre-backup script started and no post-backup script did, "interrupted"
+    when a post-backup script started on a run the restart found active,
+    since which of them still had to run is unknown, else None."""
+    hook_types = {
+        hook_type
+        for (hook_type,) in db.query(ScriptExecution.hook_type)
+        .filter(ScriptExecution.backup_plan_run_id == run_id)
+        .distinct()
+    }
+    if hook_types & set(POST_BACKUP_SCRIPT_HOOK_TYPES):
+        return "interrupted"
+    if hook_types & set(PRE_BACKUP_SCRIPT_HOOK_TYPES):
+        return "pending"
+    return None
+
+
+def _post_backup_scripts_still_pending(
+    db: Session, live_plan_run_ids: Collection[int]
+) -> list[int]:
+    """Finished runs that still say their post-backup scripts are to run,
+    after a restart or a cancel, and none of them started: the restart came
+    before they did. A run whose plan is gone has none to run."""
+    query = db.query(BackupPlanRun.id).filter(
+        BackupPlanRun.status.notin_(ACTIVE_PLAN_RUN_STATUSES),
+        BackupPlanRun.backup_plan_id.isnot(None),
+        or_(
+            *(
+                BackupPlanRun.error_message.contains(marker)
+                for marker in POST_BACKUP_HOOK_MARKERS
+            )
+        ),
+    )
+    if live_plan_run_ids:
+        query = query.filter(BackupPlanRun.id.notin_(live_plan_run_ids))
+    return [
+        run_id
+        for (run_id,) in query.order_by(BackupPlanRun.id)
+        if _post_backup_scripts_after_restart(db, run_id) == "pending"
+    ]
+
+
+def _mark_post_backup_scripts_unsettled(run: BackupPlanRun) -> None:
+    """Say on a finished run that its post-backup scripts have not run to an
+    end: what its pre-backup scripts stopped may still be stopped."""
+    if run.status == "completed":
+        run.status = "completed_with_warnings"
+    run.error_message = "\n".join(
+        [run.error_message or CONTAINER_RESTARTED_DURING_BACKUP]
+        + [POST_BACKUP_HOOKS_AFTER_RESTART]
+    )
+
+
 def _normalize_interrupted_backup_plan_runs(
     db: Session,
     now: datetime,
     interrupted_runs: Optional[list[BackupPlanRun]] = None,
+    pending_post_hooks: Optional[list[int]] = None,
 ) -> int:
-    """Finish active backup plan run rows that cannot resume after a restart."""
+    """Finish active backup plan run rows that cannot resume after a restart.
+    The runs whose post-backup scripts are still to run are added to
+    `pending_post_hooks`."""
     if interrupted_runs is None:
         interrupted_runs = (
             db.query(BackupPlanRun)
@@ -123,6 +214,13 @@ def _normalize_interrupted_backup_plan_runs(
         _finalize_interrupted_backup_plan_run(
             run, now, CONTAINER_RESTARTED_DURING_BACKUP
         )
+        # Post-backup scripts still to run run after the restart; one the
+        # restart interrupted does not run twice, so the run says so.
+        post_scripts = _post_backup_scripts_after_restart(db, run.id)
+        if post_scripts is not None:
+            _mark_post_backup_scripts_unsettled(run)
+            if post_scripts == "pending" and pending_post_hooks is not None:
+                pending_post_hooks.append(run.id)
 
         logger.info(
             "Normalized interrupted backup plan run after restart",
@@ -586,11 +684,15 @@ def _is_remote_repository(repository: Repository, db: Session) -> bool:
     )
 
 
-def cleanup_orphaned_jobs(db: Session, live_plan_run_ids: Collection[int] = ()):
+def cleanup_orphaned_jobs(
+    db: Session, live_plan_run_ids: Collection[int] = ()
+) -> list[int]:
     """Normalise what a restart leaves behind that the operations runner's
     own recovery (spec 7.6) does not cover: backup rows still in a running
     maintenance state, and backup plan runs left active. `live_plan_run_ids`
-    are plan runs this process is executing; they are not left behind."""
+    are plan runs this process is executing; they are not left behind.
+    Returns the plan runs whose post-backup scripts are still to run (#1385).
+    """
     logger.info("Checking for orphaned jobs...")
 
     now = datetime.utcnow()
@@ -607,12 +709,13 @@ def cleanup_orphaned_jobs(db: Session, live_plan_run_ids: Collection[int] = ()):
         active_backup_plan_runs=len(active_backup_plan_runs),
     )
 
+    pending_post_hooks = _post_backup_scripts_still_pending(db, live_plan_run_ids)
     if not stale_backup_jobs and not active_backup_plan_runs:
         logger.info("No orphaned jobs found")
-        return
+        return pending_post_hooks
 
     normalized_plan_runs = _normalize_interrupted_backup_plan_runs(
-        db, now, active_backup_plan_runs
+        db, now, active_backup_plan_runs, pending_post_hooks
     )
     if normalized_plan_runs:
         logger.info(
@@ -622,6 +725,7 @@ def cleanup_orphaned_jobs(db: Session, live_plan_run_ids: Collection[int] = ()):
 
     db.commit()
     logger.info("Orphaned job cleanup completed")
+    return pending_post_hooks
 
 
 def cleanup_orphaned_mounts():
