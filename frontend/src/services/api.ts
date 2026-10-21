@@ -4,6 +4,7 @@ import type { SyncState } from '../types/archives'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { getBrowserTimeZone } from '@/utils/dateUtils'
+import { trackApiError } from '@/utils/analytics'
 import {
   API_BASE_URL,
   buildApiUrl,
@@ -118,6 +119,7 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    trackApiError(error)
     // Only redirect to login for 401 errors on authenticated endpoints
     // Don't redirect if:
     // 1. We're trying to login

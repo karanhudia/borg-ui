@@ -9,6 +9,7 @@
 
 import { authAPI } from '../services/api'
 import { fetchJsonForAuthMode } from '../services/authRequest'
+import { BASE_PATH } from './basePath'
 import { randomUuid } from './uuid'
 
 export const ANALYTICS_ENDPOINT = 'https://t.borgui.com/e'
@@ -58,6 +59,59 @@ let pendingPageviews: { path: string; at: string }[] = []
 let pendingForced: { name: string; data?: Props; at: { path: string; at: string } }[] = []
 
 const sessionKey = randomUuid()
+
+/**
+ * The route a path belongs to: no deployment base path, and every segment that is
+ * not a plain lowercase word (an id, an `aid:` selector) replaced with `:id`, so
+ * paths group by page and carry nothing that identifies a repository or archive.
+ */
+export const normalizeRoute = (pathname: string): string => {
+  const path =
+    BASE_PATH && (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`))
+      ? pathname.slice(BASE_PATH.length) || '/'
+      : pathname
+  return path.replace(/[^/]+/g, (segment) => (/^[a-z][a-z-]*$/.test(segment) ? segment : ':id'))
+}
+
+const currentRoute = (): string => normalizeRoute(window.location.pathname)
+
+interface ErrorLike {
+  isAxiosError?: boolean
+  code?: string
+  config?: { method?: string; url?: string }
+  response?: { status?: number; data?: { detail?: unknown } }
+}
+
+/**
+ * A coarse class for a failure, from its HTTP status or transport code only. Error
+ * messages are never sent: they carry paths, hostnames and repository names.
+ */
+export const errorClass = (error: unknown): string => {
+  const err = error as ErrorLike | null
+  if (!err?.isAxiosError) return 'unknown'
+  const status = err.response?.status
+  if (!status)
+    return err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT' ? 'timeout' : 'network'
+  if (status === 400 || status === 422) return 'validation'
+  if (status === 401) return 'auth'
+  if (status === 403) return 'permission'
+  if (status === 404) return 'not_found'
+  if (status === 409) return 'conflict'
+  if (status === 429) return 'rate_limited'
+  if (status >= 500) return 'server'
+  return 'client'
+}
+
+// The API area a request belongs to: its first path segment after any version
+// prefix, which is a fixed route name. Never the rest, which can hold names.
+const apiArea = (url?: string): string => {
+  const segments = (url ?? '').split('?')[0].split('/').filter(Boolean)
+  const first =
+    segments[0] === 'api' || segments[0] === 'v2'
+      ? segments.find((s) => s !== 'api' && s !== 'v2')
+      : segments[0]
+  return first && /^[a-z][a-z0-9_-]*$/.test(first) ? first : 'other'
+}
 
 /**
  * Generate anonymous hash for entity names
@@ -155,7 +209,7 @@ const enqueue = (
   name: string,
   data?: Props,
   force = false,
-  at = { path: window.location.pathname, at: new Date().toISOString() }
+  at = { path: currentRoute(), at: new Date().toISOString() }
 ): void => {
   if (!instanceKey) {
     if (force && pendingForced.length < MAX_BATCH) pendingForced.push({ name, data, at })
@@ -261,7 +315,7 @@ export const trackPageView = (_path?: string): void => {
   // is off is dropped, even during a reload that turns it on.
   if (!canTrack()) {
     if (!preferenceLoaded && pendingPageviews.length < MAX_BATCH) {
-      pendingPageviews.push({ path: window.location.pathname, at: new Date().toISOString() })
+      pendingPageviews.push({ path: currentRoute(), at: new Date().toISOString() })
     }
     return
   }
@@ -285,6 +339,38 @@ export const trackEvent = (
   }
   if (value !== undefined) data.value = value
   enqueue(`${category} - ${action}`, data)
+}
+
+/**
+ * Called by the API clients for every failed request. A plan gate the backend
+ * refused is a blocked feature like any in the UI; any other failed change (not a
+ * read, not an expired session) is `API - Fail` with its area, method and class.
+ */
+export const trackApiError = (error: unknown): void => {
+  const err = error as ErrorLike
+  const detail = err?.response?.data?.detail as
+    { key?: string; feature?: string; required?: string; current?: string } | undefined
+  const area = apiArea(err?.config?.url)
+  if (typeof detail?.key === 'string' && detail.key.startsWith('backend.errors.plan.')) {
+    trackEvent(EventCategory.PLAN, EventAction.FEATURE_BLOCKED, {
+      feature: detail.feature,
+      required_plan: detail.required,
+      current_plan: detail.current,
+      allowed: false,
+      surface: 'api',
+      operation: area,
+      gate_mode: 'api_error',
+    })
+    return
+  }
+  const method = err?.config?.method?.toLowerCase()
+  if (!method || method === 'get' || method === 'head' || err.response?.status === 401) return
+  trackEvent(EventCategory.API, EventAction.FAIL, {
+    area,
+    method,
+    ...(err.response?.status ? { status: err.response.status } : {}),
+    error_class: errorClass(error),
+  })
 }
 
 export const setAppVersion = (version: string): void => {
@@ -349,6 +435,8 @@ export const EventCategory = {
   ANNOUNCEMENT: 'Announcement',
   REMOTE_CLIENT: 'Remote Client',
   QUICK_START: 'Quick Start',
+  WIZARD: 'Wizard',
+  API: 'API',
 } as const
 
 // Pre-defined event actions

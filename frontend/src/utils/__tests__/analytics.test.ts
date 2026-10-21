@@ -350,3 +350,125 @@ describe('anonymizeEntityName', () => {
     expect(a.anonymizeEntityName('repo')).toBe(a.anonymizeEntityName('repo'))
   })
 })
+
+describe('route normalization', () => {
+  it('replaces ids in the path of page views and events with placeholders', async () => {
+    const a = await load()
+    window.history.pushState({}, '', '/archives/12/345')
+    a.trackPageView()
+    window.history.pushState({}, '', '/repositories/7/prune-preview')
+    a.trackEvent('Archive', 'View')
+    vi.advanceTimersByTime(5000)
+    expect(sent().map((event) => event.path)).toEqual([
+      '/archives/:id/:id',
+      '/repositories/:id/prune-preview',
+    ])
+  })
+
+  it('keeps static routes as they are', async () => {
+    const a = await load()
+    expect(a.normalizeRoute('/settings/beta-features')).toBe('/settings/beta-features')
+    expect(a.normalizeRoute('/schedule/checks')).toBe('/schedule/checks')
+    expect(a.normalizeRoute('/archives/aid:abc123/9')).toBe('/archives/:id/:id')
+  })
+
+  it('drops the deployment base path', async () => {
+    ;(window as unknown as { __BASE_PATH__?: string }).__BASE_PATH__ = '/acme-backups'
+    try {
+      const a = await load()
+      window.history.pushState({}, '', '/acme-backups/repositories')
+      a.trackPageView()
+      vi.advanceTimersByTime(5000)
+      expect(sent()[0].path).toBe('/repositories')
+    } finally {
+      delete (window as unknown as { __BASE_PATH__?: string }).__BASE_PATH__
+    }
+  })
+})
+
+describe('errorClass', () => {
+  it('maps an error to a coarse class, never its message', async () => {
+    const a = await load()
+    const http = (status: number) => ({ isAxiosError: true, response: { status } })
+    expect(a.errorClass(http(400))).toBe('validation')
+    expect(a.errorClass(http(422))).toBe('validation')
+    expect(a.errorClass(http(401))).toBe('auth')
+    expect(a.errorClass(http(403))).toBe('permission')
+    expect(a.errorClass(http(404))).toBe('not_found')
+    expect(a.errorClass(http(409))).toBe('conflict')
+    expect(a.errorClass(http(429))).toBe('rate_limited')
+    expect(a.errorClass(http(502))).toBe('server')
+    expect(a.errorClass(http(418))).toBe('client')
+    expect(a.errorClass({ isAxiosError: true, code: 'ECONNABORTED' })).toBe('timeout')
+    expect(a.errorClass({ isAxiosError: true, code: 'ERR_NETWORK' })).toBe('network')
+    expect(a.errorClass(new Error('/srv/secret failed'))).toBe('unknown')
+  })
+})
+
+describe('trackApiError', () => {
+  const planError = {
+    isAxiosError: true,
+    config: { method: 'post', url: '/v2/repositories/' },
+    response: {
+      status: 403,
+      data: {
+        detail: {
+          key: 'backend.errors.plan.featureNotAvailable',
+          feature: 'borg_v2',
+          required: 'pro',
+          current: 'community',
+        },
+      },
+    },
+  }
+
+  it('reports a plan gate refused by the backend as a blocked feature', async () => {
+    const a = await load()
+    a.trackApiError(planError)
+    vi.advanceTimersByTime(5000)
+    expect(sent()[0]).toMatchObject({
+      name: 'Plan - FeatureBlocked',
+      props: {
+        feature: 'borg_v2',
+        required_plan: 'pro',
+        current_plan: 'community',
+        allowed: false,
+        surface: 'api',
+        operation: 'repositories',
+        gate_mode: 'api_error',
+      },
+    })
+  })
+
+  it('reports a failed change as API - Fail with only its area, method and class', async () => {
+    const a = await load()
+    a.trackApiError({
+      isAxiosError: true,
+      config: { method: 'put', url: '/repositories/12/settings?name=home' },
+      response: { status: 500, data: { detail: 'borg: /srv/secret is locked' } },
+    })
+    vi.advanceTimersByTime(5000)
+    const [event] = sent()
+    expect(event).toMatchObject({
+      name: 'API - Fail',
+      props: { area: 'repositories', method: 'put', status: 500, error_class: 'server' },
+    })
+    expect(JSON.stringify(event)).not.toContain('secret')
+  })
+
+  it('ignores reads and expired sessions', async () => {
+    const a = await load()
+    a.trackApiError({
+      isAxiosError: true,
+      config: { method: 'get', url: '/x' },
+      response: { status: 500 },
+    })
+    a.trackApiError({
+      isAxiosError: true,
+      config: { method: 'post', url: '/x' },
+      response: { status: 401 },
+    })
+    vi.advanceTimersByTime(5000)
+    expect(fetchMock()).not.toHaveBeenCalled()
+  })
+})

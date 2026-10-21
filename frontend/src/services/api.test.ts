@@ -4,10 +4,27 @@
  * WHY: Incorrect auth handling = users stuck at login or get 401s everywhere
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
 import api, { authAPI, backupAPI, backupPlansAPI, repositoriesAPI } from './api'
 import { httpClient } from './borgApi/client'
+describe('API failure analytics', () => {
+  it('hands every failed request from both clients to trackApiError', async () => {
+    vi.resetModules()
+    const trackApiError = vi.fn()
+    vi.doMock('@/utils/analytics', () => ({ trackApiError }))
+    const { default: freshApi } = await import('./api')
+    const { httpClient: freshClient } = await import('./borgApi/client')
+    const apiMock = new MockAdapter(freshApi)
+    const borgMock = new MockAdapter(freshClient)
+    apiMock.onPost('/repositories/').reply(500)
+    borgMock.onPost('/v2/repositories/').reply(422)
+    await expect(freshApi.post('/repositories/')).rejects.toBeTruthy()
+    await expect(freshClient.post('/v2/repositories/')).rejects.toBeTruthy()
+    expect(trackApiError).toHaveBeenCalledTimes(2)
+    vi.doUnmock('@/utils/analytics')
+  })
+})
 
 describe('API Request Interceptor', () => {
   let localStorageMock: { [key: string]: string }

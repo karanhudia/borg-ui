@@ -11,6 +11,7 @@
 
 import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
+import { trackApiError } from '@/utils/analytics'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
 import { getApiBaseUrl } from '../remoteBackends/gateway'
@@ -45,6 +46,7 @@ httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 httpClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    trackApiError(error)
     if (
       error.response?.status === 401 &&
       error.config?.url !== '/auth/login' &&
