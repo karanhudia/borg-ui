@@ -180,6 +180,12 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
 
+      # Edge builds serve agent code the release has not versioned yet. A
+      # unique agent version is what makes enrolled agents get offered it.
+      - name: Stamp the edge agent version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: python3 scripts/agent_version.py edge "${{ github.run_number }}"
+
       - name: Load runtime base tag
         id: runtime
         run: |
@@ -313,6 +319,12 @@ jobs:
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
+
+      # Edge builds serve agent code the release has not versioned yet. A
+      # unique agent version is what makes enrolled agents get offered it.
+      - name: Stamp the edge agent version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: python3 scripts/agent_version.py edge "${{ github.run_number }}"
 
       - name: Load runtime base tag
         id: runtime

@@ -12,6 +12,10 @@ These instructions apply to the entire repository.
 - Do not create generic `design.md` files by default; use feature-specific specs only when a written spec is warranted.
 - When sidebar tabs, navigation groups, or the main user flow change, update the relevant user docs in the same change so navigation guidance stays current.
 
+## Versioning
+
+- Do not bump the app or managed agent version in a pull request. `scripts/release.sh` sets `VERSION` and bumps the agent version (`pyproject.toml` and `agent/borg_ui_agent/__init__.py`, via `scripts/agent_version.py`) when `agent/` changed since the last tag. Edge images stamp their own agent version.
+
 ## UI Workflow
 
 - All UI-related decisions, design changes, reviews, and implementations must use the `ui-ux-pro-max` skill before proceeding.
