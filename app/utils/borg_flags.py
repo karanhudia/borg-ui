@@ -76,6 +76,7 @@ ALLOWED_BORG_FLAGS: dict[str, dict[str, bool]] = {
         "--upload-ratelimit": True,
         "--upload-buffer": True,
         "--timestamp": True,
+        "--tags": True,
         "--dry-run": False,
         "-n": False,
     },
@@ -120,7 +121,7 @@ BORG_MAJOR_ONLY_FLAGS: dict[str, dict[int, frozenset[str]]] = {
                 "--upload-buffer",
             }
         ),
-        2: frozenset(),
+        2: frozenset({"--tags"}),
     },
     "check": {
         1: frozenset({"--save-space", "--prefix", "--glob-archives"}),

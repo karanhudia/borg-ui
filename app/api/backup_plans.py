@@ -305,6 +305,16 @@ def _disable_exclusive_repository_schedule(
     return True, None
 
 
+def _stored_script_parameters(value: Any) -> Optional[dict[str, Any]]:
+    # Older installs stored schedule script parameters as JSON strings (#1330).
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return None
+    return value if isinstance(value, dict) else None
+
+
 def _payload_from_repository(
     repository: Repository,
     schedule: Optional[ScheduledJob],
@@ -349,10 +359,14 @@ def _payload_from_repository(
         pre_backup_script_id=schedule.pre_backup_script_id if schedule else None,
         post_backup_script_id=schedule.post_backup_script_id if schedule else None,
         pre_backup_script_parameters=(
-            schedule.pre_backup_script_parameters if schedule else None
+            _stored_script_parameters(schedule.pre_backup_script_parameters)
+            if schedule
+            else None
         ),
         post_backup_script_parameters=(
-            schedule.post_backup_script_parameters if schedule else None
+            _stored_script_parameters(schedule.post_backup_script_parameters)
+            if schedule
+            else None
         ),
         run_repository_scripts=True,
         run_prune_after=bool(schedule and schedule.run_prune_after),

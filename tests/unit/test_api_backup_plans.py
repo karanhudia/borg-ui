@@ -1898,6 +1898,39 @@ class TestBackupPlanRoutes:
         assert repo.exclude_patterns is None
         assert repo.source_ssh_connection_id is None
 
+    def test_create_plan_from_repository_reads_legacy_string_script_parameters(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        # Older installs stored these as JSON-encoded strings (#1330).
+        repo = _create_repo(
+            test_db,
+            "Legacy",
+            "/repos/legacy",
+            source_directories=json.dumps(["/srv/project"]),
+        )
+        schedule = ScheduledJob(
+            name="Legacy nightly",
+            cron_expression="0 2 * * *",
+            timezone="UTC",
+            repository_id=repo.id,
+            enabled=True,
+            pre_backup_script_parameters="{}",
+            post_backup_script_parameters='{"TARGET": "db"}',
+        )
+        test_db.add(schedule)
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup-plans/from-repository/{repo.id}",
+            json={"copy_schedule": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201, response.text
+        plan = response.json()["backup_plan"]
+        assert plan["pre_backup_script_parameters"] in ({}, None)
+        assert plan["post_backup_script_parameters"] == {"TARGET": "db"}
+
     def test_create_plan_from_repository_keeps_shared_schedule_enabled(
         self, test_client: TestClient, admin_headers, test_db
     ):
