@@ -5,6 +5,7 @@ import { renderWithProviders } from '../../test/test-utils'
 import RepositoryCard from '../RepositoryCard'
 import * as useMaintenanceJobsModule from '../../hooks/useMaintenanceJobs'
 import * as useAnalyticsModule from '../../hooks/useAnalytics'
+import { EventAction, EventCategory } from '../../utils/analytics'
 
 // Mock the hooks
 vi.mock('../../hooks/useMaintenanceJobs')
@@ -112,49 +113,8 @@ describe('RepositoryCard', () => {
     trackAuth: vi.fn(),
     trackQuickStart: vi.fn(),
     buildEntityData: vi.fn(),
-    EventCategory: {
-      REPOSITORY: 'Repository',
-      BACKUP: 'Backup',
-      ARCHIVE: 'Archive',
-      MOUNT: 'Mount',
-      MAINTENANCE: 'Maintenance',
-      SSH: 'SSH Connection',
-      SCRIPT: 'Script',
-      NOTIFICATION: 'Notification',
-      SYSTEM: 'System',
-      PACKAGE: 'Package',
-      SETTINGS: 'Settings',
-      AUTH: 'Authentication',
-      NAVIGATION: 'Navigation',
-      PLAN: 'Plan',
-      ANNOUNCEMENT: 'Announcement',
-      REMOTE_CLIENT: 'Remote Client',
-      QUICK_START: 'Quick Start',
-    } as const,
-    EventAction: {
-      CREATE: 'Create',
-      EDIT: 'Edit',
-      DELETE: 'Delete',
-      VIEW: 'View',
-      START: 'Start',
-      STOP: 'Stop',
-      MOUNT: 'Mount',
-      UNMOUNT: 'Unmount',
-      DOWNLOAD: 'Download',
-      UPLOAD: 'Upload',
-      TEST: 'Test',
-      LOGIN: 'Login',
-      LOGOUT: 'Logout',
-      SEARCH: 'Search',
-      FILTER: 'Filter',
-      EXPORT: 'Export',
-      SWITCH: 'Switch',
-      COMPLETE: 'Complete',
-      FAIL: 'Fail',
-      FEATURE_USED: 'FeatureUsed',
-      FEATURE_BLOCKED: 'FeatureBlocked',
-      CANCEL: 'Cancel',
-    } as const,
+    EventCategory,
+    EventAction,
   }
 
   const mockMaintenanceJobs = {
