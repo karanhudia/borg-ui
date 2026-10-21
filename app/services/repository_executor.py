@@ -55,11 +55,14 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.archive_info",
     "repository.list_archives",
     "repository.delete_archive",
+    "repository.delete_archives",
     "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
     "repository.export_archive_tar",
     "repository.restore",
+    "repository.restore_dry_run",
+    "repository.key_export",
     "repository.check",
     "repository.prune",
     "repository.compact",
@@ -118,6 +121,12 @@ def is_agent_executor(repository: Repository) -> bool:
 # The agent job that produces an archive's change listing for the history
 # index (agents from 0.1.6).
 AGENT_DIFF_JOB_KIND = "repository.diff"
+# The restore preview's extract dry run, the repository key's export and the
+# delete of a wipe's archives in one job (#1425). Agents from before them
+# get the refusals and the per-archive wipe of #1393.
+AGENT_RESTORE_DRY_RUN_JOB_KIND = "repository.restore_dry_run"
+AGENT_KEY_EXPORT_JOB_KIND = "repository.key_export"
+AGENT_DELETE_ARCHIVES_JOB_KIND = "repository.delete_archives"
 
 
 def agent_advertises_job(agent: Any, job_kind: str) -> bool:
@@ -648,13 +657,15 @@ def agent_failure_result(
     *,
     stderr_tail: Optional[str] = None,
     failure_kind: Optional[str] = None,
+    deleted_archives: Optional[int] = None,
 ) -> dict[str, Any]:
     """The `result` a failed agent job keeps: the return code as before,
     and the report's fields when the agent sent them. The tail is bounded
     here too, and a kind this server does not know reads as `other`. Borg
     names the repository in its messages, so a location with credentials
     is redacted before the tail is kept: it reaches the operation's
-    message and the failure notifications from here."""
+    message and the failure notifications from here. `deleted_archives`
+    (a `repository.delete_archives` job) is kept when it is a count."""
     result: dict[str, Any] = {}
     if return_code is not None:
         result["return_code"] = return_code
@@ -670,6 +681,8 @@ def agent_failure_result(
             if failure_kind == FAILURE_KIND_LOCK_CONTENTION
             else FAILURE_KIND_OTHER
         )
+    if isinstance(deleted_archives, int) and deleted_archives >= 0:
+        result["deleted_archives"] = deleted_archives
     return result
 
 

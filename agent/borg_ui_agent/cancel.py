@@ -24,7 +24,11 @@ SELF_CANCELLING_JOB_KINDS = frozenset(
         "repository.prune",
         "repository.compact",
         "repository.restore",
+        "repository.restore_dry_run",
+        # an artifact stream that reports its own cancel once Borg ended
+        "repository.key_export",
         "repository.delete_archive",
+        "repository.delete_archives",
         # also run by the streaming path, which reports its own cancel
         "repository.init",
         "repository.rclone_sync",

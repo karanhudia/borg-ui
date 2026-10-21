@@ -41,6 +41,10 @@ OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS = "repository.list_archive_contents"
 OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE = "repository.extract_archive_file"
 OPERATION_REPOSITORY_EXPORT_ARCHIVE_TAR = "repository.export_archive_tar"
 OPERATION_REPOSITORY_DIFF = "repository.diff"
+# The restore preview: an extract with --dry-run, reading what a restore
+# would read and writing nothing.
+OPERATION_RESTORE_DRY_RUN = "restore.dry_run"
+OPERATION_REPOSITORY_KEY_EXPORT = "repository.key_export"
 OPERATION_BREAK_LOCK = "break_lock"
 OPERATION_DISK_USAGE = "repository.disk_usage"
 OPERATION_STORAGE_USAGE = "repository.storage_usage"
@@ -115,6 +119,8 @@ READ_OPERATIONS = {
     # can run for hours on a large archive, so it is not transient read
     # work: a write that arrives meanwhile is refused, not waited out.
     OPERATION_REPOSITORY_DIFF,
+    OPERATION_RESTORE_DRY_RUN,
+    OPERATION_REPOSITORY_KEY_EXPORT,
     # rclone reads the repository and writes only to the remote, so it
     # cannot corrupt local state the way a write operation can.
     OPERATION_RCLONE_SYNC,
@@ -139,12 +145,16 @@ AGENT_JOB_KIND_OPERATIONS = {
     "repository.archive_info": OPERATION_REPOSITORY_INFO,
     "repository.list_archives": OPERATION_REPOSITORY_LIST_ARCHIVES,
     "repository.delete_archive": OPERATION_DELETE_ARCHIVE,
+    # a wipe's archives, deleted one after the other in one job
+    "repository.delete_archives": OPERATION_DELETE_ARCHIVE,
     "repository.break_lock": OPERATION_BREAK_LOCK,
     "repository.list_archive_contents": OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     "repository.extract_archive_file": OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
     "repository.export_archive_tar": OPERATION_REPOSITORY_EXPORT_ARCHIVE_TAR,
     "repository.diff": OPERATION_REPOSITORY_DIFF,
     "repository.restore": OPERATION_RESTORE,
+    "repository.restore_dry_run": OPERATION_RESTORE_DRY_RUN,
+    "repository.key_export": OPERATION_REPOSITORY_KEY_EXPORT,
     "repository.disk_usage": OPERATION_DISK_USAGE,
     "repository.storage_usage": OPERATION_STORAGE_USAGE,
     "repository.rclone_sync": OPERATION_RCLONE_SYNC,
