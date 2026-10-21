@@ -10,6 +10,7 @@ from app.database.models import (
     Repository,
     SystemSettings,
 )
+from app.services.agent_presence import backups_waiting_for_offline_agent
 from app.services.operations.vocab import (
     INDEX_KINDS,
     KINDS,
@@ -147,16 +148,32 @@ def running_count(
     return q.count()
 
 
+def running_backup_count(db: Session, *, triggers: Iterable[str]) -> int:
+    """Running backups that hold a backup slot. One that waits for an agent
+    that is away does not (#1331): its work runs on the agent, and until the
+    agent is back it does nothing but wait, so it must not hold up the
+    backups of every other machine."""
+    ids = [
+        operation_id
+        for (operation_id,) in db.query(Operation.id).filter(
+            Operation.status == "running",
+            Operation.kind == "backup",
+            Operation.trigger.in_(tuple(triggers)),
+        )
+    ]
+    return len(ids) - len(backups_waiting_for_offline_agent(db, ids))
+
+
 def global_slot_available(
     db: Session, op: Operation, settings: Optional[SystemSettings]
 ) -> bool:
     if op.kind == "backup":
         if op.trigger == "schedule":
             limit = _setting(settings, "max_concurrent_scheduled_backups")
-            return running_count(db, kind="backup", trigger="schedule") < limit
+            return running_backup_count(db, triggers=("schedule",)) < limit
         limit = _setting(settings, "max_concurrent_backups")
         non_scheduled = ("manual", "plan", "import", "retry", "followup", "reconcile")
-        return running_count(db, kind="backup", triggers=non_scheduled) < limit
+        return running_backup_count(db, triggers=non_scheduled) < limit
     if op.kind == "check" and op.trigger == "schedule":
         limit = _setting(settings, "max_concurrent_scheduled_checks")
         return running_count(db, kind="check", trigger="schedule") < limit

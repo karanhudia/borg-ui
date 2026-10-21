@@ -1154,6 +1154,9 @@ async def wait_for_agent_script_job(
                 "error_message": "agent script timed out",
             }
 
+        # As in `wait_for_agent_backup_job`: a repository hook of a backup for
+        # an agent that is away holds no backup slot either (#1331).
+        db.rollback()
         await asyncio.sleep(poll_interval_seconds)
 
 
@@ -1347,4 +1350,8 @@ async def wait_for_agent_backup_job(
                 "cancelled" if agent_job.status == "canceled" else agent_job.status
             )
 
+        # End the read before sleeping, so the wait does not hold a pooled
+        # connection: a backup for an agent that is away holds no backup slot
+        # (#1331), so any number of them can wait at once.
+        db.rollback()
         await asyncio.sleep(poll_interval_seconds)

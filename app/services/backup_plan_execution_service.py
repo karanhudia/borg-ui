@@ -47,6 +47,11 @@ from app.services.backup_route_planner import (
     plan_repository_route,
 )
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.agent_presence import (
+    AGENT_OFFLINE_SKIP_REASON,
+    agent_is_gone,
+    agent_is_offline,
+)
 from app.services.job_admission import (
     OPERATION_BACKUP,
     PLAN_BACKUP_READ_WAIT_SECONDS,
@@ -101,6 +106,8 @@ TERMINAL_PLAN_RUN_REPOSITORY_STATUSES = {
     "cancelled",
 }
 SUCCESS_BACKUP_STATUSES = {"completed", "completed_with_warnings"}
+# The message on a repository a run skipped because its agent was away.
+AGENT_OFFLINE_MESSAGE = "Skipped: agent offline; the backup was not started."
 WARNING_BACKUP_STATUSES = {"completed_with_warnings", "skipped"}
 CANCELLED_MESSAGE = '{"key": "backend.errors.backup.cancelledByUser"}'
 RESTORE_CHECK_CANCEL_POLL_SECONDS = 2
@@ -1097,6 +1104,17 @@ class BackupPlanExecutionService:
         try:
             run_warnings: list[str] = []
             context, repositories = self._prepare_run(run_id)
+            # A repository whose agent is away gets no backup, and takes no
+            # backup slot (#1331). Decided before the plan's own hooks, so a
+            # run left with nothing to back up runs none of them.
+            repositories = [
+                repository
+                for repository in repositories
+                if not await self._skip_if_agent_offline(run_id, repository)
+            ]
+            if not repositories:
+                self._finalize_run(run_id)
+                return
             (
                 pre_script_ok,
                 pre_script_error,
@@ -2038,6 +2056,8 @@ class BackupPlanExecutionService:
             )
             if not child or not repo:
                 return "failed"
+            if await self._skip_if_agent_offline(run_id, repository_context):
+                return "skipped"
 
             route = plan_repository_route(repo, context.source_locations)
             if not route.supported:
@@ -2496,6 +2516,110 @@ class BackupPlanExecutionService:
 
         _write_bookkeeping(work)
 
+    async def _skip_if_agent_offline(
+        self, run_id: int, repository_context: RepositoryRunContext
+    ) -> bool:
+        """Skip the repository when it is an agent's and its agent is away:
+        no backup is queued for it and no slot taken (#1331). The skip gets a
+        skipped backup operation, as `_fail_repositories` gives a failure
+        one, since the dashboard and the repository status read operations
+        and never the plan run. It sends no notification: an agent away on
+        purpose (a laptop) misses runs as a matter of course, and a
+        repository left without a backup for long is what the stale-backup
+        monitoring reports."""
+        recorded: list[int] = []
+
+        def work(db: Session) -> None:
+            """Record the skip in a fresh retryable session."""
+            recorded.clear()
+            repo = db.get(Repository, repository_context.repository_id)
+            if repo is None or not is_agent_executor(repo):
+                return
+            agent = (
+                db.get(AgentMachine, repo.agent_machine_id)
+                if repo.agent_machine_id is not None
+                else None
+            )
+            if agent_is_gone(agent) or not agent_is_offline(agent):
+                # An agent that is gone, rather than away, is a configuration
+                # error: the normal path refuses its backup and reports it.
+                return
+            now = datetime.utcnow()
+            backup_job = create_backup_operation(
+                db,
+                repo,
+                trigger="plan",
+                executor="agent",
+                backup_plan_run_id=run_id,
+                commit=False,
+            )
+            backup_job.status = "skipped"
+            backup_job.operation.skip_reason = AGENT_OFFLINE_SKIP_REASON
+            backup_job.error_message = AGENT_OFFLINE_MESSAGE
+            backup_job.started_at = now
+            backup_job.completed_at = now
+            # The same conditional claim as `_update_children`: a child
+            # someone cancelled since keeps its status, and the rollback takes
+            # the uncommitted operation with it.
+            claimed = (
+                db.query(BackupPlanRunRepository)
+                .filter(
+                    BackupPlanRunRepository.backup_plan_run_id == run_id,
+                    BackupPlanRunRepository.repository_id == repo.id,
+                    BackupPlanRunRepository.status == "pending",
+                )
+                .update(
+                    {
+                        BackupPlanRunRepository.status: "skipped",
+                        BackupPlanRunRepository.backup_operation_id: backup_job.id,
+                        BackupPlanRunRepository.started_at: now,
+                        BackupPlanRunRepository.completed_at: now,
+                        BackupPlanRunRepository.error_message: AGENT_OFFLINE_MESSAGE,
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if not claimed:
+                db.rollback()
+                return
+            recorded.append(backup_job.id)
+
+        try:
+            _write_bookkeeping(work)
+        except Exception as exc:
+            # The check must not cost the run: a repository it could not
+            # decide on takes the normal path, as it did before (#1331).
+            logger.warning(
+                "Could not check the repository's agent before its backup",
+                run_id=run_id,
+                repository_id=repository_context.repository_id,
+                error=str(exc),
+            )
+            return False
+        if not recorded:
+            return False
+        logger.info(
+            "Backup plan repository skipped: agent offline",
+            run_id=run_id,
+            repository_id=repository_context.repository_id,
+        )
+        db = SessionLocal()
+        try:
+            operation = db.get(Operation, recorded[0])
+            if operation is not None:
+                await broadcast_operation_updated(operation, db)
+        except Exception as exc:
+            # a courtesy to open pages; the skip is recorded
+            logger.warning(
+                "Failed to broadcast agent offline skip",
+                run_id=run_id,
+                operation_id=recorded[0],
+                error=str(exc),
+            )
+        finally:
+            db.close()
+        return True
+
     def _mark_repository_cancelled(self, run_id: int, repository_id: int) -> None:
         """Mark a pending repository child as cancelled."""
 
@@ -2748,6 +2872,17 @@ class BackupPlanExecutionService:
             if run.status == "cancelled":
                 return
             statuses = [child.status for child in run.repositories]
+            if self._all_skipped_for_offline_agents(db, run):
+                # Nothing was backed up: a skipped run, which an availability
+                # plan's minimum interval does not count as a success.
+                run.status = "skipped"
+                run.skip_reason = AGENT_OFFLINE_SKIP_REASON
+                run.error_message = "; ".join(
+                    filter(None, (AGENT_OFFLINE_MESSAGE, warning_message))
+                )
+                run.completed_at = datetime.utcnow()
+                db.commit()
+                return
             has_success = any(_is_success(status) for status in statuses)
             has_failure = any(_is_failure(status) for status in statuses)
             has_cancelled = any(status == "cancelled" for status in statuses)
@@ -2773,6 +2908,25 @@ class BackupPlanExecutionService:
             db.commit()
         finally:
             db.close()
+
+    @staticmethod
+    def _all_skipped_for_offline_agents(db: Session, run: BackupPlanRun) -> bool:
+        """Whether every repository of the run was skipped because its agent
+        was away, before the backup started or by the reaper after it was
+        queued (#1331)."""
+        children = list(run.repositories)
+        if not children or any(
+            child.status != "skipped" or child.backup_operation_id is None
+            for child in children
+        ):
+            return False
+        reasons = {
+            reason
+            for (reason,) in db.query(Operation.skip_reason).filter(
+                Operation.id.in_([child.backup_operation_id for child in children])
+            )
+        }
+        return reasons == {AGENT_OFFLINE_SKIP_REASON}
 
     @staticmethod
     def _run_status(db: Session, run_id: int) -> Optional[str]:
