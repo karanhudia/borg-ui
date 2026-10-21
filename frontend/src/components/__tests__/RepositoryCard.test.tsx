@@ -110,6 +110,7 @@ describe('RepositoryCard', () => {
     trackRemoteClient: vi.fn(),
     trackAnnouncement: vi.fn(),
     trackAuth: vi.fn(),
+    trackQuickStart: vi.fn(),
     buildEntityData: vi.fn(),
     EventCategory: {
       REPOSITORY: 'Repository',
@@ -128,6 +129,7 @@ describe('RepositoryCard', () => {
       PLAN: 'Plan',
       ANNOUNCEMENT: 'Announcement',
       REMOTE_CLIENT: 'Remote Client',
+      QUICK_START: 'Quick Start',
     } as const,
     EventAction: {
       CREATE: 'Create',
@@ -151,6 +153,7 @@ describe('RepositoryCard', () => {
       FAIL: 'Fail',
       FEATURE_USED: 'FeatureUsed',
       FEATURE_BLOCKED: 'FeatureBlocked',
+      CANCEL: 'Cancel',
     } as const,
   }
 

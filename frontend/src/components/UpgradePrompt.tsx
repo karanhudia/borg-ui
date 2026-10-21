@@ -9,6 +9,7 @@ import { getPlanAccent } from './planDrawerColors'
 import { buildBuyUrl } from '../utils/externalLinks'
 import PlanInfoDrawer from './PlanInfoDrawer'
 import { usePlan } from '../hooks/usePlan'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { licensingAPI } from '../services/api'
 
 interface UpgradePromptProps {
@@ -34,10 +35,17 @@ export default function UpgradePrompt({
   const color = getPlanAccent(requiredPlan, theme)
   const planLabel = PLAN_LABEL[requiredPlan]
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const buyUrl = buildBuyUrl({
-    plan: requiredPlan === 'enterprise' ? 'enterprise' : 'pro',
-    src: feature ? `app-gate-${feature}` : 'app-upgrade-prompt',
-  })
+  const buyPlan = requiredPlan === 'enterprise' ? 'enterprise' : 'pro'
+  const buySource = feature ? `app-gate-${feature}` : 'app-upgrade-prompt'
+  const buyUrl = buildBuyUrl({ plan: buyPlan, src: buySource })
+  const { trackPlan, EventAction } = useAnalytics()
+  const handleBuyClick = () =>
+    trackPlan(EventAction.VIEW, {
+      surface: 'upgrade_prompt',
+      operation: 'open_buy_link',
+      selected_plan: buyPlan,
+      src: buySource,
+    })
   const { plan, features, entitlement } = usePlan()
   const queryClient = useQueryClient()
   const [trialRefusal, setTrialRefusal] = useState<string | null>(null)
@@ -154,6 +162,7 @@ export default function UpgradePrompt({
             <Button
               component="a"
               href={buyUrl}
+              onClick={handleBuyClick}
               target="_blank"
               rel="noreferrer"
               variant={trialButton ? 'outlined' : 'contained'}
@@ -226,6 +235,7 @@ export default function UpgradePrompt({
         <Button
           component="a"
           href={buyUrl}
+          onClick={handleBuyClick}
           target="_blank"
           rel="noreferrer"
           variant={trialButton ? 'outlined' : 'contained'}

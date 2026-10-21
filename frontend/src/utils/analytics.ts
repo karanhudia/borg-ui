@@ -348,6 +348,7 @@ export const EventCategory = {
   PLAN: 'Plan',
   ANNOUNCEMENT: 'Announcement',
   REMOTE_CLIENT: 'Remote Client',
+  QUICK_START: 'Quick Start',
 } as const
 
 // Pre-defined event actions
@@ -373,4 +374,5 @@ export const EventAction = {
   SWITCH: 'Switch',
   FEATURE_USED: 'FeatureUsed',
   FEATURE_BLOCKED: 'FeatureBlocked',
+  CANCEL: 'Cancel',
 } as const
