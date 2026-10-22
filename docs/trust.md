@@ -126,8 +126,9 @@ Settings > Preferences. Page views from that first session, before you answer
 the banner, are counted, and so are the answer itself and a later opt-out, each
 as a single event.
 
-Each event carries the page path (never the hostname, full URL, or query
-string), the event name and its details, your app version, your plan name
+Each event carries the page route (the path with ids and any base path you
+serve Borg UI under replaced, so `/archives/:id/:id`; never the hostname, full
+URL, or query string), the event name and its details, your app version, your plan name
 (community, pro, or enterprise), and two hashes: a SHA-256 of this install's
 random instance id and a SHA-256 of that id plus your user id. The raw instance
 id and your username are never sent. Names of repositories, schedules, and other
@@ -142,7 +143,12 @@ so a purchase can be matched to the features that led to it. No licence key,
 customer, or other billing detail is sent. See `frontend/src/utils/analytics.ts`
 and [Analytics](analytics).
 
-Nothing else phones home. No crash reporting, no error telemetry, no update
+When an action fails, the event says only which part of the app it was (such
+as `repositories`), the HTTP method and status, and a coarse class such as
+`network`, `timeout`, `validation` or `server`. Error messages are never sent,
+since they can hold paths, hostnames and repository names.
+
+Nothing else phones home. No crash reporting, no stack traces, no update
 beacon.
 
 ### What never leaves
