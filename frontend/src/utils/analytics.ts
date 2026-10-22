@@ -65,19 +65,24 @@ const sessionKey = randomUuid()
  * not a plain lowercase word (an id, an `aid:` selector) replaced with `:id`, so
  * paths group by page and carry nothing that identifies a repository or archive.
  */
-// Routes whose params are ids even when a value looks like a plain word (App.tsx).
-const PARAM_ROUTES: [RegExp, string][] = [
-  [/^\/archives\/[^/]+\/[^/]+\/?$/, '/archives/:id/:id'],
-  [/^\/repositories\/[^/]+\/prune-preview\/?$/, '/repositories/:id/prune-preview'],
-]
+// How many segments after a route's root are ids, even when a value looks like a
+// plain word: /archives/:repositoryId/:archiveId, /repositories/:repositoryId/...
+const ID_SEGMENTS: Record<string, number> = { archives: 2, repositories: 1 }
 
 export const normalizeRoute = (pathname: string): string => {
   const path =
     BASE_PATH && (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`))
       ? pathname.slice(BASE_PATH.length) || '/'
       : pathname
-  for (const [pattern, route] of PARAM_ROUTES) if (pattern.test(path)) return route
-  return path.replace(/[^/]+/g, (segment) => (/^[a-z][a-z-]*$/.test(segment) ? segment : ':id'))
+  const segments = path.split('/')
+  const idCount = ID_SEGMENTS[segments[1]] ?? 0
+  return segments
+    .map((segment, index) => {
+      if (!segment) return segment
+      if (index >= 2 && index < 2 + idCount) return ':id'
+      return /^[a-z][a-z-]*$/.test(segment) ? segment : ':id'
+    })
+    .join('/')
 }
 
 const currentRoute = (): string => normalizeRoute(window.location.pathname)
@@ -112,7 +117,14 @@ export const errorClass = (error: unknown): string => {
 // The API area a request belongs to: its first path segment after any version
 // prefix, which is a fixed route name. Never the rest, which can hold names.
 const apiArea = (url?: string): string => {
-  const segments = (url ?? '').split('?')[0].split('/').filter(Boolean)
+  let pathname = ''
+  try {
+    // Relative URLs resolve against a dummy origin; absolute ones keep only their path.
+    pathname = new URL(url ?? '', 'http://x').pathname
+  } catch {
+    return 'other'
+  }
+  const segments = pathname.split('/').filter(Boolean)
   const first =
     segments[0] === 'api' || segments[0] === 'v2'
       ? segments.find((s) => s !== 'api' && s !== 'v2')

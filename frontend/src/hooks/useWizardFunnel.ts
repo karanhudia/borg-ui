@@ -39,7 +39,7 @@ export function useWizardFunnel({ category, open, step, props, startProps }: Wiz
     lastStep.current = current.step
     if (reached.current.has(current.step)) return
     reached.current.add(current.step)
-    trackEvent(category, EventAction.VIEW, { step: current.step, ...current.props })
+    trackEvent(category, EventAction.VIEW, { ...current.props, step: current.step })
   }, [category])
 
   useEffect(() => {
@@ -69,8 +69,8 @@ export function useWizardFunnel({ category, open, step, props, startProps }: Wiz
 
   const cancel = useCallback(() => {
     trackEvent(category, EventAction.CANCEL, {
-      ...(lastStep.current ? { step: lastStep.current } : {}),
       ...latest.current.props,
+      ...(lastStep.current ? { step: lastStep.current } : {}),
     })
   }, [category])
 

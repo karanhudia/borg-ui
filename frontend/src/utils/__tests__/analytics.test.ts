@@ -375,6 +375,9 @@ describe('route normalization', () => {
     expect(a.normalizeRoute('/repositories/photos/prune-preview')).toBe(
       '/repositories/:id/prune-preview'
     )
+    expect(a.normalizeRoute('/repositories/photos')).toBe('/repositories/:id')
+    expect(a.normalizeRoute('/repositories')).toBe('/repositories')
+    expect(a.normalizeRoute('/')).toBe('/')
   })
 
   it('drops the deployment base path', async () => {
@@ -459,6 +462,17 @@ describe('trackApiError', () => {
       props: { area: 'repositories', method: 'put', status: 500, error_class: 'server' },
     })
     expect(JSON.stringify(event)).not.toContain('secret')
+  })
+
+  it('takes the area from an absolute request URL', async () => {
+    const a = await load()
+    a.trackApiError({
+      isAxiosError: true,
+      config: { method: 'post', url: 'https://nas.local/api/backup-plans/3/run' },
+      response: { status: 409 },
+    })
+    vi.advanceTimersByTime(5000)
+    expect(sent()[0].props).toMatchObject({ area: 'backup-plans', error_class: 'conflict' })
   })
 
   it('ignores reads and expired sessions', async () => {
