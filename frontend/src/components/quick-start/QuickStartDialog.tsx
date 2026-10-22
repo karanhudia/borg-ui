@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Alert, Button, DialogActions, Stack } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast'
 
 import WizardDialog, { type WizardStep } from '../shared/WizardDialog'
 import { useAnalytics } from '../../hooks/useAnalytics'
+import { useWizardFunnel } from '../../hooks/useWizardFunnel'
 import { usePlan } from '../../hooks/usePlan'
 import { backupPlansAPI } from '../../services/api'
 import { getApiErrorDetail } from '../../utils/apiErrors'
@@ -60,7 +61,7 @@ export default function QuickStartDialog({
   const navigate = useNavigate()
   const { can } = usePlan()
   const runner = useQuickStartRunner()
-  const { trackQuickStart, trackBackup, EventAction } = useAnalytics()
+  const { trackQuickStart, trackBackup, EventAction, EventCategory } = useAnalytics()
   const [answers, setAnswers] = useState<QuickStartAnswers>(
     () => initialAnswers ?? createInitialQuickStartAnswers()
   )
@@ -76,18 +77,13 @@ export default function QuickStartDialog({
   // The source kind is only a choice once the user is past the step that asks for it.
   const path = ANALYTICS_PATH[answers.sourceKind]
   const pathChosen = steps.indexOf(step) > steps.indexOf('what')
-  // Steps reached since the dialog opened: going back and forth counts each once.
-  const reached = useRef(new Set<string>())
-  useEffect(() => {
-    if (!open) {
-      reached.current.clear()
-      return
-    }
-    if (showProgress || reached.current.has(step)) return
-    if (reached.current.size === 0) trackQuickStart(EventAction.START, { trigger })
-    reached.current.add(step)
-    trackQuickStart(EventAction.VIEW, { step, ...(pathChosen ? { path } : {}) })
-  }, [open, showProgress, step, path, pathChosen, trigger, trackQuickStart, EventAction])
+  const funnel = useWizardFunnel({
+    category: EventCategory.QUICK_START,
+    open,
+    step: showProgress ? 'progress' : step,
+    props: pathChosen || showProgress ? { path } : {},
+    startProps: { trigger },
+  })
 
   const wizardSteps: WizardStep[] = steps.map((key) => {
     const { colorKey, icon: Icon } = STEP_META[key]
@@ -108,12 +104,7 @@ export default function QuickStartDialog({
 
   const close = () => {
     if (runner.running || busy) return
-    if (!finished) {
-      trackQuickStart(EventAction.CANCEL, {
-        step: showProgress ? 'progress' : step,
-        ...(pathChosen || showProgress ? { path } : {}),
-      })
-    }
+    if (!finished) funnel.cancel()
     runner.reset()
     setAnswers(initialAnswers ?? createInitialQuickStartAnswers())
     setStepIndex(0)

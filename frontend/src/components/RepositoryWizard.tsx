@@ -30,6 +30,7 @@ import type {
   RcloneStatus,
 } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useWizardFunnel } from '../hooks/useWizardFunnel'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { usePlan } from '../hooks/usePlan'
 import { getApiErrorDetail } from '../utils/apiErrors'
@@ -264,7 +265,7 @@ const RepositoryWizard = ({
   onSubmit,
   canUseRclone = true,
 }: RepositoryWizardProps) => {
-  const { trackRepository, EventAction } = useAnalytics()
+  const { trackRepository, EventAction, EventCategory } = useAnalytics()
   const { trackFeatureUsed, trackFeatureBlocked } = useFeatureAnalytics()
   const { t } = useTranslation()
   const { can } = usePlan()
@@ -1516,11 +1517,22 @@ const RepositoryWizard = ({
       ? agentMachines.find((agent) => agent.id === Number(wizardState.agentMachineId))
       : null
 
+  const funnel = useWizardFunnel({
+    category: EventCategory.WIZARD,
+    open,
+    step: steps[activeStep]?.key ?? null,
+    props: { wizard: 'repository', mode },
+  })
+  const handleCancel = () => {
+    funnel.cancel()
+    onClose()
+  }
+
   return (
     <>
       <WizardDialog
         open={open}
-        onClose={onClose}
+        onClose={handleCancel}
         title={
           mode === 'create'
             ? t('repositoryWizard.titleCreate')
@@ -1533,7 +1545,7 @@ const RepositoryWizard = ({
         onStepClick={setActiveStep}
         footer={
           <DialogActions sx={{ px: { xs: 1, sm: 3 }, pb: { xs: 1, sm: 2 } }}>
-            <Button onClick={onClose} disabled={isSubmitting}>
+            <Button onClick={handleCancel} disabled={isSubmitting}>
               {t('common.buttons.cancel')}
             </Button>
             <Box sx={{ flex: 1 }} />

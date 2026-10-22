@@ -183,6 +183,7 @@ describe('QuickStartDialog', () => {
       view('protect', 'local'),
       view('schedule', 'local'),
       view('review', 'local'),
+      view('progress', 'local'),
       ['Quick Start', 'Complete', { path: 'local', app_choice: 'folders' }],
     ])
   })

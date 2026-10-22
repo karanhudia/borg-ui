@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { DialogActions, Box, Button } from '@mui/material'
 import { Files, HardDrive, CheckCircle } from 'lucide-react'
 import WizardDialog from './shared/WizardDialog'
+import { useWizardFunnel } from '../hooks/useWizardFunnel'
+import { EventCategory } from '../utils/analytics'
 import {
   WizardStepRestoreFiles,
   WizardStepRestoreDestination,
@@ -379,11 +381,22 @@ const RestoreWizard = ({
     }
   }
 
+  const funnel = useWizardFunnel({
+    category: EventCategory.WIZARD,
+    open,
+    step: steps[activeStep]?.key ?? null,
+    props: { wizard: 'restore' },
+  })
+  const handleCancel = () => {
+    funnel.cancel()
+    onClose()
+  }
+
   return (
     <>
       <WizardDialog
         open={open}
-        onClose={onClose}
+        onClose={handleCancel}
         title={t('restoreWizard.title')}
         subtitle={t('restoreWizard.fromArchive', { archiveName: archive.name })}
         steps={steps}
@@ -398,7 +411,7 @@ const RestoreWizard = ({
         }}
         footer={
           <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
+            <Button onClick={handleCancel}>{t('common.buttons.cancel')}</Button>
             <Box sx={{ flex: 1 }} />
             <Button disabled={activeStep === 0} onClick={handleBack}>
               {t('common.buttons.back')}

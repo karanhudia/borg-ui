@@ -10,6 +10,7 @@ import { isAxiosError } from 'axios'
 import RepositoryWizard from '../components/RepositoryWizard'
 import { type PruneSettings } from '../components/PruneSettingsInput'
 import WizardDialog from '../components/shared/WizardDialog'
+import { useWizardFunnel } from '../hooks/useWizardFunnel'
 import LogViewerDialog from '../components/LogViewerDialog'
 import FileExplorerDialog from '../components/FileExplorerDialog'
 import { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
@@ -873,6 +874,17 @@ export default function BackupPlans() {
     [t]
   )
 
+  const wizardFunnel = useWizardFunnel({
+    category: EventCategory.WIZARD,
+    open: wizardOpen,
+    step: stepDefinitions[activeStep]?.key ?? null,
+    props: { wizard: 'backup_plan', mode: editingPlan ? 'edit' : 'create' },
+  })
+  const cancelWizard = () => {
+    wizardFunnel.cancel()
+    setWizardOpen(false)
+  }
+
   return (
     <Box>
       <BackupPlansContent
@@ -921,7 +933,7 @@ export default function BackupPlans() {
         open={wizardOpen}
         onClose={() => {
           setLegacySourceReviewOpen(false)
-          setWizardOpen(false)
+          cancelWizard()
         }}
         title={
           editingPlan ? t('backupPlans.wizard.editTitle') : t('backupPlans.wizard.createTitle')
@@ -932,7 +944,7 @@ export default function BackupPlans() {
         stepContentSx={{ minHeight: { xs: 'auto', md: 520 } }}
         footer={
           <DialogActions>
-            <Button onClick={() => setWizardOpen(false)} disabled={isSubmitting}>
+            <Button onClick={cancelWizard} disabled={isSubmitting}>
               {t('common.buttons.cancel')}
             </Button>
             <Button
