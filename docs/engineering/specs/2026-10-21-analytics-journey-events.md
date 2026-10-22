@@ -14,7 +14,7 @@ rejected as `unknown_name`. Props are the event's `props` object.
 | `instance_key` | SHA-256 of the install's random id. Joins to `orders.ik` and buy-link `ik`. |
 | `user_key` | SHA-256 of install id plus user id. |
 | `session_key` | Random per page load. |
-| `path` | Route only: ids, `aid:` selectors and the deployment base path removed (`/archives/:id/:id`, `/repositories/:id/prune-preview`). Static segments stay (`/settings/beta-features`). Segments right after `archives` (two) and `repositories` (one) are always `:id`, and only `prune-preview` may follow a repository id. Other routes keep one fixed word below the root (a settings tab, a schedule view). Anything else becomes `:id`, and a path whose first segment is not an app route is sent as `/:other`. |
+| `path` | Route only: ids, `aid:` selectors and the deployment base path removed (`/archives/:id/:id`, `/repositories/:id/prune-preview`). Static segments stay (`/settings/beta`). Segments right after `archives` (two) and `repositories` (one) are always `:id`, and only `prune-preview` may follow a repository id. Below the root only a known Settings tab or Schedule view is kept. Anything else becomes `:id`, and a path whose first segment is not an app route is sent as `/:other`. |
 | `plan`, `app_version` | Current plan name and app version. |
 
 Privacy rules, enforced in `frontend/src/utils/analytics.ts`: any `*_name` prop and any
@@ -23,7 +23,7 @@ coarse `error_class` only, never a message.
 
 `error_class` values: `network`, `timeout`, `validation` (400, 422), `auth` (401),
 `permission` (403), `not_found`, `conflict`, `rate_limited`, `server` (5xx), `client`
-(other 4xx), `unknown` (not an HTTP error).
+(other 4xx), `unknown` (not an HTTP error), `check_failed` (a connection test whose request worked but whose check failed).
 
 ## 1. Paywalls (how many hit them, on which feature)
 
@@ -83,7 +83,7 @@ Connection tests send `success` and, on failure, `error_class`:
 
 | Event | Props |
 |---|---|
-| `SSH Connection - Test` | `resource` (`connection`, `connection_diagnostics`), `success`, `error_class` |
+| `SSH Connection - Test` | `resource` (`connection`, `connection_diagnostics`), `trigger: after_edit` for the automatic test after editing, `success`, `error_class` |
 | `System - Test` | `section: cloud_storage`, `operation: test_remote_complete`, `provider`, `success`, `error_class` |
 | `Remote Client - Test` | `surface`, `status`, `compatibility`, `success`, `error_class` |
 | `Notification - Test` | `success`, `error_class` |

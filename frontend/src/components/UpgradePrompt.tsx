@@ -26,9 +26,12 @@ interface UpgradePromptProps {
    *  offered it here (spec 2026-09-21, section 3), unless offerTrial is off. */
   feature?: Feature
   offerTrial?: boolean
-  /** Set when this prompt is the gate itself, with no PlanGate around it: it
-   *  then reports Plan - FeatureBlocked once, under this surface. */
+  /** Analytics surface for the buy click and trial. When the prompt is the gate
+   *  itself (no PlanGate around it), it also reports Plan - FeatureBlocked once
+   *  under this surface, unless reportShown is off. */
   surface?: string
+  /** Off when a PlanGate around the prompt already reports the lock. */
+  reportShown?: boolean
 }
 
 export default function UpgradePrompt({
@@ -38,6 +41,7 @@ export default function UpgradePrompt({
   feature,
   offerTrial: trialAllowed = true,
   surface,
+  reportShown = true,
 }: UpgradePromptProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -61,10 +65,10 @@ export default function UpgradePrompt({
   // Once per mount: the prompt re-renders as the panel around it loads.
   const shownTracked = useRef(false)
   useEffect(() => {
-    if (!feature || !surface || shownTracked.current) return
+    if (!feature || !surface || !reportShown || shownTracked.current) return
     shownTracked.current = true
     trackFeatureBlocked(feature, { surface, operation: 'teaser', gate_mode: 'teaser' })
-  }, [feature, surface, trackFeatureBlocked])
+  }, [feature, surface, reportShown, trackFeatureBlocked])
   const trialContext = { operation: 'start_feature_trial', feature, surface: analyticsSurface }
   const { plan, features, entitlement } = usePlan()
   const queryClient = useQueryClient()

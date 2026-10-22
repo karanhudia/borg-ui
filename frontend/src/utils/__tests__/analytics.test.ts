@@ -367,7 +367,7 @@ describe('route normalization', () => {
 
   it('keeps static routes as they are', async () => {
     const a = await load()
-    expect(a.normalizeRoute('/settings/beta-features')).toBe('/settings/beta-features')
+    expect(a.normalizeRoute('/settings/beta')).toBe('/settings/beta')
     expect(a.normalizeRoute('/schedule/checks')).toBe('/schedule/checks')
     expect(a.normalizeRoute('/archives/aid:abc123/9')).toBe('/archives/:id/:id')
     // Route params are ids even when they happen to look like words.
@@ -382,6 +382,10 @@ describe('route normalization', () => {
     expect(a.normalizeRoute('/alice')).toBe('/:other')
     expect(a.normalizeRoute('/alice/docs')).toBe('/:other')
     expect(a.normalizeRoute('/settings/account/alice')).toBe('/settings/account/:id')
+    expect(a.normalizeRoute('/settings/alice')).toBe('/settings/:id')
+    expect(a.normalizeRoute('/schedule/checks')).toBe('/schedule/checks')
+    expect(a.normalizeRoute('/schedule/alice')).toBe('/schedule/:id')
+    expect(a.normalizeRoute('/dashboard/alice')).toBe('/dashboard/:id')
     // After a route's ids only its own fixed words survive.
     expect(a.normalizeRoute('/archives/photos/nightly/alice')).toBe('/archives/:id/:id/:id')
     expect(a.normalizeRoute('/repositories/7/alice')).toBe('/repositories/:id/:id')
@@ -413,6 +417,28 @@ describe('KNOWN_ROUTE_ROOTS', () => {
   })
 })
 
+describe('ROUTE_WORDS', () => {
+  it('matches the Settings tabs and Schedule views the pages define', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const read = (file: string) => readFileSync(resolve(__dirname, '..', '..', file), 'utf8')
+    const settings = read('pages/Settings.tsx')
+    const tabBlock = settings.slice(
+      settings.indexOf('const getTabOrder'),
+      settings.indexOf('}, [', settings.indexOf('const getTabOrder'))
+    )
+    const tabs = [...tabBlock.matchAll(/'([a-z-]+)'/g)].map((match) => match[1])
+    const views = [...read('pages/Schedule.tsx').matchAll(/'\/schedule\/([a-z-]+)'/g)].map(
+      (match) => match[1]
+    )
+    expect(tabs.length).toBeGreaterThan(10)
+    expect(views.length).toBeGreaterThan(3)
+    const a = await load()
+    expect([...new Set(tabs)].sort()).toEqual([...a.ROUTE_WORDS.settings].sort())
+    expect([...new Set(views)].sort()).toEqual([...a.ROUTE_WORDS.schedule].sort())
+  })
+})
+
 describe('errorClass', () => {
   it('maps an error to a coarse class, never its message', async () => {
     const a = await load()
@@ -429,6 +455,18 @@ describe('errorClass', () => {
     expect(a.errorClass({ isAxiosError: true, code: 'ECONNABORTED' })).toBe('timeout')
     expect(a.errorClass({ isAxiosError: true, code: 'ERR_NETWORK' })).toBe('network')
     expect(a.errorClass(new Error('/srv/secret failed'))).toBe('unknown')
+  })
+})
+
+describe('testResult', () => {
+  it('gives every failed test a class, check_failed when the request itself worked', async () => {
+    const a = await load()
+    expect(a.testResult(true)).toEqual({ success: true })
+    expect(a.testResult(false)).toEqual({ success: false, error_class: 'check_failed' })
+    expect(a.testResult(false, { isAxiosError: true, code: 'ECONNABORTED' })).toEqual({
+      success: false,
+      error_class: 'timeout',
+    })
   })
 })
 
@@ -465,6 +503,25 @@ describe('trackApiError', () => {
         gate_mode: 'api_error',
       },
     })
+  })
+
+  it('recognises a plan refusal sent as a plain or JSON string detail', async () => {
+    const a = await load()
+    const refuse = (detail: unknown) =>
+      a.trackApiError({
+        isAxiosError: true,
+        config: { method: 'post', url: '/repositories/' },
+        response: { status: 403, data: { detail } },
+      })
+    refuse('backend.errors.plan.featureNotAvailable')
+    refuse(JSON.stringify({ key: 'backend.errors.plan.featureNotAvailable', feature: 'rclone' }))
+    refuse('{not json')
+    vi.advanceTimersByTime(5000)
+    expect(sent().map((event) => [event.name, event.props.feature])).toEqual([
+      ['Plan - FeatureBlocked', undefined],
+      ['Plan - FeatureBlocked', 'rclone'],
+      ['API - Fail', undefined],
+    ])
   })
 
   it('reports a failed change as API - Fail with only its area, method and class', async () => {

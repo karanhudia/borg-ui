@@ -59,7 +59,7 @@ import PlanGate from '../components/shared/PlanGate'
 import RcloneProviderIcon, { RcloneProviderGlyph } from '../components/shared/RcloneProviderIcon'
 import { joinBrowserPath, normalizeBrowserPath } from '../utils/storageBrowserPaths'
 import { useAnalytics } from '../hooks/useAnalytics'
-import { errorClass } from '../utils/analytics'
+import { testResult } from '../utils/analytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { usePlan } from '../hooks/usePlan'
 
@@ -1394,8 +1394,7 @@ export default function CloudStorage() {
         section: CLOUD_STORAGE_ANALYTICS_SECTION,
         operation: 'test_remote_complete',
         provider: remote.provider,
-        success: false,
-        error_class: errorClass(error),
+        ...testResult(false, error),
       })
     },
     onSettled: () => {

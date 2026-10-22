@@ -1616,6 +1616,7 @@ export function SourceSelectionDialog({
     trackFeatureBlocked('backup_plan_mixed_sources', {
       surface: 'source_selection_dialog',
       operation: 'queue_mixed_source_types',
+      gate_mode: 'disabled',
       source_group_count: cleanedDraftSourceLocations.length,
     })
   }, [cleanedDraftSourceLocations.length, mixedSourceTypesBlocked, trackFeatureBlocked])

@@ -96,6 +96,32 @@ export const KNOWN_ROUTE_ROOTS: ReadonlySet<string> = new Set([
   'ssh-keys',
 ])
 
+// The only words kept one level below a root: Settings tabs and Schedule views.
+// A test checks these against Settings.tsx and Schedule.tsx.
+export const ROUTE_WORDS: Record<string, ReadonlySet<string>> = {
+  settings: new Set([
+    'account',
+    'activity',
+    'appearance',
+    'background-work',
+    'beta',
+    'cache',
+    'export',
+    'licensing',
+    'logs',
+    'monitoring',
+    'mounts',
+    'mqtt',
+    'notifications',
+    'packages',
+    'preferences',
+    'scripts',
+    'system',
+    'users',
+  ]),
+  schedule: new Set(['backups', 'by-plan', 'checks', 'restore-checks']),
+}
+
 export const normalizeRoute = (pathname: string): string => {
   const path =
     BASE_PATH && (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`))
@@ -112,9 +138,8 @@ export const normalizeRoute = (pathname: string): string => {
         // Only the route's own word right after its ids; anything else is no route of ours.
         return index === 2 + idRoute.ids && idRoute.after.has(segment) ? segment : ':id'
       }
-      // Other routes have at most one fixed word below the root (a settings tab, a
-      // schedule view); anything deeper is treated as an id.
-      return index === 2 && /^[a-z][a-z-]*$/.test(segment) ? segment : ':id'
+      // Other routes keep only a known Settings tab or Schedule view below the root.
+      return index === 2 && ROUTE_WORDS[segments[1]]?.has(segment) ? segment : ':id'
     })
     .join('/')
 }
@@ -147,6 +172,15 @@ export const errorClass = (error: unknown): string => {
   if (status >= 500) return 'server'
   return 'client'
 }
+
+/**
+ * Props for the outcome of a connection test: a failure always carries a class,
+ * `check_failed` when the request worked but the test itself reported failure.
+ */
+export const testResult = (success: boolean, error?: unknown): Record<string, unknown> =>
+  success
+    ? { success: true }
+    : { success: false, error_class: error === undefined ? 'check_failed' : errorClass(error) }
 
 // The API area a request belongs to: its first path segment after any version
 // prefix, which is a fixed route name. Never the rest, which can hold names.
@@ -396,6 +430,20 @@ export const trackEvent = (
   enqueue(`${category} - ${action}`, data)
 }
 
+type PlanDetail = { key?: string; feature?: string; required?: string; current?: string }
+
+// The backend sends a detail as an object, a key string or a JSON string (see
+// getBackendErrorKey in services/api.ts).
+const planDetail = (detail: unknown): PlanDetail | undefined => {
+  if (typeof detail !== 'string') return (detail as PlanDetail | null) ?? undefined
+  if (!detail.startsWith('{')) return { key: detail }
+  try {
+    return JSON.parse(detail) as PlanDetail
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * Called by the API clients for every failed request. A plan gate the backend
  * refused is a blocked feature like any in the UI; any other failed change (not a
@@ -403,8 +451,7 @@ export const trackEvent = (
  */
 export const trackApiError = (error: unknown): void => {
   const err = error as ErrorLike
-  const detail = err?.response?.data?.detail as
-    { key?: string; feature?: string; required?: string; current?: string } | undefined
+  const detail = planDetail(err?.response?.data?.detail)
   const area = apiArea(err?.config?.url)
   if (typeof detail?.key === 'string' && detail.key.startsWith('backend.errors.plan.')) {
     trackEvent(EventCategory.PLAN, EventAction.FEATURE_BLOCKED, {

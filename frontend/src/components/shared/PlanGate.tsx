@@ -120,6 +120,8 @@ export default function PlanGate({
               requiredPlan={FEATURES[feature]}
               message={message}
               feature={feature}
+              surface={surface}
+              reportShown={false}
               offerTrial={false}
             />
           </Box>
@@ -137,6 +139,8 @@ export default function PlanGate({
       requiredPlan={FEATURES[feature]}
       message={message}
       feature={feature}
+      surface={surface}
+      reportShown={false}
       offerTrial={false}
     />
   )

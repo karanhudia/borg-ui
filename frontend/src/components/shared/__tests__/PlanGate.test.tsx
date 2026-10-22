@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../../test/test-utils'
 import PlanGate from '../PlanGate'
 import { BUY_URL } from '../../../utils/externalLinks'
@@ -131,5 +131,28 @@ describe('PlanGate', () => {
         gate_mode: 'upgrade_prompt',
       })
     )
+  })
+
+  it('carries its surface to the buy click and reports the lock only once', () => {
+    vi.mocked(usePlan).mockReturnValue({
+      plan: 'community',
+      features: {},
+      isLoading: false,
+      can: () => false,
+    })
+    renderWithProviders(
+      <PlanGate feature="borg_v2" surface="repository_info">
+        <div>pro content</div>
+      </PlanGate>
+    )
+    fireEvent.click(screen.getByRole('link', { name: /upgrade at borgui.com/i }))
+
+    const calls = trackEventMock.mock.calls
+    expect(calls.filter(([, action]) => action === 'FeatureBlocked')).toHaveLength(1)
+    expect(calls).toContainEqual([
+      'Plan',
+      'View',
+      expect.objectContaining({ feature: 'borg_v2', surface: 'repository_info' }),
+    ])
   })
 })
