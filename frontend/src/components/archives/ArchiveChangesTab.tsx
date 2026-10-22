@@ -192,6 +192,7 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
           requiredPlan="pro"
           message={t('archives.changes.locked')}
           feature="archive_history"
+          surface="archive_changes"
         />
         {/* A sample of the rows Pro lists, dimmed and inert: the counts say how
             much changed, this says what reading them looks like. Example paths,

@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Box, Typography, Chip, Button, Stack } from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles'
 import { Lock } from 'lucide-react'
@@ -10,6 +10,8 @@ import { buildBuyUrl } from '../utils/externalLinks'
 import PlanInfoDrawer from './PlanInfoDrawer'
 import { usePlan } from '../hooks/usePlan'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
+import { errorClass } from '../utils/analytics'
 import { licensingAPI } from '../services/api'
 
 interface UpgradePromptProps {
@@ -19,9 +21,14 @@ interface UpgradePromptProps {
    *  the numbers above it are the argument, so the prompt stays out of
    *  the way (spec 2026-09-21, section 1). */
   compact?: boolean
-  /** The feature behind the lock. With one, an admin who has not used its
-   *  trial is offered it here (spec 2026-09-21, section 3). */
+  /** The feature behind the lock: its key goes on the buy link and every
+   *  analytics event. With one, an admin who has not used its trial is
+   *  offered it here (spec 2026-09-21, section 3), unless offerTrial is off. */
   feature?: Feature
+  offerTrial?: boolean
+  /** Set when this prompt is the gate itself, with no PlanGate around it: it
+   *  then reports Plan - FeatureBlocked once, under this surface. */
+  surface?: string
 }
 
 export default function UpgradePrompt({
@@ -29,6 +36,8 @@ export default function UpgradePrompt({
   message,
   compact,
   feature,
+  offerTrial: trialAllowed = true,
+  surface,
 }: UpgradePromptProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -39,13 +48,24 @@ export default function UpgradePrompt({
   const buySource = feature ? `app-gate-${feature}` : 'app-upgrade-prompt'
   const buyUrl = buildBuyUrl({ plan: buyPlan, src: buySource })
   const { trackPlan, EventAction } = useAnalytics()
+  const { trackFeatureBlocked } = useFeatureAnalytics()
+  const analyticsSurface = surface ?? 'upgrade_prompt'
   const handleBuyClick = () =>
     trackPlan(EventAction.VIEW, {
-      surface: 'upgrade_prompt',
+      surface: analyticsSurface,
       operation: 'open_buy_link',
       selected_plan: buyPlan,
+      ...(feature ? { feature } : {}),
       src: buySource,
     })
+  // Once per mount: the prompt re-renders as the panel around it loads.
+  const shownTracked = useRef(false)
+  useEffect(() => {
+    if (!feature || !surface || shownTracked.current) return
+    shownTracked.current = true
+    trackFeatureBlocked(feature, { surface, operation: 'teaser', gate_mode: 'teaser' })
+  }, [feature, surface, trackFeatureBlocked])
+  const trialContext = { operation: 'start_feature_trial', feature, surface: analyticsSurface }
   const { plan, features, entitlement } = usePlan()
   const queryClient = useQueryClient()
   const [trialRefusal, setTrialRefusal] = useState<string | null>(null)
@@ -57,12 +77,17 @@ export default function UpgradePrompt({
   const trialExpired = (entitlement?.expired_trial_features ?? []).includes(feature ?? '')
   const trialRunning = (entitlement?.trial_features ?? []).some((f) => f.feature === feature)
   const trial = useMutation({
-    mutationFn: () => licensingAPI.featureTrial(feature as string),
+    mutationFn: () => {
+      trackPlan(EventAction.START, trialContext)
+      return licensingAPI.featureTrial(feature as string)
+    },
     onSuccess: (res) => {
       if (res.data.result === 'denied') {
+        trackPlan(EventAction.FAIL, { ...trialContext, reason: res.data.reason ?? 'denied' })
         setTrialRefusal(res.data.reason ?? 'denied')
         return
       }
+      trackPlan(EventAction.COMPLETE, { ...trialContext, result: res.data.result })
       setTrialRefusal(null)
       // Everything the plan touches, not just the plan itself: the panels
       // around this prompt hold answers the server shaped for a reader
@@ -70,14 +95,17 @@ export default function UpgradePrompt({
       // something else happened to refetch them.
       queryClient.invalidateQueries()
     },
-    onError: (error) =>
+    onError: (error) => {
+      trackPlan(EventAction.FAIL, { ...trialContext, error_class: errorClass(error) })
       setTrialRefusal(
         (error as { response?: { status?: number } })?.response?.status === 403
           ? 'needsAdmin'
           : 'failed'
-      ),
+      )
+    },
   })
-  const offerTrial = feature != null && !trialRunning && !trialExpired && trialRefusal === null
+  const offerTrial =
+    trialAllowed && feature != null && !trialRunning && !trialExpired && trialRefusal === null
   const trialNote = trialRefusal
     ? t(
         trialRefusal === 'failed'

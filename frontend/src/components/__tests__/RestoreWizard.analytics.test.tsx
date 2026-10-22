@@ -42,7 +42,7 @@ describe('RestoreWizard funnel', () => {
 
     const calls = trackEventMock.mock.calls.filter(([category]) => category === 'Wizard')
     expect(calls[0]).toEqual(['Wizard', 'Start', { wizard: 'restore' }])
-    expect(calls.at(-1)).toEqual([
+    expect(calls[calls.length - 1]).toEqual([
       'Wizard',
       'Cancel',
       { step: expect.any(String), wizard: 'restore' },
