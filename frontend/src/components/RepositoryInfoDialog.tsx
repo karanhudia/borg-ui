@@ -435,6 +435,8 @@ export default function RepositoryInfoDialog({
                 fallback={
                   <UpgradePrompt
                     requiredPlan="pro"
+                    feature="borg_v2"
+                    offerTrial={false}
                     message={t('dialogs.repositoryInfo.v2PlanRequired')}
                   />
                 }

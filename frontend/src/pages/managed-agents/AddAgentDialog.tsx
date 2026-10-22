@@ -18,6 +18,8 @@ import {
 import { AlertTriangle, Globe, Laptop, Monitor, Server, Settings, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import WizardDialog, { type WizardStep } from '../../components/shared/WizardDialog'
+import { useWizardFunnel } from '../../hooks/useWizardFunnel'
+import { EventCategory } from '../../utils/analytics'
 import type {
   AgentEnrollmentTokenCreate,
   AgentEnrollmentTokenCreated,
@@ -486,10 +488,22 @@ export default function AddAgentDialog({
       />
     ) : null
 
+  const funnel = useWizardFunnel({
+    category: EventCategory.WIZARD,
+    open,
+    step: (['target', 'details', 'command'] as const)[step],
+    props: { wizard: 'add_agent' },
+  })
+  // Closing once the agent has connected is the finish, not an abandon.
+  const handleClose = () => {
+    if (!connectedAgent) funnel.cancel()
+    onClose()
+  }
+
   return (
     <WizardDialog
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={
         <Stack
           direction="row"
@@ -510,7 +524,7 @@ export default function AddAgentDialog({
       }}
       footer={
         <DialogActions sx={{ px: { xs: 1, sm: 3 }, pb: { xs: 1, sm: 2 } }}>
-          <Button onClick={onClose}>
+          <Button onClick={handleClose}>
             {step === 2 ? t('common.buttons.close') : t('common.buttons.cancel')}
           </Button>
           <Box sx={{ flex: 1 }} />

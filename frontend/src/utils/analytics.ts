@@ -9,6 +9,7 @@
 
 import { authAPI } from '../services/api'
 import { fetchJsonForAuthMode } from '../services/authRequest'
+import { BASE_PATH } from './basePath'
 import { randomUuid } from './uuid'
 
 export const ANALYTICS_ENDPOINT = 'https://t.borgui.com/e'
@@ -58,6 +59,148 @@ let pendingPageviews: { path: string; at: string }[] = []
 let pendingForced: { name: string; data?: Props; at: { path: string; at: string } }[] = []
 
 const sessionKey = randomUuid()
+
+/**
+ * The route a path belongs to: no deployment base path, and every segment that is
+ * not a plain lowercase word (an id, an `aid:` selector) replaced with `:id`, so
+ * paths group by page and carry nothing that identifies a repository or archive.
+ */
+// Routes with ids (App.tsx): how many segments after the root are ids, even when a
+// value looks like a plain word, and the only words allowed after them.
+const ID_ROUTES: Record<string, { ids: number; after: ReadonlySet<string> }> = {
+  archives: { ids: 2, after: new Set() }, // /archives/:repositoryId/:archiveId
+  repositories: { ids: 1, after: new Set(['prune-preview']) }, // /repositories/:id/prune-preview
+}
+
+// The app's top-level routes (App.tsx). Any other path is sent as `/:other`, so a
+// typed or stale URL can never carry a word that is really a name. A test checks
+// this list against App.tsx.
+export const KNOWN_ROUTE_ROOTS: ReadonlySet<string> = new Set([
+  'activity',
+  'archives',
+  'backup',
+  'backup-plans',
+  'cloud-storage',
+  'connections',
+  'dashboard',
+  'integrity',
+  'login',
+  'managed-agents',
+  'remote-clients',
+  'repositories',
+  'restore',
+  'schedule',
+  'scripts',
+  'settings',
+  'ssh-connections',
+  'ssh-keys',
+])
+
+// The only words kept one level below a root: Settings tabs and Schedule views.
+// A test checks these against Settings.tsx and Schedule.tsx.
+export const ROUTE_WORDS: Record<string, ReadonlySet<string>> = {
+  settings: new Set([
+    'account',
+    'activity',
+    'appearance',
+    'background-work',
+    'beta',
+    'cache',
+    'export',
+    'licensing',
+    'logs',
+    'monitoring',
+    'mounts',
+    'mqtt',
+    'notifications',
+    'packages',
+    'preferences',
+    'scripts',
+    'system',
+    'users',
+  ]),
+  schedule: new Set(['backups', 'by-plan', 'checks', 'restore-checks']),
+}
+
+export const normalizeRoute = (pathname: string): string => {
+  const path =
+    BASE_PATH && (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`))
+      ? pathname.slice(BASE_PATH.length) || '/'
+      : pathname
+  const segments = path.split('/')
+  if (segments[1] && !KNOWN_ROUTE_ROOTS.has(segments[1])) return '/:other'
+  const idRoute = ID_ROUTES[segments[1]]
+  return segments
+    .map((segment, index) => {
+      if (!segment || index === 1) return segment
+      if (idRoute) {
+        if (index < 2 + idRoute.ids) return ':id'
+        // Only the route's own word right after its ids; anything else is no route of ours.
+        return index === 2 + idRoute.ids && idRoute.after.has(segment) ? segment : ':id'
+      }
+      // Other routes keep only a known Settings tab or Schedule view below the root.
+      return index === 2 && ROUTE_WORDS[segments[1]]?.has(segment) ? segment : ':id'
+    })
+    .join('/')
+}
+
+const currentRoute = (): string => normalizeRoute(window.location.pathname)
+
+interface ErrorLike {
+  isAxiosError?: boolean
+  code?: string
+  config?: { method?: string; url?: string }
+  response?: { status?: number; data?: { detail?: unknown } }
+}
+
+/**
+ * A coarse class for a failure, from its HTTP status or transport code only. Error
+ * messages are never sent: they carry paths, hostnames and repository names.
+ */
+export const errorClass = (error: unknown): string => {
+  const err = error as ErrorLike | null
+  if (!err?.isAxiosError) return 'unknown'
+  const status = err.response?.status
+  if (!status)
+    return err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT' ? 'timeout' : 'network'
+  if (status === 400 || status === 422) return 'validation'
+  if (status === 401) return 'auth'
+  if (status === 403) return 'permission'
+  if (status === 404) return 'not_found'
+  if (status === 409) return 'conflict'
+  if (status === 429) return 'rate_limited'
+  if (status >= 500) return 'server'
+  return 'client'
+}
+
+/**
+ * Props for the outcome of a connection test: a failure always carries a class,
+ * `check_failed` when the request worked but the test itself reported failure.
+ */
+export const testResult = (success: boolean, error?: unknown): Record<string, unknown> =>
+  success
+    ? { success: true }
+    : { success: false, error_class: error === undefined ? 'check_failed' : errorClass(error) }
+
+// The API area a request belongs to: its first path segment after any version
+// prefix, which is a fixed route name. Never the rest, which can hold names.
+const apiArea = (url?: string): string => {
+  const raw = url ?? ''
+  const absolute = /^[a-z][a-z0-9+.-]*:/i.test(raw)
+  let pathname = ''
+  try {
+    pathname = new URL(raw, 'http://x').pathname
+  } catch {
+    return 'other'
+  }
+  const segments = pathname.split('/').filter(Boolean)
+  // A relative URL is already under the API base. An absolute one may carry a
+  // deployment base path first, so its area is whatever follows `api`.
+  const apiIndex = segments.indexOf('api')
+  const rest = apiIndex >= 0 ? segments.slice(apiIndex + 1) : absolute ? [] : segments
+  const first = rest[0] === 'v2' ? rest[1] : rest[0]
+  return first && /^[a-z][a-z0-9_-]*$/.test(first) ? first : 'other'
+}
 
 /**
  * Generate anonymous hash for entity names
@@ -155,7 +298,7 @@ const enqueue = (
   name: string,
   data?: Props,
   force = false,
-  at = { path: window.location.pathname, at: new Date().toISOString() }
+  at = { path: currentRoute(), at: new Date().toISOString() }
 ): void => {
   if (!instanceKey) {
     if (force && pendingForced.length < MAX_BATCH) pendingForced.push({ name, data, at })
@@ -261,7 +404,7 @@ export const trackPageView = (_path?: string): void => {
   // is off is dropped, even during a reload that turns it on.
   if (!canTrack()) {
     if (!preferenceLoaded && pendingPageviews.length < MAX_BATCH) {
-      pendingPageviews.push({ path: window.location.pathname, at: new Date().toISOString() })
+      pendingPageviews.push({ path: currentRoute(), at: new Date().toISOString() })
     }
     return
   }
@@ -285,6 +428,52 @@ export const trackEvent = (
   }
   if (value !== undefined) data.value = value
   enqueue(`${category} - ${action}`, data)
+}
+
+type PlanDetail = { key?: string; feature?: string; required?: string; current?: string }
+
+// The backend sends a detail as an object, a key string or a JSON string (see
+// getBackendErrorKey in services/api.ts).
+const planDetail = (detail: unknown): PlanDetail | undefined => {
+  if (typeof detail !== 'string') return (detail as PlanDetail | null) ?? undefined
+  if (!detail.startsWith('{')) return { key: detail }
+  try {
+    return JSON.parse(detail) as PlanDetail
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Called by the API clients for every failed request. A plan gate the backend
+ * refused is a blocked feature like any in the UI; any other failed change (not a
+ * read, not an expired session) is `API - Fail` with its area, method and class.
+ */
+export const trackApiError = (error: unknown): void => {
+  const err = error as ErrorLike
+  const detail = planDetail(err?.response?.data?.detail)
+  const area = apiArea(err?.config?.url)
+  if (typeof detail?.key === 'string' && detail.key.startsWith('backend.errors.plan.')) {
+    trackEvent(EventCategory.PLAN, EventAction.FEATURE_BLOCKED, {
+      // Every refusal names its feature; 'unknown' keeps an old backend's countable.
+      feature: detail.feature ?? 'unknown',
+      required_plan: detail.required,
+      current_plan: detail.current,
+      allowed: false,
+      surface: 'api',
+      operation: area,
+      gate_mode: 'api_error',
+    })
+    return
+  }
+  const method = err?.config?.method?.toLowerCase()
+  if (!method || method === 'get' || method === 'head' || err.response?.status === 401) return
+  trackEvent(EventCategory.API, EventAction.FAIL, {
+    area,
+    method,
+    ...(err.response?.status ? { status: err.response.status } : {}),
+    error_class: errorClass(error),
+  })
 }
 
 export const setAppVersion = (version: string): void => {
@@ -348,6 +537,9 @@ export const EventCategory = {
   PLAN: 'Plan',
   ANNOUNCEMENT: 'Announcement',
   REMOTE_CLIENT: 'Remote Client',
+  QUICK_START: 'Quick Start',
+  WIZARD: 'Wizard',
+  API: 'API',
 } as const
 
 // Pre-defined event actions
@@ -373,4 +565,5 @@ export const EventAction = {
   SWITCH: 'Switch',
   FEATURE_USED: 'FeatureUsed',
   FEATURE_BLOCKED: 'FeatureBlocked',
+  CANCEL: 'Cancel',
 } as const

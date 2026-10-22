@@ -143,6 +143,7 @@ export default function PruneLostFilesPanel({ repositoryId, lost }: PruneLostFil
               requiredPlan="pro"
               message={t('prunePreview.lostLocked', { count: totalCount })}
               feature="archive_history"
+              surface="prune_lost_files"
             />
           )}
 

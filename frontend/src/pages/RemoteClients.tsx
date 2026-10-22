@@ -14,6 +14,7 @@ import PageHeader from '../components/PageHeader'
 import RemoteClientCard from '../components/RemoteClientCard'
 import { useAuth } from '../hooks/useAuth'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { testResult } from '../utils/analytics'
 import { usePlan } from '../hooks/usePlan'
 import { useRemoteBackends } from '../services/remoteBackends/context'
 import { LOCAL_BACKEND_ID } from '../services/remoteBackends/storage'
@@ -221,8 +222,13 @@ export function RemoteClientsContent() {
         surface: 'remote_clients',
         status: updated.health.status,
         compatibility: updated.health.compatibility,
+        ...testResult(updated.health.status === 'online'),
       })
     } catch (error) {
+      trackRemoteClient(EventAction.TEST, client, {
+        surface: 'remote_clients',
+        ...testResult(false, error),
+      })
       const message = error instanceof Error ? error.message : t('common.errors.unexpectedError')
       toast.error(t('remoteClients.toasts.checkFailed', { name: client.name, error: message }))
     } finally {

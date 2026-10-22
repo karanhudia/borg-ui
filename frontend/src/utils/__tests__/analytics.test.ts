@@ -350,3 +350,234 @@ describe('anonymizeEntityName', () => {
     expect(a.anonymizeEntityName('repo')).toBe(a.anonymizeEntityName('repo'))
   })
 })
+
+describe('route normalization', () => {
+  it('replaces ids in the path of page views and events with placeholders', async () => {
+    const a = await load()
+    window.history.pushState({}, '', '/archives/12/345')
+    a.trackPageView()
+    window.history.pushState({}, '', '/repositories/7/prune-preview')
+    a.trackEvent('Archive', 'View')
+    vi.advanceTimersByTime(5000)
+    expect(sent().map((event) => event.path)).toEqual([
+      '/archives/:id/:id',
+      '/repositories/:id/prune-preview',
+    ])
+  })
+
+  it('keeps static routes as they are', async () => {
+    const a = await load()
+    expect(a.normalizeRoute('/settings/beta')).toBe('/settings/beta')
+    expect(a.normalizeRoute('/schedule/checks')).toBe('/schedule/checks')
+    expect(a.normalizeRoute('/archives/aid:abc123/9')).toBe('/archives/:id/:id')
+    // Route params are ids even when they happen to look like words.
+    expect(a.normalizeRoute('/archives/photos/nightly')).toBe('/archives/:id/:id')
+    expect(a.normalizeRoute('/repositories/photos/prune-preview')).toBe(
+      '/repositories/:id/prune-preview'
+    )
+    expect(a.normalizeRoute('/repositories/photos')).toBe('/repositories/:id')
+    expect(a.normalizeRoute('/repositories')).toBe('/repositories')
+    expect(a.normalizeRoute('/')).toBe('/')
+    // Anything outside the app's routes could be a name in a typed URL.
+    expect(a.normalizeRoute('/alice')).toBe('/:other')
+    expect(a.normalizeRoute('/alice/docs')).toBe('/:other')
+    expect(a.normalizeRoute('/settings/account/alice')).toBe('/settings/account/:id')
+    expect(a.normalizeRoute('/settings/alice')).toBe('/settings/:id')
+    expect(a.normalizeRoute('/schedule/checks')).toBe('/schedule/checks')
+    expect(a.normalizeRoute('/schedule/alice')).toBe('/schedule/:id')
+    expect(a.normalizeRoute('/dashboard/alice')).toBe('/dashboard/:id')
+    // After a route's ids only its own fixed words survive.
+    expect(a.normalizeRoute('/archives/photos/nightly/alice')).toBe('/archives/:id/:id/:id')
+    expect(a.normalizeRoute('/repositories/7/alice')).toBe('/repositories/:id/:id')
+  })
+
+  it('drops the deployment base path', async () => {
+    ;(window as unknown as { __BASE_PATH__?: string }).__BASE_PATH__ = '/acme-backups'
+    try {
+      const a = await load()
+      window.history.pushState({}, '', '/acme-backups/repositories')
+      a.trackPageView()
+      vi.advanceTimersByTime(5000)
+      expect(sent()[0].path).toBe('/repositories')
+    } finally {
+      delete (window as unknown as { __BASE_PATH__?: string }).__BASE_PATH__
+    }
+  })
+})
+
+describe('KNOWN_ROUTE_ROOTS', () => {
+  it('covers every top-level route in App.tsx', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const app = readFileSync(resolve(__dirname, '../../App.tsx'), 'utf8')
+    const roots = [...app.matchAll(/path="\/([a-z-]+)/g)].map((match) => match[1])
+    expect(roots.length).toBeGreaterThan(10)
+    const a = await load()
+    expect(roots.filter((root) => !a.KNOWN_ROUTE_ROOTS.has(root))).toEqual([])
+  })
+})
+
+describe('ROUTE_WORDS', () => {
+  it('matches the Settings tabs and Schedule views the pages define', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const read = (file: string) => readFileSync(resolve(__dirname, '..', '..', file), 'utf8')
+    const settings = read('pages/Settings.tsx')
+    const tabBlock = settings.slice(
+      settings.indexOf('const getTabOrder'),
+      settings.indexOf('}, [', settings.indexOf('const getTabOrder'))
+    )
+    const tabs = [...tabBlock.matchAll(/'([a-z-]+)'/g)].map((match) => match[1])
+    const views = [...read('pages/Schedule.tsx').matchAll(/'\/schedule\/([a-z-]+)'/g)].map(
+      (match) => match[1]
+    )
+    expect(tabs.length).toBeGreaterThan(10)
+    expect(views.length).toBeGreaterThan(3)
+    const a = await load()
+    expect([...new Set(tabs)].sort()).toEqual([...a.ROUTE_WORDS.settings].sort())
+    expect([...new Set(views)].sort()).toEqual([...a.ROUTE_WORDS.schedule].sort())
+  })
+})
+
+describe('errorClass', () => {
+  it('maps an error to a coarse class, never its message', async () => {
+    const a = await load()
+    const http = (status: number) => ({ isAxiosError: true, response: { status } })
+    expect(a.errorClass(http(400))).toBe('validation')
+    expect(a.errorClass(http(422))).toBe('validation')
+    expect(a.errorClass(http(401))).toBe('auth')
+    expect(a.errorClass(http(403))).toBe('permission')
+    expect(a.errorClass(http(404))).toBe('not_found')
+    expect(a.errorClass(http(409))).toBe('conflict')
+    expect(a.errorClass(http(429))).toBe('rate_limited')
+    expect(a.errorClass(http(502))).toBe('server')
+    expect(a.errorClass(http(418))).toBe('client')
+    expect(a.errorClass({ isAxiosError: true, code: 'ECONNABORTED' })).toBe('timeout')
+    expect(a.errorClass({ isAxiosError: true, code: 'ERR_NETWORK' })).toBe('network')
+    expect(a.errorClass(new Error('/srv/secret failed'))).toBe('unknown')
+  })
+})
+
+describe('testResult', () => {
+  it('gives every failed test a class, check_failed when the request itself worked', async () => {
+    const a = await load()
+    expect(a.testResult(true)).toEqual({ success: true })
+    expect(a.testResult(false)).toEqual({ success: false, error_class: 'check_failed' })
+    expect(a.testResult(false, { isAxiosError: true, code: 'ECONNABORTED' })).toEqual({
+      success: false,
+      error_class: 'timeout',
+    })
+  })
+})
+
+describe('trackApiError', () => {
+  const planError = {
+    isAxiosError: true,
+    config: { method: 'post', url: '/v2/repositories/' },
+    response: {
+      status: 403,
+      data: {
+        detail: {
+          key: 'backend.errors.plan.featureNotAvailable',
+          feature: 'borg_v2',
+          required: 'pro',
+          current: 'community',
+        },
+      },
+    },
+  }
+
+  it('reports a plan gate refused by the backend as a blocked feature', async () => {
+    const a = await load()
+    a.trackApiError(planError)
+    vi.advanceTimersByTime(5000)
+    expect(sent()[0]).toMatchObject({
+      name: 'Plan - FeatureBlocked',
+      props: {
+        feature: 'borg_v2',
+        required_plan: 'pro',
+        current_plan: 'community',
+        allowed: false,
+        surface: 'api',
+        operation: 'repositories',
+        gate_mode: 'api_error',
+      },
+    })
+  })
+
+  it('recognises a plan refusal sent as a plain or JSON string detail', async () => {
+    const a = await load()
+    const refuse = (detail: unknown) =>
+      a.trackApiError({
+        isAxiosError: true,
+        config: { method: 'post', url: '/repositories/' },
+        response: { status: 403, data: { detail } },
+      })
+    refuse('backend.errors.plan.featureNotAvailable')
+    refuse(JSON.stringify({ key: 'backend.errors.plan.featureNotAvailable', feature: 'rclone' }))
+    refuse('{not json')
+    vi.advanceTimersByTime(5000)
+    expect(sent().map((event) => [event.name, event.props.feature])).toEqual([
+      ['Plan - FeatureBlocked', 'unknown'],
+      ['Plan - FeatureBlocked', 'rclone'],
+      ['API - Fail', undefined],
+    ])
+  })
+
+  it('reports a failed change as API - Fail with only its area, method and class', async () => {
+    const a = await load()
+    a.trackApiError({
+      isAxiosError: true,
+      config: { method: 'put', url: '/repositories/12/settings?name=home' },
+      response: { status: 500, data: { detail: 'borg: /srv/secret is locked' } },
+    })
+    vi.advanceTimersByTime(5000)
+    const [event] = sent()
+    expect(event).toMatchObject({
+      name: 'API - Fail',
+      props: { area: 'repositories', method: 'put', status: 500, error_class: 'server' },
+    })
+    expect(JSON.stringify(event)).not.toContain('secret')
+  })
+
+  it('skips a base path in an absolute URL and gives up without an api prefix', async () => {
+    const a = await load()
+    const fail = (url: string) =>
+      a.trackApiError({
+        isAxiosError: true,
+        config: { method: 'post', url },
+        response: { status: 500 },
+      })
+    fail('https://nas.local/acme-backups/api/v2/archives/3')
+    fail('https://nas.local/acme-backups/repositories')
+    vi.advanceTimersByTime(5000)
+    expect(sent().map((event) => event.props.area)).toEqual(['archives', 'other'])
+  })
+
+  it('takes the area from an absolute request URL', async () => {
+    const a = await load()
+    a.trackApiError({
+      isAxiosError: true,
+      config: { method: 'post', url: 'https://nas.local/api/backup-plans/3/run' },
+      response: { status: 409 },
+    })
+    vi.advanceTimersByTime(5000)
+    expect(sent()[0].props).toMatchObject({ area: 'backup-plans', error_class: 'conflict' })
+  })
+
+  it('ignores reads and expired sessions', async () => {
+    const a = await load()
+    a.trackApiError({
+      isAxiosError: true,
+      config: { method: 'get', url: '/x' },
+      response: { status: 500 },
+    })
+    a.trackApiError({
+      isAxiosError: true,
+      config: { method: 'post', url: '/x' },
+      response: { status: 401 },
+    })
+    vi.advanceTimersByTime(5000)
+    expect(fetchMock()).not.toHaveBeenCalled()
+  })
+})

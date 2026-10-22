@@ -151,6 +151,7 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
           requiredPlan="pro"
           message={t('archives.files.historyLocked')}
           feature="archive_history"
+          surface="archive_file_history"
         />
         {/* A sample of the versions Pro lists, dimmed and inert: the line
             above says what is true of this path, this says what reading it

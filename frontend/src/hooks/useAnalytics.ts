@@ -205,6 +205,10 @@ export const useAnalytics = () => {
     trackEvent(EventCategory.ANNOUNCEMENT, action, data)
   }, [])
 
+  const trackQuickStart = useCallback((action: string, data?: Record<string, unknown>) => {
+    trackEvent(EventCategory.QUICK_START, action, data)
+  }, [])
+
   // Auth tracking
   const trackAuth = useCallback((action: string, data?: Record<string, unknown>) => {
     trackEvent(EventCategory.AUTH, action, data)
@@ -229,6 +233,7 @@ export const useAnalytics = () => {
     trackRemoteClient,
     trackAnnouncement,
     trackAuth,
+    trackQuickStart,
     buildEntityData,
     EventCategory,
     EventAction,

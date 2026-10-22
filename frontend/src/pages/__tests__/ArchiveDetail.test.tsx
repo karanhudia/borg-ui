@@ -4,6 +4,12 @@ import { renderWithProviders } from '../../test/test-utils'
 import ArchiveDetail from '../ArchiveDetail'
 import { archivesAPI, repositoriesAPI, restoreAPI } from '../../services/api'
 
+const { trackEventMock } = vi.hoisted(() => ({ trackEventMock: vi.fn() }))
+vi.mock('../../utils/analytics', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../utils/analytics')>()),
+  trackEvent: trackEventMock,
+}))
+
 let mockParams = { repositoryId: '7', archiveId: '12' }
 const permissionState = { canRestore: true }
 
@@ -188,6 +194,28 @@ describe('ArchiveDetail', () => {
 
     fireEvent.click(within(panel).getByRole('button', { name: /dismiss/i }))
     expect(screen.queryByRole('status', { name: /restore progress/i })).not.toBeInTheDocument()
+  })
+
+  it('tracks opening the archive once and starting a restore from it', async () => {
+    trackEventMock.mockClear()
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    vi.mocked(restoreAPI.startRestore).mockResolvedValue({ data: { job_id: 42 } } as never)
+    vi.mocked(restoreAPI.getRestoreStatus).mockResolvedValue({
+      data: { id: 42, status: 'running', progress_details: {} },
+    } as never)
+    renderRoute('/archives/7/12?tab=files')
+    fireEvent.click(await screen.findByRole('button', { name: /restore selection/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start restore/i }))
+    await screen.findByRole('status', { name: /restore progress/i })
+
+    const archiveEvents = trackEventMock.mock.calls.filter(([category]) => category === 'Archive')
+    expect(
+      archiveEvents.map(([, action, props]) => [action, props.surface, props.operation])
+    ).toEqual([
+      ['View', 'archive_detail', 'open_archive'],
+      ['Start', 'archive_detail', 'restore'],
+    ])
+    expect(JSON.stringify(archiveEvents)).not.toContain('nas')
   })
 
   it('says so when the job status cannot be read', async () => {

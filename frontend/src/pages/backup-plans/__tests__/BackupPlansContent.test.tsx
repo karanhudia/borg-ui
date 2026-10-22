@@ -7,8 +7,19 @@ import type { TFunction } from 'i18next'
 import { BackupPlansContent } from '../BackupPlansContent'
 import type { BackupPlan, BackupPlanRun } from '../../../types'
 
-const { mockTrack } = vi.hoisted(() => ({
+const { mockTrack, trackEventMock } = vi.hoisted(() => ({
   mockTrack: vi.fn(),
+  trackEventMock: vi.fn(),
+}))
+
+const planState = vi.hoisted(() => ({ isLoading: false }))
+vi.mock('../../../hooks/usePlan', () => ({
+  usePlan: () => ({ plan: 'community', isLoading: planState.isLoading, can: () => false }),
+}))
+
+vi.mock('../../../utils/analytics', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../utils/analytics')>()),
+  trackEvent: trackEventMock,
 }))
 
 vi.mock('../../../hooks/useAnalytics', () => ({
@@ -161,7 +172,7 @@ const activeRun: BackupPlanRun = {
   ],
 }
 
-function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlansContent>> = {}) {
+function contentElement(overrides: Partial<React.ComponentProps<typeof BackupPlansContent>> = {}) {
   const props: React.ComponentProps<typeof BackupPlansContent> = {
     loadingPlans: false,
     backupPlans: [basePlan],
@@ -201,11 +212,15 @@ function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlan
     ...overrides,
   }
 
-  return render(
+  return (
     <ThemeProvider theme={theme}>
       <BackupPlansContent {...props} />
     </ThemeProvider>
   )
+}
+
+function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlansContent>> = {}) {
+  return render(contentElement(overrides))
 }
 
 describe('BackupPlansContent', () => {
@@ -417,6 +432,37 @@ describe('BackupPlansContent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run' }))
 
     expect(onRunPlan).not.toHaveBeenCalled()
+    expect(trackEventMock).toHaveBeenCalledWith(
+      'Plan',
+      'FeatureBlocked',
+      expect.objectContaining({
+        feature: 'database_discovery',
+        surface: 'backup_plan_card',
+        operation: 'run_plan',
+        gate_mode: 'disabled',
+      })
+    )
+  })
+
+  it('reports no lock while the plan is still loading, then reports it once known', () => {
+    const multiPlan: BackupPlan = { ...basePlan, repository_count: 2 }
+    const props = {
+      backupPlans: [multiPlan],
+      processedPlans: { groups: [{ name: null, plans: [multiPlan] }] },
+      canUseMultiRepository: false,
+    }
+    trackEventMock.mockClear()
+    planState.isLoading = true
+    const { rerender } = renderContent(props)
+    expect(trackEventMock).not.toHaveBeenCalledWith('Plan', 'FeatureBlocked', expect.anything())
+
+    planState.isLoading = false
+    rerender(contentElement({ ...props, searchQuery: 'x' }))
+    expect(trackEventMock).toHaveBeenCalledWith(
+      'Plan',
+      'FeatureBlocked',
+      expect.objectContaining({ feature: 'backup_plan_multi_repository' })
+    )
   })
 
   it('disables container backup plan runs behind the Pro chip when unavailable', () => {

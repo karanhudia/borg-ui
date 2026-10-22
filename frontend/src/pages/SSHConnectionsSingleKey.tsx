@@ -13,6 +13,7 @@ import type {
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { testResult } from '../utils/analytics'
 import { useAuth } from '../hooks/useAuth'
 import { SSHConnectionsSingleKeyView } from './ssh-connections-single-key/SSHConnectionsSingleKeyView'
 import { HostKeyDialog } from './ssh-connections-single-key/dialogs/HostKeyDialog'
@@ -154,14 +155,21 @@ export default function SSHConnectionsSingleKey() {
         toast.success(
           translateBackendKey(response.data.message, 'sshConnections.toasts.connectionTestSuccess')
         )
-        track(EventCategory.SSH, EventAction.TEST, { resource: 'connection' })
       } else {
         toast.error(t('sshConnections.toasts.connectionTestFailed'))
       }
+      track(EventCategory.SSH, EventAction.TEST, {
+        resource: 'connection',
+        ...testResult(!!response.data.success),
+      })
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
     },
     onError: (error: unknown) => {
       console.error('Failed to test connection:', error)
+      track(EventCategory.SSH, EventAction.TEST, {
+        resource: 'connection',
+        ...testResult(false, error),
+      })
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.toasts.connectionTestFailed')
@@ -180,11 +188,21 @@ export default function SSHConnectionsSingleKey() {
 
       // Automatically test the connection after update
       try {
-        await sshKeysAPI.testExistingConnection(variables.connectionId)
+        const response = await sshKeysAPI.testExistingConnection(variables.connectionId)
+        track(EventCategory.SSH, EventAction.TEST, {
+          resource: 'connection',
+          trigger: 'after_edit',
+          ...testResult(!!response?.data?.success),
+        })
         queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       } catch (error: unknown) {
         // Test failure is already shown in the connection status
         console.error('Failed to test connection:', error)
+        track(EventCategory.SSH, EventAction.TEST, {
+          resource: 'connection',
+          trigger: 'after_edit',
+          ...testResult(false, error),
+        })
         queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       }
     },
@@ -254,10 +272,17 @@ export default function SSHConnectionsSingleKey() {
         )
       }
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
-      track(EventCategory.SSH, EventAction.TEST, { resource: 'connection' })
+      track(EventCategory.SSH, EventAction.TEST, {
+        resource: 'connection',
+        ...testResult(!!response.data.success),
+      })
     },
     onError: (error: unknown) => {
       console.error('Failed to test connection:', error)
+      track(EventCategory.SSH, EventAction.TEST, {
+        resource: 'connection',
+        ...testResult(false, error),
+      })
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.toasts.connectionTestFailed')
@@ -358,10 +383,17 @@ export default function SSHConnectionsSingleKey() {
     onSuccess: (response) => {
       setDiagnosticsResult(response.data)
       toast.success(t('sshConnections.toasts.diagnosticsComplete'))
-      track(EventCategory.SSH, EventAction.TEST, { resource: 'connection_diagnostics' })
+      track(EventCategory.SSH, EventAction.TEST, {
+        resource: 'connection_diagnostics',
+        success: true,
+      })
     },
     onError: (error: unknown) => {
       console.error('Failed to run connection diagnostics:', error)
+      track(EventCategory.SSH, EventAction.TEST, {
+        resource: 'connection_diagnostics',
+        ...testResult(false, error),
+      })
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.toasts.diagnosticsFailed')

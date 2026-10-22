@@ -5,6 +5,12 @@ import { BorgApiClient } from '../../../services/borgApi'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../../test/test-utils'
 import QuickStartDialog from '../QuickStartDialog'
 
+const { trackEventMock } = vi.hoisted(() => ({ trackEventMock: vi.fn() }))
+vi.mock('../../../utils/analytics', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../utils/analytics')>()),
+  trackEvent: trackEventMock,
+}))
+
 vi.mock('../../../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../services/api')>()
   return {
@@ -61,6 +67,7 @@ vi.mock('../../../services/borgApi', () => ({
 
 describe('QuickStartDialog', () => {
   beforeEach(() => {
+    trackEventMock.mockClear()
     vi.mocked(BorgApiClient.createRepository).mockResolvedValue({ data: { id: 4 } } as never)
     vi.mocked(backupPlansAPI.create).mockResolvedValue({ data: { id: 9 } } as never)
     vi.mocked(scriptsAPI.create).mockResolvedValue({ data: { id: 12 } } as never)
@@ -97,7 +104,7 @@ describe('QuickStartDialog', () => {
 
   it('walks a local setup and creates the repository and plan', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<QuickStartDialog open onClose={() => {}} />)
+    renderWithProviders(<QuickStartDialog open trigger="manual" onClose={() => {}} />)
 
     const next = () => user.click(screen.getByRole('button', { name: 'Next' }))
 
@@ -144,9 +151,67 @@ describe('QuickStartDialog', () => {
     )
   })
 
+  it('tracks the funnel: open, each step reached, and the finished local path', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<QuickStartDialog open trigger="auto" onClose={() => {}} />)
+    const next = () => user.click(screen.getByRole('button', { name: 'Next' }))
+
+    await next()
+    await next()
+    await user.type(screen.getByLabelText('Folder'), '/local/home{Enter}')
+    await next()
+    await next()
+    await user.type(screen.getByLabelText(/^Passphrase/), 'correct horse')
+    await user.type(screen.getByLabelText(/Repeat passphrase/), 'correct horse')
+    await user.click(screen.getByLabelText(/I have saved my passphrase/))
+    await next()
+    await next()
+    await user.click(screen.getByRole('button', { name: 'Create backup' }))
+    await waitFor(() => expect(screen.getByText('Your backup is ready')).toBeInTheDocument())
+
+    const view = (step: string, path?: string) => [
+      'Quick Start',
+      'View',
+      { step, ...(path ? { path } : {}) },
+    ]
+    expect(trackEventMock.mock.calls).toEqual([
+      ['Quick Start', 'Start', { trigger: 'auto' }],
+      view('app'),
+      view('what'),
+      view('folders', 'local'),
+      view('destination', 'local'),
+      view('protect', 'local'),
+      view('schedule', 'local'),
+      view('review', 'local'),
+      view('progress', 'local'),
+      ['Quick Start', 'Complete', { path: 'local', app_choice: 'folders' }],
+    ])
+  })
+
+  it('counts a step once when revisited and tracks closing early as Cancel', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<QuickStartDialog open trigger="manual" onClose={() => {}} />)
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('radio', { name: /Files on another computer/ }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(trackEventMock.mock.calls).toEqual([
+      ['Quick Start', 'Start', { trigger: 'manual' }],
+      ['Quick Start', 'View', { step: 'app' }],
+      ['Quick Start', 'View', { step: 'what' }],
+      ['Quick Start', 'View', { step: 'connect', path: 'ssh' }],
+      ['Quick Start', 'Cancel', { step: 'what' }],
+    ])
+  })
+
   it('sets up Immich from its detected folder, with excludes and the dump check', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<QuickStartDialog open onClose={() => {}} />)
+    renderWithProviders(<QuickStartDialog open trigger="manual" onClose={() => {}} />)
     const next = () => user.click(screen.getByRole('button', { name: 'Next' }))
 
     await user.click(screen.getByRole('radio', { name: /An app/ }))

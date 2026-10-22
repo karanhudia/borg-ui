@@ -225,6 +225,7 @@ export default function ArchiveSearchField({
                     compact
                     requiredPlan="pro"
                     feature="archive_history"
+                    surface="archive_search"
                     message={t(
                       data?.match_count_capped
                         ? 'archives.search.lockedCapped'
