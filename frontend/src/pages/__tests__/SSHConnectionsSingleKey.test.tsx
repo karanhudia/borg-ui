@@ -586,6 +586,27 @@ describe('SSHConnectionsSingleKey', () => {
     })
   })
 
+  it('tracks a failed connection test with its error class only', async () => {
+    const { sshKeysAPI } = await import('../../services/api')
+    vi.mocked(sshKeysAPI.testExistingConnection).mockRejectedValueOnce({
+      isAxiosError: true,
+      code: 'ECONNABORTED',
+      message: 'timeout reaching backup-host',
+    })
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+    await screen.findByText('backup-host')
+    fireEvent.click(screen.getByRole('button', { name: /test backup-host/i }))
+
+    await waitFor(() =>
+      expect(track).toHaveBeenCalledWith('ssh', 'test', {
+        resource: 'connection',
+        success: false,
+        error_class: 'timeout',
+      })
+    )
+  })
+
   it('opens remote machine diagnostics from a connection card and runs a session check', async () => {
     const user = userEvent.setup()
     const { sshKeysAPI } = await import('../../services/api')

@@ -404,6 +404,7 @@ describe('RemoteClients', () => {
         surface: 'remote_clients',
         status: 'online',
         compatibility: 'compatible',
+        success: true,
       }
     )
 
