@@ -65,9 +65,12 @@ const sessionKey = randomUuid()
  * not a plain lowercase word (an id, an `aid:` selector) replaced with `:id`, so
  * paths group by page and carry nothing that identifies a repository or archive.
  */
-// How many segments after a route's root are ids, even when a value looks like a
-// plain word: /archives/:repositoryId/:archiveId, /repositories/:repositoryId/...
-const ID_SEGMENTS: Record<string, number> = { archives: 2, repositories: 1 }
+// Routes with ids (App.tsx): how many segments after the root are ids, even when a
+// value looks like a plain word, and the only words allowed after them.
+const ID_ROUTES: Record<string, { ids: number; after: ReadonlySet<string> }> = {
+  archives: { ids: 2, after: new Set() }, // /archives/:repositoryId/:archiveId
+  repositories: { ids: 1, after: new Set(['prune-preview']) }, // /repositories/:id/prune-preview
+}
 
 // The app's top-level routes (App.tsx). Any other path is sent as `/:other`, so a
 // typed or stale URL can never carry a word that is really a name. A test checks
@@ -100,15 +103,18 @@ export const normalizeRoute = (pathname: string): string => {
       : pathname
   const segments = path.split('/')
   if (segments[1] && !KNOWN_ROUTE_ROOTS.has(segments[1])) return '/:other'
-  const idCount = ID_SEGMENTS[segments[1]] ?? 0
+  const idRoute = ID_ROUTES[segments[1]]
   return segments
     .map((segment, index) => {
-      if (!segment) return segment
-      if (index >= 2 && index < 2 + idCount) return ':id'
-      // A route has at most one fixed word after its ids (prune-preview); anything
-      // deeper is no route of ours, so a free word there is treated as an id.
-      if (index > 2 + idCount) return ':id'
-      return /^[a-z][a-z-]*$/.test(segment) ? segment : ':id'
+      if (!segment || index === 1) return segment
+      if (idRoute) {
+        if (index < 2 + idRoute.ids) return ':id'
+        // Only the route's own word right after its ids; anything else is no route of ours.
+        return index === 2 + idRoute.ids && idRoute.after.has(segment) ? segment : ':id'
+      }
+      // Other routes have at most one fixed word below the root (a settings tab, a
+      // schedule view); anything deeper is treated as an id.
+      return index === 2 && /^[a-z][a-z-]*$/.test(segment) ? segment : ':id'
     })
     .join('/')
 }

@@ -14,7 +14,7 @@ rejected as `unknown_name`. Props are the event's `props` object.
 | `instance_key` | SHA-256 of the install's random id. Joins to `orders.ik` and buy-link `ik`. |
 | `user_key` | SHA-256 of install id plus user id. |
 | `session_key` | Random per page load. |
-| `path` | Route only: ids, `aid:` selectors and the deployment base path removed (`/archives/:id/:id`, `/repositories/:id/prune-preview`). Static segments stay (`/settings/beta-features`). Segments right after `archives` (two) and `repositories` (one) are always `:id`. A path whose first segment is not an app route is sent as `/:other`. |
+| `path` | Route only: ids, `aid:` selectors and the deployment base path removed (`/archives/:id/:id`, `/repositories/:id/prune-preview`). Static segments stay (`/settings/beta-features`). Segments right after `archives` (two) and `repositories` (one) are always `:id`, and only `prune-preview` may follow a repository id. Other routes keep one fixed word below the root (a settings tab, a schedule view). Anything else becomes `:id`, and a path whose first segment is not an app route is sent as `/:other`. |
 | `plan`, `app_version` | Current plan name and app version. |
 
 Privacy rules, enforced in `frontend/src/utils/analytics.ts`: any `*_name` prop and any

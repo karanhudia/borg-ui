@@ -382,6 +382,9 @@ describe('route normalization', () => {
     expect(a.normalizeRoute('/alice')).toBe('/:other')
     expect(a.normalizeRoute('/alice/docs')).toBe('/:other')
     expect(a.normalizeRoute('/settings/account/alice')).toBe('/settings/account/:id')
+    // After a route's ids only its own fixed words survive.
+    expect(a.normalizeRoute('/archives/photos/nightly/alice')).toBe('/archives/:id/:id/:id')
+    expect(a.normalizeRoute('/repositories/7/alice')).toBe('/repositories/:id/:id')
   })
 
   it('drops the deployment base path', async () => {
