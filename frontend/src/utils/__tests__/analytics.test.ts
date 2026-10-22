@@ -518,7 +518,7 @@ describe('trackApiError', () => {
     refuse('{not json')
     vi.advanceTimersByTime(5000)
     expect(sent().map((event) => [event.name, event.props.feature])).toEqual([
-      ['Plan - FeatureBlocked', undefined],
+      ['Plan - FeatureBlocked', 'unknown'],
       ['Plan - FeatureBlocked', 'rclone'],
       ['API - Fail', undefined],
     ])

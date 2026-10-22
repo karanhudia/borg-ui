@@ -31,7 +31,7 @@ coarse `error_class` only, never a message.
 
 | Prop | Meaning |
 |---|---|
-| `feature` | Stable key: `borg_v2`, `backup_plan_multi_repository`, `backup_plan_mixed_sources`, `rclone`, `remote_clients`, `database_discovery`, `container_backups`, `backup_reports`, `alerting_monitoring`, `archive_history`, `rbac`. |
+| `feature` | Stable key (`unknown` if a backend refusal names none): `borg_v2`, `backup_plan_multi_repository`, `backup_plan_mixed_sources`, `rclone`, `remote_clients`, `database_discovery`, `container_backups`, `backup_reports`, `alerting_monitoring`, `archive_history`, `extra_users`, `rbac`. |
 | `current_plan`, `required_plan`, `allowed` (false) | |
 | `surface` | Where: `plan_gate` (default), `repository_wizard`, `source_selection_dialog`, `backup_plan_card`, `archive_search`, `archive_changes`, `archive_file_history`, `prune_lost_files`, `api`, and the surfaces callers pass to PlanGate. |
 | `operation` | What the user was doing (`render_gate`, `run_plan`, `source_kind_pivot`, `teaser`, or for `surface=api` the API area such as `repositories`). |
@@ -42,7 +42,9 @@ plan card Run lock, source picker Database/Container tabs, repository wizard rcl
 locks, backup plan multi-repo and mixed-source locks, and the API interceptors for any
 backend plan refusal.
 
-Not paywalls, so no event: `extra_users` (not enforced anywhere), Borg 2 option hidden
+The user limit is a paywall too: the backend refuses a new user over the plan's limit with `feature: extra_users` (`required` pro from Community, enterprise from Pro), which arrives as `surface: api`, `gate_mode: api_error`.
+
+Not paywalls, so no event: Borg 2 option hidden
 in Quick Start and encryption fields, remote clients hidden in the backend switcher,
 archive history hidden in the pipeline board.
 

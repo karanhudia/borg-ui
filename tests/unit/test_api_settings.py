@@ -651,6 +651,47 @@ class TestUserManagement:
 
         assert response.status_code == 200
 
+    def test_create_user_over_plan_limit_names_the_feature(
+        self, test_client: TestClient, admin_headers
+    ):
+        """The refusal names extra_users so the app can count it as a paywall"""
+        with (
+            patch("app.api.settings.get_current_plan", return_value=Plan.COMMUNITY),
+            patch.dict("app.api.settings.USER_LIMITS", {Plan.COMMUNITY: 0}),
+        ):
+            response = test_client.post(
+                "/api/settings/users",
+                json={
+                    "username": "overlimit",
+                    "password": "SecurePass123!",
+                    "email": "overlimit@example.com",
+                    "role": "viewer",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 403
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.plan.userLimitReached"
+        assert detail["feature"] == "extra_users"
+        assert detail["required"] == "pro"
+
+        with (
+            patch("app.api.settings.get_current_plan", return_value=Plan.PRO),
+            patch.dict("app.api.settings.USER_LIMITS", {Plan.PRO: 0}),
+        ):
+            response = test_client.post(
+                "/api/settings/users",
+                json={
+                    "username": "overlimit2",
+                    "password": "SecurePass123!",
+                    "email": "overlimit2@example.com",
+                    "role": "viewer",
+                },
+                headers=admin_headers,
+            )
+        assert response.json()["detail"]["required"] == "enterprise"
+
     def test_create_user_missing_fields(self, test_client: TestClient, admin_headers):
         """Test creating user with missing fields returns 422"""
         response = test_client.post(

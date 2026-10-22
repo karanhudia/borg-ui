@@ -1380,7 +1380,8 @@ export default function CloudStorage() {
         operation: 'test_remote_complete',
         provider: remote.provider,
         status: response.data?.status || 'unknown',
-        success: true,
+        // The route answers 200 with status 'failed' when the remote is unreachable.
+        ...testResult(response.data?.status === 'connected'),
       })
       trackRcloneFeatureUsed('test_remote', {
         provider: remote.provider,

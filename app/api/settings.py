@@ -19,7 +19,13 @@ from app.core.security import (
     verify_password,
 )
 from app.core.user_deletion import detach_user_delete_references
-from app.core.features import get_current_plan, require_feature_access, USER_LIMITS
+from app.core.features import (
+    FEATURES,
+    Plan,
+    get_current_plan,
+    require_feature_access,
+    USER_LIMITS,
+)
 from app.core.permissions import (
     GLOBAL_ROLE_RANK,
     REPOSITORY_ROLE_RANK,
@@ -1396,6 +1402,15 @@ async def create_user(
                 status_code=403,
                 detail={
                     "key": "backend.errors.plan.userLimitReached",
+                    # The paywall behind the limit, so the app counts it like
+                    # any other blocked feature.
+                    "feature": "extra_users",
+                    # Pro lifts the Community limit; past Pro's, only Enterprise does.
+                    "required": (
+                        FEATURES["extra_users"].value
+                        if current_plan == Plan.COMMUNITY
+                        else Plan.ENTERPRISE.value
+                    ),
                     "current": current_plan.value,
                     "limit": limit,
                 },

@@ -455,7 +455,8 @@ export const trackApiError = (error: unknown): void => {
   const area = apiArea(err?.config?.url)
   if (typeof detail?.key === 'string' && detail.key.startsWith('backend.errors.plan.')) {
     trackEvent(EventCategory.PLAN, EventAction.FEATURE_BLOCKED, {
-      feature: detail.feature,
+      // Every refusal names its feature; 'unknown' keeps an old backend's countable.
+      feature: detail.feature ?? 'unknown',
       required_plan: detail.required,
       current_plan: detail.current,
       allowed: false,
