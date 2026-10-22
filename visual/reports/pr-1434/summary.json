@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-10-22T14:30:22.314Z",
+  "generatedAt": "2026-10-22T15:46:30.749Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1434 visual report",
     "commitSha": "4a47e6d80ef6",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/39794875312"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/39805533122"
   },
   "totals": {
     "baseline": 1214,
@@ -17,13 +17,13 @@
   },
   "changed": [
     {
-      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPixels": 106,
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
+      "diffPixels": 362,
       "totalPixels": 329160,
-      "diffRatio": 0.00032203183861951635,
+      "diffRatio": 0.0010997691092477823,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -2577,9 +2577,6 @@
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png"
-    },
-    {
       "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
     },
     {
@@ -3082,6 +3079,9 @@
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png"
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
