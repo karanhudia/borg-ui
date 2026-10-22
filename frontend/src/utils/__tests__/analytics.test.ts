@@ -381,6 +381,7 @@ describe('route normalization', () => {
     // Anything outside the app's routes could be a name in a typed URL.
     expect(a.normalizeRoute('/alice')).toBe('/:other')
     expect(a.normalizeRoute('/alice/docs')).toBe('/:other')
+    expect(a.normalizeRoute('/settings/account/alice')).toBe('/settings/account/:id')
   })
 
   it('drops the deployment base path', async () => {

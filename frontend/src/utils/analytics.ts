@@ -105,6 +105,9 @@ export const normalizeRoute = (pathname: string): string => {
     .map((segment, index) => {
       if (!segment) return segment
       if (index >= 2 && index < 2 + idCount) return ':id'
+      // A route has at most one fixed word after its ids (prune-preview); anything
+      // deeper is no route of ours, so a free word there is treated as an id.
+      if (index > 2 + idCount) return ':id'
       return /^[a-z][a-z-]*$/.test(segment) ? segment : ':id'
     })
     .join('/')
