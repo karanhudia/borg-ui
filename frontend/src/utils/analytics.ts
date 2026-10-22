@@ -65,11 +65,18 @@ const sessionKey = randomUuid()
  * not a plain lowercase word (an id, an `aid:` selector) replaced with `:id`, so
  * paths group by page and carry nothing that identifies a repository or archive.
  */
+// Routes whose params are ids even when a value looks like a plain word (App.tsx).
+const PARAM_ROUTES: [RegExp, string][] = [
+  [/^\/archives\/[^/]+\/[^/]+\/?$/, '/archives/:id/:id'],
+  [/^\/repositories\/[^/]+\/prune-preview\/?$/, '/repositories/:id/prune-preview'],
+]
+
 export const normalizeRoute = (pathname: string): string => {
   const path =
     BASE_PATH && (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`))
       ? pathname.slice(BASE_PATH.length) || '/'
       : pathname
+  for (const [pattern, route] of PARAM_ROUTES) if (pattern.test(path)) return route
   return path.replace(/[^/]+/g, (segment) => (/^[a-z][a-z-]*$/.test(segment) ? segment : ':id'))
 }
 

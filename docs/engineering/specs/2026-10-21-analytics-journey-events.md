@@ -128,15 +128,15 @@ event each:
 | Feature | Event |
 |---|---|
 | Backup run | `Backup - Start` (`descriptor` manual, backup_plan, quick_start, legacy_repository; `entity` backup_plan/schedule) |
-| Restore | `Archive - Start` with `operation: restore` (no surface on the Archives page, `archive_detail` on the archive page) and `Archive - Complete|Fail` from the Archives page |
+| Restore | `Archive - Start` with `operation: restore` (no surface on the Archives page, `archive_detail` on the archive page) and `Archive - Complete\|Fail` from the Archives page |
 | Browse archive | `Archive - View` with `operation: open_archive` (`surface: archive_contents` or `archive_detail`) |
-| Mount | `Archive - Mount` (`operation: mount_archive`), `Mount - Unmount|Delete` |
+| Mount | `Archive - Mount` (`operation: mount_archive`), `Mount - Unmount\|Delete` |
 | Prune, check, compact | `Maintenance - Start` with `operation_type` Prune, Check, Compact |
-| Schedules | `Backup - Create|Edit|Delete|Start` with `entity: schedule` |
-| Notifications | `Notification - Create|Edit|Delete|Test` |
+| Schedules | `Backup - Create\|Edit\|Delete\|Start` with `entity: schedule` |
+| Notifications | `Notification - Create\|Edit\|Delete\|Test` |
 | Cloud (rclone) | `System - *` with `section: cloud_storage`, plus `Plan - FeatureUsed` `rclone` |
 | Agents | `System - *` on Managed Agents, plus `Plan - FeatureUsed` `managed_agents` |
-| SSH | `SSH Connection - Create|Edit|Delete|Test|Upload|Start` |
+| SSH | `SSH Connection - Create\|Edit\|Delete\|Test\|Upload\|Start` |
 
 ## 5. Quick Start
 

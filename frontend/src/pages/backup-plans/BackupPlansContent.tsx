@@ -15,6 +15,7 @@ import { BackupPlanIdleCard } from './PlanRunComponents'
 import { isActiveRun } from './runStatus'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../../hooks/useFeatureAnalytics'
+import { usePlan } from '../../hooks/usePlan'
 import type { Feature } from '../../core/features'
 
 const BACKUP_PLANS_ANALYTICS_SECTION = 'backup_plans'
@@ -169,6 +170,8 @@ function BackupPlansContentImpl({
   const theme = useTheme()
   const { track, EventCategory, EventAction } = useAnalytics()
   const { trackFeatureBlocked } = useFeatureAnalytics()
+  // While the plan loads it reads as community, so every lock would be false.
+  const { isLoading: planLoading } = usePlan()
   // A plan whose Run is locked by the plan is a paywall too: report each locked
   // feature once while the set shown stays the same.
   const lockedRunFeatures = new Set<Feature>()
@@ -186,7 +189,7 @@ function BackupPlansContentImpl({
   const lockedRunKey = [...lockedRunFeatures].sort().join(',')
   const lockedRunTrackedRef = useRef<string | null>(null)
   useEffect(() => {
-    if (lockedRunTrackedRef.current === lockedRunKey) return
+    if (planLoading || lockedRunTrackedRef.current === lockedRunKey) return
     lockedRunTrackedRef.current = lockedRunKey
     for (const feature of lockedRunKey.split(',').filter(Boolean)) {
       trackFeatureBlocked(feature as Feature, {
@@ -195,7 +198,7 @@ function BackupPlansContentImpl({
         gate_mode: 'disabled',
       })
     }
-  }, [lockedRunKey, trackFeatureBlocked])
+  }, [lockedRunKey, planLoading, trackFeatureBlocked])
   const isDark = theme.palette.mode === 'dark'
   // Plans currently running are pulled into a top "Currently running" section
   // so the user can find live state in one glance. The idle plan card down in

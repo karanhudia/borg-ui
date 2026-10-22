@@ -229,7 +229,10 @@ export default function ArchiveDetail() {
         surface,
         operation: 'mount_archive',
         archive_age_bucket: getArchiveAgeBucket(archive?.start),
-        uses_custom_mount_point: Boolean(customMountPoint),
+        // The dialog opens filled with the default, so only a changed value is custom.
+        uses_custom_mount_point:
+          Boolean(customMountPoint) &&
+          customMountPoint !== getDefaultMountPoint(archive?.name ?? ''),
       })
     },
     onError: (error: unknown) => {

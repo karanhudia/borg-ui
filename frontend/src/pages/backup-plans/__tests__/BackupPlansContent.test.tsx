@@ -12,6 +12,11 @@ const { mockTrack, trackEventMock } = vi.hoisted(() => ({
   trackEventMock: vi.fn(),
 }))
 
+const planState = vi.hoisted(() => ({ isLoading: false }))
+vi.mock('../../../hooks/usePlan', () => ({
+  usePlan: () => ({ plan: 'community', isLoading: planState.isLoading, can: () => false }),
+}))
+
 vi.mock('../../../utils/analytics', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../utils/analytics')>()),
   trackEvent: trackEventMock,
@@ -167,7 +172,7 @@ const activeRun: BackupPlanRun = {
   ],
 }
 
-function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlansContent>> = {}) {
+function contentElement(overrides: Partial<React.ComponentProps<typeof BackupPlansContent>> = {}) {
   const props: React.ComponentProps<typeof BackupPlansContent> = {
     loadingPlans: false,
     backupPlans: [basePlan],
@@ -207,11 +212,15 @@ function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlan
     ...overrides,
   }
 
-  return render(
+  return (
     <ThemeProvider theme={theme}>
       <BackupPlansContent {...props} />
     </ThemeProvider>
   )
+}
+
+function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlansContent>> = {}) {
+  return render(contentElement(overrides))
 }
 
 describe('BackupPlansContent', () => {
@@ -432,6 +441,27 @@ describe('BackupPlansContent', () => {
         operation: 'run_plan',
         gate_mode: 'disabled',
       })
+    )
+  })
+
+  it('reports no lock while the plan is still loading, then reports it once known', () => {
+    const multiPlan: BackupPlan = { ...basePlan, repository_count: 2 }
+    const props = {
+      backupPlans: [multiPlan],
+      processedPlans: { groups: [{ name: null, plans: [multiPlan] }] },
+      canUseMultiRepository: false,
+    }
+    trackEventMock.mockClear()
+    planState.isLoading = true
+    const { rerender } = renderContent(props)
+    expect(trackEventMock).not.toHaveBeenCalledWith('Plan', 'FeatureBlocked', expect.anything())
+
+    planState.isLoading = false
+    rerender(contentElement({ ...props, searchQuery: 'x' }))
+    expect(trackEventMock).toHaveBeenCalledWith(
+      'Plan',
+      'FeatureBlocked',
+      expect.objectContaining({ feature: 'backup_plan_multi_repository' })
     )
   })
 

@@ -26,6 +26,7 @@ export function useWizardFunnel({ category, open, step, props, startProps }: Wiz
   // Off until a tick after opening: wizards reset their step in an effect on
   // open, so the first frame can still show the step the last session ended on.
   const ready = useRef(false)
+  const started = useRef(false)
   const latest = useRef({ step, props, startProps })
   // Declared first, so it runs before the effects below read it.
   useEffect(() => {
@@ -37,9 +38,6 @@ export function useWizardFunnel({ category, open, step, props, startProps }: Wiz
     if (current.step === null) return
     lastStep.current = current.step
     if (reached.current.has(current.step)) return
-    if (reached.current.size === 0) {
-      trackEvent(category, EventAction.START, current.startProps ?? current.props)
-    }
     reached.current.add(current.step)
     trackEvent(category, EventAction.VIEW, { step: current.step, ...current.props })
   }, [category])
@@ -47,16 +45,23 @@ export function useWizardFunnel({ category, open, step, props, startProps }: Wiz
   useEffect(() => {
     if (!open) {
       ready.current = false
+      started.current = false
       reached.current.clear()
       lastStep.current = null
       return
+    }
+    // Start goes out now, so a wizard closed before its first step settles is
+    // still an abandon that started.
+    if (!started.current) {
+      started.current = true
+      trackEvent(category, EventAction.START, latest.current.startProps ?? latest.current.props)
     }
     const timer = setTimeout(() => {
       ready.current = true
       reach()
     }, 0)
     return () => clearTimeout(timer)
-  }, [open, reach])
+  }, [category, open, reach])
 
   useEffect(() => {
     if (ready.current) reach()

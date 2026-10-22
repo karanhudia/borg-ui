@@ -80,6 +80,7 @@ import type {
 import { formatBytes } from '../../../utils/dateUtils'
 import type { Feature } from '../../../core/features'
 import { useFeatureAnalytics } from '../../../hooks/useFeatureAnalytics'
+import { usePlan } from '../../../hooks/usePlan'
 import type { ScriptOption, SSHConnection, WizardState } from '../types'
 import type { SourceScriptCreateInput } from './types'
 import { DatabaseBrandTile } from './DatabaseBrandTile'
@@ -956,11 +957,14 @@ export function SourceSelectionDialog({
 
   // The locked Database and Container tabs are paywalls: report each once per open.
   const lockedTabsTrackedRef = useRef(new Set<Feature>())
+  // While the plan loads it reads as community, so the tabs would look locked.
+  const { isLoading: planLoading } = usePlan()
   useEffect(() => {
     if (!open) {
       lockedTabsTrackedRef.current.clear()
       return
     }
+    if (planLoading) return
     const locked: Feature[] = []
     if (!canUseDatabaseDiscovery) locked.push('database_discovery')
     if (!canUseContainerBackups) locked.push('container_backups')
@@ -973,7 +977,7 @@ export function SourceSelectionDialog({
         gate_mode: 'disabled',
       })
     }
-  }, [open, canUseDatabaseDiscovery, canUseContainerBackups, trackFeatureBlocked])
+  }, [open, planLoading, canUseDatabaseDiscovery, canUseContainerBackups, trackFeatureBlocked])
 
   useEffect(() => {
     if ((view === 'database' || view === 'database-detail') && !canUseDatabaseDiscovery) {

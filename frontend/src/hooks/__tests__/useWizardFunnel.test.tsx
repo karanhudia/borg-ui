@@ -71,4 +71,16 @@ describe('useWizardFunnel', () => {
       ['Wizard', 'View', { step: 'basic', wizard: 'schedule' }],
     ])
   })
+
+  it('still sends Start before Cancel when closed before the first step settles', () => {
+    const { result } = renderHook(() =>
+      useWizardFunnel({ category: 'Wizard', open: true, step: 'basic', props: { wizard: 'x' } })
+    )
+    result.current.cancel()
+
+    expect(trackEventMock.mock.calls).toEqual([
+      ['Wizard', 'Start', { wizard: 'x' }],
+      ['Wizard', 'Cancel', { wizard: 'x' }],
+    ])
+  })
 })

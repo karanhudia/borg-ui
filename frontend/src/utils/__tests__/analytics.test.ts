@@ -370,6 +370,11 @@ describe('route normalization', () => {
     expect(a.normalizeRoute('/settings/beta-features')).toBe('/settings/beta-features')
     expect(a.normalizeRoute('/schedule/checks')).toBe('/schedule/checks')
     expect(a.normalizeRoute('/archives/aid:abc123/9')).toBe('/archives/:id/:id')
+    // Route params are ids even when they happen to look like words.
+    expect(a.normalizeRoute('/archives/photos/nightly')).toBe('/archives/:id/:id')
+    expect(a.normalizeRoute('/repositories/photos/prune-preview')).toBe(
+      '/repositories/:id/prune-preview'
+    )
   })
 
   it('drops the deployment base path', async () => {
