@@ -7,8 +7,14 @@ import type { TFunction } from 'i18next'
 import { BackupPlansContent } from '../BackupPlansContent'
 import type { BackupPlan, BackupPlanRun } from '../../../types'
 
-const { mockTrack } = vi.hoisted(() => ({
+const { mockTrack, trackEventMock } = vi.hoisted(() => ({
   mockTrack: vi.fn(),
+  trackEventMock: vi.fn(),
+}))
+
+vi.mock('../../../utils/analytics', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../utils/analytics')>()),
+  trackEvent: trackEventMock,
 }))
 
 vi.mock('../../../hooks/useAnalytics', () => ({
@@ -417,6 +423,16 @@ describe('BackupPlansContent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run' }))
 
     expect(onRunPlan).not.toHaveBeenCalled()
+    expect(trackEventMock).toHaveBeenCalledWith(
+      'Plan',
+      'FeatureBlocked',
+      expect.objectContaining({
+        feature: 'database_discovery',
+        surface: 'backup_plan_card',
+        operation: 'run_plan',
+        gate_mode: 'disabled',
+      })
+    )
   })
 
   it('disables container backup plan runs behind the Pro chip when unavailable', () => {

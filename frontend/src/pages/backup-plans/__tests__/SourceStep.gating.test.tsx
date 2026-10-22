@@ -5,6 +5,12 @@ import type { ReactNode } from 'react'
 import { createInitialState } from '../state'
 import { SourceStep } from '../wizard-step/SourceStep'
 
+const { trackEventMock } = vi.hoisted(() => ({ trackEventMock: vi.fn() }))
+vi.mock('../../../utils/analytics', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../utils/analytics')>()),
+  trackEvent: trackEventMock,
+}))
+
 const apiMocks = vi.hoisted(() => ({
   databases: vi.fn(),
   scanDatabases: vi.fn(),
@@ -132,6 +138,13 @@ describe('SourceStep plan gates', () => {
     expect(databaseTab).toHaveAttribute('aria-disabled', 'true')
     expect(containerTab).toHaveAttribute('aria-disabled', 'true')
     expect(apiMocks.databases).not.toHaveBeenCalled()
+    const blocked = trackEventMock.mock.calls
+      .filter(([, action]) => action === 'FeatureBlocked')
+      .map(([, , props]) => [props.feature, props.surface, props.gate_mode])
+    expect(blocked).toEqual([
+      ['database_discovery', 'source_selection_dialog', 'disabled'],
+      ['container_backups', 'source_selection_dialog', 'disabled'],
+    ])
 
     fireEvent.click(databaseTab)
     expect(filesTab).toHaveAttribute('aria-selected', 'true')

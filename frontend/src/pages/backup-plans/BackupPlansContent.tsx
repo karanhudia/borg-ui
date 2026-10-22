@@ -1,4 +1,4 @@
-import { memo, type Dispatch, type SetStateAction } from 'react'
+import { memo, useEffect, type Dispatch, type SetStateAction } from 'react'
 import { alpha, Box, Button, Chip, Divider, Stack, Typography, useTheme } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import { Database, ListChecks, Plus, RefreshCw, Rocket } from 'lucide-react'
@@ -14,6 +14,8 @@ import { BackupPlanCardSkeleton } from './BackupPlanCardSkeleton'
 import { BackupPlanIdleCard } from './PlanRunComponents'
 import { isActiveRun } from './runStatus'
 import { useAnalytics } from '../../hooks/useAnalytics'
+import { useFeatureAnalytics } from '../../hooks/useFeatureAnalytics'
+import type { Feature } from '../../core/features'
 
 const BACKUP_PLANS_ANALYTICS_SECTION = 'backup_plans'
 
@@ -166,6 +168,31 @@ function BackupPlansContentImpl({
 }: BackupPlansContentProps) {
   const theme = useTheme()
   const { track, EventCategory, EventAction } = useAnalytics()
+  const { trackFeatureBlocked } = useFeatureAnalytics()
+  // A plan whose Run is locked by the plan is a paywall too: report each locked
+  // feature once while the set shown stays the same.
+  const lockedRunFeatures = new Set<Feature>()
+  for (const plan of backupPlans) {
+    if (
+      (plan.repository_count > 1 || plan.repository_run_mode === 'parallel') &&
+      !canUseMultiRepository
+    )
+      lockedRunFeatures.add('backup_plan_multi_repository')
+    if (planUsesDatabaseFeature(plan) && !canUseDatabaseDiscovery)
+      lockedRunFeatures.add('database_discovery')
+    if (planUsesContainerFeature(plan) && !canUseContainerBackups)
+      lockedRunFeatures.add('container_backups')
+  }
+  const lockedRunKey = [...lockedRunFeatures].sort().join(',')
+  useEffect(() => {
+    for (const feature of lockedRunKey.split(',').filter(Boolean)) {
+      trackFeatureBlocked(feature as Feature, {
+        surface: 'backup_plan_card',
+        operation: 'run_plan',
+        gate_mode: 'disabled',
+      })
+    }
+  }, [lockedRunKey, trackFeatureBlocked])
   const isDark = theme.palette.mode === 'dark'
   // Plans currently running are pulled into a top "Currently running" section
   // so the user can find live state in one glance. The idle plan card down in
