@@ -1,40 +1,21 @@
 {
-  "generatedAt": "2026-10-21T15:02:54.590Z",
+  "generatedAt": "2026-10-22T17:00:52.348Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1421 visual report",
-    "commitSha": "4a47e6d80ef6",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/39622012249"
+    "commitSha": "7f10c712e05b",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/39818723499"
   },
   "totals": {
     "baseline": 1214,
     "actual": 1214,
     "compared": 1214,
-    "changed": 1,
+    "changed": 0,
     "added": 0,
     "removed": 0,
-    "unchanged": 1213
+    "unchanged": 1214
   },
-  "changed": [
-    {
-      "fileName": "pages-cloudstorage--add-guided-remote--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote--mobile.png",
-      "diffPixels": 629,
-      "totalPixels": 329160,
-      "diffRatio": 0.0019109247782233565,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    }
-  ],
+  "changed": [],
   "added": [],
   "removed": [],
   "unchanged": [
@@ -3043,6 +3024,9 @@
     },
     {
       "fileName": "pages-backup-plans-content--skipped-repository.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png"
