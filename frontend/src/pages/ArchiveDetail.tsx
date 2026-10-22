@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams, Link as RouterLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -41,6 +41,8 @@ import type { RestorePathMetadata } from '../utils/restorePaths'
 import type { ArchiveDetailResponse } from '../types/archives'
 import type { Archive, Repository } from '@/types'
 import { usePermissions } from '../hooks/usePermissions'
+import { useAnalytics } from '../hooks/useAnalytics'
+import { getArchiveAgeBucket } from '../utils/analyticsProperties'
 
 type DetailTab = 'changes' | 'files'
 
@@ -131,6 +133,20 @@ export default function ArchiveDetail() {
   // which is the behaviour every install had before the mode existed.
   const indexMode = repository?.index_mode ?? 'full'
 
+  const { trackArchive, EventAction } = useAnalytics()
+  const surface = 'archive_detail'
+  // Once per archive, when both it and its repository are known.
+  const trackedOpenRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!archive || !repository || trackedOpenRef.current === archiveId) return
+    trackedOpenRef.current = archiveId
+    trackArchive(EventAction.VIEW, repository, {
+      surface,
+      operation: 'open_archive',
+      archive_age_bucket: getArchiveAgeBucket(archive.start),
+    })
+  }, [archive, repository, archiveId, trackArchive, EventAction])
+
   // The archive a restore reads from: the one on screen, unless file history
   // asked for an older one, whose borg id has to be resolved before Borg can
   // be dialled.
@@ -175,6 +191,7 @@ export default function ArchiveDetail() {
       const jobId = data.data.job_id
       toast.success(t('archives.deletionStarted', { id: jobId }))
       setShowDeleteConfirm(false)
+      trackArchive(EventAction.DELETE, repository ?? undefined, { surface })
       // The delete is a queued job: the button stays disabled until it has
       // finished (#1197), and only then is the stored list, which the
       // Archives page reads, asked to reconcile. A resync before that would
@@ -208,6 +225,12 @@ export default function ArchiveDetail() {
         duration: 15000,
       })
       setShowMountDialog(false)
+      trackArchive(EventAction.MOUNT, repository ?? undefined, {
+        surface,
+        operation: 'mount_archive',
+        archive_age_bucket: getArchiveAgeBucket(archive?.start),
+        uses_custom_mount_point: Boolean(customMountPoint),
+      })
     },
     onError: (error: unknown) => {
       const err = error as { response?: { data?: { detail?: BackendDetail } }; message?: string }
@@ -234,7 +257,16 @@ export default function ArchiveDetail() {
         data.existing_files
       )
     },
-    onSuccess: (res) => {
+    onSuccess: (res, data) => {
+      trackArchive(EventAction.START, repository ?? undefined, {
+        surface,
+        operation: 'restore',
+        destination_type: data.destination_type,
+        restore_layout: data.restore_layout,
+        restore_path_count: data.selected_paths.length,
+        uses_custom_destination: data.restore_strategy === 'custom',
+        archive_age_bucket: getArchiveAgeBucket(restoreArchive?.start),
+      })
       setShowRestoreWizard(false)
       setSelectionEpoch((n) => n + 1)
       setRestoreJobIds((ids) => [...ids, res.data.job_id])
