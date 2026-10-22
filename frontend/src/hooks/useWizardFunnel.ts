@@ -23,27 +23,44 @@ interface WizardFunnelOptions {
 export function useWizardFunnel({ category, open, step, props, startProps }: WizardFunnelOptions) {
   const reached = useRef(new Set<string>())
   const lastStep = useRef<string | null>(null)
-  const latest = useRef({ props, startProps })
-  // Declared first, so it runs before the effect below reads it.
+  // Off until a tick after opening: wizards reset their step in an effect on
+  // open, so the first frame can still show the step the last session ended on.
+  const ready = useRef(false)
+  const latest = useRef({ step, props, startProps })
+  // Declared first, so it runs before the effects below read it.
   useEffect(() => {
-    latest.current = { props, startProps }
+    latest.current = { step, props, startProps }
   })
+
+  const reach = useCallback(() => {
+    const current = latest.current
+    if (current.step === null) return
+    lastStep.current = current.step
+    if (reached.current.has(current.step)) return
+    if (reached.current.size === 0) {
+      trackEvent(category, EventAction.START, current.startProps ?? current.props)
+    }
+    reached.current.add(current.step)
+    trackEvent(category, EventAction.VIEW, { step: current.step, ...current.props })
+  }, [category])
 
   useEffect(() => {
     if (!open) {
+      ready.current = false
       reached.current.clear()
       lastStep.current = null
       return
     }
-    if (step === null) return
-    lastStep.current = step
-    if (reached.current.has(step)) return
-    if (reached.current.size === 0) {
-      trackEvent(category, EventAction.START, latest.current.startProps ?? latest.current.props)
-    }
-    reached.current.add(step)
-    trackEvent(category, EventAction.VIEW, { step, ...latest.current.props })
-  }, [category, open, step])
+    const timer = setTimeout(() => {
+      ready.current = true
+      reach()
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [open, reach])
+
+  useEffect(() => {
+    if (ready.current) reach()
+  }, [step, reach])
 
   const cancel = useCallback(() => {
     trackEvent(category, EventAction.CANCEL, {

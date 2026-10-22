@@ -44,7 +44,7 @@ const ANALYTICS_PATH: Record<QuickStartSourceKind, string> = {
 interface QuickStartDialogProps {
   open: boolean
   /** How the dialog was opened, sent with the open event. */
-  trigger?: QuickStartTrigger
+  trigger: QuickStartTrigger
   onClose: () => void
   initialAnswers?: QuickStartAnswers
   canAddMachine?: boolean

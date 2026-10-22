@@ -1,4 +1,4 @@
-import { memo, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { memo, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { alpha, Box, Button, Chip, Divider, Stack, Typography, useTheme } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import { Database, ListChecks, Plus, RefreshCw, Rocket } from 'lucide-react'
@@ -184,7 +184,10 @@ function BackupPlansContentImpl({
       lockedRunFeatures.add('container_backups')
   }
   const lockedRunKey = [...lockedRunFeatures].sort().join(',')
+  const lockedRunTrackedRef = useRef<string | null>(null)
   useEffect(() => {
+    if (lockedRunTrackedRef.current === lockedRunKey) return
+    lockedRunTrackedRef.current = lockedRunKey
     for (const feature of lockedRunKey.split(',').filter(Boolean)) {
       trackFeatureBlocked(feature as Feature, {
         surface: 'backup_plan_card',

@@ -211,7 +211,7 @@ describe('QuickStartDialog', () => {
 
   it('sets up Immich from its detected folder, with excludes and the dump check', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<QuickStartDialog open onClose={() => {}} />)
+    renderWithProviders(<QuickStartDialog open trigger="manual" onClose={() => {}} />)
     const next = () => user.click(screen.getByRole('button', { name: 'Next' }))
 
     await user.click(screen.getByRole('radio', { name: /An app/ }))

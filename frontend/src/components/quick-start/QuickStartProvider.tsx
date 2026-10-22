@@ -36,7 +36,8 @@ export function QuickStartProvider({ children, allowAutoOpen }: QuickStartProvid
       {canQuickStart && (
         <QuickStartDialog
           open={openedBy !== null}
-          trigger={openedBy ?? undefined}
+          // Only read while open.
+          trigger={openedBy ?? 'manual'}
           onClose={() => setOpenedBy(null)}
           canAddMachine={hasGlobalPermission('settings.ssh.manage')}
         />

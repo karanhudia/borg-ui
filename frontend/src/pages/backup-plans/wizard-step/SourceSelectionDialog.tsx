@@ -955,12 +955,18 @@ export function SourceSelectionDialog({
   ])
 
   // The locked Database and Container tabs are paywalls: report each once per open.
+  const lockedTabsTrackedRef = useRef(new Set<Feature>())
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      lockedTabsTrackedRef.current.clear()
+      return
+    }
     const locked: Feature[] = []
     if (!canUseDatabaseDiscovery) locked.push('database_discovery')
     if (!canUseContainerBackups) locked.push('container_backups')
     for (const feature of locked) {
+      if (lockedTabsTrackedRef.current.has(feature)) continue
+      lockedTabsTrackedRef.current.add(feature)
       trackFeatureBlocked(feature, {
         surface: 'source_selection_dialog',
         operation: 'source_kind_pivot',
