@@ -69,12 +69,37 @@ const sessionKey = randomUuid()
 // plain word: /archives/:repositoryId/:archiveId, /repositories/:repositoryId/...
 const ID_SEGMENTS: Record<string, number> = { archives: 2, repositories: 1 }
 
+// The app's top-level routes (App.tsx). Any other path is sent as `/:other`, so a
+// typed or stale URL can never carry a word that is really a name. A test checks
+// this list against App.tsx.
+export const KNOWN_ROUTE_ROOTS: ReadonlySet<string> = new Set([
+  'activity',
+  'archives',
+  'backup',
+  'backup-plans',
+  'cloud-storage',
+  'connections',
+  'dashboard',
+  'integrity',
+  'login',
+  'managed-agents',
+  'remote-clients',
+  'repositories',
+  'restore',
+  'schedule',
+  'scripts',
+  'settings',
+  'ssh-connections',
+  'ssh-keys',
+])
+
 export const normalizeRoute = (pathname: string): string => {
   const path =
     BASE_PATH && (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`))
       ? pathname.slice(BASE_PATH.length) || '/'
       : pathname
   const segments = path.split('/')
+  if (segments[1] && !KNOWN_ROUTE_ROOTS.has(segments[1])) return '/:other'
   const idCount = ID_SEGMENTS[segments[1]] ?? 0
   return segments
     .map((segment, index) => {
@@ -117,18 +142,20 @@ export const errorClass = (error: unknown): string => {
 // The API area a request belongs to: its first path segment after any version
 // prefix, which is a fixed route name. Never the rest, which can hold names.
 const apiArea = (url?: string): string => {
+  const raw = url ?? ''
+  const absolute = /^[a-z][a-z0-9+.-]*:/i.test(raw)
   let pathname = ''
   try {
-    // Relative URLs resolve against a dummy origin; absolute ones keep only their path.
-    pathname = new URL(url ?? '', 'http://x').pathname
+    pathname = new URL(raw, 'http://x').pathname
   } catch {
     return 'other'
   }
   const segments = pathname.split('/').filter(Boolean)
-  const first =
-    segments[0] === 'api' || segments[0] === 'v2'
-      ? segments.find((s) => s !== 'api' && s !== 'v2')
-      : segments[0]
+  // A relative URL is already under the API base. An absolute one may carry a
+  // deployment base path first, so its area is whatever follows `api`.
+  const apiIndex = segments.indexOf('api')
+  const rest = apiIndex >= 0 ? segments.slice(apiIndex + 1) : absolute ? [] : segments
+  const first = rest[0] === 'v2' ? rest[1] : rest[0]
   return first && /^[a-z][a-z0-9_-]*$/.test(first) ? first : 'other'
 }
 

@@ -378,6 +378,9 @@ describe('route normalization', () => {
     expect(a.normalizeRoute('/repositories/photos')).toBe('/repositories/:id')
     expect(a.normalizeRoute('/repositories')).toBe('/repositories')
     expect(a.normalizeRoute('/')).toBe('/')
+    // Anything outside the app's routes could be a name in a typed URL.
+    expect(a.normalizeRoute('/alice')).toBe('/:other')
+    expect(a.normalizeRoute('/alice/docs')).toBe('/:other')
   })
 
   it('drops the deployment base path', async () => {
@@ -391,6 +394,18 @@ describe('route normalization', () => {
     } finally {
       delete (window as unknown as { __BASE_PATH__?: string }).__BASE_PATH__
     }
+  })
+})
+
+describe('KNOWN_ROUTE_ROOTS', () => {
+  it('covers every top-level route in App.tsx', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const app = readFileSync(resolve(__dirname, '../../App.tsx'), 'utf8')
+    const roots = [...app.matchAll(/path="\/([a-z-]+)/g)].map((match) => match[1])
+    expect(roots.length).toBeGreaterThan(10)
+    const a = await load()
+    expect(roots.filter((root) => !a.KNOWN_ROUTE_ROOTS.has(root))).toEqual([])
   })
 })
 
@@ -462,6 +477,20 @@ describe('trackApiError', () => {
       props: { area: 'repositories', method: 'put', status: 500, error_class: 'server' },
     })
     expect(JSON.stringify(event)).not.toContain('secret')
+  })
+
+  it('skips a base path in an absolute URL and gives up without an api prefix', async () => {
+    const a = await load()
+    const fail = (url: string) =>
+      a.trackApiError({
+        isAxiosError: true,
+        config: { method: 'post', url },
+        response: { status: 500 },
+      })
+    fail('https://nas.local/acme-backups/api/v2/archives/3')
+    fail('https://nas.local/acme-backups/repositories')
+    vi.advanceTimersByTime(5000)
+    expect(sent().map((event) => event.props.area)).toEqual(['archives', 'other'])
   })
 
   it('takes the area from an absolute request URL', async () => {
