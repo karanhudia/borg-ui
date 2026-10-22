@@ -24,7 +24,10 @@ export function useWizardFunnel({ category, open, step, props, startProps }: Wiz
   const reached = useRef(new Set<string>())
   const lastStep = useRef<string | null>(null)
   const latest = useRef({ props, startProps })
-  latest.current = { props, startProps }
+  // Declared first, so it runs before the effect below reads it.
+  useEffect(() => {
+    latest.current = { props, startProps }
+  })
 
   useEffect(() => {
     if (!open) {
