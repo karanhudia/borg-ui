@@ -47,7 +47,12 @@ import {
   type LegacySourceRepositoryReview,
 } from './backup-plans/legacySourceSettings'
 import { BackupPlanHistoryDialog } from './backup-plans/PlanRunComponents'
-import { parseRepositoryFilterId, processBackupPlans } from './backup-plans/helpers'
+import {
+  backupPlanRunAnalytics,
+  parseRepositoryFilterId,
+  processBackupPlans,
+} from './backup-plans/helpers'
+import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { buildRoutePreviews } from './backup-plans/routePreview'
 import { formatRunStatus, isActiveRun } from './backup-plans/runStatus'
 import {
@@ -191,6 +196,18 @@ export default function BackupPlans() {
     refetchInterval: 2000,
   })
   const backupPlanRuns: BackupPlanRun[] = useMemo(() => runsData?.data?.runs || [], [runsData])
+  // Outcomes of runs seen finishing while this page is open: the plan path is
+  // where first backups now run, Quick Start's included.
+  useTrackedJobOutcomes<BackupPlanRun>({
+    jobs: backupPlanRuns,
+    onTerminal: useCallback(
+      (run: BackupPlanRun) => {
+        const [action, props] = backupPlanRunAnalytics(run)
+        track(EventCategory.BACKUP, action, props)
+      },
+      [track, EventCategory]
+    ),
+  })
   const canRetryBackupPlanRun = (run: BackupPlanRun) =>
     canRetryBackupPlanRunForPermissions(run, (repositoryId) =>
       permissions.canDo(repositoryId, 'backup')

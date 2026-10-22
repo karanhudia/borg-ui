@@ -6,6 +6,9 @@ export const TERMINAL_JOB_STATUSES = new Set<JobStatus>([
   'completed_with_warnings',
   'failed',
   'cancelled',
+  // Backup plan runs only.
+  'partial',
+  'skipped',
 ])
 
 export function isTerminalJobStatus(status: JobStatus | null | undefined): boolean {
