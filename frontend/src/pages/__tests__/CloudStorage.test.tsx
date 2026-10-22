@@ -11,6 +11,7 @@ import {
 } from '../../test/test-utils'
 import CloudStorage from '../CloudStorage'
 import { rcloneAPI } from '../../services/api'
+import { toast } from 'react-hot-toast'
 
 const { mockTrackSystem, mockPlanCan } = vi.hoisted(() => ({
   mockTrackSystem: vi.fn(),
@@ -1088,6 +1089,22 @@ describe('CloudStorage', () => {
     expect(screen.getByText('borg-ui')).toBeInTheDocument()
     expect(screen.getByText('README')).toBeInTheDocument()
   }, 60000)
+
+  it('shows the failure toast when the remote test answers status failed', async () => {
+    vi.mocked(rcloneAPI.testRemote).mockResolvedValue({
+      data: { status: 'failed', remote },
+    } as AxiosResponse)
+    const user = userEvent.setup()
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    const card = await screen.findByTestId('cloud-storage-remote-prod-s3')
+    await user.click(within(card).getByRole('button', { name: /Test connection/i }))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to test rclone remote.')
+    })
+    expect(toast.success).not.toHaveBeenCalled()
+  })
 
   it('navigates folders in the reusable browse dialog', async () => {
     const user = userEvent.setup()

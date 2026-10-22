@@ -1374,7 +1374,11 @@ export default function CloudStorage() {
       setTestingRemoteId(remote.id)
     },
     onSuccess: (response, remote) => {
-      toast.success(t('cloudStorage.remoteTestSucceeded'))
+      if (response.data?.status === 'connected') {
+        toast.success(t('cloudStorage.remoteTestSucceeded'))
+      } else {
+        toast.error(t('cloudStorage.remoteTestFailed'))
+      }
       trackSystem(EventAction.TEST, {
         section: CLOUD_STORAGE_ANALYTICS_SECTION,
         operation: 'test_remote_complete',
