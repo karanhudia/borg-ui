@@ -40,7 +40,11 @@ updates:
 
   # Backend dependencies (pip)
   - package-ecosystem: "pip"
-    directory: "/"
+    # /agent: the managed agent's pinned wheelhouse (agent/constraints.txt),
+    # so its versions follow the server's instead of drifting.
+    directories:
+      - "/"
+      - "/agent"
     schedule:
       interval: "weekly"
       day: "monday"
