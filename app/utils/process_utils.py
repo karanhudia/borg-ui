@@ -27,6 +27,7 @@ from app.database.models import (
     Repository,
 )
 from app.services.operations.backup_facade import backup_jobs_in_maintenance
+from app.services.operations.vocab import INDEX_KINDS
 from app.utils.backup_maintenance import (
     COMPLETED_BACKUP_STATUSES,
     MAINTENANCE_STATUS_KIND,
@@ -100,12 +101,41 @@ def _finalize_interrupted_backup_plan_run(
     run.completed_at = run.completed_at or now
 
 
+def _cancel_queued_run_operations(
+    db: Session, run: BackupPlanRun, now: datetime
+) -> int:
+    """Cancel the operations an interrupted run queued and never started.
+    The run is finished, so they would run without it: its status would not
+    follow them, and a backup of the run would hold its repository against
+    the plan's next run. Index rows describe the repository, not the run,
+    and still run."""
+    return (
+        db.query(Operation)
+        .filter(
+            Operation.backup_plan_run_id == run.id,
+            Operation.status == "queued",
+            Operation.kind.notin_(tuple(sorted(INDEX_KINDS))),
+        )
+        .update(
+            {
+                Operation.status: "cancelled",
+                Operation.error_message: func.coalesce(
+                    Operation.error_message, CONTAINER_RESTARTED_DURING_BACKUP
+                ),
+                Operation.completed_at: now,
+            },
+            synchronize_session=False,
+        )
+    )
+
+
 def _normalize_interrupted_backup_plan_runs(
     db: Session,
     now: datetime,
     interrupted_runs: Optional[list[BackupPlanRun]] = None,
 ) -> int:
-    """Finish active backup plan run rows that cannot resume after a restart."""
+    """Finish active backup plan run rows that cannot resume after a restart,
+    with the operations they queued and never started."""
     if interrupted_runs is None:
         interrupted_runs = (
             db.query(BackupPlanRun)
@@ -123,12 +153,14 @@ def _normalize_interrupted_backup_plan_runs(
         _finalize_interrupted_backup_plan_run(
             run, now, CONTAINER_RESTARTED_DURING_BACKUP
         )
+        cancelled_operations = _cancel_queued_run_operations(db, run, now)
 
         logger.info(
             "Normalized interrupted backup plan run after restart",
             backup_plan_run_id=run.id,
             backup_plan_id=run.backup_plan_id,
             status=run.status,
+            cancelled_operations=cancelled_operations,
         )
 
     return len(interrupted_runs)
