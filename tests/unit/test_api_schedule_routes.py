@@ -774,6 +774,8 @@ class TestScheduleRouteContracts:
 
         assert len(sessions) == 2
         prune.assert_awaited_once()
+        # an agent backup's archive listing is waited out, not a refusal
+        assert prune.await_args.kwargs["wait_for_read_work"] is True
         test_db.expire_all()
         backup = test_db.query(Operation).filter(Operation.kind == "backup").one()
         assert backup.status == "completed"
@@ -807,6 +809,8 @@ class TestScheduleRouteContracts:
 
         assert len(sessions) == 2
         prune.assert_awaited_once()
+        # an agent backup's archive listing is waited out, not a refusal
+        assert prune.await_args.kwargs["wait_for_read_work"] is True
 
     def test_dispatch_due_multi_repo_schedule_defers_for_active_repository_work(
         self, test_db, monkeypatch

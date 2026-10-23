@@ -40,6 +40,7 @@ from app.services.job_admission import (
     lock_backup_capacity_scope,
 )
 from app.utils.datetime_utils import serialize_datetime
+from app.services.repository_executor import is_agent_executor
 from app.services.operations.backup_facade import (
     create_backup_operation,
     refresh_backup_job,
@@ -1785,7 +1786,7 @@ async def run_scheduled_job_now(
                 db,
                 repo,
                 trigger="schedule",
-                executor="server",
+                executor=_backup_executor(repo),
                 params={"archive_name": archive_name},
                 scheduled_job_id=job.id,
             )
@@ -2037,6 +2038,12 @@ async def execute_multi_repo_schedule_by_id(scheduled_job_id: int):
         db.close()
 
 
+def _backup_executor(repository: Repository) -> str:
+    """The executor a schedule's backup of `repository` runs on, chosen from
+    the repository as the manual route and backup plans do (#1388)."""
+    return "agent" if is_agent_executor(repository) else "server"
+
+
 async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
     """Execute a multi-repository scheduled backup
 
@@ -2147,21 +2154,28 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
+            # An agent repository's own scripts are agent scripts: its agent
+            # backup runs them around the backup on the agent, so the
+            # schedule neither runs them here nor tells the backup to skip
+            # them.
+            server_runs_repository_scripts = (
+                scheduled_job.run_repository_scripts and not is_agent_executor(repo)
+            )
             backup_job = create_backup_operation(
                 db,
                 repo,
                 trigger="schedule",
-                executor="server",
+                executor=_backup_executor(repo),
                 params={
                     "archive_name": archive_name,
-                    "skip_hooks": scheduled_job.run_repository_scripts,
+                    "skip_hooks": server_runs_repository_scripts,
                 },
                 scheduled_job_id=scheduled_job.id,
             )
             backup_jobs.append(backup_job)
 
             # Run repository-level pre-scripts if enabled
-            if scheduled_job.run_repository_scripts:
+            if server_runs_repository_scripts:
                 try:
                     from app.services.script_library_executor import (
                         ScriptLibraryExecutor,
@@ -2256,7 +2270,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             await wait_out_backup_operation(operation_id)
 
             # Run repository-level post-scripts if enabled
-            if scheduled_job.run_repository_scripts:
+            if server_runs_repository_scripts:
                 try:
                     from app.services.script_library_executor import (
                         ScriptLibraryExecutor,
@@ -2394,6 +2408,9 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                             keep_yearly=scheduled_job.prune_keep_yearly,
                             dry_run=False,
                             keep_within=scheduled_job.prune_keep_within,
+                            # an agent backup's archive listing may still
+                            # hold the repository: wait it out, as plans do
+                            wait_for_read_work=True,
                         )
 
                         # Refresh job to get updated status
@@ -2454,7 +2471,9 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                         backup_job.maintenance_status = "running_compact"
                         db.commit()
 
-                        await BorgRouter(repo).compact(compact_job.id)
+                        await BorgRouter(repo).compact(
+                            compact_job.id, wait_for_read_work=True
+                        )
 
                         # Refresh job to get updated status
                         db.refresh(compact_job)
@@ -2665,6 +2684,9 @@ async def execute_scheduled_backup_with_maintenance(
                     keep_yearly=scheduled_job.prune_keep_yearly,
                     dry_run=False,
                     keep_within=scheduled_job.prune_keep_within,
+                    # an agent backup's archive listing may still hold the
+                    # repository: wait it out, as plans do
+                    wait_for_read_work=True,
                 )
 
                 # Refresh job to get updated status
@@ -2737,7 +2759,7 @@ async def execute_scheduled_backup_with_maintenance(
                 backup_job.maintenance_status = "running_compact"
                 db.commit()
 
-                await BorgRouter(repo).compact(compact_job.id)
+                await BorgRouter(repo).compact(compact_job.id, wait_for_read_work=True)
 
                 # Refresh job to get updated status
                 db.refresh(compact_job)
@@ -2894,7 +2916,7 @@ def _dispatch_due_scheduled_job(
             db,
             repo,
             trigger="schedule",
-            executor="server",
+            executor=_backup_executor(repo),
             params={"archive_name": archive_name},
             scheduled_job_id=job.id,
         )

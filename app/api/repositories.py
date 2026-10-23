@@ -4619,6 +4619,13 @@ async def download_keyfile(repo_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.repo.repoHasNoKeyfile"}
         )
+    if is_agent_executor(repository):
+        # `borg key export` would run on the server, and the agent has no
+        # key export. The upload above stays: it keeps a copy of the key.
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.agentKeyfileExportUnsupported"},
+        )
 
     try:
         import tempfile
