@@ -622,15 +622,19 @@ class TestProcessUtils:
         unrelated = self._operation(
             db_session, repo, "backup", "queued", trigger="schedule"
         )
+        live_repo, live_run = self._interrupted_plan_run(db_session, "Kept")
+        live_backup = self._operation(
+            db_session, live_repo, "backup", "queued", live_run
+        )
         db_session.commit()
 
-        cleanup_orphaned_jobs(db_session)
+        cleanup_orphaned_jobs(db_session, {live_run.id})
 
         db_session.refresh(queued_backup)
         assert queued_backup.status == "cancelled"
         assert queued_backup.completed_at is not None
         assert "containerRestartedDuringBackup" in queued_backup.error_message
-        for operation in [*queued_followups, unrelated]:
+        for operation in [*queued_followups, unrelated, live_backup]:
             db_session.refresh(operation)
             assert operation.status == "queued"
             assert operation.completed_at is None
@@ -639,6 +643,8 @@ class TestProcessUtils:
         assert running_backup.status == "running"
         db_session.refresh(run)
         assert run.status == "failed"
+        db_session.refresh(live_run)
+        assert live_run.status == "running"
 
     def test_cleanup_orphaned_jobs_keeps_queued_operations_of_live_plan_run(
         self, db_session
