@@ -592,13 +592,13 @@ class TestProcessUtils:
         return repo, run
 
     @staticmethod
-    def _operation(db_session, repo, kind, status, run=None):
+    def _operation(db_session, repo, kind, status, run=None, trigger="plan"):
         operation = Operation(
             repository_id=repo.id,
             kind=kind,
             category="index" if kind == "archive_sync" else "backup",
             status=status,
-            trigger="schedule",
+            trigger=trigger,
             priority=0,
             run_id=f"run-{kind}-{status}",
             backup_plan_run_id=run.id if run is not None else None,
@@ -614,20 +614,23 @@ class TestProcessUtils:
         nothing of it starts after the restart (#1450)."""
         repo, run = self._interrupted_plan_run(db_session, "Swept")
         queued_backup = self._operation(db_session, repo, "backup", "queued", run)
-        queued_prune = self._operation(db_session, repo, "prune", "queued", run)
-        queued_index = self._operation(db_session, repo, "archive_sync", "queued", run)
+        queued_followups = [
+            self._operation(db_session, repo, kind, "queued", run, "followup")
+            for kind in ("archive_sync", "prune_compare", "prune")
+        ]
         running_backup = self._operation(db_session, repo, "backup", "running", run)
-        unrelated = self._operation(db_session, repo, "backup", "queued")
+        unrelated = self._operation(
+            db_session, repo, "backup", "queued", trigger="schedule"
+        )
         db_session.commit()
 
         cleanup_orphaned_jobs(db_session)
 
-        for operation in (queued_backup, queued_prune):
-            db_session.refresh(operation)
-            assert operation.status == "cancelled"
-            assert operation.completed_at is not None
-            assert "containerRestartedDuringBackup" in operation.error_message
-        for operation in (queued_index, unrelated):
+        db_session.refresh(queued_backup)
+        assert queued_backup.status == "cancelled"
+        assert queued_backup.completed_at is not None
+        assert "containerRestartedDuringBackup" in queued_backup.error_message
+        for operation in [*queued_followups, unrelated]:
             db_session.refresh(operation)
             assert operation.status == "queued"
             assert operation.completed_at is None

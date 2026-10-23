@@ -27,7 +27,6 @@ from app.database.models import (
     Repository,
 )
 from app.services.operations.backup_facade import backup_jobs_in_maintenance
-from app.services.operations.vocab import INDEX_KINDS
 from app.utils.backup_maintenance import (
     COMPLETED_BACKUP_STATUSES,
     MAINTENANCE_STATUS_KIND,
@@ -107,14 +106,14 @@ def _cancel_queued_run_operations(
     """Cancel the operations an interrupted run queued and never started.
     The run is finished, so they would run without it: its status would not
     follow them, and a backup of the run would hold its repository against
-    the plan's next run. Index rows describe the repository, not the run,
-    and still run."""
+    the plan's next run. Follow-ups of its finished work refresh the
+    repository, not the run, and still run."""
     return (
         db.query(Operation)
         .filter(
             Operation.backup_plan_run_id == run.id,
             Operation.status == "queued",
-            Operation.kind.notin_(tuple(sorted(INDEX_KINDS))),
+            Operation.trigger == "plan",
         )
         .update(
             {
