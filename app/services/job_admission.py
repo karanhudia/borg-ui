@@ -18,6 +18,7 @@ from app.database.models import (
     Repository,
     SystemSettings,
 )
+from app.services.agent_presence import backups_waiting_for_offline_agent
 
 logger = structlog.get_logger()
 
@@ -705,16 +706,25 @@ async def admit_repository_with_read_work_wait(
         )
 
 
-def count_active_manual_backup_jobs(db: Session) -> int:
-    return (
-        db.query(Operation)
-        .filter(
+def _count_backups_holding_capacity(db: Session, *criteria) -> int:
+    """Active backups matching `criteria`, less those that wait for an agent
+    that is away: they hold no capacity (#1331)."""
+    ids = [
+        operation_id
+        for (operation_id,) in db.query(Operation.id).filter(
             Operation.kind == "backup",
             Operation.status.in_(tuple(ACTIVE_OPERATION_STATUSES)),
-            Operation.scheduled_job_id.is_(None),
-            Operation.backup_plan_run_id.is_(None),
+            *criteria,
         )
-        .count()
+    ]
+    return len(ids) - len(backups_waiting_for_offline_agent(db, ids))
+
+
+def count_active_manual_backup_jobs(db: Session) -> int:
+    return _count_backups_holding_capacity(
+        db,
+        Operation.scheduled_job_id.is_(None),
+        Operation.backup_plan_run_id.is_(None),
     )
 
 
@@ -740,15 +750,7 @@ def ensure_manual_backup_capacity(db: Session) -> None:
 
 
 def count_active_scheduled_backup_jobs(db: Session) -> int:
-    return (
-        db.query(Operation)
-        .filter(
-            Operation.kind == "backup",
-            Operation.status.in_(tuple(ACTIVE_OPERATION_STATUSES)),
-            Operation.scheduled_job_id.isnot(None),
-        )
-        .count()
-    )
+    return _count_backups_holding_capacity(db, Operation.scheduled_job_id.isnot(None))
 
 
 def get_scheduled_backup_limit(db: Session) -> int:

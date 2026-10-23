@@ -42,6 +42,7 @@ from app.services.operations.executors.maintenance import cancel_watcher
 from app.services.operations.runner import Outcome
 from app.services.operations.vocab import TERMINAL_STATUSES
 from app.services.agent_job_notifications import notify_backup_job_finished
+from app.services.agent_presence import AGENT_OFFLINE_SKIP_REASON
 from app.services.agent_repository_hooks import (
     SKIPPED,
     AgentHookResult,
@@ -287,10 +288,22 @@ async def _run_agent_backup(ctx, job, repository, params) -> None:
 
     db.expire_all()
     job = BackupJobFacade(db, db.get(Operation, ctx.operation_id))
+    if job.operation.skip_reason == AGENT_OFFLINE_SKIP_REASON and not (
+        pre_ran or _pre_hooks_ran(db, ctx.operation_id)
+    ):
+        # The agent never got the backup (#1331), and has nothing to undo:
+        # its post-backup hooks would only wait for it as well. Once a
+        # pre-backup hook ran, in this run or before a restart it resumed
+        # from, they run, so a service it stopped is started again when the
+        # agent is back.
+        return
     status = "cancelled" if ctx.cancelled() else job.status
     backup_result = {
         "completed": "success",
         "completed_with_warnings": "warning",
+        # skipped after a pre-backup hook ran (#1331): the hooks hear what
+        # they hear after a skipping pre-backup hook
+        "skipped": SKIPPED,
     }.get(status, "failure")
     if backup_result == "success" and (unrunnable or warnings):
         # the backup ends with a warning, and its post-backup hooks hear so,
@@ -328,6 +341,18 @@ async def _run_agent_backup(ctx, job, repository, params) -> None:
                 )
             )
             db.commit()
+        elif status == "skipped":
+            # a skip whose cleanup failed is not a graceful one: what a
+            # pre-backup hook stopped may still be stopped (#1331)
+            job.status = "failed"
+            job.error_message = (job.error_message or "") + (
+                "\n"
+                + _hook_failure_message(
+                    "backend.errors.service.postBackupHooksAlsoFailed", post
+                )
+            )
+            db.commit()
+            await notify_backup_job_finished(db, job)
     elif status == "completed" and (unrunnable or warnings):
         job.status = "completed_with_warnings"
         messages = []
@@ -398,6 +423,13 @@ async def run_backup(ctx) -> Outcome:
             error_message=job.error_message or "backup returned no result",
         )
     if status == "skipped":
+        if operation.skip_reason == AGENT_OFFLINE_SKIP_REASON:
+            # the reaper's skip keeps its reason and says why (#1331)
+            return Outcome(
+                status="skipped",
+                skip_reason=operation.skip_reason,
+                error_message=job.error_message,
+            )
         return Outcome(status="skipped", skip_reason=job.error_message)
     if status in ("completed", "completed_with_warnings"):
         return Outcome(
