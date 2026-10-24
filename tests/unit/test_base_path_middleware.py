@@ -61,6 +61,7 @@ def test_assets_resolve_when_proxy_strips_prefix(tmp_path):
 def test_assets_resolve_on_direct_prefixed_access(tmp_path):
     response = _client(tmp_path).get("/borg-ui/assets/index-abc.css")
     assert response.status_code == 200
+    assert response.text == "body{}"
 
 
 def test_root_and_spa_routes_still_match(tmp_path):

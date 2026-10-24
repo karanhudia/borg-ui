@@ -124,6 +124,19 @@ class BorgWebUITester:
                 else:
                     response = self.session.post(f"{self.base_url}{route}", timeout=5)
 
+                # /health must reach its handler, not the SPA catch-all.
+                if route == "/health" and response.status_code in expected_statuses:
+                    if not response.headers.get("content-type", "").startswith(
+                        "application/json"
+                    ):
+                        self.log_test(
+                            f"API Route {route}",
+                            False,
+                            f"Expected JSON, got {response.headers.get('content-type')}",
+                        )
+                        all_passed = False
+                        continue
+
                 if response.status_code in expected_statuses:
                     self.log_test(
                         f"API Route {route}",
