@@ -44,6 +44,10 @@ interface AuthContextType {
   ) => Promise<{ mustChangePassword: boolean }>
   loginWithOidcExchangeToken: () => Promise<{ mustChangePassword: boolean }>
   loginWithPasskey: () => Promise<{ mustChangePassword: boolean }>
+  finishPasskeyLogin: (
+    ceremonyToken: string,
+    credential: Record<string, unknown>
+  ) => Promise<{ mustChangePassword: boolean }>
   canEnrollPasskeyFromRecentLogin: boolean
   enrollPasskeyFromRecentLogin: () => Promise<void>
   canChangePasswordFromRecentLogin: boolean
@@ -337,14 +341,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { mustChangePassword: must_change_password || false }
   }
 
-  const loginWithPasskey = async () => {
-    const { getPasskeyAssertion } = await import('../utils/webauthn')
-    const startResponse = await authAPI.beginPasskeyAuthentication()
-    const credential = await getPasskeyAssertion(startResponse.data.options)
-    const finishResponse = await authAPI.finishPasskeyAuthentication(
-      startResponse.data.ceremony_token,
-      credential
-    )
+  const finishPasskeyLogin = async (ceremonyToken: string, credential: Record<string, unknown>) => {
+    const finishResponse = await authAPI.finishPasskeyAuthentication(ceremonyToken, credential)
     const { access_token, must_change_password } = finishResponse.data
     if (!access_token) {
       throw new Error('Missing access token')
@@ -354,6 +352,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearRecentPasskeyEnrollmentState()
     await refreshUser()
     return { mustChangePassword: must_change_password || false }
+  }
+
+  const loginWithPasskey = async () => {
+    const { getPasskeyAssertion } = await import('../utils/webauthn')
+    const startResponse = await authAPI.beginPasskeyAuthentication()
+    const credential = await getPasskeyAssertion(startResponse.data.options)
+    return finishPasskeyLogin(startResponse.data.ceremony_token, credential)
   }
 
   const enrollPasskeyFromRecentLogin = async () => {
@@ -428,6 +433,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     verifyTotpLogin,
     loginWithOidcExchangeToken,
     loginWithPasskey,
+    finishPasskeyLogin,
     canEnrollPasskeyFromRecentLogin: !!recentPasswordForPasskeyPrompt,
     enrollPasskeyFromRecentLogin,
     canChangePasswordFromRecentLogin: !!recentPasswordForPasskeyPrompt,

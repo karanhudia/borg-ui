@@ -10,7 +10,6 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { authAPI } from '../services/api'
-import { setAccessToken } from '../services/authHeaders'
 import { BASE_PATH } from '../utils/basePath'
 import BackendTargetSelect from '../components/BackendTargetSelect'
 
@@ -87,6 +86,7 @@ export default function Login() {
     verifyTotpLogin,
     loginWithOidcExchangeToken,
     loginWithPasskey,
+    finishPasskeyLogin,
     mustChangePassword,
     oidcEnabled,
     oidcProviderName,
@@ -101,6 +101,13 @@ export default function Login() {
     handleSubmit,
     formState: { errors },
   } = useForm<LoginForm>()
+
+  // The conditional passkey request stays open while the page is shown; read the latest
+  // auth callback through a ref so provider re-renders do not restart it.
+  const finishPasskeyLoginRef = useRef(finishPasskeyLogin)
+  useEffect(() => {
+    finishPasskeyLoginRef.current = finishPasskeyLogin
+  }, [finishPasskeyLogin])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -150,16 +157,11 @@ export default function Login() {
         if (cancelled) return
 
         setIsLoading(true)
-        const finishResponse = await authAPI.finishPasskeyAuthentication(
+        const result = await finishPasskeyLoginRef.current(
           startResponse.data.ceremony_token,
           credential
         )
-        const { access_token, must_change_password } = finishResponse.data
-        if (!access_token) {
-          throw new Error('Missing access token')
-        }
-        setAccessToken(access_token)
-        handleSuccessfulLogin(null, must_change_password || false, 'passkey_autofill')
+        handleSuccessfulLogin(null, result.mustChangePassword, 'passkey_autofill')
       } catch (error: unknown) {
         if (hasErrorName(error, 'AbortError') || cancelled) {
           return
