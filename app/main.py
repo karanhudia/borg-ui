@@ -46,6 +46,7 @@ from app.api import (
 from app.api.v2 import router as v2_router
 from app.routers import config
 from app.config import get_runtime_app_version, settings
+from app.services.error_reporter import report_exception
 from app.core.proxy_auth import inspect_proxy_auth_config
 from app.core.security import create_first_user
 from app.services.licensing_service import sync_licensing_state
@@ -215,6 +216,17 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     )
 
 
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    route = request.scope.get("route")
+    report_exception(
+        exc,
+        kind="request",
+        component=f"{request.method} {route.path if route else 'unmatched'}",
+    )
+    return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+
+
 if BASE_PATH:
     app.add_middleware(BasePathMiddleware, base_path=BASE_PATH)
 
@@ -311,8 +323,19 @@ async def startup_event():
     # against an empty database and fails every request that reads from it.
     from app.database.db_upgrade import ensure_schema
 
-    ensure_schema()
+    try:
+        ensure_schema()
+    except Exception as exc:
+        report_exception(exc, kind="migration", component="ensure_schema")
+        raise
+    try:
+        await _startup_after_schema()
+    except Exception as exc:
+        report_exception(exc, kind="startup", component="startup_event")
+        raise
 
+
+async def _startup_after_schema() -> None:
     from app.database.database import SessionLocal
 
     app_version = get_runtime_app_version()

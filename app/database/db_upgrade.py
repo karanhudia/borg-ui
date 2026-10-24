@@ -791,6 +791,13 @@ if __name__ == "__main__":
         format="%(asctime)s [db-upgrade] %(message)s",
         stream=sys.stdout,
     )
-    report = upgrade_from_settings()
+    try:
+        report = upgrade_from_settings()
+    except Exception as exc:
+        from app.services.error_reporter import flush, report_exception
+
+        report_exception(exc, kind="migration", component="db_upgrade")
+        flush()
+        raise
     for line in report.lines():
         log.info(line)

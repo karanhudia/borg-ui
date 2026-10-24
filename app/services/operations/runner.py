@@ -25,6 +25,7 @@ from app.database.models import (
     SystemSettings,
     utc_now,
 )
+from app.services import error_reporter
 from app.services.operations import executors as executor_registry
 from app.services.operations.events import (
     broadcast_operation_progress,
@@ -228,6 +229,23 @@ class OperationContext:
         if self._log_handle is not None:
             self._log_handle.close()
             self._log_handle = None
+
+
+def _report_failed_operation(op: Operation, failure: Optional[Exception]) -> None:
+    # never lets the report touch the run's outcome
+    try:
+        if failure is not None:
+            error_reporter.report_exception(failure, kind="job", component=op.kind)
+        else:
+            error_reporter.report_failure(
+                kind="job",
+                type_=f"{op.kind}_failed",
+                message=op.error_message or "",
+                component=op.kind,
+                handled=True,
+            )
+    except Exception:
+        pass
 
 
 class OperationRunner:
@@ -896,6 +914,7 @@ class OperationRunner:
             ctx = OperationContext(self, db, op)
             outcome: Optional[Outcome]
             busy_error: Optional[str] = None
+            failure: Optional[Exception] = None
             try:
                 outcome = await executor(ctx)
             except asyncio.CancelledError:
@@ -917,6 +936,7 @@ class OperationRunner:
                     # cancelled path below with the admission's message
                     outcome = Outcome(error_message=busy_error)
                 else:
+                    failure = exc
                     logger.exception(
                         "Operation failed", operation_id=op.id, kind=op.kind
                     )
@@ -991,6 +1011,8 @@ class OperationRunner:
             terminal = self._terminal_of(op)
             db.commit()
             terminal_committed = True
+            if op.status == "failed":
+                _report_failed_operation(op, failure)
             await broadcast_operation_updated(op, db)
             if op.status in SUCCESS_STATUSES:
                 enqueue_followups(

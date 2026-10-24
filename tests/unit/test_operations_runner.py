@@ -2642,3 +2642,54 @@ async def test_an_exclusive_task_holds_its_lane_after_its_row_reads_terminal(
     assert await runner.tick() == 1
     await asyncio.gather(*runner.running_tasks.values())
     assert started == [first.id, second.id]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_failed_operation_is_reported_once(
+    db, repo, runner, registry, monkeypatch
+):
+    reports = []
+    monkeypatch.setattr(
+        "app.services.error_reporter.report_exception",
+        lambda exc, **kw: reports.append(("exception", type(exc), kw)),
+    )
+    monkeypatch.setattr(
+        "app.services.error_reporter.report_failure",
+        lambda **kw: reports.append(("failure", kw)),
+    )
+
+    async def boom(ctx):
+        raise RuntimeError("boom")
+
+    async def nope(ctx):
+        return Outcome(status="failed", error_message="nope")
+
+    async def ok(ctx):
+        return Outcome()
+
+    registry["stats"] = boom
+    registry["import_connect"] = nope
+    registry["archive_sync"] = ok
+    enqueue(db, "stats", repository_id=repo.id)
+    await _drain(runner)
+    assert reports == [
+        ("exception", RuntimeError, {"kind": "job", "component": "stats"})
+    ]
+
+    reports.clear()
+    enqueue(db, "import_connect", repository_id=repo.id, trigger="import")
+    enqueue(db, "archive_sync", repository_id=repo.id)
+    await _drain(runner)
+    assert reports == [
+        (
+            "failure",
+            {
+                "kind": "job",
+                "type_": "import_connect_failed",
+                "message": "nope",
+                "component": "import_connect",
+                "handled": True,
+            },
+        )
+    ]

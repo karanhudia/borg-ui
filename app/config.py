@@ -125,6 +125,9 @@ class Settings(BaseSettings):
         None  # Optional header containing authenticated full name
     )
 
+    # Error reports to the analytics ingest (still skipped when a user opted out)
+    error_reporting_enabled: bool = True
+
     # Licensing / activation settings
     activation_service_url: Optional[str] = "https://license.borgui.com"
     activation_public_key: Optional[str] = (
