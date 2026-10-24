@@ -24,7 +24,7 @@ def _normalize_path(path: str) -> str:
 def _strip_root_path(path: str, root_path: str) -> str:
     """Drop the mount prefix so matching is done on the app-relative path.
 
-    Under a non-empty ``BASE_PATH`` (``FastAPI(root_path=...)``), the ASGI
+    Under a non-empty ``BASE_PATH`` (``BasePathMiddleware`` in app/main.py), the ASGI
     server can leave ``request.url.path`` carrying the mount prefix while
     ``scope["root_path"]`` holds it separately. Stripping it on a path-segment
     boundary keeps the policy lookup working — otherwise the prefixed path

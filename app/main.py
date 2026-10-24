@@ -95,7 +95,13 @@ _cached_index_html = _prepare_index_html()
 
 
 class BasePathMiddleware:
-    """Make scope["path"] always carry BASE_PATH so Starlette route matching is consistent.
+    """Serve the app below BASE_PATH: set ``root_path`` and make scope["path"] carry it.
+
+    The root path is set here, not by the server: ``FastAPI(root_path=...)`` is
+    deprecated, and uvicorn's ``--root-path`` prepends the prefix to every path,
+    so a request that already carries it would be doubled. Setting it here
+    works the same under gunicorn, a bare ``uvicorn app.main:app`` or a test
+    client.
 
     Reverse proxies strip the prefix before forwarding, so requests arrive as
     ``/assets/x.css`` while ``root_path`` says ``/borg-ui``. Starlette mounts
@@ -110,6 +116,7 @@ class BasePathMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope["type"] in ("http", "websocket"):
+            scope["root_path"] = self.base_path
             path = scope["path"]
             if path != self.base_path and not path.startswith(self.base_path + "/"):
                 scope["path"] = self.base_path + path
@@ -196,7 +203,6 @@ app = FastAPI(
     version=get_runtime_app_version(),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
-    root_path=BASE_PATH if BASE_PATH else None,
 )
 
 
@@ -651,6 +657,25 @@ async def shutdown_event():
             logger.warning("Error disconnecting MQTT service", error=str(e))
 
 
+# Registered before the SPA catch-all below, which would otherwise answer
+# these paths with index.html.
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for container orchestration and startup scripts"""
+    return {"status": "healthy", "service": "borg-web-ui"}
+
+
+@app.get("/api")
+async def api_info():
+    """API information endpoint"""
+    return {
+        "name": "Borg UI API",
+        "version": get_runtime_app_version(),
+        "docs": f"{BASE_PATH}/api/docs",
+        "status": "running",
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the main application"""
@@ -685,23 +710,6 @@ async def catch_all(full_path: str):
     return HTMLResponse(
         content="<h1>Borg UI</h1><p>Frontend not built yet. Please run the build process.</p>"
     )
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for container orchestration and startup scripts"""
-    return {"status": "healthy", "service": "borg-web-ui"}
-
-
-@app.get("/api")
-async def api_info():
-    """API information endpoint"""
-    return {
-        "name": "Borg UI API",
-        "version": get_runtime_app_version(),
-        "docs": "/api/docs",
-        "status": "running",
-    }
 
 
 @app.middleware("http")
