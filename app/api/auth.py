@@ -1320,7 +1320,7 @@ async def complete_oidc_login(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={"key": "backend.errors.auth.oidcIdTokenInvalid"},
             )
-        id_claims = verify_id_token(
+        id_claims = await verify_id_token(
             provider,
             id_token,
             nonce=verified_state["nonce"],
@@ -1419,6 +1419,9 @@ async def complete_oidc_login(
             status_code=status.HTTP_302_FOUND,
         )
     except Exception:
+        # Without this the only trace of an unexpected failure is the generic
+        # error key in the redirect, which makes the callback undebuggable.
+        logger.exception("OIDC callback failed", flow=login_state.flow)
         _record_auth_event(
             db,
             event_type="oidc_callback_failed",

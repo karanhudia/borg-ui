@@ -10,8 +10,8 @@ import secrets
 
 import httpx
 import jwt
-from jwt import PyJWKClient
-from jwt.exceptions import PyJWTError
+from jwt import PyJWKSet
+from jwt.exceptions import PyJWKClientError, PyJWTError
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
@@ -318,10 +318,51 @@ async def exchange_code_for_tokens(
         return response.json()
 
 
-def verify_id_token(
+async def fetch_jwks(provider: OidcProviderConfiguration) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(provider.jwks_uri)
+        response.raise_for_status()
+        return response.json()
+
+
+def select_signing_key(jwks: dict[str, Any], id_token: str) -> Any:
+    try:
+        header = jwt.get_unverified_header(id_token)
+    except PyJWTError as exc:
+        raise PyJWKClientError(f"Unable to read the ID token header: {exc}") from exc
+
+    signing_keys = [
+        key
+        for key in PyJWKSet.from_dict(jwks).keys
+        if key.public_key_use in {"sig", None} and key.key_id
+    ]
+    if not signing_keys:
+        raise PyJWKClientError("The JWKS response contained no usable signing keys")
+
+    kid = header.get("kid")
+    if kid is None:
+        if len(signing_keys) == 1:
+            return signing_keys[0]
+        raise PyJWKClientError(
+            "The ID token has no 'kid' header and the JWKS has several signing keys"
+        )
+
+    for key in signing_keys:
+        if key.key_id == kid:
+            return key
+
+    raise PyJWKClientError(f'Unable to find a signing key that matches: "{kid}"')
+
+
+async def verify_id_token(
     provider: OidcProviderConfiguration, id_token: str, *, nonce: str
 ) -> dict[str, Any]:
-    signing_key = PyJWKClient(provider.jwks_uri).get_signing_key_from_jwt(id_token)
+    # The JWKS is fetched with httpx rather than PyJWKClient, which uses
+    # urllib under the hood. urllib would block the event loop for the whole
+    # request, and its requests are rejected by reverse proxies and WAFs that
+    # accept the discovery and token calls this module already makes with
+    # httpx -- Cloudflare answers them with "error code: 1010", for example.
+    signing_key = select_signing_key(await fetch_jwks(provider), id_token)
     claims = jwt.decode(
         id_token,
         signing_key.key,
