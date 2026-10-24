@@ -1154,6 +1154,15 @@ class BackupPlanExecutionService:
             if not repositories:
                 self._finalize_run(run_id)
                 return
+            # Its pre-backup scripts do not run under the post-backup hooks
+            # a restart left to run for an earlier backup of one of its
+            # repositories (#1429).
+            from app.services.backup_service import backup_service
+
+            for repository in repositories:
+                await backup_service.wait_for_post_hooks_after_restart(
+                    repository_id=repository.repository_id
+                )
             (
                 pre_script_ok,
                 pre_script_error,
@@ -1314,8 +1323,14 @@ class BackupPlanExecutionService:
                 # cancelled the queued ones, the runner's recovery failed the
                 # running ones), but an agent backup the restart failed, or an
                 # agent's pre-backup hook, may still run on its agent.
+                from app.services.backup_service import backup_service
+
                 for operation_id in self._run_backup_operation_ids(run_id):
                     await wait_out_backup_operation(operation_id)
+                    # and its repository's post-backup hooks first (#1429)
+                    await backup_service.wait_for_post_hooks_after_restart(
+                        operation_id=operation_id
+                    )
                     await self._wait_for_agent_job_to_end(
                         partial(_backup_agent_job, operation_id=operation_id)
                     )
@@ -1767,21 +1782,44 @@ class BackupPlanExecutionService:
         hook_type: str,
         backup_result: Optional[str] = None,
     ) -> tuple[bool, Optional[str]]:
+        """The source scripts of `hook_type` in order. A failing pre-backup
+        script stops the ones after it: the backup does not start. Every
+        post-backup script runs, since each undoes what its own source's
+        pre-backup script did; the ones that fail are reported together, as
+        the plan's post-backup hooks are (#1428)."""
+        post = hook_type == "source-post-backup"
+        errors: list[str] = []
         for assignment in _source_script_assignments(
             context.source_locations, hook_type
         ):
-            ok, error = await self._execute_plan_script(
-                run_id,
-                context,
-                hook_type=hook_type,
-                backup_result=backup_result,
-                script_id=assignment["script_id"],
-                script_parameters=assignment["parameters"],
-                source_location=assignment["location"],
-                source_index=assignment["execution_order"],
-            )
-            if not ok:
+            try:
+                ok, error = await self._execute_plan_script(
+                    run_id,
+                    context,
+                    hook_type=hook_type,
+                    backup_result=backup_result,
+                    script_id=assignment["script_id"],
+                    script_parameters=assignment["parameters"],
+                    source_location=assignment["location"],
+                    source_index=assignment["execution_order"],
+                )
+            except Exception as exc:
+                if not post:
+                    raise
+                logger.warning(
+                    "Source post-backup script raised",
+                    run_id=run_id,
+                    script_id=assignment["script_id"],
+                    error=str(exc),
+                )
+                ok, error = False, f"Database source post-backup script failed: {exc}"
+            if ok:
+                continue
+            if not post:
                 return False, error
+            errors.append(error or "Database source post-backup script failed")
+        if errors:
+            return False, "; ".join(errors)
         return True, None
 
     async def _execute_plan_script_hooks(

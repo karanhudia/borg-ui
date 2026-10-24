@@ -27,7 +27,11 @@ from app.database.models import (
     Repository,
     ScriptExecution,
 )
-from app.services.operations.backup_facade import backup_jobs_in_maintenance
+from app.services.operations.backup_facade import (
+    BackupJobFacade,
+    backup_jobs_in_maintenance,
+    backup_result_summary,
+)
 from app.utils.backup_maintenance import (
     COMPLETED_BACKUP_STATUSES,
     MAINTENANCE_STATUS_KIND,
@@ -67,6 +71,23 @@ POST_BACKUP_HOOK_MARKERS = (
 # run leave, each before it starts.
 PRE_BACKUP_SCRIPT_HOOK_TYPES = ("pre-backup", "source-pre-backup")
 POST_BACKUP_SCRIPT_HOOK_TYPES = ("post-backup", "source-post-backup")
+# On a server backup a restart interrupted after its repository's
+# pre-backup hooks ran, until its post-backup hooks ran after the restart
+# without a failure (#1429).
+BACKUP_POST_HOOKS_AFTER_RESTART = json.dumps(
+    {"key": "backend.errors.service.backupPostHooksAfterRestart"}
+)
+# In a backup's params once its post-backup hooks after a restart ended
+# without settling it: the line stays, and a later start does not report it
+# again.
+BACKUP_POST_HOOKS_REPORTED = "postHooksAfterRestartReported"
+
+
+def backup_hook_result(status: Optional[str]) -> str:
+    """The result a backup's post-backup hooks hear for its status."""
+    return {"completed": "success", "completed_with_warnings": "warning"}.get(
+        status or "", "failure"
+    )
 
 
 def _plan_repository_failed(status: Optional[str]) -> bool:
@@ -175,6 +196,158 @@ def _post_backup_scripts_still_pending(
         for (run_id,) in query.order_by(BackupPlanRun.id)
         if _post_backup_scripts_after_restart(db, run_id) == "pending"
     ]
+
+
+def _backup_post_hooks_state(db: Session, operation_id: int) -> Optional[str]:
+    """What a restart left of the post-backup hooks of a server backup, from
+    the script executions its repository's hooks leave, each before it
+    starts: "pending" when a pre-backup hook started and no post-backup hook
+    did, "interrupted" when a post-backup hook started, since which of them
+    still had to run is unknown, else None. Agent hooks run on the agent and
+    are not looked at."""
+    hook_types = {
+        hook_type
+        for (hook_type,) in db.query(ScriptExecution.hook_type)
+        .filter(
+            ScriptExecution.operation_id == operation_id,
+            ScriptExecution.agent_script_name.is_(None),
+        )
+        .distinct()
+    }
+    if "post-backup" in hook_types:
+        return "interrupted"
+    if "pre-backup" in hook_types:
+        return "pending"
+    return None
+
+
+def backup_post_hooks_settled(db: Session, operation: Operation) -> bool:
+    """Whether every library post-backup hook the backup's result makes due
+    ran to a success: then the restart came after them. An inline script
+    leaves no record, so a repository without library post-backup hooks is
+    never settled this way."""
+    from app.database.models import RepositoryScript
+    from app.services.script_library_executor import ScriptLibraryExecutor
+
+    if operation.repository_id is None:
+        return False
+    configured = (
+        db.query(RepositoryScript)
+        .filter(
+            RepositoryScript.repository_id == operation.repository_id,
+            RepositoryScript.hook_type == "post-backup",
+            RepositoryScript.enabled == True,  # noqa: E712
+            RepositoryScript.script_id.isnot(None),
+        )
+        .all()
+    )
+    if not configured:
+        return False
+    result = backup_hook_result(operation.status)
+    should_run = ScriptLibraryExecutor(db)._should_run_script
+    due = {
+        rs.script_id
+        for rs in configured
+        if should_run(rs.custom_run_on or rs.script.run_on, result)
+    }
+    succeeded = {
+        script_id
+        for (script_id,) in db.query(ScriptExecution.script_id).filter(
+            ScriptExecution.operation_id == operation.id,
+            ScriptExecution.hook_type == "post-backup",
+            ScriptExecution.status == "completed",
+        )
+    }
+    return due <= succeeded
+
+
+def _latest_started_backups(db: Session):
+    """Each repository's latest backup that started. A later one's own hooks
+    ran since, so what an earlier one's pre-backup hooks did is not that
+    one's to undo any more."""
+    latest = (
+        db.query(func.max(Operation.id))
+        .filter(
+            Operation.kind == "backup",
+            Operation.repository_id.isnot(None),
+            Operation.started_at.isnot(None),
+        )
+        .group_by(Operation.repository_id)
+    )
+    return db.query(Operation).filter(Operation.id.in_(latest.scalar_subquery()))
+
+
+def backup_post_hooks_after_restart(
+    db: Session,
+) -> list[tuple[int, Optional[int], str]]:
+    """The server backups whose post-backup hooks a restart left unrun
+    (#1429), as (operation id, repository id, state), state as in
+    `_backup_post_hooks_state`. Called before the runner's own recovery:
+
+    - a backup still `running` is one the restart interrupted (the runner
+      fails it right after this);
+    - a completed backup writes its outcome before its archive statistics
+      and its post-backup hooks; one whose task never reached its end has
+      no `result`, which the runner writes after it. Only the repository's
+      latest backup that started is looked at;
+    - a backup a restart caught after an earlier one is found again from
+      its message, until a recovery reported it: one whose post-backup
+      hooks had not started runs them, one whose hooks a second restart
+      interrupted is reported.
+
+    Each one found is marked in the same commit, so a restart before its
+    post-backup hooks start finds it again."""
+    found: list[tuple[int, Optional[int], str]] = []
+    candidates = {
+        operation.id: operation
+        for operation in db.query(Operation).filter(
+            Operation.kind == "backup",
+            or_(
+                Operation.status == "running",
+                Operation.error_message.contains(BACKUP_POST_HOOKS_AFTER_RESTART)
+                & Operation.status.notin_(("queued", "running")),
+            ),
+        )
+    }
+    # `result` is JSON: a row the runner never wrote it on may hold SQL NULL
+    # or JSON null, so it is read rather than filtered on
+    for operation in _latest_started_backups(db).filter(
+        Operation.status.in_(("completed", "completed_with_warnings"))
+    ):
+        # a backup copied from the legacy table never had one
+        legacy = "legacy_id" in (operation.params or {})
+        if operation.result is None and not legacy:
+            candidates.setdefault(operation.id, operation)
+    for _operation_id, operation in sorted(candidates.items()):
+        marked = BACKUP_POST_HOOKS_AFTER_RESTART in (operation.error_message or "")
+        if marked and (operation.params or {}).get(BACKUP_POST_HOOKS_REPORTED):
+            continue
+        state = _backup_post_hooks_state(db, operation.id)
+        if state is None:
+            continue
+        if state == "interrupted" and backup_post_hooks_settled(db, operation):
+            # the restart came after its post-backup hooks
+            if operation.status in ("completed", "completed_with_warnings"):
+                operation.result = backup_result_summary(BackupJobFacade(db, operation))
+            if marked:
+                # a recovery that ran them all and was cut off before it
+                # could say so
+                operation.error_message = (
+                    "\n".join(
+                        line
+                        for line in operation.error_message.split("\n")
+                        if line and line != BACKUP_POST_HOOKS_AFTER_RESTART
+                    )
+                    or None
+                )
+            continue
+        if not marked:
+            operation.error_message = "\n".join(
+                filter(None, [operation.error_message, BACKUP_POST_HOOKS_AFTER_RESTART])
+            )
+        found.append((operation.id, operation.repository_id, state))
+    db.commit()
+    return found
 
 
 def _mark_post_backup_scripts_unsettled(run: BackupPlanRun) -> None:
