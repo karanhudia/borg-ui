@@ -16,7 +16,9 @@ WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN npm run build
+# Source maps ship as a release asset, never in the image (deleted here so no
+# layer of the final image ever holds them).
+RUN npm run build && find build -name '*.map' -delete
 
 # --- managed agent wheelhouse: built in-image, served to enrolling nodes ---
 # A node installs the agent belonging to the server it enrols against instead of
@@ -141,8 +143,6 @@ COPY --from=backend-builder /usr/local/bin /usr/local/bin
 # Frontend assets built hermetically in the frontend-builder stage above (once
 # on the builder arch), so `docker build` alone is fully reproducible.
 COPY --from=frontend-builder /frontend/build ./app/static/
-# Source maps ship as a release asset, never in the image.
-RUN find ./app/static -name '*.map' -delete
 
 # Agent wheelhouse served at /agent/dist/<filename> to enrolling nodes.
 COPY --from=agent-builder /agent-dist/ /opt/borg-ui/agent-dist/
