@@ -581,3 +581,67 @@ describe('trackApiError', () => {
     expect(fetchMock()).not.toHaveBeenCalled()
   })
 })
+
+describe('enqueueErrorReport', () => {
+  const report = { origin: 'frontend', kind: 'uncaught', message: 'boom' }
+
+  it('sends without a key when none is known, and not after a no', async () => {
+    const a = await load({ analytics_instance_key: null, analytics_user_key: null })
+    a.enqueueErrorReport(report)
+    vi.advanceTimersByTime(5000)
+    const [event] = sent()
+    expect(event).toMatchObject({ name: 'Error - Report', source: 'app', props: report })
+    expect(event).not.toHaveProperty('instance_key')
+
+    fetchMock().mockClear()
+    const off = await load({ analytics_enabled: false })
+    off.enqueueErrorReport(report)
+    vi.advanceTimersByTime(10_000)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('sends with the key when known, even if props would be scrubbed or long', async () => {
+    const a = await load()
+    a.enqueueErrorReport({ ...report, message: '/a/b user@host' })
+    vi.advanceTimersByTime(5000)
+    expect(sent()[0]).toMatchObject({
+      instance_key: KEY,
+      props: { message: '/a/b user@host' },
+    })
+  })
+
+  it('holds reports until the first load settles, at most 20, then sends them', async () => {
+    vi.resetModules()
+    prefs.value = { analytics_enabled: true, analytics_instance_key: KEY }
+    const a = await import('../analytics')
+    for (let i = 0; i < 25; i++) a.enqueueErrorReport({ ...report, i })
+    vi.advanceTimersByTime(4000)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    localStorage.setItem('access_token', 'token')
+    await a.loadUserPreference()
+    vi.advanceTimersByTime(5000)
+    expect(sent()).toHaveLength(20)
+    expect(sent()[0]).toMatchObject({ instance_key: KEY })
+  })
+
+  it('stops waiting for the preference after 5 seconds', async () => {
+    vi.resetModules()
+    const a = await import('../analytics')
+    a.enqueueErrorReport(report)
+    vi.advanceTimersByTime(5000)
+    vi.advanceTimersByTime(5000)
+    expect(sent()).toHaveLength(1)
+    expect(sent()[0]).not.toHaveProperty('instance_key')
+  })
+
+  it('drops held reports when the preference loads with a no', async () => {
+    vi.resetModules()
+    prefs.value = { analytics_enabled: false, analytics_instance_key: KEY }
+    localStorage.setItem('access_token', 'token')
+    const a = await import('../analytics')
+    a.enqueueErrorReport(report)
+    await a.loadUserPreference()
+    vi.advanceTimersByTime(10_000)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+})
