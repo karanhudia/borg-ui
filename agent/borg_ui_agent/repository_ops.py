@@ -1153,6 +1153,7 @@ def _run_cancellable(
     should_cancel: Callable[[], bool],
     *,
     timeout: float,
+    text: bool = True,
 ) -> tuple[subprocess.CompletedProcess, bool]:
     """`subprocess.run(capture_output=True, timeout=...)` with a cancel
     poller: returns the finished process and whether a cancel ended it.
@@ -1160,7 +1161,7 @@ def _run_cancellable(
     popen_kwargs: dict[str, Any] = {
         "stdout": subprocess.PIPE,
         "stderr": subprocess.PIPE,
-        "text": True,
+        "text": text,
         "env": env,
     }
     if os.name == "posix":
@@ -1562,6 +1563,9 @@ def _execute_streaming_artifact_operation(
         _terminate_process(process)
 
     return_code = process.wait()
+    # A child of Borg's that ignored SIGTERM may still hold stderr; the
+    # cancel poller kills the group unless `watchdog_done` is set first.
+    stderr_thread.join()
     watchdog_done.set()
     watchdog.join(timeout=5)
     # The keepalive and cancel-poller threads are not joined: a request in
@@ -1569,7 +1573,6 @@ def _execute_streaming_artifact_operation(
     # verdict must not wait for it. They end on their own, and a progress
     # report that lands after the verdict is refused by the server as a
     # report on a final job.
-    stderr_thread.join()
     stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")
 
     if cancelled.is_set():
@@ -1704,7 +1707,22 @@ def _execute_binary_output_repository_operation(
         )
 
     try:
-        process = subprocess.run(cmd, capture_output=True, env=env, timeout=300)
+        if should_cancel is None:
+            process = subprocess.run(cmd, capture_output=True, env=env, timeout=300)
+        else:
+            # The session leaves the cancel report of this kind to the
+            # worker (SELF_CANCELLING_JOB_KINDS): end Borg and report it.
+            process, cancelled = _run_cancellable(
+                cmd, env, should_cancel, timeout=300, text=False
+            )
+            if cancelled:
+                client.cancel_job(job_id)
+                return RepositoryOperationResult(
+                    job_id=job_id,
+                    status="canceled",
+                    return_code=process.returncode,
+                    message=f"{payload.job_kind} canceled",
+                )
     except OSError as exc:
         error_message = f"Failed to start {payload.job_kind}: {exc}"
         client.send_log(job_id, sequence=1, stream="stderr", message=error_message)

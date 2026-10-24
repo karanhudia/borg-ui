@@ -1540,8 +1540,18 @@ def test_session_cancel_command_cancels_target_job_not_completes(
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "command",
+    [
+        "repository.check",
+        # the streamed artifact kinds end Borg on cancel as well
+        "repository.extract_archive_file",
+        "repository.export_archive_tar",
+        "repository.diff",
+    ],
+)
 def test_session_cancel_command_leaves_a_running_job_to_its_worker(
-    patch_session_platform,
+    patch_session_platform, command
 ):
     """A worker that runs the job reports `canceled` once its process has
     ended; reporting it on the command would let the server hand the
@@ -1566,7 +1576,7 @@ def test_session_cancel_command_leaves_a_running_job_to_its_worker(
         connect=lambda *args, **kwargs: socket,
         http_client=http,
     )
-    event = runtime._register_cancel(55, command="repository.check")
+    event = runtime._register_cancel(55, command=command)
     runtime.run_session(max_messages=1)
 
     assert event.is_set()
@@ -2904,10 +2914,11 @@ def test_repository_extract_file_streaming_cancels_a_wedged_borg(monkeypatch):
             },
         },
         client,
-        should_cancel=lambda: True,
+        should_cancel=_cancel_after_the_first_check(),
     )
 
     assert result.status == "canceled"
+    assert terminated.is_set()
     assert ("cancel_job", 93) in client.calls
 
 
@@ -4088,10 +4099,14 @@ def test_streaming_deadline_does_not_wait_for_a_blocked_cancel_check(monkeypatch
     terminated = threading.Event()
     killed = _watchdog_process(monkeypatch, terminated, _StallingStdout(terminated))
     entered = threading.Event()
+    checks = []
 
     def should_cancel():
-        entered.set()
-        time.sleep(3)
+        # The check before the start answers; the poller's checks hang.
+        checks.append(None)
+        if len(checks) > 1:
+            entered.set()
+            time.sleep(3)
         return False
 
     client = _ArtifactClient([])
@@ -4265,6 +4280,18 @@ class _StallingStdout:
         self._terminated.set()
 
 
+def _cancel_after_the_first_check():
+    """A cancel check that answers yes from its second call on: the first
+    comes before Borg starts, so the cancel reaches a running Borg."""
+    calls = []
+
+    def should_cancel():
+        calls.append(None)
+        return len(calls) > 1
+
+    return should_cancel
+
+
 def _watchdog_process(monkeypatch, terminated, stdout, *, stderr=b""):
     """A fake borg whose stdout is `stdout`. `terminated` unblocks the
     stdout (the helper closes it after the upload; the watchdog's kill
@@ -4434,13 +4461,62 @@ def test_repository_diff_is_cancelled_through_the_watchdog(monkeypatch):
             },
         },
         client,
-        should_cancel=lambda: True,
+        should_cancel=_cancel_after_the_first_check(),
     )
 
     assert result.status == "canceled"
     assert killed.is_set()
     assert ("cancel_job", 105) in client.calls
     assert not [c for c in client.calls if c[0] in ("complete_job", "fail_job")]
+
+
+_STREAMED_ARTIFACT_JOBS = [
+    (
+        "repository.extract_archive_file",
+        {"archive": "a", "file_path": "f", "delivery": "artifact"},
+    ),
+    (
+        "repository.export_archive_tar",
+        {"archive": "a", "directory_path": "d", "delivery": "artifact"},
+    ),
+    ("repository.diff", {"archive": "daily-2", "predecessor": "daily-1"}),
+]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("job_kind,operation", _STREAMED_ARTIFACT_JOBS)
+def test_a_streamed_artifact_job_cancelled_before_its_start_runs_nothing(
+    monkeypatch, job_kind, operation
+):
+    def _no_popen(*args, **kwargs):
+        raise AssertionError("borg must not start")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", _no_popen
+    )
+
+    class _CancelClient(_ArtifactClient):
+        def cancel_job(self, job_id):
+            self.calls.append(("cancel_job", job_id))
+            return {"id": job_id, "status": "canceled"}
+
+    client = _CancelClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 108,
+            "payload": {
+                "job_kind": job_kind,
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": operation,
+            },
+        },
+        client,
+        should_cancel=lambda: True,
+    )
+
+    assert result.status == "canceled"
+    assert ("cancel_job", 108) in client.calls
 
 
 @pytest.mark.unit
