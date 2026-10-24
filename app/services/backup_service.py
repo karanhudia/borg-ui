@@ -25,8 +25,10 @@ from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
 from app.services.mount_service import stable_sshfs_temp_root
 from app.services.operations.backup_facade import (
+    backup_result_summary,
     refresh_backup_job,
     resolve_backup_job,
+    wait_out_backup_operation,
 )
 from app.services.rclone_repository_service import rclone_repository_service
 from app.services.restore_check_canary import (
@@ -125,6 +127,18 @@ def _apply_created_archive_stats(job, lines: list[str]) -> None:
             setattr(job, key, value)
 
 
+def _backup_job_name(db: Session, job) -> str | None:
+    """The schedule's name a backup's notifications carry, if any."""
+    if not job.scheduled_job_id:
+        return None
+    from app.database.models import ScheduledJob
+
+    scheduled_job = (
+        db.query(ScheduledJob).filter(ScheduledJob.id == job.scheduled_job_id).first()
+    )
+    return scheduled_job.name if scheduled_job else None
+
+
 def _uses_remote_execution(job) -> bool:
     return (job.execution_mode or "").strip().lower() in REMOTE_EXECUTION_MODES or (
         job.route_strategy or ""
@@ -160,6 +174,9 @@ class BackupService:
         self.log_buffers = {}  # Track in-memory log buffers by job_id (for running jobs)
         self.ssh_mounts = {}  # Track SSH mount IDs by job_id: {job_id: [mount_id, ...]}
         self.filesystem_snapshots = {}  # Track btrfs/zfs snapshots by job_id
+        # The post-backup hooks a restart left to run, by backup operation
+        # id: (repository id, task) (#1429).
+        self.post_hooks_after_restart: dict[int, tuple[int | None, asyncio.Task]] = {}
 
     def _resolve_grouped_source_paths(
         self, db: Session, source_locations: list[dict]
@@ -328,6 +345,8 @@ class BackupService:
                 "scripts_executed": result["scripts_executed"],
                 "scripts_failed": result["scripts_failed"],
                 "using_library": True,
+                "should_skip": result.get("should_skip", False),
+                "skip_script_name": result.get("skip_script_name"),
             }
 
         else:
@@ -386,10 +405,12 @@ class BackupService:
         repo_record: Repository,
         job_id: int,
         hook_logs: list[str],
+        backup_result: str = "failure",
     ) -> str:
         """The post-backup hooks of a backup that ends before `borg create`
         ran to its end, after a pre-backup hook ran (#1385), with the failure
-        result, as the failure after `borg create` runs them. Their output
+        result, as the failure after `borg create` runs them, or with
+        `backup_result` (a skip, #1427). Their output
         joins `hook_logs`. Returns the line to append to the error message
         when one of them failed, else "". An exception a hook raises is
         logged and counted as a failure, never raised in place of the
@@ -404,7 +425,7 @@ class BackupService:
                 db=db,
                 repo_record=repo_record,
                 hook_type="post-backup",
-                backup_result="failure",
+                backup_result=backup_result,
                 job_id=job_id,
             )
         except Exception as exc:
@@ -432,6 +453,190 @@ class BackupService:
                     "total": hook_result["scripts_executed"],
                 },
             }
+        )
+
+    def recover_post_hooks_after_restart(
+        self, backups: list[tuple[int, int | None, str]]
+    ) -> None:
+        """Settle the post-backup hooks of the server backups a restart left
+        them unrun on (`backup_post_hooks_after_restart`, #1429), each in a
+        task of its own. A backup of the same repository waits for them
+        before its own pre-backup hooks run."""
+        for operation_id, repository_id, state in backups:
+            task = asyncio.create_task(
+                self._post_hooks_after_restart(operation_id, state)
+            )
+            if asyncio.isfuture(task):  # not a test's patched create_task
+                self.post_hooks_after_restart[operation_id] = (repository_id, task)
+                task.add_done_callback(
+                    lambda _task, key=operation_id: self.post_hooks_after_restart.pop(
+                        key, None
+                    )
+                )
+
+    async def wait_for_post_hooks_after_restart(
+        self,
+        *,
+        operation_id: int | None = None,
+        repository_id: int | None = None,
+    ) -> None:
+        """Until the post-backup hooks a restart left to run for backup
+        `operation_id`, or for any backup of `repository_id`, ended."""
+        tasks = [
+            task
+            for key, (repo_id, task) in list(self.post_hooks_after_restart.items())
+            if key == operation_id
+            or (repository_id is not None and repo_id == repository_id)
+        ]
+        if tasks:
+            await asyncio.wait(tasks)
+
+    async def _post_hooks_after_restart(self, operation_id: int, state: str) -> None:
+        """The post-backup hooks of a server backup a restart caught after
+        its pre-backup hooks ran, once the runner's recovery ended the
+        backup, with the result its status gives (an interrupted one is a
+        failure). The startup sweep left a line on the backup saying that
+        they have not run; it goes when they ran without a failure and
+        stays, with a notification, when not. Hooks whose start is unknown
+        do not run twice: ones a restart interrupted ("interrupted"), and
+        an inline post-backup script, which leaves no record; the backup
+        keeps the line and is notified."""
+        from app.utils.process_utils import (
+            BACKUP_POST_HOOKS_AFTER_RESTART,
+            BACKUP_POST_HOOKS_REPORTED,
+            _backup_post_hooks_state,
+            backup_hook_result,
+            backup_post_hooks_settled,
+        )
+
+        try:
+            await wait_out_backup_operation(operation_id)
+        except Exception as exc:
+            logger.error(
+                "Waiting for the interrupted backup failed",
+                job_id=operation_id,
+                error=str(exc),
+            )
+            return
+        db = SessionLocal()
+        try:
+            job = resolve_backup_job(db, operation_id)
+            if job is None:
+                return
+            repo_record = (
+                db.query(Repository).filter(Repository.id == job.repository_id).first()
+                if job.repository_id is not None
+                else None
+            )
+            hook_logs: list[str] = []
+            ran = False
+            failure = ""
+            # why the notification goes, in words: the row's lines are keys
+            reason = "they had started before the restart and are not run again"
+            # Read again after the wait: hooks a process still running its
+            # backup ran meanwhile are not run a second time.
+            if _backup_post_hooks_state(db, operation_id) == "interrupted":
+                state = "interrupted"
+            if state == "interrupted" and backup_post_hooks_settled(db, job.operation):
+                ran = True  # they all ran to a success
+            elif repo_record is None:
+                failure = "Repository no longer exists"
+                reason = "the repository no longer exists"
+            elif state == "pending" and not self._post_hooks_leave_records(
+                db, repo_record
+            ):
+                reason = (
+                    "an inline post-backup script leaves no record, so it is "
+                    "not run again"
+                )
+            elif state == "pending":
+                logger.info(
+                    "Running post-backup hooks after the restart",
+                    job_id=operation_id,
+                    repository_id=repo_record.id,
+                )
+                backup_result = backup_hook_result(job.status)
+                ran = True
+                failure = (
+                    await self._run_post_hooks_after_early_exit(
+                        db, repo_record, operation_id, hook_logs, backup_result
+                    )
+                ).lstrip("\n")
+                job = resolve_backup_job(db, operation_id)
+                if failure:
+                    counts = json.loads(failure)["params"]
+                    reason = (
+                        f"{counts['failed']}/{counts['total']} post-backup "
+                        "scripts failed"
+                    )
+
+            settled = ran and not failure
+            lines = [
+                line
+                for line in (job.error_message or "").split("\n")
+                if line and line != BACKUP_POST_HOOKS_AFTER_RESTART
+            ]
+            if not settled:
+                lines += [BACKUP_POST_HOOKS_AFTER_RESTART, *filter(None, [failure])]
+                if job.status == "completed":
+                    job.status = "completed_with_warnings"
+                # reported once: a later start leaves the line as it is
+                job.operation.params = {
+                    **(job.operation.params or {}),
+                    BACKUP_POST_HOOKS_REPORTED: True,
+                }
+            job.error_message = "\n".join(lines) or None
+            if hook_logs:
+                job.logs = "\n".join([job.logs, *hook_logs] if job.logs else hook_logs)
+            if (
+                job.status in ("completed", "completed_with_warnings")
+                and job.operation.result is None
+            ):
+                # what the runner writes once the backup ended: a later
+                # restart does not take it for one interrupted again
+                job.operation.result = backup_result_summary(job)
+            db.commit()
+            if not settled:
+                try:
+                    await notification_service.send_backup_failure(
+                        db,
+                        job.repository,
+                        "Post-backup hooks after the restart did not run "
+                        f"cleanly: {reason}. Check what the pre-backup hooks "
+                        "stopped.",
+                        operation_id,
+                        _backup_job_name(db, job),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to send backup failure notification",
+                        error=str(exc),
+                    )
+        except Exception as exc:
+            db.rollback()
+            logger.error(
+                "Post-backup hooks after the restart failed",
+                job_id=operation_id,
+                error=str(exc),
+            )
+        finally:
+            db.close()
+
+    @staticmethod
+    def _post_hooks_leave_records(db: Session, repo_record: Repository) -> bool:
+        """Whether the repository's post-backup hooks are library scripts,
+        which record each run (`script_executions`); an inline script
+        records none, so whether it already ran cannot be told."""
+        return (
+            db.query(RepositoryScript.id)
+            .filter(
+                RepositoryScript.repository_id == repo_record.id,
+                RepositoryScript.hook_type == "post-backup",
+                RepositoryScript.enabled == True,  # noqa: E712
+            )
+            .first()
+            is not None
+            or not repo_record.post_backup_script
         )
 
     async def _sync_rclone_after_borg(
@@ -1517,17 +1722,7 @@ class BackupService:
                 return
 
             # Get job/schedule name for notifications
-            job_name = None
-            if job.scheduled_job_id:
-                from app.database.models import ScheduledJob
-
-                scheduled_job = (
-                    db.query(ScheduledJob)
-                    .filter(ScheduledJob.id == job.scheduled_job_id)
-                    .first()
-                )
-                if scheduled_job:
-                    job_name = scheduled_job.name
+            job_name = _backup_job_name(db, job)
 
             # Check if this is a remote backup
             if _uses_remote_execution(job):
@@ -1891,6 +2086,13 @@ class BackupService:
                         repository=actual_repository_path,
                     )
 
+            if repo_record:
+                # not under the post-backup hooks a restart left to run for an
+                # earlier backup of this repository (#1429)
+                await self.wait_for_post_hooks_after_restart(
+                    repository_id=repo_record.id
+                )
+
             # Run pre-backup hooks (script library or inline)
             if repo_record and not skip_hooks:
                 logger.info(
@@ -1935,11 +2137,37 @@ class BackupService:
                             job_id=job_id,
                             script=skip_script,
                         )
-                        job.status = "skipped"
-                        job.error_message = f"Skipped by '{skip_script}'"
+                        # What the pre-backup scripts did, the skipping one
+                        # included, is undone by the post-backup hooks that
+                        # run "always", as on an agent repository (#1427).
+                        post_hooks_ran = True
+                        post_error = await self._run_post_hooks_after_early_exit(
+                            db,
+                            repo_record,
+                            job_id,
+                            hook_logs,
+                            backup_result="skipped",
+                        )
                         job.logs = "\n".join(hook_logs)
                         job.completed_at = datetime.utcnow()
+                        if not post_error:
+                            job.status = "skipped"
+                            job.error_message = f"Skipped by '{skip_script}'"
+                            db.commit()
+                            return
+                        # a skip whose cleanup failed is not a graceful one
+                        job.status = "failed"
+                        job.error_message = post_error.lstrip("\n")
                         db.commit()
+                        try:
+                            await notification_service.send_backup_failure(
+                                db, repository, job.error_message, job_id, job_name
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to send backup failure notification",
+                                error=str(e),
+                            )
                         return
 
                     # Inline-script path: Repository.skip_on_hook_failure on the repo itself.

@@ -1134,7 +1134,11 @@ class OperationRunner:
                 counts["kept"] += 1
             else:
                 op.status = "failed"
-                op.error_message = "interrupted by restart"
+                # after the lines a startup sweep wrote first, such as a
+                # backup's post-backup hooks still to run (#1429)
+                op.error_message = "\n".join(
+                    filter(None, ["interrupted by restart", op.error_message])
+                )
                 op.completed_at = utc_now()
                 counts["failed"] += 1
                 # Spec 7.6: a local repository gets the lock-break attempt the

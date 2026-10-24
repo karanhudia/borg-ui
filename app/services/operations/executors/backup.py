@@ -36,6 +36,7 @@ from app.services.operations.backup_facade import (
     SERVICE_PARAMS,
     BackupJobFacade,
     admission_ignore_for,
+    backup_result_summary,
     failed_after_create,
     resolve_backup_job,
 )
@@ -502,13 +503,7 @@ async def run_backup(ctx) -> Outcome:
     if status in ("completed", "completed_with_warnings"):
         return Outcome(
             status=status,
-            result={
-                "archive_name": job.archive_name,
-                "original_size": job.original_size or 0,
-                "compressed_size": job.compressed_size or 0,
-                "deduplicated_size": job.deduplicated_size or 0,
-                "nfiles": job.nfiles or 0,
-            },
+            result=backup_result_summary(job),
             # the runner writes the outcome's message onto the row: a
             # warning keeps the one that says what it was
             error_message=(

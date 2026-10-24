@@ -1255,8 +1255,22 @@ async def test_pre_backup_library_should_skip_signal_skips_job(
         "using_library": True,
     }
 
+    no_post_hooks = {
+        "success": True,
+        "execution_logs": [],
+        "scripts_executed": 0,
+        "scripts_failed": 0,
+        "using_library": False,
+    }
+
+    async def execute_hooks(**kwargs):
+        # the post-backup hooks that run "always" follow the skip (#1427)
+        if kwargs["hook_type"] == "pre-backup":
+            return library_skip
+        return no_post_hooks
+
     with patch.object(
-        backup_service_fixture, "_execute_hooks", return_value=library_skip
+        backup_service_fixture, "_execute_hooks", side_effect=execute_hooks
     ):
         with patch(
             "app.services.backup_service.SessionLocal", return_value=mock_db_session

@@ -286,6 +286,17 @@ class BackupJobFacade:
         self.operation.log_file_path = str(path)
 
 
+def backup_result_summary(job: "BackupJobFacade") -> dict:
+    """The `result` the runner writes on a completed backup."""
+    return {
+        "archive_name": job.archive_name,
+        "original_size": job.original_size or 0,
+        "compressed_size": job.compressed_size or 0,
+        "deduplicated_size": job.deduplicated_size or 0,
+        "nfiles": job.nfiles or 0,
+    }
+
+
 def is_backup_operation(job: Any) -> bool:
     """True for every job `resolve_backup_job` returns, since phase 9 left
     one table. Callers keep asking, so the question keeps an answer."""
