@@ -249,11 +249,13 @@ class TestProcessUtils:
 
         query_results = [
             [],  # active backup plan runs
+            [],  # finished runs whose post-backup hooks are still to run
         ]
 
         def build_query(result):
             mock_query = MagicMock()
             mock_query.filter.return_value = mock_query
+            mock_query.order_by.return_value = result
             mock_query.all.return_value = result
             mock_query.first.return_value = None
             return mock_query

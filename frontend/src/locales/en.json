@@ -6261,6 +6261,8 @@
         "backupCompletedWithWarning": "Backup completed with warning (exit code {{exitCode}})",
         "backupWarningPostHooksFailed": "Backup succeeded with warning but post-backup hooks failed: {{failed}}/{{total}} scripts failed",
         "containerRestartedDuringBackup": "Container restarted during backup operation",
+        "postBackupHooksAfterCancel": "This run was cancelled after its pre-backup hooks ran. Its post-backup hooks run once its backups have ended; if this message stays, they could not run or failed. Check what the pre-backup hooks stopped.",
+        "postBackupHooksAfterRestart": "A restart interrupted this run after its pre-backup hooks ran. If this message stays, its post-backup hooks could not run after the restart or failed. Check what the pre-backup hooks stopped.",
         "containerRestartedDuringOperation": "Container restarted during operation",
         "containerRestartedDuringRestore": "Container restarted during restore operation",
         "failedCreateDestinationDir": "Failed to create destination directory: {{error}}",

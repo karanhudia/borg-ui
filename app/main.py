@@ -571,10 +571,16 @@ def _recover_interrupted_work() -> None:
         try:
             # A plan run started by hand while the runner waited for the
             # lease is this process's own, not one the restart interrupted.
-            cleanup_orphaned_jobs(db, backup_plan_execution_service.live_run_ids)
+            pending_post_hooks = cleanup_orphaned_jobs(
+                db, backup_plan_execution_service.live_run_ids
+            )
         finally:
             db.close()
         logger.info("Orphaned job cleanup completed")
+        # Before the scheduler resumes: the runs are live while these run.
+        backup_plan_execution_service.recover_post_hooks_after_restart(
+            pending_post_hooks
+        )
     except Exception as e:
         logger.error("Failed to cleanup orphaned jobs", error=str(e))
 

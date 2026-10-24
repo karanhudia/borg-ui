@@ -380,6 +380,60 @@ class BackupService:
                 "using_library": False,
             }
 
+    async def _run_post_hooks_after_early_exit(
+        self,
+        db: Session,
+        repo_record: Repository,
+        job_id: int,
+        hook_logs: list[str],
+    ) -> str:
+        """The post-backup hooks of a backup that ends before `borg create`
+        ran to its end, after a pre-backup hook ran (#1385), with the failure
+        result, as the failure after `borg create` runs them. Their output
+        joins `hook_logs`. Returns the line to append to the error message
+        when one of them failed, else "". An exception a hook raises is
+        logged and counted as a failure, never raised in place of the
+        backup's own outcome."""
+        logger.info(
+            "Executing post-backup hooks (early exit)",
+            job_id=job_id,
+            repository_id=repo_record.id,
+        )
+        try:
+            hook_result = await self._execute_hooks(
+                db=db,
+                repo_record=repo_record,
+                hook_type="post-backup",
+                backup_result="failure",
+                job_id=job_id,
+            )
+        except Exception as exc:
+            db.rollback()
+            logger.warning(
+                "Post-backup hooks raised (early exit)",
+                job_id=job_id,
+                error=str(exc),
+            )
+            hook_logs.append(f"Post-backup hooks failed: {exc}")
+            hook_result = {"success": False, "scripts_failed": 1, "scripts_executed": 1}
+        hook_logs.extend(hook_result.get("execution_logs") or [])
+        if hook_result["success"]:
+            return ""
+        logger.warning(
+            "Post-backup hooks also failed",
+            job_id=job_id,
+            scripts_failed=hook_result["scripts_failed"],
+        )
+        return "\n" + json.dumps(
+            {
+                "key": "backend.errors.service.postBackupHooksAlsoFailed",
+                "params": {
+                    "failed": hook_result["scripts_failed"],
+                    "total": hook_result["scripts_executed"],
+                },
+            }
+        )
+
     async def _sync_rclone_after_borg(
         self,
         db: Session,
@@ -1449,6 +1503,11 @@ class BackupService:
         temp_key_file = None  # Track SSH key file for cleanup
         borg_command_lock = None
         sshfs_cache_lock = None
+        # Once a pre-backup hook ran, every way out runs the post-backup
+        # hooks once (#1385): what a pre-backup hook stopped is started again.
+        pre_hooks_ran = False
+        post_hooks_ran = False
+        hook_logs = []
 
         try:
             # Get job
@@ -1832,20 +1891,20 @@ class BackupService:
                         repository=actual_repository_path,
                     )
 
-            # Initialize hook logs
-            hook_logs = []
-
             # Run pre-backup hooks (script library or inline)
             if repo_record and not skip_hooks:
                 logger.info(
                     "Executing pre-backup hooks", job_id=job_id, repository=repository
                 )
+                # a hook may have started before an error the call raises
+                pre_hooks_ran = True
                 hook_result = await self._execute_hooks(
                     db=db,
                     repo_record=repo_record,
                     hook_type="pre-backup",
                     job_id=job_id,
                 )
+                pre_hooks_ran = hook_result["scripts_executed"] > 0
 
                 # Add hook logs
                 if hook_result["execution_logs"]:
@@ -1917,6 +1976,11 @@ class BackupService:
 
                     # Check if we should continue or abort
                     if not repo_record.continue_on_hook_failure:
+                        if pre_hooks_ran:
+                            post_hooks_ran = True
+                            error_msg += await self._run_post_hooks_after_early_exit(
+                                db, repo_record, job_id, hook_logs
+                            )
                         job.status = "failed"
                         job.error_message = error_msg
                         job.logs = "\n".join(hook_logs)
@@ -1963,6 +2027,19 @@ class BackupService:
                         job_id=job_id,
                         repository_id=repo_record.id,
                     )
+                    if pre_hooks_ran:
+                        post_hooks_ran = True
+                        post_hook_error = await self._run_post_hooks_after_early_exit(
+                            db, repo_record, job_id, hook_logs
+                        )
+                        if post_hook_error:
+                            job.error_message = (
+                                job.error_message + post_hook_error
+                                if job.error_message
+                                else post_hook_error.lstrip("\n")
+                            )
+                        job.logs = "\n".join(hook_logs)
+                        db.commit()
                     return
 
             # Calculate total expected size of source directories in background
@@ -2000,10 +2077,17 @@ class BackupService:
                     "No valid source paths after processing (all SSH mounts failed?)",
                     job_id=job_id,
                 )
-                job.status = "failed"
-                job.error_message = json.dumps(
+                error_msg = json.dumps(
                     {"key": "backend.errors.service.failedPrepareSourcePaths"}
                 )
+                if pre_hooks_ran:
+                    post_hooks_ran = True
+                    error_msg += await self._run_post_hooks_after_early_exit(
+                        db, repo_record, job_id, hook_logs
+                    )
+                    job.logs = "\n".join(hook_logs)
+                job.status = "failed"
+                job.error_message = error_msg
                 job.completed_at = datetime.utcnow()
                 db.commit()
                 mqtt_service.sync_state_with_db(
@@ -2103,6 +2187,19 @@ class BackupService:
                         job_id=job_id,
                         repository_id=repo_record.id,
                     )
+                    if pre_hooks_ran:
+                        post_hooks_ran = True
+                        post_hook_error = await self._run_post_hooks_after_early_exit(
+                            db, repo_record, job_id, hook_logs
+                        )
+                        if post_hook_error:
+                            job.error_message = (
+                                job.error_message + post_hook_error
+                                if job.error_message
+                                else post_hook_error.lstrip("\n")
+                            )
+                        job.logs = "\n".join(hook_logs)
+                        db.commit()
                     return
 
             # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
@@ -2615,6 +2712,7 @@ class BackupService:
                         job_id=job_id,
                         repository=repository,
                     )
+                    post_hooks_ran = True
                     hook_result = await self._execute_hooks(
                         db=db,
                         repo_record=repo_record,
@@ -2660,6 +2758,7 @@ class BackupService:
                         job_id=job_id,
                         repository=repository,
                     )
+                    post_hooks_ran = True
                     hook_result = await self._execute_hooks(
                         db=db,
                         repo_record=repo_record,
@@ -2771,6 +2870,7 @@ class BackupService:
                         job_id=job_id,
                         repository=repository,
                     )
+                    post_hooks_ran = True
                     hook_result = await self._execute_hooks(
                         db=db,
                         repo_record=repo_record,
@@ -2911,6 +3011,7 @@ class BackupService:
                         job_id=job_id,
                         repository=repository,
                     )
+                    post_hooks_ran = True
                     hook_result = await self._execute_hooks(
                         db=db,
                         repo_record=repo_record,
@@ -3122,6 +3223,23 @@ class BackupService:
                 except Exception:
                     pass
 
+            post_hook_error = ""
+            if pre_hooks_ran and not post_hooks_ran:
+                post_hooks_ran = True
+                try:
+                    # the error may have left the session unusable
+                    db.rollback()
+                    post_hook_error = await self._run_post_hooks_after_early_exit(
+                        db, repo_record, job_id, hook_logs
+                    )
+                except Exception as hook_exc:
+                    # the backup is still marked failed below
+                    logger.warning(
+                        "Post-backup hooks could not run after the failure",
+                        job_id=job_id,
+                        error=str(hook_exc),
+                    )
+
             # Try to update job status - may fail if job was deleted during execution
             try:
                 failure_text = str(e)
@@ -3137,9 +3255,10 @@ class BackupService:
                     job.error_message = json.dumps(
                         {"key": "backend.errors.borg.unknownError"}
                     )
+                job.error_message += post_hook_error
                 job.completed_at = datetime.utcnow()
                 if not job.logs:
-                    job.logs = failure_text
+                    job.logs = "\n".join([*hook_logs, failure_text])
                 db.commit()
                 mqtt_service.sync_state_with_db(
                     db, reason="backup failed with exception"
@@ -3148,7 +3267,7 @@ class BackupService:
                 # Send failure notification
                 try:
                     await notification_service.send_backup_failure(
-                        db, repository, str(e), job_id, job_name
+                        db, repository, str(e) + post_hook_error, job_id, job_name
                     )
                 except Exception as notif_error:
                     logger.warning(
@@ -3181,9 +3300,10 @@ class BackupService:
                             retry_job.error_message = json.dumps(
                                 {"key": "backend.errors.borg.unknownError"}
                             )
+                        retry_job.error_message += post_hook_error
                         retry_job.completed_at = datetime.utcnow()
                         if not retry_job.logs:
-                            retry_job.logs = str(e)
+                            retry_job.logs = "\n".join([*hook_logs, str(e)])
                         retry_db.commit()
                         mqtt_service.sync_state_with_db(
                             retry_db, reason="backup failed with exception (retry)"

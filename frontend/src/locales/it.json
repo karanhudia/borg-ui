@@ -6261,6 +6261,8 @@
         "backupCompletedWithWarning": "Backup completato con avviso (codice uscita {{exitCode}})",
         "backupWarningPostHooksFailed": "Backup riuscito con avviso ma gli hook post-backup sono falliti: {{failed}}/{{total}} script falliti",
         "containerRestartedDuringBackup": "Container riavviato durante l'operazione di backup",
+        "postBackupHooksAfterCancel": "Questa esecuzione è stata annullata dopo l'esecuzione dei suoi hook pre-backup. I suoi hook post-backup vengono eseguiti al termine dei suoi backup; se questo messaggio resta, non sono riusciti a essere eseguiti o sono falliti. Controlla cosa hanno fermato gli hook pre-backup.",
+        "postBackupHooksAfterRestart": "Un riavvio ha interrotto questa esecuzione dopo l'esecuzione dei suoi hook pre-backup. Se questo messaggio resta, i suoi hook post-backup non sono riusciti a essere eseguiti dopo il riavvio o sono falliti. Controlla cosa hanno fermato gli hook pre-backup.",
         "containerRestartedDuringOperation": "Container riavviato durante l'operazione",
         "containerRestartedDuringRestore": "Container riavviato durante l'operazione di ripristino",
         "failedCreateDestinationDir": "Impossibile creare la directory di destinazione: {{error}}",
