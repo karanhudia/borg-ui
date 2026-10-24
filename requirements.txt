@@ -5,7 +5,7 @@ coverage[toml]==7.16.2
 croniter==6.2.4
 cryptography==50.0.2
 fastapi-cache2==0.2.2
-fastapi==0.143.2
+fastapi==0.150.0
 gunicorn==26.2.0
 httpx==0.28.1
 psutil==7.2.2
@@ -23,7 +23,7 @@ pyyaml==6.0.3
 redis==8.1.0
 requests==2.34.2
 ruff==0.17.1
-sqlalchemy==2.1.4
+sqlalchemy==2.1.5
 structlog==26.1.0
 truststore==0.10.5
 tzdata==2026.5
