@@ -282,6 +282,15 @@ describe('global handlers', () => {
     expect(sent).not.toHaveBeenCalled()
   })
 
+  it('reports again after a pageshow (bfcache restore)', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    window.dispatchEvent(new Event('pagehide'))
+    window.dispatchEvent(new Event('pageshow'))
+    rejection(new Error('back again'))
+    expect(sent).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores cancelled and aborted rejections', () => {
     const sent = spyOnEnqueue()
     installGlobalErrorHandlers()

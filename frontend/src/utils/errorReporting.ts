@@ -203,11 +203,14 @@ let installed = false
 export const installGlobalErrorHandlers = (): void => {
   if (installed) return
   installed = true
-  const markUnloading = () => {
+  // pagehide, not beforeunload: a cancelled prompt never hides the page. A bfcache
+  // restore fires pageshow, which turns reporting back on.
+  window.addEventListener('pagehide', () => {
     unloading = true
-  }
-  window.addEventListener('pagehide', markUnloading)
-  window.addEventListener('beforeunload', markUnloading)
+  })
+  window.addEventListener('pageshow', () => {
+    unloading = false
+  })
   window.addEventListener('error', (event) => {
     // Cross-origin scripts and browser extensions are not ours.
     if (event.message === 'Script error.') return

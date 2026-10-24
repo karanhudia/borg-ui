@@ -9,7 +9,10 @@ const Boom = () => {
 }
 
 describe('AppErrorBoundary', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
 
   it('renders children when nothing throws', () => {
     render(
@@ -49,7 +52,6 @@ describe('AppErrorBoundary', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: /reload/i }))
     expect(reload).toHaveBeenCalledTimes(1)
-    vi.unstubAllGlobals()
   })
 
   it('falls back to English when i18n throws', () => {
