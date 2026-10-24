@@ -127,6 +127,10 @@ curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/instal
 For setup details and the native install options, see the
 [installation guide](https://docs.borgui.com/installation).
 
+## ☁️ One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Borg%20UI/)
+
 ## Documentation
 
 - [Full documentation](https://docs.borgui.com)
