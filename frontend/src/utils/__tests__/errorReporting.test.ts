@@ -69,6 +69,13 @@ describe('scrubSecrets', () => {
     }
     expect(out).toContain('use Bearer [redacted]')
   })
+  it('scrubs prefixed key names but keeps paths and hosts', () => {
+    const out = scrubSecrets(
+      'api_key=AAA aws_secret_access_key = BBB x_token=CCC at /mnt/a/b ssh://me@nas.local/./repo'
+    )
+    for (const v of ['AAA', 'BBB', 'CCC']) expect(out).not.toContain(v)
+    expect(out).toContain('/mnt/a/b ssh://me@nas.local/./repo')
+  })
 })
 
 describe('reportError', () => {
@@ -192,9 +199,20 @@ describe('reportError', () => {
 
   it('drops the stack, not the report, when props are too large', () => {
     const sent = spyOnEnqueue()
-    const e = new Error('x')
-    e.stack = 'y'.repeat(20000)
+    const e = new Error('keep me')
+    e.stack = '\n'.repeat(9000)
     reportError(e, { kind: 'uncaught' })
-    expect(JSON.stringify(sent.mock.calls[0][0]).length).toBeLessThanOrEqual(16384)
+    const props = sent.mock.calls[0][0]
+    expect(props.stack).toBeUndefined()
+    expect(props.message).toBe('keep me')
+    expect(JSON.stringify(props).length).toBeLessThanOrEqual(16384)
+  })
+
+  it('caps the type at 100 characters', () => {
+    const sent = spyOnEnqueue()
+    const e = new Error('x')
+    e.name = 'N'.repeat(5000)
+    reportError(e, { kind: 'uncaught' })
+    expect(sent.mock.calls[0][0].type).toHaveLength(100)
   })
 })

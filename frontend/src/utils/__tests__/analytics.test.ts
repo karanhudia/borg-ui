@@ -600,7 +600,7 @@ describe('enqueueErrorReport', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
-  it('sends with the key when known, even if props would be scrubbed or long', async () => {
+  it('sends with the key when known, and leaves paths and user@host in props alone', async () => {
     const a = await load()
     a.enqueueErrorReport({ ...report, message: '/a/b user@host' })
     vi.advanceTimersByTime(5000)

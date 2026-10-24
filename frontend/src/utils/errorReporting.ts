@@ -19,6 +19,7 @@ export interface ErrorContext {
 }
 
 const MESSAGE_MAX = 500
+const TYPE_MAX = 100
 const STACK_MAX = 8192
 const PROPS_MAX = 16384
 const REPEAT_MS = 10 * 60 * 1000
@@ -72,7 +73,10 @@ const SCRUBBERS: [RegExp, string][] = [
   ],
   [/(Authorization\s*:\s*)[^\r\n]+/gi, '$1[redacted]'],
   [/(Bearer\s+)[\w.~+/=-]+/gi, '$1[redacted]'],
-  [new RegExp(`(?<!\\w)((?:${KEYED})\\s*=\\s*)(?:"[^"]*"|'[^']*'|\\S+)`, 'gi'), '$1[redacted]'],
+  [
+    new RegExp(`(?<![A-Za-z0-9])((?:${KEYED})\\s*=\\s*)(?:"[^"]*"|'[^']*'|\\S+)`, 'gi'),
+    '$1[redacted]',
+  ],
 ]
 
 /** Replace secrets with `[redacted]`. Paths, hostnames and repository names stay. */
@@ -133,7 +137,10 @@ export const reportError = (error: unknown, ctx: ErrorContext): void => {
   try {
     const obj =
       typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : null
-    const type = typeof obj?.name === 'string' && obj.name ? obj.name : typeof error
+    const type = (typeof obj?.name === 'string' && obj.name ? obj.name : typeof error).slice(
+      0,
+      TYPE_MAX
+    )
     const message = scrubSecrets(typeof obj?.message === 'string' ? obj.message : stringify(error))
     const rawStack = typeof obj?.stack === 'string' ? obj.stack : ''
     const parts =
