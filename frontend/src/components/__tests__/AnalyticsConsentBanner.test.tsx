@@ -41,9 +41,7 @@ describe('AnalyticsConsentBanner', () => {
 
     it('renders description text', () => {
       render(<AnalyticsConsentBanner onConsentGiven={mockOnConsentGiven} />)
-      expect(
-        screen.getByText(/We collect anonymous usage data to understand how Borg UI is used/)
-      ).toBeInTheDocument()
+      expect(screen.getByText(/We collect usage data and error reports/)).toBeInTheDocument()
     })
 
     it('renders privacy assurance text', () => {
