@@ -64,6 +64,7 @@ from app.services.agent_connection_manager import (
 from app.services.agent_job_dispatcher import (
     agent_job_attempt,
     agent_job_kind as live_agent_job_kind,
+    dispatch_agent_cancel_if_connected,
     dispatch_agent_job_best_effort,
 )
 from app.services.agent_job_notifications import (
@@ -1651,6 +1652,43 @@ async def _dispatch_queued_agent_jobs(
         await dispatch_agent_job_best_effort(db, job, source=source)
 
 
+def _cancel_requested_running_jobs(
+    db: Session, agent_machine_id: int, running_job_ids: Optional[list[int]]
+) -> list[AgentJob]:
+    """The jobs the agent says it runs that someone asked to stop: their
+    cancel is still owed to the agent."""
+    if not running_job_ids:
+        return []
+    return (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.agent_machine_id == agent_machine_id,
+            AgentJob.status == "cancel_requested",
+            AgentJob.id.in_(running_job_ids),
+        )
+        .order_by(AgentJob.id.asc())
+        .all()
+    )
+
+
+async def _dispatch_owed_agent_cancels(
+    db: Session,
+    connection: AgentConnection,
+    running_job_ids: Optional[list[int]],
+) -> None:
+    """Send the session agent the cancel of every job it runs that someone
+    asked to stop. The cancel is sent once when it is asked for, and goes
+    nowhere while the session is down; the REST heartbeat repeats it in
+    `cancel_job_ids`, and this is the session's counterpart. A cancel the
+    agent already has is a no-op there. The list is `connection`'s, so the
+    pass stops once a newer session replaces it."""
+    agent_machine_id = connection.agent_machine_id
+    for job in _cancel_requested_running_jobs(db, agent_machine_id, running_job_ids):
+        if agent_connection_manager.get(agent_machine_id) is not connection:
+            return
+        await dispatch_agent_cancel_if_connected(job)
+
+
 def _load_session_job(
     db: Session, agent_machine_id: int, job_id: Any
 ) -> Optional[AgentJob]:
@@ -1722,6 +1760,7 @@ async def _handle_agent_session_message(
                         AgentJob.status.in_(("claimed", "running", "cancel_requested")),
                     ).update({AgentJob.updated_at: now}, synchronize_session=False)
                 db.commit()
+                await _dispatch_owed_agent_cancels(db, connection, running_job_ids)
         # The agent is idle and listening: a job left queued past the grace
         # has no other sender in this process before the next reconnect.
         await _dispatch_queued_agent_jobs(
@@ -2008,20 +2047,14 @@ async def heartbeat(
     )
     db.commit()
 
-    cancel_job_ids = (
-        db.query(AgentJob.id)
-        .filter(
-            AgentJob.agent_machine_id == current_agent.id,
-            AgentJob.status == "cancel_requested",
-            AgentJob.id.in_(payload.running_job_ids or [0]),
-        )
-        .all()
+    cancel_jobs = _cancel_requested_running_jobs(
+        db, current_agent.id, payload.running_job_ids
     )
 
     return AgentHeartbeatResponse(
         server_time=now,
         poll_interval_seconds=DEFAULT_AGENT_POLL_INTERVAL_SECONDS,
-        cancel_job_ids=[row[0] for row in cancel_job_ids],
+        cancel_job_ids=[job.id for job in cancel_jobs],
     )
 
 
@@ -2103,6 +2136,8 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
                 "server_time": serialize_datetime(_now_utc()),
             }
         )
+        # A job cancelled while the session was down still runs on the agent.
+        await _dispatch_owed_agent_cancels(db, connection, hello.running_job_ids)
         await _dispatch_queued_agent_jobs(db, current_agent.id)
 
         while True:
