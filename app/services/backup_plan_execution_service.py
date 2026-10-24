@@ -1310,9 +1310,10 @@ class BackupPlanExecutionService:
             if context is None:
                 warnings = ["Backup plan no longer exists"]
             else:
-                # A backup the runner resumed is still running, and an agent
-                # backup the restart failed, or an agent's pre-backup hook,
-                # may still run on its agent.
+                # The run's backup operations are over (the startup sweep
+                # cancelled the queued ones, the runner's recovery failed the
+                # running ones), but an agent backup the restart failed, or an
+                # agent's pre-backup hook, may still run on its agent.
                 for operation_id in self._run_backup_operation_ids(run_id):
                     await wait_out_backup_operation(operation_id)
                     await self._wait_for_agent_job_to_end(
