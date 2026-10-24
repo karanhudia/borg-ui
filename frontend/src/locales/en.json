@@ -72,7 +72,7 @@
   },
   "errorBoundary": {
     "title": "Something went wrong",
-    "message": "Borg UI hit an unexpected error. It has been reported. Reloading usually fixes it.",
+    "message": "Borg UI hit an unexpected error. Reloading usually fixes it.",
     "reload": "Reload"
   },
   "login": {

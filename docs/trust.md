@@ -126,13 +126,13 @@ Settings > Preferences. Page views from that first session, before you answer
 the banner, are counted, and so are the answer itself and a later opt-out, each
 as a single event.
 
-Each event carries the page route (the path with ids and any base path you
+Each usage event carries the page route (the path with ids and any base path you
 serve Borg UI under replaced, so `/archives/:id/:id`; never the hostname, full
 URL, or query string), the event name and its details, your app version, your plan name
 (community, pro, or enterprise), and two hashes: a SHA-256 of this install's
 random instance id and a SHA-256 of that id plus your user id. The raw instance
 id and your username are never sent. Names of repositories, schedules, and other
-things you create are hashed before sending, and so is any detail that looks like
+things you create are hashed before sending in usage events, and so is any detail that looks like
 a path, URL, or user@host, such as a repository you filter by. Requests go without cookies or a
 referrer. Your browser still adds an `Origin` header naming the address you
 reach Borg UI at; the service only compares it for website events and does not
@@ -148,15 +148,18 @@ fixed before anyone files an issue. It carries the error message, the stack trac
 or backend traceback, the route or job, your app version and your browser. These
 can contain paths, hostnames and repository names. Passphrases, passwords, tokens
 and private keys are removed before sending. Error reports are part of analytics,
-so turning analytics off stops them too.
+so turning analytics off stops them too. Errors that happen before you sign in,
+such as on the login page, are sent without the install hash, since no answer is
+known yet.
 
 Nothing else phones home. No update beacon.
 
 ### What never leaves
 
 Your backup data. Borg UI runs `borg` against your repositories on your
-infrastructure. Archive contents, file names, and repository paths are never
-transmitted anywhere. There is no cloud component in the backup path.
+infrastructure. Archive contents and passwords are never transmitted anywhere. File names
+and repository paths leave only where an error message or stack trace names
+them (see Usage analytics). There is no cloud component in the backup path.
 
 ## Your Keys Keep Working
 

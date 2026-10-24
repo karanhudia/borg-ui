@@ -129,6 +129,16 @@ describe('reportError', () => {
     )
   })
 
+  it('ignores a frame from a look-alike host', () => {
+    const sent = spyOnEnqueue()
+    const e = new Error('x')
+    e.stack = `Error: x\n    at evil (${window.location.origin}.evil.com/a.js:1:1)`
+    reportError(e, { kind: 'uncaught' })
+    expect(sent.mock.calls[0][0].fingerprint).toBe(
+      fnv1a64(['frontend', 'uncaught', 'Error', '', 'x'].join('|'))
+    )
+  })
+
   it('reads a Firefox style frame', () => {
     const sent = spyOnEnqueue()
     const e = new Error('x')

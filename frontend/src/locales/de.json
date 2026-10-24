@@ -72,7 +72,7 @@
   },
   "errorBoundary": {
     "title": "Etwas ist schiefgelaufen",
-    "message": "Borg UI ist auf einen unerwarteten Fehler gestoßen. Er wurde gemeldet. Ein Neuladen behebt das Problem meist.",
+    "message": "Borg UI ist auf einen unerwarteten Fehler gestoßen. Ein Neuladen behebt das Problem meist.",
     "reload": "Neu laden"
   },
   "login": {

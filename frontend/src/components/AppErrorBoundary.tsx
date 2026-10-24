@@ -52,7 +52,7 @@ export class AppErrorBoundary extends React.Component<
             <Typography color="text.secondary" sx={{ mb: 3 }}>
               {text(
                 'errorBoundary.message',
-                'Borg UI hit an unexpected error. It has been reported. Reloading usually fixes it.'
+                'Borg UI hit an unexpected error. Reloading usually fixes it.'
               )}
             </Typography>
             <Button variant="contained" onClick={() => window.location.reload()}>

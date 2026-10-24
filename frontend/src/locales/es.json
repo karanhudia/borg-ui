@@ -72,7 +72,7 @@
   },
   "errorBoundary": {
     "title": "Algo salió mal",
-    "message": "Borg UI encontró un error inesperado. Se ha notificado. Recargar la página suele solucionarlo.",
+    "message": "Borg UI encontró un error inesperado. Recargar la página suele solucionarlo.",
     "reload": "Recargar"
   },
   "login": {

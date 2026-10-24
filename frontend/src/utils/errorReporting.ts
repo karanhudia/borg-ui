@@ -89,7 +89,7 @@ export const scrubSecrets = (text: string): string =>
 const topFrame = (stack: string): string => {
   for (const line of stack.split('\n')) {
     const url = /(https?:\/\/[^\s()]+?):\d+(?::\d+)?\)?\s*$/.exec(line)?.[1]
-    if (!url || !url.startsWith(window.location.origin)) continue
+    if (!url || !sameOrigin(url)) continue
     const name = /^\s*at\s+(.+?)\s+\(/.exec(line)?.[1] ?? /^([^@\s]*)@/.exec(line)?.[1] ?? ''
     const file = url.split(/[?#]/)[0].split('/').pop() ?? ''
     return `${name}@${file}`

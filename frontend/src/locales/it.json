@@ -72,7 +72,7 @@
   },
   "errorBoundary": {
     "title": "Qualcosa è andato storto",
-    "message": "Borg UI ha riscontrato un errore imprevisto. È stato segnalato. Ricaricare la pagina di solito lo risolve.",
+    "message": "Borg UI ha riscontrato un errore imprevisto. Ricaricare la pagina di solito lo risolve.",
     "reload": "Ricarica"
   },
   "login": {
