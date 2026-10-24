@@ -46,7 +46,7 @@ from app.api import (
 from app.api.v2 import router as v2_router
 from app.routers import config
 from app.config import get_runtime_app_version, settings
-from app.services.error_reporter import report_exception
+from app.services.error_reporter import flush, report_exception
 from app.core.proxy_auth import inspect_proxy_auth_config
 from app.core.security import create_first_user
 from app.services.licensing_service import sync_licensing_state
@@ -327,11 +327,13 @@ async def startup_event():
         ensure_schema()
     except Exception as exc:
         report_exception(exc, kind="migration", component="ensure_schema")
+        flush()  # the process exits next and the sender thread with it
         raise
     try:
         await _startup_after_schema()
     except Exception as exc:
         report_exception(exc, kind="startup", component="startup_event")
+        flush()  # the process exits next and the sender thread with it
         raise
 
 

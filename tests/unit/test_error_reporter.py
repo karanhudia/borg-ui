@@ -276,3 +276,52 @@ def test_unhandled_request_reports_and_returns_500(test_db, sent):
     flush()
     assert sent[0]["props"]["kind"] == "request"
     assert sent[0]["props"]["component"] == "GET /api/__boom"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failing", ["ensure_schema", "after_schema"])
+async def test_startup_failure_is_sent_before_the_process_exits(
+    monkeypatch, sent, failing
+):
+    # no flush() here: startup_event itself has to wait for the send
+    import app.database.db_upgrade as db_upgrade
+    import app.main as main
+
+    async def fine_after_schema():
+        pass
+
+    async def broken_after_schema():
+        raise RuntimeError("startup broke")
+
+    def broken_schema():
+        raise RuntimeError("no such table: users")
+
+    monkeypatch.setattr(
+        db_upgrade,
+        "ensure_schema",
+        broken_schema if failing == "ensure_schema" else lambda: None,
+    )
+    monkeypatch.setattr(
+        main,
+        "_startup_after_schema",
+        broken_after_schema if failing == "after_schema" else fine_after_schema,
+    )
+    with pytest.raises(RuntimeError):
+        await main.startup_event()
+    expected = (
+        ("migration", "ensure_schema")
+        if failing == "ensure_schema"
+        else ("startup", "startup_event")
+    )
+    assert [(e["props"]["kind"], e["props"]["component"]) for e in sent] == [expected]
+
+
+def test_flush_is_bounded_and_never_raises(monkeypatch):
+    monkeypatch.setattr(settings, "error_reporting_enabled", True)
+    monkeypatch.setattr(requests, "post", lambda *a, **k: time.sleep(10))
+    report_failure(kind="startup", type_="x", message="x")
+    start = time.monotonic()
+    flush()
+    assert 2.5 < time.monotonic() - start < 4
+    monkeypatch.setattr(error_reporter, "_queue", None)
+    flush()

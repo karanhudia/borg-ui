@@ -232,13 +232,16 @@ def _enqueue(event: dict) -> None:
 
 def flush(timeout: float = 3.0) -> None:
     """Wait until queued reports are sent, or `timeout` seconds pass."""
-    deadline = time.monotonic() + timeout
-    with _queue.all_tasks_done:
-        while _queue.unfinished_tasks:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return
-            _queue.all_tasks_done.wait(remaining)
+    try:
+        deadline = time.monotonic() + timeout
+        with _queue.all_tasks_done:
+            while _queue.unfinished_tasks:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return
+                _queue.all_tasks_done.wait(remaining)
+    except Exception:
+        pass
 
 
 # -- reports -------------------------------------------------------------------
