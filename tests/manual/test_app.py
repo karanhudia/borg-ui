@@ -79,7 +79,6 @@ class BorgWebUITester:
             "/settings",
             "/repositories",
             "/ssh-keys",
-            "/health",
         ]
 
         all_passed = True
@@ -111,6 +110,7 @@ class BorgWebUITester:
     def test_api_routes_exist(self) -> bool:
         """Test that API routes exist and return proper responses"""
         api_routes = [
+            ("/health", "GET", {200}),
             ("/api", "GET", {200}),
             ("/api/docs", "GET", {200}),
             ("/api/system/info", "GET", {200}),
