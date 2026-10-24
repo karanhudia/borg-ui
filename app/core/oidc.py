@@ -320,7 +320,9 @@ async def exchange_code_for_tokens(
 
 async def fetch_jwks(provider: OidcProviderConfiguration) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.get(provider.jwks_uri)
+        # urllib followed redirects, httpx does not by default: a jwks_uri
+        # that redirects has to keep working.
+        response = await client.get(provider.jwks_uri, follow_redirects=True)
         response.raise_for_status()
         return response.json()
 
@@ -341,11 +343,7 @@ def select_signing_key(jwks: dict[str, Any], id_token: str) -> Any:
 
     kid = header.get("kid")
     if kid is None:
-        if len(signing_keys) == 1:
-            return signing_keys[0]
-        raise PyJWKClientError(
-            "The ID token has no 'kid' header and the JWKS has several signing keys"
-        )
+        raise PyJWKClientError("The ID token has no 'kid' header")
 
     for key in signing_keys:
         if key.key_id == kid:

@@ -1714,8 +1714,9 @@ class TestOidcAuthentication:
             async def __aexit__(self, exc_type, exc, tb):
                 return None
 
-            async def get(self, url):
+            async def get(self, url, **kwargs):
                 captured["url"] = url
+                captured["kwargs"] = kwargs
                 return FakeResponse()
 
         monkeypatch.setattr("app.core.oidc.httpx.AsyncClient", FakeAsyncClient)
@@ -1739,6 +1740,8 @@ class TestOidcAuthentication:
 
         assert claims["sub"] == "subject-123"
         assert captured["url"] == provider.jwks_uri
+        # urllib followed redirects, httpx does not by default
+        assert captured["kwargs"]["follow_redirects"] is True
 
     @pytest.mark.asyncio
     async def test_oidc_token_exchange_uses_client_secret_basic(self, monkeypatch):
@@ -1873,7 +1876,7 @@ class TestOidcAuthentication:
         async def fake_exchange(*args, **kwargs):
             return {"id_token": "id-token-value", "access_token": "access-token"}
 
-        def fake_verify(*args, **kwargs):
+        async def fake_verify(*args, **kwargs):
             return {
                 "sub": "linked-subject",
                 "preferred_username": admin_user.username,
