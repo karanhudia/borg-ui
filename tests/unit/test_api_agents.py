@@ -569,6 +569,37 @@ class TestAgentJobTransport:
                 assert job.status == "running"
                 assert job.started_at is not None
 
+    def test_websocket_hello_sends_the_cancel_of_a_listed_job_again(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        # The job was cancelled while the session was down, so its cancel
+        # command went nowhere. The agent's new session lists the job: the
+        # cancel goes out right after the ack.
+        registered, agent, job = self._agent_with_a_young_running_job(
+            test_client, test_db, admin_headers
+        )
+        job.status = "cancel_requested"
+        test_db.commit()
+        # Its command follows the cancel, and ends the receive below should
+        # the cancel not come.
+        queued = _create_agent_job(test_db, agent, status="queued")
+
+        with test_client.websocket_connect(
+            "/api/agents/session",
+            headers=_agent_headers(registered["agent_token"]),
+        ) as websocket:
+            websocket.send_json(self._hello(registered, running_job_ids=[job.id]))
+            assert websocket.receive_json()["type"] == "hello_ack"
+
+            command = websocket.receive_json()
+            assert command["type"] == "command"
+            assert command["command"] == "cancel"
+            assert command["job_id"] == job.id
+            assert command["payload"] == {"job_id": job.id}
+            assert websocket.receive_json()["job_id"] == queued.id
+            test_db.refresh(job)
+            assert job.status == "cancel_requested"
+
     def test_websocket_session_dispatches_durable_job_without_polling(
         self, test_client: TestClient, test_db, admin_headers
     ):
