@@ -93,6 +93,8 @@ from app.services.repository_wipe_service import (
     repository_wipe_service,
 )
 from app.services.repository_executor import (
+    AGENT_KEY_EXPORT_JOB_KIND,
+    agent_supports_job,
     agent_timezone_for_repository,
     is_agent_executor,
     legacy_execution_target,
@@ -3609,7 +3611,7 @@ def get_repositories(
                 "schedule_name": schedule_summary["schedule_name"],
                 "schedule_timezone": schedule_summary["schedule_timezone"],
                 "next_run": schedule_summary["next_run"],
-                "has_keyfile": repo.has_keyfile or False,
+                "has_keyfile": _offers_keyfile_download(db, repo, agents=page.agents),
                 "source_ssh_connection_id": repo.source_ssh_connection_id,
                 "borg_version": borg_major(repo),
             }
@@ -4602,6 +4604,38 @@ async def upload_keyfile(
         )
 
 
+def _has_exportable_keyfile(repository: Repository) -> bool:
+    """Whether the repository's key is a keyfile that can be exported.
+
+    `has_keyfile` marks a keyfile the server keeps: it is set when the server
+    creates or imports a keyfile repository, or a key is uploaded. An agent
+    repository's keyfile lives on its agent's machine, so its encryption
+    mode says it; the agent exports the key there."""
+    if repository.has_keyfile:
+        return True
+    return is_agent_executor(repository) and (repository.encryption or "").startswith(
+        "keyfile"
+    )
+
+
+def _offers_keyfile_download(
+    db: Session,
+    repository: Repository,
+    *,
+    agents: Optional[Dict[int, AgentMachine]] = None,
+) -> bool:
+    """`has_keyfile` as the repository payload reports it: whether the key
+    can be downloaded (the info dialog shows its button by it). An agent
+    repository's key is exported by its agent, so an agent from before
+    `repository.key_export` offers none; the download route refuses it.
+    `agents` as in `_agent_machine_summary`."""
+    if not _has_exportable_keyfile(repository):
+        return False
+    if not is_agent_executor(repository):
+        return True
+    return agent_supports_job(db, repository, AGENT_KEY_EXPORT_JOB_KIND, agents=agents)
+
+
 @router.get("/{repo_id}/keyfile")
 async def download_keyfile(repo_id: int, db: Session = Depends(get_db)):
     """Export and download the keyfile for a repository that uses keyfile encryption.
@@ -4615,16 +4649,30 @@ async def download_keyfile(repo_id: int, db: Session = Depends(get_db)):
             status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"}
         )
 
-    if not repository.has_keyfile:
+    if not _has_exportable_keyfile(repository):
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.repo.repoHasNoKeyfile"}
         )
     if is_agent_executor(repository):
-        # `borg key export` would run on the server, and the agent has no
-        # key export. The upload above stays: it keeps a copy of the key.
-        raise HTTPException(
-            status_code=400,
-            detail={"key": "backend.errors.repo.agentKeyfileExportUnsupported"},
+        # `borg key export` runs on the agent, never on the server; an agent
+        # from before the job is refused. The upload above stays either way:
+        # it keeps a copy of the key.
+        if not agent_supports_job(db, repository, AGENT_KEY_EXPORT_JOB_KIND):
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.agentKeyfileExportUnsupported"},
+            )
+        from app.services.agent_key_export import export_agent_repository_key
+
+        content = await export_agent_repository_key(db, repository)
+        return Response(
+            content=content,
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="{_borg_keyfile_name(repository.path)}"'
+                )
+            },
         )
 
     try:
@@ -4746,7 +4794,7 @@ async def get_repository(
             "archive_count": repository.archive_count,
             "created_at": format_datetime(repository.created_at),
             "updated_at": format_datetime(repository.updated_at),
-            "has_keyfile": repository.has_keyfile or False,
+            "has_keyfile": _offers_keyfile_download(db, repository),
             "source_ssh_connection_id": repository.source_ssh_connection_id,
             "source_directories": _decode_json_list_field(
                 repository.source_directories

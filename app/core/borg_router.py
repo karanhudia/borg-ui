@@ -518,7 +518,7 @@ class BorgRouter:
         """Run the version-aware repository contents wipe delete command.
 
         Server-side only: an agent repository's wipe deletes its archives
-        one by one on the agent (`repository_wipe_service`)."""
+        on the agent (`repository_wipe_service`)."""
         self._refuse_agent_repository("run_wipe_delete")
         cmd = self.build_wipe_delete_command(dry_run=dry_run)
         if self.is_v2:
@@ -548,8 +548,8 @@ class BorgRouter:
     async def preview_restore(
         self, archive: str, paths: List[str], destination: str, env: dict = None
     ) -> dict:
-        """Server-side only: the agent's restore has no dry run yet, and the
-        preview route refuses an agent repository."""
+        """Server-side only: the preview route runs an agent repository's
+        dry run on its agent (`repository.restore_dry_run`)."""
         self._refuse_agent_repository("preview_restore")
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
@@ -1403,8 +1403,8 @@ class BorgRouter:
     async def export_keyfile(self, output_path: str) -> dict:
         """Export the repository keyfile through the version-aware service layer.
 
-        Server-side only: the agent has no key export, and the keyfile route
-        refuses an agent repository."""
+        Server-side only: the keyfile route exports an agent repository's
+        key on its agent (`repository.key_export`)."""
         self._refuse_agent_repository("export_keyfile")
         if self.is_v2:
             from app.services.v2.repository_service import repository_v2_service

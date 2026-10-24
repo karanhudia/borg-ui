@@ -25,7 +25,18 @@ from app.services.operations.restore_facade import (
     resolve_restore_job,
 )
 from app.services.operations.runner import operation_runner
-from app.services.repository_executor import is_agent_executor
+from app.services.agent_job_dispatcher import (
+    dispatch_agent_cancel_if_connected,
+    dispatch_agent_job_best_effort,
+)
+from app.services.repository_executor import (
+    AGENT_RESTORE_DRY_RUN_JOB_KIND,
+    abandon_agent_repository_operation_job,
+    agent_supports_job,
+    is_agent_executor,
+    queue_agent_repository_operation_job,
+    wait_for_agent_repository_operation_job,
+)
 from app.services.restore_service import restore_service
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.local_paths import is_restore_destination_allowed
@@ -139,6 +150,51 @@ def _restore_path_metadata_to_dict(item: RestorePathMetadata) -> dict:
     return item.dict()
 
 
+async def _agent_restore_preview(
+    db: Session, repo: Repository, restore_request: RestoreRequest
+) -> dict:
+    """An agent repository's restore preview: the extract dry run, on its
+    agent (`repository.restore_dry_run`). The answer is the last lines Borg
+    printed, as the server's own preview answers with Borg's output. An
+    agent from before the job is refused, as before it existed.
+
+    A wait that ends without the job's verdict (the timeout, a client that
+    left) takes the job back: the dry run reads every chunk of the selected
+    paths and must not go on for nobody."""
+    if not agent_supports_job(db, repo, AGENT_RESTORE_DRY_RUN_JOB_KIND):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.restore.agentPreviewUnsupported"},
+        )
+    from app.api.archives import _archive_extract_selector
+    from app.api.repositories import get_operation_timeouts
+
+    agent_job = queue_agent_repository_operation_job(
+        db,
+        repo,
+        job_kind=AGENT_RESTORE_DRY_RUN_JOB_KIND,
+        operation={
+            # a Borg 2 archive id names one archive only as `aid:`
+            "archive": _archive_extract_selector(restore_request.archive, repo),
+            "paths": list(restore_request.paths),
+        },
+    )
+    try:
+        await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo.id)
+        result = await wait_for_agent_repository_operation_job(
+            db,
+            agent_job.id,
+            timeout_seconds=get_operation_timeouts(db)["backup_timeout"],
+        )
+    except BaseException:
+        # a job that is over is left as it is
+        abandoned = abandon_agent_repository_operation_job(db, agent_job.id)
+        if abandoned is not None and abandoned.status == "cancel_requested":
+            await dispatch_agent_cancel_if_connected(abandoned)
+        raise
+    return {"preview": result.get("output") or ""}
+
+
 @router.post("/preview")
 async def preview_restore(
     restore_request: RestoreRequest,
@@ -155,12 +211,9 @@ async def preview_restore(
             RESTORE_ROLE,
         )
         if is_agent_executor(repo):
-            # The preview is Borg's extract dry run, and the agent's restore
-            # has none yet: refused rather than run on the server.
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"key": "backend.errors.restore.agentPreviewUnsupported"},
-            )
+            # The preview is Borg's extract dry run: on the agent, never on
+            # the server.
+            return await _agent_restore_preview(db, repo, restore_request)
 
         if (
             repo.repository_type == "ssh"

@@ -212,10 +212,13 @@ class AgentClient:
         return_code: Optional[int] = None,
         stderr_tail: Optional[str] = None,
         failure_kind: Optional[str] = None,
+        deleted_archives: Optional[int] = None,
     ) -> dict[str, Any]:
         """`stderr_tail` and `failure_kind` (see `failure_report`) ride with
         the report: the log lines that carry Borg's reason can land after
-        it, and a server before them ignores the two fields."""
+        it, and a server before them ignores the two fields.
+        `deleted_archives`: how many archives a `repository.delete_archives`
+        job deleted before it failed."""
         body: dict[str, Any] = {
             "error_message": error_message,
             "return_code": return_code,
@@ -224,6 +227,8 @@ class AgentClient:
             body["stderr_tail"] = stderr_tail
         if failure_kind is not None:
             body["failure_kind"] = failure_kind
+        if deleted_archives is not None:
+            body["deleted_archives"] = deleted_archives
         return self._request("POST", f"/api/agents/jobs/{job_id}/fail", json=body)
 
     def cancel_job(self, job_id: int) -> dict[str, Any]:

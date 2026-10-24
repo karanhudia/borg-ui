@@ -52,11 +52,14 @@ REPOSITORY_JOB_KINDS = {
     "repository.archive_info",
     "repository.list_archives",
     "repository.delete_archive",
+    "repository.delete_archives",
     "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
     "repository.export_archive_tar",
     "repository.restore",
+    "repository.restore_dry_run",
+    "repository.key_export",
     "repository.check",
     "repository.prune",
     "repository.compact",
@@ -145,6 +148,14 @@ STREAM_KEEPALIVE_SECONDS = 60
 # consumer of this stream must keep doing so. Never for an extract: its
 # bytes are the file.
 STREAM_DIFF_PAD_IDLE_SECONDS = 30
+
+# One archive's delete in a `repository.delete_archives` job gets what a
+# `repository.delete_archive` job gets (`_execute_short_repository_operation`).
+DELETE_ARCHIVE_TIMEOUT_SECONDS = 300
+
+# The share of a warning's stderr a `repository.delete_archives` completion
+# carries per archive; the full text is in the job log.
+DELETE_WARNING_STDERR_MAX_CHARS = 2048
 
 
 @dataclass(frozen=True)
@@ -296,17 +307,31 @@ class RepositoryOperationPayload:
             ]
 
         if self.job_kind == "repository.delete_archive":
-            # The server passes the exact selector (an `aid:<hex>` for a Borg 2
-            # series, a unique name for Borg 1), so a series delete removes only
-            # the intended archive. No extra flags: mirrors borg.delete_archive /
-            # borg2.delete_archive. Space is reclaimed by a later compact.
-            archive = _operation_archive(self.operation, self.job_kind)
+            return self.delete_archive_command(
+                _operation_archive(self.operation, self.job_kind)
+            )
+
+        if self.job_kind == "repository.delete_archives":
+            # One command per archive (`delete_archives_commands`); this is
+            # the first, for the job's start line.
+            return self.delete_archives_commands()[0][1]
+
+        if self.job_kind == "repository.key_export":
+            # Without a path both majors write the key to stdout, which the
+            # job streams to the server's waiting download and nowhere else.
             if self.borg_version == 2:
-                return [*self._base_borg2("delete"), archive]
-            return [
-                *self._base_borg1("delete"),
-                f"{self.repository_path}::{archive}",
+                return [*self._base_borg2("key"), "export"]
+            # The options after the full subcommand (`key export`), where
+            # Borg 1 documents them, not between `key` and `export`.
+            cmd = [
+                self.borg_cmd,
+                "key",
+                "export",
+                *borg1_lock_wait_args(self.environment),
             ]
+            if self.remote_path:
+                cmd.extend(["--remote-path", self.remote_path])
+            return [*cmd, self.repository_path]
 
         if self.job_kind == "repository.break_lock":
             # Break a stale lock on the node (mirrors borg.break_lock /
@@ -425,6 +450,31 @@ class RepositoryOperationPayload:
                 "-",
                 "--",
                 directory_path,
+            ]
+
+        if self.job_kind == "repository.restore_dry_run":
+            # The restore preview: the extract as the server's own preview
+            # runs it (`--dry-run`, nothing written), so where the restore
+            # would go does not matter. Borg still reads every chunk of the
+            # selected paths, which is what the preview checks. `--` closes
+            # the options before the archive: the archive and the paths
+            # come from the request, and are data whatever they begin with.
+            archive = _operation_archive(self.operation, self.job_kind)
+            paths = _restore_paths(self.operation)
+            if self.borg_version == 2:
+                return [
+                    *self._base_borg2("extract"),
+                    "--dry-run",
+                    "--",
+                    archive,
+                    *paths,
+                ]
+            return [
+                *self._base_borg1("extract"),
+                "--dry-run",
+                "--",
+                f"{self.repository_path}::{archive}",
+                *paths,
             ]
 
         if self.job_kind == "repository.restore":
@@ -564,6 +614,28 @@ class RepositoryOperationPayload:
 
         raise ValueError(f"unsupported repository job kind: {self.job_kind}")
 
+    def delete_archive_command(self, archive: str) -> list[str]:
+        """Delete one archive. The server passes the exact selector (an
+        `aid:<hex>` for a Borg 2 series, a unique name for Borg 1), so a
+        series delete removes only the intended archive. No extra flags:
+        mirrors borg.delete_archive / borg2.delete_archive. Space is
+        reclaimed by a later compact."""
+        if self.borg_version == 2:
+            return [*self._base_borg2("delete"), archive]
+        return [
+            *self._base_borg1("delete"),
+            f"{self.repository_path}::{archive}",
+        ]
+
+    def delete_archives_commands(self) -> list[tuple[str, list[str]]]:
+        """`repository.delete_archives`: each archive with its own delete,
+        in the order the server named them. Borg 2's delete takes one
+        archive, so both majors run one per archive."""
+        return [
+            (archive, self.delete_archive_command(archive))
+            for archive in _operation_archives(self.operation, self.job_kind)
+        ]
+
 
 def _split_flags(value: Any) -> list[str]:
     if value is None:
@@ -618,6 +690,23 @@ def _operation_archive(operation: dict[str, Any] | None, job_kind: str) -> str:
     if not isinstance(archive, str) or not archive.strip():
         raise ValueError(f"{job_kind} requires operation.archive")
     return archive.strip()
+
+
+def _operation_archives(operation: dict[str, Any] | None, job_kind: str) -> list[str]:
+    """The archives a `repository.delete_archives` job names: a non-empty
+    list of selectors, each named once. Anything else is a payload error,
+    never an empty run reported as done."""
+    archives = operation.get("archives") if isinstance(operation, dict) else None
+    if not isinstance(archives, list) or not archives:
+        raise ValueError(f"{job_kind} requires a non-empty operation.archives list")
+    selectors: list[str] = []
+    for archive in archives:
+        if not isinstance(archive, str) or not archive.strip():
+            raise ValueError(f"{job_kind} requires every archive to be a name")
+        selectors.append(archive.strip())
+    if len(set(selectors)) != len(selectors):
+        raise ValueError(f"{job_kind} names an archive twice")
+    return selectors
 
 
 def _operation_predecessor(operation: dict[str, Any] | None) -> Optional[str]:
@@ -729,6 +818,7 @@ def execute_repository_operation_job(
 ) -> RepositoryOperationResult:
     job_id = int(job["id"])
     rclone_config_path: Optional[str] = None
+    delete_commands: list[tuple[str, list[str]]] = []
     try:
         payload = RepositoryOperationPayload.from_job_payload(job.get("payload") or {})
         with_stats = _reports_compact_stats(payload)
@@ -736,6 +826,9 @@ def execute_repository_operation_job(
             if payload.job_kind == "repository.rclone_sync":
                 rclone_config_path = _write_temp_rclone_config(payload)
                 cmd = payload.build_command(rclone_config_path=rclone_config_path)
+            elif payload.job_kind == "repository.delete_archives":
+                delete_commands = payload.delete_archives_commands()
+                cmd = delete_commands[0][1]
             else:
                 cmd = payload.build_command()
         except Exception:
@@ -768,12 +861,13 @@ def execute_repository_operation_job(
         # misreports that as "repository already exists".
         env["BORG_STORE_CACHE"] = ""
     sequence = 0
-    client.send_log(
-        job_id,
-        sequence=sequence,
-        stream="stdout",
-        message=f"Starting {payload.job_kind}: {shlex.join(cmd)}",
-    )
+    start_line = f"Starting {payload.job_kind}: {shlex.join(cmd)}"
+    if delete_commands:
+        start_line = (
+            f"Starting {payload.job_kind}: {len(delete_commands)} archives, "
+            f"one delete each, the first: {shlex.join(cmd)}"
+        )
+    client.send_log(job_id, sequence=sequence, stream="stdout", message=start_line)
     sequence += 1
 
     if payload.job_kind in SELF_CANCELLING_JOB_KINDS and cancel_requested(
@@ -795,6 +889,38 @@ def execute_repository_operation_job(
         try:
             return _execute_short_repository_operation(
                 job_id, payload, client, cmd, env, should_cancel=should_cancel
+            )
+        finally:
+            _remove_temp_file(rclone_config_path)
+
+    if payload.job_kind == "repository.delete_archives":
+        try:
+            return _execute_delete_archives(
+                job_id,
+                payload,
+                client,
+                delete_commands,
+                env,
+                initial_sequence=sequence,
+                should_cancel=should_cancel,
+            )
+        finally:
+            _remove_temp_file(rclone_config_path)
+
+    if payload.job_kind == "repository.key_export":
+        # The key reaches the server only as the artifact upload, which the
+        # keyfile download relays from memory: never as a log line or in the
+        # completion report, both of which the server stores.
+        try:
+            return _execute_streaming_artifact_operation(
+                job_id,
+                payload,
+                client,
+                cmd,
+                env,
+                should_cancel=should_cancel,
+                idle_timeout_seconds=STREAM_EXTRACT_IDLE_SECONDS,
+                keepalive_seconds=STREAM_KEEPALIVE_SECONDS,
             )
         finally:
             _remove_temp_file(rclone_config_path)
@@ -885,6 +1011,7 @@ def execute_repository_operation_job(
             initial_sequence=sequence,
             should_cancel=should_cancel,
             compact_stats=with_stats,
+            report_output=payload.job_kind == "repository.restore_dry_run",
         )
     finally:
         _remove_temp_file(rclone_config_path)
@@ -1650,12 +1777,15 @@ def _execute_streaming_repository_operation(
     initial_sequence: int,
     should_cancel: Optional[Callable[[], bool]],
     compact_stats: bool = False,
+    report_output: bool = False,
 ) -> RepositoryOperationResult:
     """Run a Borg (or rclone) command to completion, streaming its output
     as log lines. `compact_stats`: the command is a Borg 2 `compact
     --stats`, whose statistics are parsed from the tail of the output into
     the completion report, and whose Borg warning exit code completes the
-    job with warnings (`_warning_exit`)."""
+    job with warnings (`_warning_exit`). `report_output`: the completion
+    report carries the last lines of the output as `output` (the restore
+    preview's answer)."""
     try:
         popen_kwargs: dict[str, Any] = {
             "stdout": subprocess.PIPE,
@@ -1691,7 +1821,7 @@ def _execute_streaming_repository_operation(
         if process.stdout is not None:
             for line in process.stdout:
                 message = line.rstrip("\n")
-                if compact_stats:
+                if compact_stats or report_output:
                     tail.append(message)
                 failure_tail.append(message)
                 progress = parse_borg_progress(message)
@@ -1740,6 +1870,8 @@ def _execute_streaming_repository_operation(
             stats = parse_compact_stats(tail)
             if stats is not None:
                 result["stats"] = stats
+        if report_output:
+            result["output"] = "\n".join(tail)
         client.complete_job(job_id, result=result)
         return RepositoryOperationResult(
             job_id=job_id,
@@ -1777,10 +1909,133 @@ def _warning_exit(payload: RepositoryOperationPayload, return_code: int) -> bool
     `check` exits 1 for consistency errors found, which must not count as
     a repository checked; `prune` is left as it was until its warning
     semantics are settled with the server's; rclone has no warning range
-    at all."""
-    if payload.job_kind != "repository.compact":
+    at all. A restore preview that warned (a path that matched nothing)
+    ran through as well: the warning is its answer, which the server's own
+    preview returns too."""
+    if payload.job_kind not in {"repository.compact", "repository.restore_dry_run"}:
         return False
     return is_warning_return_code(return_code)
+
+
+def _execute_delete_archives(
+    job_id: int,
+    payload: RepositoryOperationPayload,
+    client: AgentClient,
+    commands: list[tuple[str, list[str]]],
+    env: dict[str, str],
+    *,
+    initial_sequence: int,
+    should_cancel: Optional[Callable[[], bool]],
+) -> RepositoryOperationResult:
+    """Delete the named archives one after the other, each as a
+    `repository.delete_archive` job would, in one job.
+
+    A Borg warning is noted and the next archive follows. The first failure
+    ends the job, and its report says how many archives were deleted before
+    it (`deleted_archives`): the server tells a partial wipe from one that
+    deleted nothing by it. A cancel ends the archive at hand and starts no
+    other. Each archive's log line is the job's sign of life on the server.
+    """
+    count = len(commands)
+    sequence = initial_sequence
+    warnings: list[dict[str, Any]] = []
+    first_warning_code = 0
+
+    def canceled(deleted: int, return_code: Optional[int] = None):
+        client.cancel_job(job_id)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="canceled",
+            return_code=return_code,
+            message=f"{payload.job_kind} canceled after {deleted} of {count} archives",
+        )
+
+    for deleted, (archive, cmd) in enumerate(commands):
+        if cancel_requested(should_cancel):
+            return canceled(deleted)
+        return_code: Optional[int] = None
+        stdout = stderr = ""
+        reason: Optional[str] = None
+        try:
+            process, was_cancelled = _run_cancellable(
+                cmd,
+                env,
+                should_cancel or (lambda: False),
+                timeout=DELETE_ARCHIVE_TIMEOUT_SECONDS,
+            )
+        except OSError as exc:
+            reason = f"could not start: {exc}"
+        except subprocess.TimeoutExpired:
+            reason = f"timed out after {DELETE_ARCHIVE_TIMEOUT_SECONDS}s"
+        else:
+            if was_cancelled:
+                return canceled(deleted, process.returncode)
+            return_code = process.returncode
+            stdout, stderr = process.stdout or "", process.stderr or ""
+            for stream, text in (("stdout", stdout), ("stderr", stderr)):
+                if text.strip():
+                    client.send_log(
+                        job_id, sequence=sequence, stream=stream, message=text.rstrip()
+                    )
+                    sequence += 1
+            if return_code == 0 or is_warning_return_code(return_code):
+                if return_code != 0:
+                    first_warning_code = first_warning_code or return_code
+                    warnings.append(
+                        {
+                            "archive": archive,
+                            "return_code": return_code,
+                            "stderr": stderr.strip()[-DELETE_WARNING_STDERR_MAX_CHARS:],
+                        }
+                    )
+                client.send_log(
+                    job_id,
+                    sequence=sequence,
+                    stream="stdout",
+                    message=f"Deleted archive {archive} ({deleted + 1}/{count})",
+                )
+                sequence += 1
+                continue
+            reason = f"exited with code {return_code}"
+
+        error_message = (
+            f"{payload.job_kind}: deleting archive {archive} {reason}; "
+            f"{deleted} of {count} archives were deleted"
+        )
+        client.send_log(
+            job_id, sequence=sequence, stream="stderr", message=error_message
+        )
+        client.fail_job(
+            job_id,
+            error_message=error_message,
+            return_code=return_code,
+            deleted_archives=deleted,
+            # borg prints an argument error on stdout
+            **failure_report(return_code, stderr or stdout or reason or ""),
+        )
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="failed",
+            return_code=return_code,
+            message=error_message,
+        )
+
+    client.complete_job(
+        job_id,
+        result={
+            # The first warning's code: the server records the job
+            # completed_with_warnings from it, as for one archive's delete.
+            "return_code": first_warning_code,
+            "deleted_archives": count,
+            "warnings": warnings,
+        },
+    )
+    return RepositoryOperationResult(
+        job_id=job_id,
+        status="completed_with_warnings" if warnings else "completed",
+        return_code=first_warning_code,
+        message=f"{payload.job_kind} deleted {count} archives",
+    )
 
 
 def _restores_into_existing_files(operation: dict[str, Any]) -> bool:

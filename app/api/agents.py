@@ -337,6 +337,8 @@ class AgentJobFailRequest(BaseModel):
     # (`lock_contention` or `other`); see `agent_failure_result`.
     stderr_tail: Optional[str] = None
     failure_kind: Optional[str] = None
+    # `repository.delete_archives`: the archives deleted before it failed.
+    deleted_archives: Optional[StrictInt] = None
 
 
 class AgentJobCanceledRequest(BaseModel):
@@ -436,6 +438,15 @@ REQUEST_SCOPED_REPOSITORY_JOB_KINDS = frozenset(
         # channel; once it stopped waiting, a rerun streams a whole diff
         # into the drain for nobody and holds the repository meanwhile.
         "repository.diff",
+        # The restore preview's dry run and the keyfile download answer
+        # the request that queued them, as the reads above.
+        "repository.restore_dry_run",
+        "repository.key_export",
+        # A wipe's deletes: a rerun would start over at archives the first
+        # run deleted, fail on the first of them and report none deleted.
+        # Failed instead, the wipe that waits reads an unknown count as a
+        # partial wipe.
+        "repository.delete_archives",
     }
 )
 
@@ -1478,6 +1489,7 @@ def _fail_agent_job(
     completed_at: Optional[datetime] = None,
     stderr_tail: Optional[str] = None,
     failure_kind: Optional[str] = None,
+    deleted_archives: Optional[int] = None,
 ) -> bool:
     """Returns True when this report moved the job into a terminal state."""
     from app.services.repository_executor import (
@@ -1490,7 +1502,10 @@ def _fail_agent_job(
         return False
     completed = _normalize_agent_timestamp(completed_at)
     result = agent_failure_result(
-        return_code, stderr_tail=stderr_tail, failure_kind=failure_kind
+        return_code,
+        stderr_tail=stderr_tail,
+        failure_kind=failure_kind,
+        deleted_archives=deleted_archives,
     )
     # Decided once, here, and kept in the result: the row's deferral count
     # moves on with the runner, so a later reader (a late log line) must
@@ -1845,6 +1860,7 @@ async def _handle_agent_session_message(
         if job:
             stderr_tail = error_payload.get("stderr_tail")
             failure_kind = error_payload.get("failure_kind")
+            deleted_archives = error_payload.get("deleted_archives")
             transitioned = _fail_agent_job(
                 job,
                 db,
@@ -1853,6 +1869,11 @@ async def _handle_agent_session_message(
                 completed_at=_parse_optional_datetime(message.get("completed_at")),
                 stderr_tail=stderr_tail if isinstance(stderr_tail, str) else None,
                 failure_kind=failure_kind if isinstance(failure_kind, str) else None,
+                deleted_archives=(
+                    deleted_archives
+                    if type(deleted_archives) is int  # not a bool
+                    else None
+                ),
             )
             db.commit()
             if transitioned:
@@ -2454,6 +2475,7 @@ def _record_job_failure(
             completed_at=payload.completed_at,
             stderr_tail=payload.stderr_tail,
             failure_kind=payload.failure_kind,
+            deleted_archives=payload.deleted_archives,
         )
         db.commit()
         return transitioned, job.status
