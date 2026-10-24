@@ -110,7 +110,7 @@ async def _agent_archive_contents_result(
     *,
     archive: str,
     path: str,
-    max_lines: int,
+    max_lines: int | None,
     timeout_seconds: int,
 ) -> dict:
     """Run `repository.list_archive_contents` on the managed agent.
@@ -118,12 +118,16 @@ async def _agent_archive_contents_result(
     The agent executes `borg2 list <archive> --json-lines [path]` on the node,
     so passing the `aid:<hex>` selector disambiguates a Borg 2 archive series
     and the returned ``stdout`` is parsed exactly like the server-side result.
+    Without `max_lines` the agent applies its own default cap.
     """
+    operation = {"archive": archive, "path": path}
+    if max_lines is not None:
+        operation["max_lines"] = max_lines
     agent_job = queue_agent_repository_operation_job(
         db,
         repo,
         job_kind="repository.list_archive_contents",
-        operation={"archive": archive, "path": path, "max_lines": max_lines},
+        operation=operation,
     )
     await dispatch_agent_job_best_effort(
         db, agent_job, repository_id=repo.id, archive_name=archive
@@ -381,14 +385,28 @@ async def get_archive_info(
 
         if include_files:
             if is_agent_executor(repo):
-                list_result = await _agent_archive_contents_result(
-                    db,
-                    repo,
-                    archive=archive_selector,
-                    path="",
-                    max_lines=file_limit,
-                    timeout_seconds=_get_list_timeout(db),
-                )
+                try:
+                    list_result = await _agent_archive_contents_result(
+                        db,
+                        repo,
+                        archive=archive_selector,
+                        path="",
+                        # No line cap: the agent ends a listing at its cap
+                        # with a failure. `file_limit` cuts it below, as on
+                        # the server.
+                        max_lines=None,
+                        timeout_seconds=_get_list_timeout(db),
+                    )
+                except HTTPException as exc:
+                    # the files are best effort, as on the server: the
+                    # archive info stands without them
+                    logger.warning(
+                        "Agent file listing for archive info failed",
+                        repository_id=repo.id,
+                        archive=archive_selector,
+                        status_code=exc.status_code,
+                    )
+                    list_result = {"success": False}
             elif _repo_needs_custom_env(repo):
                 with repository_borg_env(repo, db) as env:
                     list_result = await borg2.list_archive_contents(
