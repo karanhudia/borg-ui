@@ -16,7 +16,9 @@ WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN npm run build
+# Source maps ship as a release asset, never in the image (deleted here so no
+# layer of the final image ever holds them).
+RUN npm run build && find build -name '*.map' -delete
 
 # --- managed agent wheelhouse: built in-image, served to enrolling nodes ---
 # A node installs the agent belonging to the server it enrols against instead of

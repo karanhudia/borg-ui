@@ -40,6 +40,9 @@ DOCKERFILE = REPO_ROOT / "Dockerfile.runtime-base"
 
 VERSION_URL = "https://downloads.rclone.org/version.txt"
 SHA256SUMS_URL = "https://downloads.rclone.org/v{version}/SHA256SUMS"
+# downloads.rclone.org answers urllib's default User-Agent (Python-urllib/3.x)
+# with 403 Forbidden, so the requests name themselves.
+USER_AGENT = "borg-ui-rclone-binary-update (+https://github.com/karanhudia/borg-ui)"
 
 # rclone zip suffix (linux-<goarch>) -> the Dockerfile ARG that pins its checksum.
 # Only the architectures the runtime base builds for are tracked; a release
@@ -51,7 +54,9 @@ ARCHES = {
 
 
 def _get_text(url: str) -> str:
-    request = urllib.request.Request(url, headers={"Accept": "text/plain"})
+    request = urllib.request.Request(
+        url, headers={"Accept": "text/plain", "User-Agent": USER_AGENT}
+    )
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read().decode("utf-8")
 
