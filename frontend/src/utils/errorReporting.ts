@@ -109,6 +109,8 @@ interface Seen {
   lastSent: number
   pending: number
 }
+// Set once the page is going away: requests aborted by a reload or navigation are not errors.
+let unloading = false
 const seen = new Map<string, Seen>()
 let sentAt: number[] = []
 
@@ -116,6 +118,7 @@ let sentAt: number[] = []
 export const resetErrorReporting = (): void => {
   seen.clear()
   sentAt = []
+  unloading = false
 }
 
 /** The count to send for this fingerprint now, or null when flood control holds it back. */
@@ -136,6 +139,7 @@ const admit = (fingerprint: string): number | null => {
 /** Report an error to Borg UI's analytics. Never throws. */
 export const reportError = (error: unknown, ctx: ErrorContext): void => {
   try {
+    if (unloading) return
     const obj =
       typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : null
     const type = (typeof obj?.name === 'string' && obj.name ? obj.name : typeof error).slice(
@@ -184,16 +188,30 @@ export const isCancelled = (reason: unknown): boolean => {
   }
 }
 
+// Exact origin match; a look-alike host or an unparsable URL counts as foreign.
+const sameOrigin = (url: string): boolean => {
+  try {
+    return new URL(url, window.location.href).origin === window.location.origin
+  } catch {
+    return false
+  }
+}
+
 let installed = false
 
 /** Report uncaught errors and unhandled rejections. Idempotent. */
 export const installGlobalErrorHandlers = (): void => {
   if (installed) return
   installed = true
+  const markUnloading = () => {
+    unloading = true
+  }
+  window.addEventListener('pagehide', markUnloading)
+  window.addEventListener('beforeunload', markUnloading)
   window.addEventListener('error', (event) => {
     // Cross-origin scripts and browser extensions are not ours.
     if (event.message === 'Script error.') return
-    if (event.filename && !event.filename.startsWith(window.location.origin)) return
+    if (event.filename && !sameOrigin(event.filename)) return
     reportError(event.error ?? event.message, { kind: 'uncaught' })
   })
   window.addEventListener('unhandledrejection', (event) => {

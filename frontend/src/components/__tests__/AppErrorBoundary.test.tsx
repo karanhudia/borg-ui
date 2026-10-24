@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
+import i18n from '../../i18n'
 import * as errorReporting from '../../utils/errorReporting'
 import { AppErrorBoundary } from '../AppErrorBoundary'
 
@@ -34,5 +35,35 @@ describe('AppErrorBoundary', () => {
       expect.any(TypeError),
       expect.objectContaining({ kind: 'render', component: 'Boom' })
     )
+  })
+
+  it('reloads the page from the Reload button', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(errorReporting, 'reportError').mockImplementation(() => {})
+    const reload = vi.fn()
+    vi.stubGlobal('location', { ...window.location, reload })
+    render(
+      <AppErrorBoundary>
+        <Boom />
+      </AppErrorBoundary>
+    )
+    fireEvent.click(screen.getByRole('button', { name: /reload/i }))
+    expect(reload).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
+  })
+
+  it('falls back to English when i18n throws', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(errorReporting, 'reportError').mockImplementation(() => {})
+    vi.spyOn(i18n, 't').mockImplementation(() => {
+      throw new Error('i18n broken')
+    })
+    render(
+      <AppErrorBoundary>
+        <Boom />
+      </AppErrorBoundary>
+    )
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
   })
 })

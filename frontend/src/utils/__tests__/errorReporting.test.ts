@@ -258,6 +258,30 @@ describe('global handlers', () => {
     expect(sent).not.toHaveBeenCalled()
   })
 
+  it('ignores a look-alike host and an unparsable filename', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    for (const filename of [
+      `${window.location.origin}.evil.com/a.js`,
+      'https://a.com.evil.com/a.js',
+      'http://',
+    ]) {
+      window.dispatchEvent(
+        new ErrorEvent('error', { message: 'x', filename, error: new Error('x') })
+      )
+    }
+    expect(sent).not.toHaveBeenCalled()
+  })
+
+  it('stops reporting once the page is unloading', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    window.dispatchEvent(new Event('pagehide'))
+    rejection(new Error('aborted by reload'))
+    trackApiError({ isAxiosError: true, config: { method: 'get', url: '/x' } })
+    expect(sent).not.toHaveBeenCalled()
+  })
+
   it('ignores cancelled and aborted rejections', () => {
     const sent = spyOnEnqueue()
     installGlobalErrorHandlers()

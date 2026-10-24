@@ -586,6 +586,9 @@ describe('trackApiError', () => {
     })
     vi.advanceTimersByTime(5000)
     expect(sent().filter((event) => event.name === 'API - Fail')).toEqual([])
+    const reports = sent().filter((event) => event.name === 'Error - Report')
+    expect(reports).toHaveLength(1)
+    expect(reports[0].props).toMatchObject({ kind: 'api', method: 'post', status: 401 })
   })
 })
 
