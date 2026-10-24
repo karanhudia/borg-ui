@@ -4052,7 +4052,7 @@
     "saving": "Saving...",
     "updatedSuccessfully": "Preferences updated successfully",
     "analyticsTitle": "Anonymous Usage Analytics",
-    "analyticsDescription": "Help us improve Borg UI by sharing anonymous usage data. We collect page views, feature clicks, and browser type, without tracking IP addresses, hostnames, cookies, or any personally identifiable information.",
+    "analyticsDescription": "Help us improve Borg UI by sharing usage data and error reports. Error reports can include paths, hostnames and repository names; passwords, passphrases, tokens and private keys are removed first. We never collect backup contents, passwords or IP addresses.",
     "enableAnalytics": "Enable analytics",
     "languageTitle": "Language",
     "languageDescription": "Choose the interface language",
@@ -4370,7 +4370,7 @@
   },
   "analyticsConsent": {
     "title": "Help Improve Borg UI",
-    "message": "We collect anonymous usage data to understand how Borg UI is used and make it better. No personal information, IP addresses, hostnames, or backup data is ever collected.",
+    "message": "We collect usage data and error reports to understand how Borg UI is used and fix problems. We never collect backup contents, passwords or IP addresses.",
     "accept": "Accept",
     "decline": "Decline",
     "learnMore": "Learn more",

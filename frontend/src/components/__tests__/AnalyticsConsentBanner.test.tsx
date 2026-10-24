@@ -49,7 +49,7 @@ describe('AnalyticsConsentBanner', () => {
     it('renders privacy assurance text', () => {
       render(<AnalyticsConsentBanner onConsentGiven={mockOnConsentGiven} />)
       expect(
-        screen.getByText(/No personal information, IP addresses, hostnames/)
+        screen.getByText(/We never collect backup contents, passwords or IP addresses/)
       ).toBeInTheDocument()
     })
 

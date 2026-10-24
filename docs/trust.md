@@ -118,8 +118,8 @@ service at all, block it at your firewall.
 
 ### Usage analytics
 
-The web UI counts page views and feature usage and sends them to Borg UI's own
-analytics service at `t.borgui.com`, which stores them in Google BigQuery in the
+The web UI counts page views and feature usage, and reports errors. It sends both to
+Borg UI's own analytics service at `t.borgui.com`, which stores them in Google BigQuery in the
 EU. It starts on, and a banner on first login asks whether to keep it. Declining
 stops it from that point, and you can change the answer whenever you like in
 Settings > Preferences. Page views from that first session, before you answer
@@ -143,13 +143,14 @@ so a purchase can be matched to the features that led to it. No licence key,
 customer, or other billing detail is sent. See `frontend/src/utils/analytics.ts`
 and [Analytics](analytics).
 
-When an action fails, the event says only which part of the app it was (such
-as `repositories`), the HTTP method and status, and a coarse class such as
-`network`, `timeout`, `validation` or `server`. Error messages are never sent,
-since they can hold paths, hostnames and repository names.
+When an action fails or the UI crashes, an error report is sent so it can be
+fixed before anyone files an issue. It carries the error message, the stack trace
+or backend traceback, the route or job, your app version and your browser. These
+can contain paths, hostnames and repository names. Passphrases, passwords, tokens
+and private keys are removed before sending. Error reports are part of analytics,
+so turning analytics off stops them too.
 
-Nothing else phones home. No crash reporting, no stack traces, no update
-beacon.
+Nothing else phones home. No update beacon.
 
 ### What never leaves
 

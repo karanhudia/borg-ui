@@ -3,8 +3,10 @@
  *
  * Events go to the Borg UI ingest service described in docs/trust.md. Nothing is
  * sent before the user's preferences load or after analytics is turned off, except
- * the single consent answer and opt-out events that count those choices. Only
- * paths are sent, never hostnames, query strings or referrers.
+ * the single consent answer and opt-out events that count those choices. Events
+ * carry only paths, never hostnames, query strings or referrers. Error reports
+ * (see errorReporting.ts) also go through this tracker and stop with it; they can
+ * contain paths, hostnames and repository names, with secrets removed.
  */
 
 import { authAPI } from '../services/api'
