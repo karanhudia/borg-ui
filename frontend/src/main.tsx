@@ -11,6 +11,8 @@ import { AppProvider } from './context/AppContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { RemoteBackendProvider } from './services/remoteBackends/context'
 import App from './App.tsx'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
+import { installGlobalErrorHandlers } from './utils/errorReporting'
 import './index.css'
 
 // NOTE: Umami initialization is deferred until user preferences are loaded
@@ -28,6 +30,8 @@ const queryClient = new QueryClient({
   },
 })
 
+installGlobalErrorHandlers()
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
@@ -37,7 +41,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <RemoteBackendProvider>
             <AuthProvider>
               <AppProvider>
-                <App />
+                <AppErrorBoundary>
+                  <App />
+                </AppErrorBoundary>
                 <Toaster position="top-right" />
               </AppProvider>
             </AuthProvider>

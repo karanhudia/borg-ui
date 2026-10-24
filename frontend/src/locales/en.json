@@ -70,6 +70,11 @@
       "copyFailed": "Failed to copy to clipboard"
     }
   },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "message": "Borg UI hit an unexpected error. It has been reported. Reloading usually fixes it.",
+    "reload": "Reload"
+  },
   "login": {
     "title": "Borg UI",
     "subtitle": "Enter your credentials to continue",

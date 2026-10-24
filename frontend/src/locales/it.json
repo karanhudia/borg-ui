@@ -70,6 +70,11 @@
       "copyFailed": "Impossibile copiare negli appunti"
     }
   },
+  "errorBoundary": {
+    "title": "Qualcosa è andato storto",
+    "message": "Borg UI ha riscontrato un errore imprevisto. È stato segnalato. Ricaricare la pagina di solito lo risolve.",
+    "reload": "Ricarica"
+  },
   "login": {
     "title": "Borg UI",
     "subtitle": "Inserisci le credenziali per continuare",

@@ -5,6 +5,7 @@
  * throws: an error while reporting an error is dropped.
  */
 
+import axios from 'axios'
 import { enqueueErrorReport, normalizeRoute } from './analytics'
 
 export type FrontendErrorKind = 'render' | 'uncaught' | 'rejection' | 'api'
@@ -171,4 +172,32 @@ export const reportError = (error: unknown, ctx: ErrorContext): void => {
   } catch {
     // Reporting an error must never cause one.
   }
+}
+
+/** A cancelled or aborted request (axios cancel, ERR_CANCELED, fetch AbortError) is not an error. */
+export const isCancelled = (reason: unknown): boolean => {
+  try {
+    const r = reason as { code?: unknown; name?: unknown } | null
+    return axios.isCancel(reason) || r?.code === 'ERR_CANCELED' || r?.name === 'AbortError'
+  } catch {
+    return false
+  }
+}
+
+let installed = false
+
+/** Report uncaught errors and unhandled rejections. Idempotent. */
+export const installGlobalErrorHandlers = (): void => {
+  if (installed) return
+  installed = true
+  window.addEventListener('error', (event) => {
+    // Cross-origin scripts and browser extensions are not ours.
+    if (event.message === 'Script error.') return
+    if (event.filename && !event.filename.startsWith(window.location.origin)) return
+    reportError(event.error ?? event.message, { kind: 'uncaught' })
+  })
+  window.addEventListener('unhandledrejection', (event) => {
+    if (isCancelled(event.reason)) return
+    reportError(event.reason, { kind: 'rejection' })
+  })
 }

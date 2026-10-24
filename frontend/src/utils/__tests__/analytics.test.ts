@@ -517,7 +517,11 @@ describe('trackApiError', () => {
     refuse(JSON.stringify({ key: 'backend.errors.plan.featureNotAvailable', feature: 'rclone' }))
     refuse('{not json')
     vi.advanceTimersByTime(5000)
-    expect(sent().map((event) => [event.name, event.props.feature])).toEqual([
+    expect(
+      sent()
+        .filter((event) => event.name !== 'Error - Report')
+        .map((event) => [event.name, event.props.feature])
+    ).toEqual([
       ['Plan - FeatureBlocked', 'unknown'],
       ['Plan - FeatureBlocked', 'rclone'],
       ['API - Fail', undefined],
@@ -562,7 +566,10 @@ describe('trackApiError', () => {
       response: { status: 409 },
     })
     vi.advanceTimersByTime(5000)
-    expect(sent()[0].props).toMatchObject({ area: 'backup-plans', error_class: 'conflict' })
+    expect(sent().find((event) => event.name === 'API - Fail').props).toMatchObject({
+      area: 'backup-plans',
+      error_class: 'conflict',
+    })
   })
 
   it('ignores reads and expired sessions', async () => {
@@ -578,7 +585,7 @@ describe('trackApiError', () => {
       response: { status: 401 },
     })
     vi.advanceTimersByTime(5000)
-    expect(fetchMock()).not.toHaveBeenCalled()
+    expect(sent().filter((event) => event.name === 'API - Fail')).toEqual([])
   })
 })
 

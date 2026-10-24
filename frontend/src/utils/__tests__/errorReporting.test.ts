@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import axios from 'axios'
 import * as analytics from '../analytics'
+import { trackApiError } from '../analytics'
 import {
   fnv1a64,
+  installGlobalErrorHandlers,
   normalizeMessage,
   reportError,
   resetErrorReporting,
@@ -214,5 +217,89 @@ describe('reportError', () => {
     e.name = 'N'.repeat(5000)
     reportError(e, { kind: 'uncaught' })
     expect(sent.mock.calls[0][0].type).toHaveLength(100)
+  })
+})
+
+describe('global handlers', () => {
+  const rejection = (reason: unknown) =>
+    window.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason }))
+
+  it('reports uncaught errors and rejections once installed twice', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    installGlobalErrorHandlers()
+    window.dispatchEvent(new ErrorEvent('error', { message: 'x', error: new TypeError('boom') }))
+    rejection(new RangeError('later'))
+    expect(sent).toHaveBeenCalledTimes(2)
+    expect(sent.mock.calls[0][0]).toMatchObject({ kind: 'uncaught', type: 'TypeError' })
+    expect(sent.mock.calls[1][0]).toMatchObject({ kind: 'rejection', type: 'RangeError' })
+  })
+
+  it('reports a same-origin error and falls back to the message', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    window.dispatchEvent(
+      new ErrorEvent('error', { message: 'plain', filename: `${window.location.origin}/a.js` })
+    )
+    expect(sent.mock.calls[0][0]).toMatchObject({ kind: 'uncaught', message: 'plain' })
+  })
+
+  it('ignores cross-origin and extension errors', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    window.dispatchEvent(new ErrorEvent('error', { message: 'Script error.' }))
+    window.dispatchEvent(
+      new ErrorEvent('error', {
+        message: 'x',
+        filename: 'chrome-extension://abc/content.js',
+        error: new Error('x'),
+      })
+    )
+    expect(sent).not.toHaveBeenCalled()
+  })
+
+  it('ignores cancelled and aborted rejections', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    rejection({ code: 'ERR_CANCELED', isAxiosError: true })
+    rejection(new axios.CanceledError('cancelled'))
+    rejection(new DOMException('aborted', 'AbortError'))
+    expect(sent).not.toHaveBeenCalled()
+  })
+})
+
+describe('trackApiError reporting', () => {
+  it('reports failed reads with the error key stripped, skips 5xx and cancels', () => {
+    const sent = spyOnEnqueue()
+    trackApiError({
+      isAxiosError: true,
+      config: { method: 'get', url: '/ssh-keys' },
+      response: { status: 404, data: { detail: { key: 'backend.errors.ssh.sshKeyNotFound' } } },
+    })
+    trackApiError({
+      isAxiosError: true,
+      config: { method: 'post', url: '/repositories' },
+      response: { status: 500 },
+    })
+    trackApiError({
+      isAxiosError: true,
+      code: 'ERR_CANCELED',
+      config: { method: 'get', url: '/repositories' },
+    })
+    expect(sent).toHaveBeenCalledTimes(1)
+    expect(sent.mock.calls[0][0]).toMatchObject({
+      kind: 'api',
+      area: 'ssh-keys',
+      method: 'get',
+      status: 404,
+      error_key: 'ssh.sshKeyNotFound',
+    })
+  })
+
+  it('reports a network failure without a status', () => {
+    const sent = spyOnEnqueue()
+    trackApiError({ isAxiosError: true, config: { method: 'put', url: '/settings' } })
+    expect(sent.mock.calls[0][0]).toMatchObject({ kind: 'api', method: 'put' })
+    expect(sent.mock.calls[0][0].status).toBeUndefined()
   })
 })

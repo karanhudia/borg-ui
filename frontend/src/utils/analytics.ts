@@ -11,6 +11,7 @@ import { authAPI } from '../services/api'
 import { fetchJsonForAuthMode } from '../services/authRequest'
 import { BASE_PATH } from './basePath'
 import { randomUuid } from './uuid'
+import { isCancelled, reportError } from './errorReporting'
 
 export const ANALYTICS_ENDPOINT = 'https://t.borgui.com/e'
 
@@ -525,6 +526,19 @@ export const trackApiError = (error: unknown): void => {
     return
   }
   const method = err?.config?.method?.toLowerCase()
+  const status = err?.response?.status
+  // 5xx are reported by the backend itself.
+  if (method && !isCancelled(error) && !(status !== undefined && status >= 500)) {
+    reportError(error, {
+      kind: 'api',
+      area,
+      method,
+      ...(status !== undefined ? { status } : {}),
+      ...(typeof detail?.key === 'string'
+        ? { error_key: detail.key.replace(/^backend\.errors\./, '') }
+        : {}),
+    })
+  }
   if (!method || method === 'get' || method === 'head' || err.response?.status === 401) return
   trackEvent(EventCategory.API, EventAction.FAIL, {
     area,

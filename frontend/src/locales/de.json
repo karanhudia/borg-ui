@@ -70,6 +70,11 @@
       "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
     }
   },
+  "errorBoundary": {
+    "title": "Etwas ist schiefgelaufen",
+    "message": "Borg UI ist auf einen unerwarteten Fehler gestoßen. Er wurde gemeldet. Ein Neuladen behebt das Problem meist.",
+    "reload": "Neu laden"
+  },
   "login": {
     "title": "Borg UI",
     "subtitle": "Zugangsdaten eingeben, um fortzufahren",
