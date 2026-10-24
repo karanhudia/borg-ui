@@ -188,15 +188,43 @@ def _mark_post_backup_scripts_unsettled(run: BackupPlanRun) -> None:
     )
 
 
+def _cancel_queued_run_operations(
+    db: Session, run: BackupPlanRun, now: datetime
+) -> int:
+    """Cancel the operations an interrupted run queued and never started.
+    The run is finished, so they would run without it: its status would not
+    follow them, and a backup of the run would hold its repository against
+    the plan's next run. Follow-ups of its finished work refresh the
+    repository, not the run, and still run."""
+    return (
+        db.query(Operation)
+        .filter(
+            Operation.backup_plan_run_id == run.id,
+            Operation.status == "queued",
+            Operation.trigger == "plan",
+        )
+        .update(
+            {
+                Operation.status: "cancelled",
+                Operation.error_message: func.coalesce(
+                    Operation.error_message, CONTAINER_RESTARTED_DURING_BACKUP
+                ),
+                Operation.completed_at: now,
+            },
+            synchronize_session=False,
+        )
+    )
+
+
 def _normalize_interrupted_backup_plan_runs(
     db: Session,
     now: datetime,
     interrupted_runs: Optional[list[BackupPlanRun]] = None,
     pending_post_hooks: Optional[list[int]] = None,
 ) -> int:
-    """Finish active backup plan run rows that cannot resume after a restart.
-    The runs whose post-backup scripts are still to run are added to
-    `pending_post_hooks`."""
+    """Finish active backup plan run rows that cannot resume after a restart,
+    with the operations they queued and never started. The runs whose
+    post-backup scripts are still to run are added to `pending_post_hooks`."""
     if interrupted_runs is None:
         interrupted_runs = (
             db.query(BackupPlanRun)
@@ -221,12 +249,14 @@ def _normalize_interrupted_backup_plan_runs(
             _mark_post_backup_scripts_unsettled(run)
             if post_scripts == "pending" and pending_post_hooks is not None:
                 pending_post_hooks.append(run.id)
+        cancelled_operations = _cancel_queued_run_operations(db, run, now)
 
         logger.info(
             "Normalized interrupted backup plan run after restart",
             backup_plan_run_id=run.id,
             backup_plan_id=run.backup_plan_id,
             status=run.status,
+            cancelled_operations=cancelled_operations,
         )
 
     return len(interrupted_runs)

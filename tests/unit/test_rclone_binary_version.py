@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+import scripts.refresh_rclone_binary_version as refresh
 from scripts.refresh_rclone_binary_version import _parse_sha256sums, _parse_version
 
 
@@ -48,3 +49,28 @@ def test_parses_both_arch_checksums():
 def test_ignores_other_platforms_and_wrong_version():
     # An osx asset must not leak in, and a version mismatch must match nothing.
     assert _parse_sha256sums(SHA256SUMS, "1.74.0") == {}
+
+
+def test_requests_name_their_own_user_agent(monkeypatch):
+    # downloads.rclone.org rejects urllib's default Python-urllib User-Agent
+    # with 403, which broke the scheduled job; the request must send its own.
+    seen = {}
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b"rclone v1.75.0\n"
+
+    def fake_urlopen(request, timeout):
+        seen["user_agent"] = request.get_header("User-agent")
+        return _Response()
+
+    monkeypatch.setattr(refresh.urllib.request, "urlopen", fake_urlopen)
+    assert refresh._get_text(refresh.VERSION_URL) == "rclone v1.75.0\n"
+    assert seen["user_agent"] == refresh.USER_AGENT
+    assert not seen["user_agent"].startswith("Python-urllib")

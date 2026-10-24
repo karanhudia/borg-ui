@@ -13,6 +13,7 @@ from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
 from app.database.models import (
+    AgentJob,
     Operation,
     Repository,
     RepositoryWipeJob,
@@ -33,7 +34,9 @@ from app.services.agent_job_dispatcher import (
 from app.services.log_policy import DEFAULT_LOG_SAVE_POLICY, job_has_logs_by_policy
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.repository_executor import (
+    AGENT_DELETE_ARCHIVES_JOB_KIND,
     abandon_agent_repository_operation_job,
+    agent_supports_job,
     agent_timezone_for_repository,
     is_agent_executor,
     queue_agent_repository_operation_job,
@@ -68,6 +71,16 @@ TERMINAL_EXECUTION_STATUSES = {
 
 class WipeArchiveSetChanged(Exception):
     """Raised when execution no longer matches the previewed archive set."""
+
+
+class _AgentDeleteFailed(Exception):
+    """The delete phase of an agent wipe ended on a failure; `partial` when
+    archives may have been deleted before it."""
+
+    def __init__(self, reason: str, *, partial: bool):
+        self.reason = reason
+        self.partial = partial
+        super().__init__(reason)
 
 
 class WipeValidationError(Exception):
@@ -222,6 +235,7 @@ async def _agent_job_result(
     operation: dict[str, Any] | None = None,
     wipe_operation_id: int | None = None,
     agent_machine_id: int | None = None,
+    queued: list[AgentJob] | None = None,
 ) -> dict[str, Any]:
     """Run one job on the repository's agent and wait for its result.
 
@@ -239,7 +253,10 @@ async def _agent_job_result(
 
     `agent_machine_id` is the agent the caller read or confirmed the
     archives on. The job goes to the repository's agent as it is when the
-    job is queued; another one gets nothing."""
+    job is queued; another one gets nothing.
+
+    `queued` receives the job once it is queued, for a caller that reads
+    the failed job's report."""
     agent_job = queue_agent_repository_operation_job(
         db,
         repository,
@@ -249,6 +266,8 @@ async def _agent_job_result(
         maintenance_job_id=wipe_operation_id,
         ignore_queued_operations=wipe_operation_id is not None,
     )
+    if queued is not None:
+        queued.append(agent_job)
     try:
         if (
             agent_machine_id is not None
@@ -274,6 +293,22 @@ async def _agent_job_result(
 def _agent_warning(result: dict[str, Any]) -> bool:
     """A completed agent job whose Borg ended with a warning (exit 1)."""
     return result.get("return_code") not in (None, 0)
+
+
+def _deleted_before_failure(db: Session, agent_job: AgentJob | None) -> int | None:
+    """How many archives a failed `repository.delete_archives` job deleted:
+    the count its failure report gave, 0 for a job no agent ever claimed,
+    None when unknown (the job was reaped, or taken back while it ran)."""
+    if agent_job is None:
+        return 0
+    db.refresh(agent_job)
+    result = agent_job.result if isinstance(agent_job.result, dict) else {}
+    deleted = result.get("deleted_archives")
+    if isinstance(deleted, int) and not isinstance(deleted, bool):
+        return deleted
+    if agent_job.claimed_at is None:
+        return 0
+    return None
 
 
 def _listing_agent(repository: Repository) -> int | None:
@@ -695,10 +730,12 @@ class RepositoryWipeService:
         self, db: Session, job: Any, repository: Repository, log_lines: list[str]
     ) -> None:
         """Wipe an agent repository on its agent: delete the archives of the
-        confirmed preview one by one (`repository.delete_archive`), then
-        compact (`repository.compact`). Only the archives the preview listed
-        and the start confirmed are named; an archive added since stays.
-        The job's states and phases are the server-side wipe's."""
+        confirmed preview, then compact (`repository.compact`). An agent
+        that has `repository.delete_archives` deletes them in that one job;
+        an older one gets a `repository.delete_archive` job per archive.
+        Only the archives the preview listed and the start confirmed are
+        named; an archive added since stays. The job's states and phases
+        are the server-side wipe's."""
         from app.api.repositories import get_operation_timeouts
 
         borg_version = borg_major(repository)
@@ -731,43 +768,32 @@ class RepositoryWipeService:
         job.progress_message = "Deleting repository archives"
         db.commit()
 
-        count = len(manifest)
-        warnings: list[str] = []
-        for index, item in enumerate(manifest, 1):
-            name = item.get("name") or item["identity"]
-            try:
-                ensure_target_unchanged()
-                result = await _agent_job_result(
-                    db,
-                    repository,
-                    "repository.delete_archive",
-                    operation={"archive": _archive_selector(borg_version, item)},
-                    timeout_seconds=timeout_seconds,
-                    wipe_operation_id=job.id,
-                    agent_machine_id=params.get("agent_machine_id"),
-                )
-            except Exception as exc:
-                reason = _failure_text(exc)
-                log_lines.append(f"Deleting archive {name} failed: {reason}")
-                partial = index > 1
-                job.status = "failed_partial" if partial else "failed"
-                job.phase = "delete_failed_partial" if partial else "delete_failed"
-                job.error_message = reason
-                job.progress_message = "Repository wipe delete failed"
-                job.progress = 100
-                await self._best_effort_post_wipe_refresh(db, repository)
-                return
-            if _agent_warning(result):
-                warnings.append(
-                    f"Deleting archive {name} ended with a warning "
-                    f"(exit {result.get('return_code')}): "
-                    f"{result.get('stderr') or 'see the agent job log'}"
-                )
-                log_lines.append(warnings[-1])
-            else:
-                log_lines.append(f"Deleted archive: {name} ({index}/{count})")
-            job.progress = 10 + (65 * index) // max(count, 1)
-            db.commit()
+        delete = (
+            self._delete_agent_archives_in_one_job
+            if manifest
+            and agent_supports_job(db, repository, AGENT_DELETE_ARCHIVES_JOB_KIND)
+            else self._delete_agent_archives_one_by_one
+        )
+        try:
+            warnings = await delete(
+                db,
+                job,
+                repository,
+                manifest,
+                borg_version=borg_version,
+                timeout_seconds=timeout_seconds,
+                agent_machine_id=params.get("agent_machine_id"),
+                ensure_target_unchanged=ensure_target_unchanged,
+                log_lines=log_lines,
+            )
+        except _AgentDeleteFailed as failure:
+            job.status = "failed_partial" if failure.partial else "failed"
+            job.phase = "delete_failed_partial" if failure.partial else "delete_failed"
+            job.error_message = failure.reason
+            job.progress_message = "Repository wipe delete failed"
+            job.progress = 100
+            await self._best_effort_post_wipe_refresh(db, repository)
+            return
 
         if job.run_compact:
             job.phase = "compact"
@@ -818,6 +844,119 @@ class RepositoryWipeService:
         job.progress = 100
         job.progress_message = "Repository contents wipe completed"
         await self._best_effort_post_wipe_refresh(db, repository)
+
+    async def _delete_agent_archives_one_by_one(
+        self,
+        db: Session,
+        job: Any,
+        repository: Repository,
+        manifest: list[dict[str, Any]],
+        *,
+        borg_version: int,
+        timeout_seconds: int,
+        agent_machine_id: int | None,
+        ensure_target_unchanged: Any,
+        log_lines: list[str],
+    ) -> list[str]:
+        """A `repository.delete_archive` job per archive, for an agent from
+        before `repository.delete_archives`. Returns the warnings."""
+        count = len(manifest)
+        warnings: list[str] = []
+        for index, item in enumerate(manifest, 1):
+            name = item.get("name") or item["identity"]
+            try:
+                ensure_target_unchanged()
+                result = await _agent_job_result(
+                    db,
+                    repository,
+                    "repository.delete_archive",
+                    operation={"archive": _archive_selector(borg_version, item)},
+                    timeout_seconds=timeout_seconds,
+                    wipe_operation_id=job.id,
+                    agent_machine_id=agent_machine_id,
+                )
+            except Exception as exc:
+                reason = _failure_text(exc)
+                log_lines.append(f"Deleting archive {name} failed: {reason}")
+                raise _AgentDeleteFailed(reason, partial=index > 1) from exc
+            if _agent_warning(result):
+                warnings.append(
+                    f"Deleting archive {name} ended with a warning "
+                    f"(exit {result.get('return_code')}): "
+                    f"{result.get('stderr') or 'see the agent job log'}"
+                )
+                log_lines.append(warnings[-1])
+            else:
+                log_lines.append(f"Deleted archive: {name} ({index}/{count})")
+            job.progress = 10 + (65 * index) // max(count, 1)
+            db.commit()
+        return warnings
+
+    async def _delete_agent_archives_in_one_job(
+        self,
+        db: Session,
+        job: Any,
+        repository: Repository,
+        manifest: list[dict[str, Any]],
+        *,
+        borg_version: int,
+        timeout_seconds: int,
+        agent_machine_id: int | None,
+        ensure_target_unchanged: Any,
+        log_lines: list[str],
+    ) -> list[str]:
+        """One `repository.delete_archives` job naming every confirmed
+        archive; the agent deletes them in that order and stops at the
+        first failure, whose report says how many it deleted before.
+        Returns the warnings.
+
+        A Borg 2 archive protected after the confirmation is not skipped
+        silently: tagging gives it a new id, and the `aid:` the job names
+        then matches nothing, which fails the job."""
+        count = len(manifest)
+        names = {
+            _archive_selector(borg_version, item): item.get("name") or item["identity"]
+            for item in manifest
+        }
+        job.progress_message = f"Deleting {count} archives on the agent"
+        db.commit()
+        queued: list[AgentJob] = []
+        try:
+            ensure_target_unchanged()
+            result = await _agent_job_result(
+                db,
+                repository,
+                AGENT_DELETE_ARCHIVES_JOB_KIND,
+                operation={"archives": list(names)},
+                # the budget a job per archive had, in all
+                timeout_seconds=timeout_seconds * count,
+                wipe_operation_id=job.id,
+                agent_machine_id=agent_machine_id,
+                queued=queued,
+            )
+        except Exception as exc:
+            reason = _failure_text(exc)
+            log_lines.append(f"Deleting the archives failed: {reason}")
+            deleted = _deleted_before_failure(db, queued[0] if queued else None)
+            # an unknown count may include deleted archives
+            raise _AgentDeleteFailed(reason, partial=deleted != 0) from exc
+        warned: dict[str, str] = {}
+        for warning in result.get("warnings") or []:
+            if not isinstance(warning, dict):
+                continue
+            archive = str(warning.get("archive"))
+            warned[archive] = (
+                f"Deleting archive {names.get(archive, archive)} ended with a "
+                f"warning (exit {warning.get('return_code')}): "
+                f"{warning.get('stderr') or 'see the agent job log'}"
+            )
+        for index, (selector, name) in enumerate(names.items(), 1):
+            log_lines.append(
+                warned.get(selector) or f"Deleted archive: {name} ({index}/{count})"
+            )
+        job.progress = 75
+        db.commit()
+        return list(warned.values())
 
     async def _best_effort_post_wipe_refresh(
         self, db: Session, repository: Repository

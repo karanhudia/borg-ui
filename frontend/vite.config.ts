@@ -48,6 +48,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'build',
-    sourcemap: true,
+    // 'hidden': maps are still emitted (CI packages them as a release asset)
+    // but bundles carry no sourceMappingURL.
+    sourcemap: 'hidden',
   },
 })
