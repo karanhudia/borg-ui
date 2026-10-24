@@ -4051,7 +4051,7 @@
     "save": "Salva Preferenze",
     "saving": "Salvataggio in corso...",
     "updatedSuccessfully": "Preferenze aggiornate con successo",
-    "analyticsTitle": "Analisi di Utilizzo Anonime",
+    "analyticsTitle": "Analisi di Utilizzo",
     "analyticsDescription": "Aiutaci a migliorare Borg UI condividendo dati di utilizzo e segnalazioni di errore. Le segnalazioni possono includere percorsi, hostname e nomi di repository; password, passphrase, token e chiavi private vengono rimossi prima. Non raccogliamo mai il contenuto dei backup, password o indirizzi IP.",
     "enableAnalytics": "Abilita analisi",
     "languageTitle": "Lingua",
@@ -4374,7 +4374,7 @@
     "accept": "Accetta",
     "decline": "Rifiuta",
     "learnMore": "Scopri di più",
-    "enableToggle": "Abilita analisi anonime",
+    "enableToggle": "Abilita analisi",
     "continue": "Continua",
     "saving": "Salvataggio in corso...",
     "changeAnytime": "Puoi modificare questa impostazione in qualsiasi momento in Impostazioni → Preferenze"

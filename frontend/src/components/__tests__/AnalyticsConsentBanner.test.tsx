@@ -59,7 +59,7 @@ describe('AnalyticsConsentBanner', () => {
     it('renders analytics toggle switch', () => {
       render(<AnalyticsConsentBanner onConsentGiven={mockOnConsentGiven} />)
       expect(screen.getByRole('switch')).toBeInTheDocument()
-      expect(screen.getByText('Enable anonymous analytics')).toBeInTheDocument()
+      expect(screen.getByText('Enable analytics')).toBeInTheDocument()
     })
 
     it('renders Continue button', () => {

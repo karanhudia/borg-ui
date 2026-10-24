@@ -4051,7 +4051,7 @@
     "save": "Save Preferences",
     "saving": "Saving...",
     "updatedSuccessfully": "Preferences updated successfully",
-    "analyticsTitle": "Anonymous Usage Analytics",
+    "analyticsTitle": "Usage Analytics",
     "analyticsDescription": "Help us improve Borg UI by sharing usage data and error reports. Error reports can include paths, hostnames and repository names; passwords, passphrases, tokens and private keys are removed first. We never collect backup contents, passwords or IP addresses.",
     "enableAnalytics": "Enable analytics",
     "languageTitle": "Language",
@@ -4374,7 +4374,7 @@
     "accept": "Accept",
     "decline": "Decline",
     "learnMore": "Learn more",
-    "enableToggle": "Enable anonymous analytics",
+    "enableToggle": "Enable analytics",
     "continue": "Continue",
     "saving": "Saving...",
     "changeAnytime": "You can change this anytime in Settings → Preferences"

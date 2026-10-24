@@ -4051,7 +4051,7 @@
     "save": "Einstellungen speichern",
     "saving": "Speichert...",
     "updatedSuccessfully": "Einstellungen erfolgreich aktualisiert",
-    "analyticsTitle": "Anonyme Nutzungsanalyse",
+    "analyticsTitle": "Nutzungsanalyse",
     "analyticsDescription": "Hilf uns, Borg UI zu verbessern, indem du Nutzungsdaten und Fehlerberichte teilst. Fehlerberichte können Pfade, Hostnamen und Repository-Namen enthalten; Passwörter, Passphrasen, Tokens und private Schlüssel werden vorher entfernt. Wir erfassen nie Backup-Inhalte, Passwörter oder IP-Adressen.",
     "enableAnalytics": "Analysen aktivieren",
     "languageTitle": "Sprache",
@@ -4374,7 +4374,7 @@
     "accept": "Akzeptieren",
     "decline": "Ablehnen",
     "learnMore": "Mehr erfahren",
-    "enableToggle": "Anonyme Analysen aktivieren",
+    "enableToggle": "Analysen aktivieren",
     "continue": "Weiter",
     "saving": "Speichert...",
     "changeAnytime": "Du kannst dies jederzeit in Einstellungen → Einstellungen ändern"
