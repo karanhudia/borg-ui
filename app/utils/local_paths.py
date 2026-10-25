@@ -74,3 +74,39 @@ def is_restore_destination_allowed(
         if any(_is_within(resolved, r) or _is_within(r, resolved) for r in reserved):
             return False
     return True
+
+
+def is_operator_metadata_path_allowed(path: str) -> bool:
+    """True when a non-admin may set ``path`` as a backup location's dump,
+    export or snapshot staging directory: absolute, without a ".." segment, and
+    neither inside nor containing the application or its data directory. The
+    app writes and, through the discovery scripts, deletes these directories,
+    so a reserved-directory target is refused; the mount points do not confine
+    them (the defaults live under /var/tmp/borg-ui)."""
+    if not path or not os.path.isabs(path) or ".." in path.split("/"):
+        return False
+    try:
+        resolved = os.path.realpath(path)
+    except ValueError:  # an embedded NUL byte
+        return False
+    reserved = [os.path.realpath(_APP_DIR), os.path.realpath(settings.data_dir)]
+    return not any(_is_within(resolved, r) or _is_within(r, resolved) for r in reserved)
+
+
+def is_operator_source_allowed(path: str) -> bool:
+    """True when a non-admin may add ``path`` as a server-local backup source:
+    absolute and without a ".." segment, inside a mount point, and neither
+    inside nor containing the application or its data directory (a backup of
+    "/" would read them too). Borg drops ".." before the path is resolved, so a
+    ".." behind a symlink would name another directory than the one checked
+    here; a relative path depends on the directory Borg runs in."""
+    if not path or not os.path.isabs(path) or ".." in path.split("/"):
+        return False
+    try:
+        resolved = os.path.realpath(path)
+    except ValueError:  # an embedded NUL byte
+        return False
+    if not is_within_local_mount(resolved):
+        return False
+    reserved = [os.path.realpath(_APP_DIR), os.path.realpath(settings.data_dir)]
+    return not any(_is_within(resolved, r) or _is_within(r, resolved) for r in reserved)

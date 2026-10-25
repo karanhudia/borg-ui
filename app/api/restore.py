@@ -82,10 +82,19 @@ def _require_restore_job_access(
 def _require_allowed_local_destination(
     restore_request: "RestoreRequest", repository: Repository, user: User
 ) -> None:
-    # SSH destinations and agent repositories write on another host; only a
-    # restore that lands on this server is checked. Admins set up the mounts
-    # themselves, so only other users are confined to the mount points.
-    if restore_request.destination_type == "ssh" or is_agent_executor(repository):
+    # An agent repository restores on the agent's host, where no mount points
+    # confine a path: only administrators choose a destination there.
+    if is_agent_executor(repository):
+        if user.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"key": "backend.errors.auth.notEnoughPermissions"},
+            )
+        return
+    # SSH destinations write on another host; only a restore that lands on this
+    # server is checked. Admins set up the mounts themselves, so only other
+    # users are confined to the mount points.
+    if restore_request.destination_type == "ssh":
         return
     if not is_restore_destination_allowed(
         restore_request.destination,

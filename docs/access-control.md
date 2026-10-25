@@ -30,7 +30,7 @@ Current global permissions are:
 | Manage system, licensing, cache, logs, packages, SSH, scripts, notifications, export/import, beta, and MQTT settings | `admin` |
 | Delete job history entries and associated log files | `admin` |
 | Create, edit, run, duplicate, and delete schedules | `operator`, plus operator access to the schedule repositories |
-| Mount and unmount Borg archives | `operator` |
+| Mount and unmount Borg archives (new non-admin mount targets must resolve below `DATA_DIR/mounts`) | `operator` |
 | Browse local paths and create folders (operators are limited to `LOCAL_MOUNT_POINTS`, admins are not) | `operator` |
 | Discover databases and scan database or container sources | `operator` or `admin`, subject to the source restrictions below |
 | Restore to a saved SSH connection | `operator` |
@@ -103,10 +103,37 @@ Repository action rules are:
 | Action | Required repository role |
 | --- | --- |
 | View repository and browse archives | `viewer` |
-| Restore files | `operator` |
+| Restore files (agent repositories require global `admin`) | `operator` |
 | Run backups | `operator` |
 | Run repository maintenance such as check, restore check, prune, and compact | `operator` |
 | Delete archives | `operator` |
+
+## Operator Path Restrictions
+
+For non-admin users, newly selected server backup sources must be absolute,
+contain no `..` segment, and resolve inside `LOCAL_MOUNT_POINTS`, including
+symlink resolution. They must neither contain nor be inside `/app` or `DATA_DIR`.
+These checks cover both source formats and new `R`/`r` backup roots in plan
+`custom_flags` and repository-link `custom_flags_override`, including disabled
+links. New agent sources and agent pattern roots require an administrator.
+
+New database dump paths, container export paths, and btrfs staging directories
+must be absolute, contain no `..`, and avoid the application and data directories
+in both directions. They can be outside `LOCAL_MOUNT_POINTS`, so the defaults
+under `/var/tmp/borg-ui` remain usable.
+
+Restoring an agent repository requires a global administrator; operators receive
+a permission error before a restore is queued. Server restores retain their
+local mount-point restrictions. SSH destinations, restore checks, previews, and
+archive downloads keep their existing access rules.
+
+Existing plans keep their stored sources, metadata, and pattern roots and can
+still run or have other fields edited. Copying an administrator-configured
+repository's sources into a plan remains supported. A plan with no repositories
+left has no trusted stored paths: every selected path is checked again.
+
+See [Operator path restriction upgrades](security#operator-path-restriction-upgrades)
+for the required administrator review and the limits of selection-time checks.
 
 ## All-Repositories Access
 
