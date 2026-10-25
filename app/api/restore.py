@@ -8,6 +8,11 @@ from datetime import datetime, timezone
 
 from app.database.models import User, Repository
 from app.database.database import get_db
+from app.core.borg_errors import (
+    get_exit_code_message,
+    is_borg_warning_exit_code,
+    is_lock_contention_exit_code,
+)
 from app.core.borg_router import BorgRouter
 from app.core.permissions import REPOSITORY_ACTION_RULES
 from app.core.security import (
@@ -31,6 +36,7 @@ from app.services.agent_job_dispatcher import (
 )
 from app.services.repository_executor import (
     AGENT_RESTORE_DRY_RUN_JOB_KIND,
+    _tail_reason_line,
     abandon_agent_repository_operation_job,
     agent_supports_job,
     is_agent_executor,
@@ -39,6 +45,7 @@ from app.services.repository_executor import (
 )
 from app.services.restore_service import restore_service
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.redaction import redact_secrets
 from app.utils.local_paths import is_restore_destination_allowed
 from app.utils.borg_env import (
     get_standard_ssh_opts,
@@ -217,6 +224,37 @@ async def _agent_restore_preview(
     return {"preview": result.get("output") or ""}
 
 
+def _server_preview_answer(result: dict) -> dict:
+    """A server repository's preview answer from its extract dry run, as an
+    agent repository's: Borg's output, a warning (a path that matched
+    nothing) included, for a run that went through; a failure with Borg's
+    reason for one that did not (or could not start)."""
+    return_code = result.get("return_code")
+    stdout = (result.get("stdout") or "").rstrip("\n")
+    stderr = (result.get("stderr") or "").rstrip("\n")
+    if return_code == 0 or is_borg_warning_exit_code(return_code):
+        return {"preview": "\n".join(part for part in (stdout, stderr) if part)}
+
+    reason = _tail_reason_line(
+        stderr if stderr.strip() else stdout,
+        lock_contention=is_lock_contention_exit_code(return_code),
+    )
+    if not reason:
+        reason = (
+            get_exit_code_message(return_code)
+            if isinstance(return_code, int)
+            else "Borg did not run"
+        )
+    logger.warning("Restore preview failed", return_code=return_code, reason=reason)
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail={
+            "key": "backend.errors.restore.failedPreviewRestoreWithReason",
+            "params": {"reason": redact_secrets(reason)},
+        },
+    )
+
+
 @router.post("/preview")
 async def preview_restore(
     restore_request: RestoreRequest,
@@ -247,7 +285,6 @@ async def preview_restore(
                 result = await BorgRouter(repo).preview_restore(
                     archive=restore_request.archive,
                     paths=restore_request.paths,
-                    destination=restore_request.destination,
                     env=env,
                 )
             finally:
@@ -256,9 +293,8 @@ async def preview_restore(
             result = await BorgRouter(repo).preview_restore(
                 archive=restore_request.archive,
                 paths=restore_request.paths,
-                destination=restore_request.destination,
             )
-        return {"preview": result["stdout"]}
+        return _server_preview_answer(result)
     except HTTPException:
         raise
     except Exception as e:

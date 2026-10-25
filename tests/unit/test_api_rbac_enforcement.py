@@ -178,7 +178,12 @@ class TestRestoreProtection:
         with patch(
             "app.api.restore.BorgRouter.preview_restore", new_callable=AsyncMock
         ) as mock_preview:
-            mock_preview.return_value = {"success": True, "stdout": "", "stderr": ""}
+            mock_preview.return_value = {
+                "return_code": 0,
+                "success": True,
+                "stdout": "",
+                "stderr": "",
+            }
             response = test_client.post(
                 "/api/restore/preview",
                 json={
@@ -190,7 +195,8 @@ class TestRestoreProtection:
                 },
                 headers=headers,
             )
-        assert response.status_code != 403
+        assert response.status_code == 200, response.text
+        assert response.json() == {"preview": ""}
 
     def test_no_permission_cannot_restore(self, test_client, test_db):
         from app.core.security import create_access_token

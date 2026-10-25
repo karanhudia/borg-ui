@@ -6047,6 +6047,7 @@
         "failedGetRestoreJobs": "Failed to get restore jobs",
         "failedGetRestoreStatus": "Failed to get restore status",
         "failedPreviewRestore": "Failed to preview restore",
+        "failedPreviewRestoreWithReason": "Failed to preview restore: {{reason}}",
         "agentPreviewUnsupported": "This repository is run by an agent whose version cannot preview a restore. Update the agent, or start the restore instead.",
         "repositoryNotFound": "Repository not found",
         "restoreJobNotFound": "Restore job not found",
