@@ -1226,12 +1226,26 @@ class OperationRunner:
                     continue
             elif self._took_over_at is None or op.created_at >= self._took_over_at:
                 continue
-            op.status = "cancelled"
-            op.error_message = "\n".join(
-                filter(None, ["interrupted by restart", op.error_message])
+            # Only the row as read: a release or cancel another session
+            # committed since then is the newer word.
+            cancelled += (
+                db.query(Operation)
+                .filter(
+                    Operation.id == op.id,
+                    Operation.status == "queued",
+                    Operation.params[HOLD_PARAM].as_string() == holder,
+                )
+                .update(
+                    {
+                        Operation.status: "cancelled",
+                        Operation.error_message: "\n".join(
+                            filter(None, ["interrupted by restart", op.error_message])
+                        ),
+                        Operation.completed_at: utc_now(),
+                    },
+                    synchronize_session=False,
+                )
             )
-            op.completed_at = utc_now()
-            cancelled += 1
         return cancelled
 
 

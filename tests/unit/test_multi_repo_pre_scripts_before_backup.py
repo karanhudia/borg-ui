@@ -469,3 +469,34 @@ async def test_a_retried_hold_sweep_leaves_a_successors_hold(test_db, runner):
     test_db.expire_all()
     assert test_db.get(Operation, successor.id).status == "queued"
     assert runner.started == []
+
+
+def test_the_hold_sweep_leaves_a_backup_released_meanwhile(test_db, runner):
+    from app.services.operations import runner as runner_module
+
+    repository = _repository(test_db)
+    gone = create_backup_operation(
+        test_db, repository, trigger="schedule", executor="server", held=True
+    )
+    gone.operation.params = {**gone.operation.params, HOLD_PARAM: "gone"}
+    test_db.commit()
+    runner._took_over_at = runner_module.utc_now()
+    held_by = runner_module.held_by
+
+    def released_after_the_read(op):
+        # the holder releases it between the sweep's read and its write
+        holder = held_by(op)
+        other = sessionmaker(bind=test_db.get_bind())()
+        stored = other.get(Operation, op.id)
+        stored.params = {k: v for k, v in stored.params.items() if k != HOLD_PARAM}
+        other.commit()
+        other.close()
+        return holder
+
+    with patch.object(runner_module, "held_by", released_after_the_read):
+        runner._sweep_abandoned_holds(test_db)
+
+    test_db.expire_all()
+    released = test_db.get(Operation, gone.id)
+    assert released.status == "queued"
+    assert HOLD_PARAM not in released.params
