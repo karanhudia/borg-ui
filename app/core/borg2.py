@@ -695,10 +695,14 @@ class Borg2Interface:
         encryption: str = "repokey-aes-ocb",
         passphrase: Optional[str] = None,
         remote_path: Optional[str] = None,
+        timeout: int = 300,
+        env: Optional[Dict] = None,
     ) -> Dict:
         """Create (initialise) a new Borg 2 repository.
 
-        Replaces `borg init` — borg2 uses `rcreate` for this.
+        Replaces `borg init` — borg2 uses `rcreate` for this. `env` is a
+        caller's environment (a stored SSH key's); the store cache stays off
+        whatever it carries.
         """
         refusal = borg2_removed_encryption_refusal(encryption)
         if refusal:
@@ -714,11 +718,12 @@ class Borg2Interface:
         # enabled, Store.create() also creates the cache backend, which rejects
         # an already-populated cache directory — and borg misreports that as
         # "repository already exists".
-        env = {"BORG_STORE_CACHE": ""}
-        env.update(borg2_remote_path_env(remote_path))
+        exec_env = env.copy() if env else {}
+        exec_env["BORG_STORE_CACHE"] = ""
+        exec_env.update(borg2_remote_path_env(remote_path))
         if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
-        return await self._run(cmd, timeout=300, env=env)
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, timeout=timeout, env=exec_env)
 
     async def rinfo(
         self,
