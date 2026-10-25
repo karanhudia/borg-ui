@@ -570,7 +570,24 @@ def _recover_interrupted_work() -> None:
     from app.services.backup_plan_execution_service import (
         backup_plan_execution_service,
     )
-    from app.utils.process_utils import cleanup_orphaned_jobs
+    from app.services.backup_service import backup_service
+    from app.utils.process_utils import (
+        backup_post_hooks_after_restart,
+        cleanup_orphaned_jobs,
+    )
+
+    # Before the runner's recovery fails the backups the restart
+    # interrupted: the ones whose post-backup hooks are still to run (#1429).
+    # A plan run's waits for them, so they are launched first.
+    try:
+        db = SessionLocal()
+        try:
+            backup_post_hooks = backup_post_hooks_after_restart(db)
+        finally:
+            db.close()
+        backup_service.recover_post_hooks_after_restart(backup_post_hooks)
+    except Exception as e:
+        logger.error("Failed to recover backup post-backup hooks", error=str(e))
 
     try:
         db = SessionLocal()

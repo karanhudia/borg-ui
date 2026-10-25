@@ -2088,6 +2088,14 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
         )
         return
 
+    # Its pre-backup scripts do not run under the post-backup hooks a
+    # restart left to run for an earlier backup of one of its repositories
+    # (#1429).
+    from app.services.backup_service import backup_service
+
+    for repo in repositories:
+        await backup_service.wait_for_post_hooks_after_restart(repository_id=repo.id)
+
     # 1. Run schedule-level pre-backup script (ONCE)
     if scheduled_job.pre_backup_script_id:
         try:
