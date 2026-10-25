@@ -139,6 +139,18 @@ describe('reportError', () => {
     )
   })
 
+  it('fingerprints the scrubbed message, so secret values do not matter', () => {
+    const sent = spyOnEnqueue()
+    reportError(new Error('login failed password=aaa'), { kind: 'uncaught' })
+    vi.advanceTimersByTime(11 * 60 * 1000)
+    reportError(new Error('login failed password=bbb'), { kind: 'uncaught' })
+    const [first, second] = sent.mock.calls.map((c) => c[0])
+    expect(second.fingerprint).toBe(first.fingerprint)
+    expect(first.fingerprint).toBe(
+      fnv1a64(['frontend', 'uncaught', 'Error', '', 'login failed password=[redacted]'].join('|'))
+    )
+  })
+
   it('reads a Firefox style frame', () => {
     const sent = spyOnEnqueue()
     const e = new Error('x')
