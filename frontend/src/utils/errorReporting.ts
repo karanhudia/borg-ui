@@ -236,6 +236,14 @@ export const installGlobalErrorHandlers = (): void => {
   window.addEventListener('error', (event) => {
     // Cross-origin scripts and browser extensions are not ours.
     if (event.message === 'Script error.') return
+    // Browser layout notifications have no exception object. Keep real errors reportable.
+    if (
+      event.error == null &&
+      /^ResizeObserver loop (?:limit exceeded|completed with undelivered notifications)\.?$/.test(
+        event.message
+      )
+    )
+      return
     if (event.filename && !sameOrigin(event.filename)) return
     reportError(event.error ?? event.message, { kind: 'uncaught' })
   })
