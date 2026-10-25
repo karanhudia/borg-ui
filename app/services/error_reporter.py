@@ -276,7 +276,10 @@ def _report(
         "message": scrub_secrets(message)[:MESSAGE_LIMIT],
     }
     if stack:
-        props["stack"] = scrub_secrets(stack)[:STACK_LIMIT]
+        # a Python traceback ends with the innermost frame and the exception
+        # line, so keep the tail; scrubbing 64 KB keeps any secret cut at that
+        # boundary far outside the 8 KB that is sent
+        props["stack"] = scrub_secrets(stack[-SCRUB_INPUT_LIMIT:])[-STACK_LIMIT:]
     props["fingerprint"] = fingerprint
     if component:
         props["component"] = component

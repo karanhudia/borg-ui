@@ -239,6 +239,16 @@ def test_caps_reports_at_30_per_hour(sent):
     assert len(sent) == 30
 
 
+def test_long_stack_keeps_the_exception_line(monkeypatch, sent):
+    stack = "frame\n" * 20000 + "BORG_PASSPHRASE=hunter2\nRuntimeError: boom\n"
+    monkeypatch.setattr(error_reporter, "_format_stack", lambda exc: stack)
+    report_exception(RuntimeError("boom"), kind="job")
+    flush()
+    out = sent[0]["props"]["stack"]
+    assert len(out) <= error_reporter.STACK_LIMIT
+    assert out.endswith("RuntimeError: boom\n") and "hunter2" not in out
+
+
 def test_drops_stack_when_props_too_large(monkeypatch, sent):
     # 8192 characters escape to six each in JSON: only non-ASCII can pass the cap
     monkeypatch.setattr(error_reporter, "_format_stack", lambda exc: "\u00e9" * 20000)
