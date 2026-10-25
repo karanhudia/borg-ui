@@ -698,16 +698,21 @@ def backup_jobs_started_since(
     return _facades(db, ops.all())
 
 
-def recent_backup_jobs(db: Session, limit: int) -> list:
-    """The newest backups by start time, with queued rows kept.
-
-    A queued backup has no `started_at`; it sorts last here rather than being
-    filtered out.
-    """
+def recent_backup_jobs(
+    db: Session, limit: int, *, accessible: Optional[set] = None
+) -> list:
+    """The newest visible backups by start time, with queued rows kept."""
+    query = _operations_query(db)
+    if accessible is not None:
+        query = query.filter(
+            or_(
+                Operation.repository_id.is_(None),
+                Operation.repository_id.in_(accessible),
+            )
+        )
     return _facades(
         db,
-        _operations_query(db)
-        .order_by(nullslast(Operation.started_at.desc()), Operation.id.desc())
+        query.order_by(nullslast(Operation.started_at.desc()), Operation.id.desc())
         .limit(limit)
         .all(),
     )

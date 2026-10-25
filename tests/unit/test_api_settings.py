@@ -1165,3 +1165,64 @@ class TestDeploymentProfile:
             headers=auth_headers,
         )
         assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["viewer", "operator"])
+async def test_authorization_monitoring_handler_requires_admin(test_db, role):
+    from fastapi import HTTPException
+    from types import SimpleNamespace
+    from app.api.settings import run_backup_monitoring_now
+
+    with pytest.raises(HTTPException) as exc:
+        await run_backup_monitoring_now(SimpleNamespace(role=role), test_db)
+    assert exc.value.status_code == 403
+    assert exc.value.detail == {"key": "backend.errors.settings.adminAccessRequired"}
+
+
+def test_authorization_users_requires_authentication(test_client, auth_headers):
+    assert test_client.get("/api/settings/users").status_code == 401
+    assert (
+        test_client.get("/api/settings/users", headers=auth_headers).status_code == 403
+    )
+
+
+@pytest.mark.parametrize("headers_fixture", ["auth_headers", "operator_headers"])
+def test_authorization_monitoring_http_requires_admin(
+    test_client, request, headers_fixture
+):
+    response = test_client.post(
+        "/api/settings/backup-monitoring/run",
+        headers=request.getfixturevalue(headers_fixture),
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == {
+        "key": "backend.errors.settings.adminAccessRequired"
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["viewer", "operator"])
+async def test_authorization_backup_report_handler_requires_admin(test_db, role):
+    from fastapi import HTTPException
+    from types import SimpleNamespace
+    from app.api.settings import send_backup_report_now
+
+    with pytest.raises(HTTPException) as exc:
+        await send_backup_report_now(SimpleNamespace(role=role), test_db)
+    assert exc.value.status_code == 403
+    assert exc.value.detail == {"key": "backend.errors.settings.adminAccessRequired"}
+
+
+@pytest.mark.parametrize("headers_fixture", ["auth_headers", "operator_headers"])
+def test_authorization_backup_report_http_requires_admin(
+    test_client, request, headers_fixture
+):
+    response = test_client.post(
+        "/api/settings/backup-reports/send",
+        headers=request.getfixturevalue(headers_fixture),
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == {
+        "key": "backend.errors.settings.adminAccessRequired"
+    }

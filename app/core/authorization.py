@@ -53,6 +53,15 @@ def _template_to_regex(path: str) -> Pattern[str]:
 
 
 ENDPOINT_POLICIES: Dict[Tuple[str, str], EndpointPolicy] = {
+    ("POST", "/api/repositories/{repo_id}/permanent-delete"): EndpointPolicy(
+        ("admin",), "backend.errors.repo.adminAccessRequired"
+    ),
+    ("POST", "/api/settings/backup-monitoring/run"): EndpointPolicy(
+        ("admin",), "backend.errors.settings.adminAccessRequired"
+    ),
+    ("POST", "/api/settings/backup-reports/send"): EndpointPolicy(
+        ("admin",), "backend.errors.settings.adminAccessRequired"
+    ),
     ("PUT", "/api/settings/system"): EndpointPolicy(
         ("admin",), "backend.errors.settings.adminAccessRequired"
     ),

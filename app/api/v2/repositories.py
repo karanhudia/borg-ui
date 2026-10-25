@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from typing import Any, Optional
 import structlog
 
+from app.core.security import require_role_dependency
 from app.database.database import get_db
 from app.database.models import User, Repository, SSHConnection, SystemSettings
 from app.core.security import check_repo_access, get_current_user
@@ -287,7 +288,11 @@ def list_encryption_modes(current_user: User = Depends(get_current_user)):
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_repository(
     data: RepositoryV2Create,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.repo.adminAccessRequired"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Create and initialise a new Borg 2 repository (borg2 rcreate)."""
@@ -405,7 +410,11 @@ async def create_repository(
 @router.post("/import", status_code=status.HTTP_201_CREATED)
 async def import_repository(
     data: RepositoryV2Import,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.repo.adminAccessRequired"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Import an existing Borg 2 repository (no rcreate — repo already exists)."""

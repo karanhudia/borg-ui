@@ -27,8 +27,8 @@ from app.core.features import require_feature
 from app.core.security import (
     decrypt_secret,
     encrypt_secret,
-    get_current_download_user,
     get_current_user,
+    require_role_dependency,
 )
 from app.services.storage_usage import format_bytes
 from app.database.database import get_db
@@ -2289,7 +2289,10 @@ async def get_status(current_user: User = Depends(get_current_user)):
 
 @router.get("/providers")
 async def list_providers(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
+    db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
     catalog = await _provider_catalog()
@@ -2332,7 +2335,10 @@ def _serialize_oauth_credential_status(provider: str, db: Session) -> dict[str, 
 
 @router.get("/oauth/credentials", dependencies=[RCLONE_FEATURE_DEPENDENCY])
 def list_oauth_credentials(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
+    db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
     return {
@@ -2347,7 +2353,9 @@ def list_oauth_credentials(
 async def update_oauth_credentials(
     provider: str,
     payload: RcloneOAuthCredentialUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
@@ -2403,7 +2411,9 @@ async def update_oauth_credentials(
 )
 async def start_oauth_session(
     payload: RcloneOAuthStart,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
@@ -2483,7 +2493,9 @@ async def start_oauth_session(
 @router.get("/oauth/sessions/{session_id}", dependencies=[RCLONE_FEATURE_DEPENDENCY])
 async def get_oauth_session(
     session_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
 ):
     _require_admin(current_user)
     if _get_oauth_session(session_id) is None:
@@ -2500,7 +2512,11 @@ async def get_oauth_session(
 )
 async def open_oauth_authorization(
     session_id: str,
-    current_user: User = Depends(get_current_download_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.forbidden", allow_download_token=True
+        )
+    ),
 ):
     _require_admin(current_user)
     session = _get_oauth_session(session_id)
@@ -2631,7 +2647,9 @@ async def complete_borg_ui_oauth_callback(
 )
 async def cancel_oauth_session(
     session_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
 ):
     _require_admin(current_user)
     session = await _drop_oauth_session_async(session_id)
@@ -2642,7 +2660,9 @@ async def cancel_oauth_session(
 
 @router.get("/remotes")
 def list_remotes(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
@@ -2657,7 +2677,9 @@ def list_remotes(
 )
 async def create_remote(
     payload: RcloneRemoteCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
@@ -2718,7 +2740,9 @@ async def create_remote(
 async def update_remote(
     remote_id: int,
     payload: RcloneRemoteUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
@@ -2828,7 +2852,9 @@ async def update_remote(
 )
 async def delete_remote(
     remote_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
@@ -2868,7 +2894,9 @@ async def delete_remote(
 @router.post("/remotes/{remote_id}/test", dependencies=[RCLONE_FEATURE_DEPENDENCY])
 async def test_remote(
     remote_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
@@ -2897,7 +2925,9 @@ async def test_remote(
 async def browse_remote(
     remote_id: int,
     path: str = "",
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency("admin", detail_key="backend.errors.forbidden")
+    ),
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)

@@ -481,12 +481,17 @@ class TestStartupBuildsSchema:
 
 
 def test_validation_error_does_not_echo_submitted_input():
+    from fastapi import FastAPI
+    from fastapi.exceptions import RequestValidationError
     from fastapi.testclient import TestClient
 
-    from app.main import app
+    from app.main import validation_error_handler
+
+    app = FastAPI()
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
 
     # Unauthenticated body validation runs before the handler's auth dependency
-    # only on routes without one, so use a throwaway route.
+    # only on routes without one, so isolate the route from the production app.
     from pydantic import BaseModel
 
     class Body(BaseModel):

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import Optional
 import structlog
 from sqlalchemy.orm import Session
-from app.api.auth import get_current_user
+from app.core.security import require_role_dependency
 from app.database.models import User, Repository, SSHConnection
 from app.database.database import get_db
 from app.services.script_executor import execute_script
@@ -35,7 +35,11 @@ class ScriptTestResponse(BaseModel):
 @router.post("/test", response_model=ScriptTestResponse)
 async def test_script(
     request: ScriptTestRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.scripts.adminAccessRequired"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Test run a script using the shared script executor"""

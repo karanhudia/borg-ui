@@ -6404,3 +6404,66 @@ async def test_wait_for_agent_job_failure_surfaces_borg_stderr(test_db):
         "repository.info exited with code 2: "
         "Failed to create/acquire the lock /repo/lock.exclusive (Permission denied)."
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("permanent", [False, True])
+async def test_authorization_delete_handler_requires_admin(
+    test_db, operator_user, tmp_path, permanent
+):
+    from app.api.repositories import (
+        delete_repository,
+        permanently_delete_repository,
+        RepositoryPermanentDeleteRequest,
+    )
+
+    operator_user.all_repositories_role = "operator"
+    root = tmp_path / "private-repository"
+    root.mkdir()
+    repo = Repository(
+        name="private-repository", path=str(root), repository_type="local"
+    )
+    test_db.add(repo)
+    test_db.commit()
+    with pytest.raises(HTTPException) as exc:
+        if permanent:
+            await permanently_delete_repository(
+                repo.id,
+                RepositoryPermanentDeleteRequest(
+                    understood=True, confirmation_phrase=repo.name
+                ),
+                operator_user,
+                test_db,
+            )
+        else:
+            await delete_repository(repo.id, operator_user, test_db)
+    assert exc.value.status_code == 403
+    assert root.is_dir()
+    assert test_db.get(Repository, repo.id) is not None
+
+
+@pytest.mark.parametrize("permanent", [False, True])
+def test_authorization_delete_http_requires_admin(
+    test_client, test_db, operator_user, operator_headers, tmp_path, permanent
+):
+    operator_user.all_repositories_role = "operator"
+    root = tmp_path / "http-private-repository"
+    root.mkdir()
+    repo = Repository(
+        name="http-private-repository", path=str(root), repository_type="local"
+    )
+    test_db.add(repo)
+    test_db.commit()
+    if permanent:
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/permanent-delete",
+            headers=operator_headers,
+            json={"understood": True, "confirmation_phrase": repo.name},
+        )
+    else:
+        response = test_client.delete(
+            f"/api/repositories/{repo.id}", headers=operator_headers
+        )
+    assert response.status_code == 403
+    assert root.is_dir()
+    assert test_db.get(Repository, repo.id) is not None

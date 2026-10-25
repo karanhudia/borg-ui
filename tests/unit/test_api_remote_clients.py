@@ -156,8 +156,14 @@ class TestRemoteClientsApi:
             ),
         ]
 
+    @pytest.mark.parametrize("use_query_token", [False, True])
     def test_proxy_remote_client_request_from_server(
-        self, test_client: TestClient, admin_headers, monkeypatch
+        self,
+        test_client: TestClient,
+        admin_headers,
+        admin_token,
+        monkeypatch,
+        use_query_token,
     ):
         create_response = test_client.post(
             "/api/remote-clients",
@@ -207,8 +213,8 @@ class TestRemoteClientsApi:
 
         response = test_client.get(
             "/api/remote-clients/studio-nas/proxy/api/repositories"
-            "?token=local-token&target_token=remote-token&limit=5",
-            headers=admin_headers,
+            f"?token={admin_token if use_query_token else 'local-token'}&target_token=remote-token&limit=5",
+            headers={} if use_query_token else admin_headers,
         )
 
         assert response.status_code == 200

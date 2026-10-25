@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import get_runtime_app_version
 from app.core.security import (
     get_current_admin_user,
-    get_current_download_user,
+    get_current_download_admin_user,
     require_any_role,
 )
 from app.database.database import get_db
@@ -483,7 +483,7 @@ async def proxy_remote_client_request(
     client_id: str,
     path: str,
     request: Request,
-    current_user: User = Depends(get_current_download_user),
+    current_user: User = Depends(get_current_download_admin_user),
     db: Session = Depends(get_db),
 ):
     require_any_role(current_user, "admin")

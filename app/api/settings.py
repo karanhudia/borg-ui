@@ -15,6 +15,8 @@ from app.core.security import (
     BcryptPassword,
     encrypt_secret,
     get_current_user,
+    get_current_admin_user,
+    require_any_role,
     get_password_hash,
     verify_password,
 )
@@ -1311,7 +1313,9 @@ async def run_backup_monitoring_now(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Manually run backup freshness monitoring."""
-    del current_user
+    require_any_role(
+        current_user, "admin", detail_key="backend.errors.settings.adminAccessRequired"
+    )
     require_feature_access(db, "alerting_monitoring")
     try:
         return await backup_monitoring_service.run_backup_monitoring(
@@ -1333,7 +1337,9 @@ async def send_backup_report_now(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Manually send a backup health report."""
-    del current_user
+    require_any_role(
+        current_user, "admin", detail_key="backend.errors.settings.adminAccessRequired"
+    )
     require_feature_access(db, "backup_reports")
     try:
         return await backup_monitoring_service.send_backup_report_now(
@@ -1351,7 +1357,9 @@ async def send_backup_report_now(
 
 
 @router.get("/users")
-def get_users(db: Session = Depends(get_db)):
+def get_users(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_admin_user)
+):
     """Get all users (admin only)"""
     try:
         users = db.query(User).all()

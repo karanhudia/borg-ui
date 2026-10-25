@@ -60,7 +60,7 @@ from app.services.operations.repository_status import (
     storage_summaries,
 )
 from app.core.authorization import authorize_request
-from app.core.security import get_current_user, check_repo_access
+from app.core.security import get_current_user, check_repo_access, require_any_role
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error, is_repository_exists_failure
@@ -6013,6 +6013,9 @@ async def delete_repository(
     db: Session = Depends(get_db),
 ):
     """Delete repository (admin only)"""
+    require_any_role(
+        current_user, "admin", detail_key="backend.errors.repo.adminAccessRequired"
+    )
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
@@ -6122,6 +6125,9 @@ async def permanently_delete_repository(
     db: Session = Depends(get_db),
 ):
     """Delete a local repository directory, then remove the Borg UI record."""
+    require_any_role(
+        current_user, "admin", detail_key="backend.errors.repo.adminAccessRequired"
+    )
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:

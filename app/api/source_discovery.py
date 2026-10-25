@@ -766,7 +766,19 @@ def _is_configured_sqlite_database(path: Path) -> bool:
     return candidate_path == configured_path
 
 
-def _local_path_probe(path: str) -> tuple[PathProbe, ScanWarning | None]:
+def _local_path_probe(
+    path: str, current_user: User | None = None
+) -> tuple[PathProbe, ScanWarning | None]:
+    if current_user is not None:
+        _require_scan_access(
+            current_user,
+            "local",
+            [path]
+            + [
+                os.path.join(path, marker)
+                for marker in ("PG_VERSION", "mysql", "WiredTiger", "dump.rdb")
+            ],
+        )
     candidate = Path(path)
     probe = PathProbe(path=path)
     try:
@@ -1380,6 +1392,7 @@ def _walk_local_path(
     root: str,
     max_depth: int,
     ignore_patterns: list[str],
+    current_user: User | None = None,
 ) -> tuple[list[PathProbe], list[ScanWarning]]:
     """Walk one root path emitting probes for every directory that looks like
     a DB data dir plus every file that looks like a SQLite database. Depth 0
@@ -1392,7 +1405,7 @@ def _walk_local_path(
 
     # Always probe the root itself; this preserves the legacy "you can point
     # at a specific dir" behaviour even when max_depth is 0.
-    root_probe, root_warning = _local_path_probe(root)
+    root_probe, root_warning = _local_path_probe(root, current_user=current_user)
     probes.append(root_probe)
     if root_warning is not None:
         warnings.append(root_warning)
@@ -1434,7 +1447,7 @@ def _walk_local_path(
                 child = os.path.join(current_dir, dirname)
                 if child == root:
                     continue
-                probe, warning = _local_path_probe(child)
+                probe, warning = _local_path_probe(child, current_user=current_user)
                 if probe.exists:
                     probes.append(probe)
                 if warning is not None:
@@ -1448,7 +1461,7 @@ def _walk_local_path(
                 ):
                     continue
                 file_path = os.path.join(current_dir, filename)
-                probe, warning = _local_path_probe(file_path)
+                probe, warning = _local_path_probe(file_path, current_user=current_user)
                 if probe.exists:
                     probes.append(probe)
                 if warning is not None:
@@ -1477,6 +1490,7 @@ def _scan_local_database_paths(
     paths: list[str],
     max_depth: int = DEFAULT_SCAN_MAX_DEPTH,
     ignore_patterns: list[str] | None = None,
+    current_user: User | None = None,
 ) -> DatabaseScanResponse:
     templates = _templates()
     patterns = (
@@ -1486,7 +1500,9 @@ def _scan_local_database_paths(
     warnings: list[ScanWarning] = []
 
     for path in paths:
-        path_probes, path_warnings = _walk_local_path(path, max_depth, patterns)
+        path_probes, path_warnings = _walk_local_path(
+            path, max_depth, patterns, current_user=current_user
+        )
         probes.extend(path_probes)
         warnings.extend(path_warnings)
 
@@ -1508,10 +1524,15 @@ async def _scan_local_database_paths_with_timeout(
     max_depth: int,
     ignore_patterns: list[str],
     timeout_seconds: int,
+    current_user: User | None = None,
 ) -> DatabaseScanResponse:
     return await asyncio.wait_for(
         asyncio.to_thread(
-            _scan_local_database_paths, paths, max_depth, ignore_patterns
+            _scan_local_database_paths,
+            paths,
+            max_depth,
+            ignore_patterns,
+            current_user=current_user,
         ),
         timeout=timeout_seconds,
     )
@@ -1521,9 +1542,12 @@ def _default_paths_for_template(template_id: str) -> list[str]:
     return DEFAULT_DATABASE_SCAN_PATHS_BY_ENGINE.get(template_id, [])
 
 
-def _detect_template(template: DatabaseCandidate) -> DatabaseCandidate | None:
+def _detect_template(
+    template: DatabaseCandidate, current_user: User | None = None
+) -> DatabaseCandidate | None:
     probes = [
-        _local_path_probe(path)[0] for path in _default_paths_for_template(template.id)
+        _local_path_probe(path, current_user=current_user)[0]
+        for path in _default_paths_for_template(template.id)
     ]
     command_available = {
         command: which(command) is not None for command in template.client_commands
@@ -1882,6 +1906,7 @@ async def _scan_local_containers(
     request: ContainerScanRequest,
     *,
     with_sizes: bool = True,
+    current_user: User | None = None,
 ) -> ContainerScanResponse | JSONResponse:
     scan_target = _scan_target("local")
     timeout_seconds = (
@@ -1914,6 +1939,18 @@ async def _scan_local_containers(
         )
 
     containers = _parse_container_scan_output(result.stdout or "")
+    if current_user is not None:
+        _require_scan_access(
+            current_user,
+            "local",
+            [
+                path
+                for container in containers
+                for mount in container.mounts
+                if mount.source
+                for path in _local_mount_size_probe_paths(mount.source)
+            ],
+        )
     if with_sizes:
         await asyncio.to_thread(
             _enrich_local_container_mount_sizes,
@@ -2044,15 +2081,34 @@ def discover_filesystem_snapshot_capabilities(
     )
 
 
+# Detecting and inspecting apps runs commands on a machine and reads its
+# folders, so it takes the same roles as the file browser.
+_APP_SOURCE_ROLES = require_role_dependency(
+    "admin", "operator", detail_key="backend.errors.filesystem.operatorAccessRequired"
+)
+
+
+def _require_scan_access(current_user: User, source_type: str, paths=()) -> None:
+    if current_user.role == "admin":
+        return
+    if source_type == "remote" or any(
+        not is_within_local_mount(os.path.realpath(path)) for path in paths
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail={"key": "backend.errors.filesystem.permissionDenied"},
+        )
+
+
 @router.post("/databases/scan", response_model=DatabaseScanResponse)
 async def scan_databases(
     request: DatabaseScanRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_APP_SOURCE_ROLES),
     db: Session = Depends(get_db),
 ) -> DatabaseScanResponse | JSONResponse:
-    del current_user
     require_feature_access(db, "database_discovery")
     paths = _validate_database_scan_request(request)
+    _require_scan_access(current_user, request.source_type, paths)
 
     # Validation already normalised these to safe values; assert for type
     # narrowing.
@@ -2068,6 +2124,7 @@ async def scan_databases(
             max_depth=request.max_depth,
             ignore_patterns=request.ignore_patterns,
             timeout_seconds=request.timeout_seconds,
+            current_user=current_user,
         )
     except asyncio.TimeoutError:
         return _failure_response(
@@ -2085,28 +2142,38 @@ async def scan_databases(
 @router.post("/containers/scan", response_model=ContainerScanResponse)
 async def scan_containers(
     request: ContainerScanRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_APP_SOURCE_ROLES),
     db: Session = Depends(get_db),
 ) -> ContainerScanResponse | JSONResponse:
-    del current_user
     require_feature_access(db, "container_backups")
     _validate_container_scan_request(request)
+    _require_scan_access(current_user, request.source_type)
 
     if request.source_type == "remote":
         return await _scan_remote_containers(request, db)
-    return await _scan_local_containers(request)
+    return await _scan_local_containers(request, current_user=current_user)
 
 
 @router.get("/databases", response_model=DatabaseDiscoveryResponse)
 def discover_databases(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_APP_SOURCE_ROLES),
     db: Session = Depends(get_db),
 ) -> DatabaseDiscoveryResponse:
-    del current_user
     require_feature_access(db, "database_discovery")
+    _require_scan_access(
+        current_user,
+        "local",
+        [
+            path
+            for template in _templates()
+            for path in _default_paths_for_template(template.id)
+        ],
+    )
     templates = _templates()
     detections = [
-        detection for template in templates if (detection := _detect_template(template))
+        detection
+        for template in templates
+        if (detection := _detect_template(template, current_user=current_user))
     ]
     return DatabaseDiscoveryResponse(
         source_types=_source_types(),
@@ -2253,13 +2320,6 @@ def _app_detections(
             )
         )
     return detections
-
-
-# Detecting and inspecting apps runs commands on a machine and reads its
-# folders, so it takes the same roles as the file browser.
-_APP_SOURCE_ROLES = require_role_dependency(
-    "admin", "operator", detail_key="backend.errors.filesystem.operatorAccessRequired"
-)
 
 
 @router.get("/apps", response_model=AppTemplateListResponse)

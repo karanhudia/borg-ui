@@ -27,6 +27,7 @@ from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.operations.maintenance_start import active_delete_for_archive
 from app.core.security import (
+    require_role_dependency,
     check_repo_access,
     get_current_user,
     get_current_download_user,
@@ -614,7 +615,11 @@ async def get_archive_contents(
 async def delete_archive(
     repository: str,
     archive_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.archives.adminAccessRequired"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Delete a Borg 2 archive (non-blocking background job).

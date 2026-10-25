@@ -577,6 +577,15 @@ async def get_current_admin_user(
     return current_user
 
 
+async def get_current_download_admin_user(
+    request: Request, db: Session = Depends(get_db)
+) -> User:
+    """Authenticate an administrator while preserving download query tokens."""
+    current_user = await get_current_download_user(request, db)
+    require_any_role(current_user, "admin")
+    return current_user
+
+
 def require_any_role(
     user: User,
     *allowed_roles: str,
@@ -591,12 +600,17 @@ def require_any_role(
 
 
 def require_role_dependency(
-    *allowed_roles: str, detail_key: str = "backend.errors.auth.notEnoughPermissions"
+    *allowed_roles: str,
+    detail_key: str = "backend.errors.auth.notEnoughPermissions",
+    allow_download_token: bool = False,
 ):
-    """Create a FastAPI dependency that resolves the user and enforces role membership."""
+    """Resolve a user and enforce roles, optionally accepting download query tokens."""
 
     async def dependency(request: Request, db: Session = Depends(get_db)) -> User:
-        current_user = await get_current_user(request, db)
+        authenticate = (
+            get_current_download_user if allow_download_token else get_current_user
+        )
+        current_user = await authenticate(request, db)
         return require_any_role(current_user, *allowed_roles, detail_key=detail_key)
 
     return dependency

@@ -1360,3 +1360,246 @@ class TestSourceDiscovery:
             "BORG_UI_DETECTED_PATH"
             not in detections[0]["script_drafts"]["pre_backup"]["content"]
         )
+
+
+@pytest.mark.parametrize(
+    "method,path,payload",
+    [
+        (
+            "post",
+            "/api/source-discovery/databases/scan",
+            {"source_type": "local", "paths": ["/outside"]},
+        ),
+        ("post", "/api/source-discovery/containers/scan", {"source_type": "local"}),
+        ("get", "/api/source-discovery/databases", None),
+    ],
+)
+def test_authorization_viewer_cannot_discover_sources(
+    test_client, auth_headers, method, path, payload
+):
+    kwargs = {"headers": auth_headers}
+    if payload is not None:
+        kwargs["json"] = payload
+    assert getattr(test_client, method)(path, **kwargs).status_code == 403
+
+
+def test_authorization_operator_database_root_must_be_mounted(
+    test_client, operator_headers, monkeypatch
+):
+    monkeypatch.setattr(source_discovery, "is_within_local_mount", lambda path: False)
+    response = test_client.post(
+        "/api/source-discovery/databases/scan",
+        headers=operator_headers,
+        json={"source_type": "local", "paths": ["/outside"]},
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize("path", ["/databases/scan", "/containers/scan"])
+def test_authorization_operator_cannot_use_stored_ssh(
+    test_client, operator_headers, path
+):
+    payload = {
+        "source_type": "remote",
+        "source_ssh_connection_id": 123,
+        "paths": ["/data"],
+    }
+    assert (
+        test_client.post(
+            "/api/source-discovery" + path, headers=operator_headers, json=payload
+        ).status_code
+        == 403
+    )
+
+
+def test_authorization_operator_default_discovery_roots_must_be_mounted(
+    test_client, operator_headers, monkeypatch
+):
+    monkeypatch.setattr(source_discovery, "is_within_local_mount", lambda path: False)
+    assert (
+        test_client.get(
+            "/api/source-discovery/databases", headers=operator_headers
+        ).status_code
+        == 403
+    )
+
+
+def test_authorization_operator_container_mount_rejected_before_probe(
+    test_client, operator_headers, monkeypatch
+):
+    monkeypatch.setattr(source_discovery, "is_within_local_mount", lambda path: False)
+    monkeypatch.setattr(
+        source_discovery,
+        "_run_local_container_scan",
+        lambda **kwargs: subprocess.CompletedProcess(
+            [],
+            0,
+            stdout=json.dumps(
+                {
+                    "Id": "123",
+                    "Name": "/test",
+                    "Config": {"Image": "test"},
+                    "State": {"Status": "running"},
+                    "Mounts": [
+                        {"Type": "bind", "Source": "/outside", "Destination": "/data"}
+                    ],
+                }
+            ),
+            stderr="",
+        ),
+    )
+
+    def forbidden_probe(*args, **kwargs):
+        raise AssertionError("Forbidden container mount must not be probed")
+
+    monkeypatch.setattr(
+        source_discovery, "_enrich_local_container_mount_sizes", forbidden_probe
+    )
+    assert (
+        test_client.post(
+            "/api/source-discovery/containers/scan",
+            headers=operator_headers,
+            json={"source_type": "local"},
+        ).status_code
+        == 403
+    )
+
+
+def test_authorization_operator_database_realpath_must_be_mounted(
+    test_client, operator_headers, monkeypatch, tmp_path
+):
+    mounted = tmp_path / "mounted"
+    outside = tmp_path / "outside"
+    mounted.mkdir()
+    outside.mkdir()
+    (mounted / "escape").symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(
+        source_discovery,
+        "is_within_local_mount",
+        lambda path: path.startswith(str(mounted) + os.sep),
+    )
+    response = test_client.post(
+        "/api/source-discovery/databases/scan",
+        headers=operator_headers,
+        json={"source_type": "local", "paths": [str(mounted / "escape")]},
+    )
+    assert response.status_code == 403
+
+
+def test_authorization_operator_can_scan_allowed_local_database_root(
+    test_client, operator_headers, monkeypatch, tmp_path
+):
+    root = _scan_root(tmp_path)
+    database = root / "allowed.sqlite"
+    connection = sqlite3.connect(database)
+    connection.execute("create table example (id integer)")
+    connection.close()
+    monkeypatch.setattr(source_discovery.settings, "local_mount_points", str(root))
+    response = test_client.post(
+        "/api/source-discovery/databases/scan",
+        headers=operator_headers,
+        json={"source_type": "local", "paths": [str(root)]},
+    )
+    assert response.status_code == 200
+    assert str(database) in response.text
+
+
+@pytest.mark.parametrize(
+    "escape_kind",
+    ["directory", "file", "PG_VERSION", "mysql", "WiredTiger", "dump.rdb"],
+)
+@pytest.mark.parametrize("endpoint", ["scan", "default-list"])
+@pytest.mark.parametrize("role", ["operator", "admin"])
+def test_authorization_local_scan_checks_symlink_candidates_before_probing(
+    test_client, request, monkeypatch, tmp_path, escape_kind, role, endpoint
+):
+    from pathlib import Path
+
+    root = _scan_root(tmp_path)
+    ordinary = root / "ordinary.sqlite3"
+    ordinary.write_bytes(b"SQLite format 3\x00")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    if escape_kind == "directory":
+        target = outside / "postgresql"
+        target.mkdir()
+        (target / "PG_VERSION").write_text("17\n")
+        escaped = root / "escaped-postgresql"
+        escaped.symlink_to(target, target_is_directory=True)
+    elif escape_kind == "file":
+        target = outside / "private.sqlite3"
+        target.write_bytes(b"SQLite format 3\x00")
+        escaped = root / "escaped.sqlite3"
+        escaped.symlink_to(target)
+    else:
+        target = outside / escape_kind
+        if escape_kind == "mysql":
+            target.mkdir()
+        else:
+            target.write_text("17\n")
+        escaped = root / "database"
+        escaped.mkdir()
+        (escaped / escape_kind).symlink_to(target, target_is_directory=target.is_dir())
+
+    monkeypatch.setattr(source_discovery.settings, "local_mount_points", str(root))
+    outside_checks = []
+    original_exists = Path.exists
+    original_is_dir = Path.is_dir
+
+    def record_exists(path):
+        if os.path.realpath(path).startswith(str(outside) + os.sep):
+            outside_checks.append(str(path))
+        return original_exists(path)
+
+    def record_is_dir(path):
+        if os.path.realpath(path).startswith(str(outside) + os.sep):
+            outside_checks.append(str(path))
+        return original_is_dir(path)
+
+    monkeypatch.setattr(Path, "exists", record_exists)
+    monkeypatch.setattr(Path, "is_dir", record_is_dir)
+    headers = request.getfixturevalue(f"{role}_headers")
+    if endpoint == "scan":
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            headers=headers,
+            json={"source_type": "local", "paths": [str(root)], "max_depth": 2},
+        )
+    else:
+        monkeypatch.setattr(
+            source_discovery,
+            "_default_paths_for_template",
+            lambda template: [str(escaped)],
+        )
+        response = test_client.get("/api/source-discovery/databases", headers=headers)
+    if role == "operator":
+        assert response.status_code == 403
+        assert outside_checks == []
+    else:
+        assert response.status_code == 200
+        sources = {row["detection_source"] for row in response.json()["detections"]}
+        if endpoint == "scan":
+            assert str(ordinary) in sources
+        assert str(escaped) in sources
+
+
+def test_authorization_operator_local_scan_preserves_ordinary_allowed_child(
+    test_client, operator_headers, monkeypatch, tmp_path
+):
+    root = _scan_root(tmp_path)
+    child = root / "nested"
+    child.mkdir()
+    database = child / "allowed.sqlite3"
+    database.write_bytes(b"SQLite format 3\x00")
+    monkeypatch.setattr(source_discovery.settings, "local_mount_points", str(root))
+    response = test_client.post(
+        "/api/source-discovery/databases/scan",
+        headers=operator_headers,
+        json={"source_type": "local", "paths": [str(root)], "max_depth": 2},
+    )
+    assert response.status_code == 200
+    assert {
+        row["detection_source"]
+        for row in response.json()["detections"]
+        if row["id"] == "sqlite"
+    } == {str(database)}

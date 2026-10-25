@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import structlog
 
+from app.core.security import require_role_dependency
 from app.core.borg_major import is_borg2
 from app.database.database import get_db
 from app.database.models import (
@@ -192,7 +193,11 @@ async def run_backup(
 @router.post("/prune")
 async def prune_archives(
     data: PruneV2Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.repo.adminAccessRequired"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Prune old Borg 2 archives.
@@ -331,7 +336,11 @@ async def _agent_prune_dry_run(
 @router.post("/compact")
 async def compact_repository(
     data: CompactV2Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.repo.adminAccessRequired"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Compact a Borg 2 repository to reclaim disk space (non-blocking).
@@ -373,7 +382,11 @@ async def compact_repository(
 @router.post("/check")
 async def check_repository(
     data: CheckV2Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.repo.adminAccessRequired"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Start a Borg 2 repository integrity check (non-blocking).
