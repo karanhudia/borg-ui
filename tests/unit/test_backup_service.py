@@ -1669,6 +1669,7 @@ class TestBackupService:
                 "compression": "lz4",
                 "custom_flags": None,
                 "upload_ratelimit_kib": 640,
+                "skip_hooks": False,
             }
         ]
 

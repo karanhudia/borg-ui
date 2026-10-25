@@ -1781,6 +1781,7 @@ class BackupService:
                     compression=remote_compression,
                     custom_flags=remote_custom_flags,
                     upload_ratelimit_kib=effective_upload_ratelimit_kib,
+                    skip_hooks=skip_hooks,
                 )
                 return
 
