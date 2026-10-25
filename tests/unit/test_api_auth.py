@@ -1641,22 +1641,25 @@ class TestOidcAuthentication:
             default_all_repositories_role="viewer",
         )
 
-    def test_oidc_id_token_requires_sub_exp_and_iat(self, monkeypatch):
+    @staticmethod
+    def _signing_jwk(private_key):
+        from jwt.algorithms import RSAAlgorithm
+
+        jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+        jwk.update({"kid": "signing-key", "use": "sig", "alg": "RS256"})
+        return jwk
+
+    @pytest.mark.asyncio
+    async def test_oidc_id_token_requires_sub_exp_and_iat(self, monkeypatch):
         from app.core.oidc import verify_id_token
 
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        jwks = {"keys": [self._signing_jwk(private_key)]}
 
-        class DummyJwkClient:
-            def __init__(self, jwks_uri):
-                self.jwks_uri = jwks_uri
+        async def fake_fetch_jwks(provider):
+            return jwks
 
-            def get_signing_key_from_jwt(self, token):
-                class SigningKey:
-                    key = private_key.public_key()
-
-                return SigningKey()
-
-        monkeypatch.setattr("app.core.oidc.PyJWKClient", DummyJwkClient)
+        monkeypatch.setattr("app.core.oidc.fetch_jwks", fake_fetch_jwks)
         provider = self._oidc_provider()
         now = datetime.now(timezone.utc)
         required_claims = {
@@ -1671,10 +1674,74 @@ class TestOidcAuthentication:
         for missing_claim in ("sub", "exp", "iat"):
             claims = dict(required_claims)
             claims.pop(missing_claim)
-            id_token = jwt.encode(claims, private_key, algorithm="RS256")
+            id_token = jwt.encode(
+                claims,
+                private_key,
+                algorithm="RS256",
+                headers={"kid": "signing-key"},
+            )
 
             with pytest.raises(Exception):
-                verify_id_token(provider, id_token, nonce="nonce-123")
+                await verify_id_token(provider, id_token, nonce="nonce-123")
+
+    @pytest.mark.asyncio
+    async def test_oidc_jwks_is_fetched_with_httpx(self, monkeypatch):
+        """The JWKS must go through httpx like every other provider call.
+
+        PyJWKClient fetches it with urllib, which blocks the event loop and is
+        rejected by proxies and WAFs that let the httpx calls through.
+        """
+        from app.core.oidc import verify_id_token
+
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        jwk = self._signing_jwk(private_key)
+        captured = {}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"keys": [jwk]}
+
+        class FakeAsyncClient:
+            def __init__(self, timeout):
+                self.timeout = timeout
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return None
+
+            async def get(self, url, **kwargs):
+                captured["url"] = url
+                captured["kwargs"] = kwargs
+                return FakeResponse()
+
+        monkeypatch.setattr("app.core.oidc.httpx.AsyncClient", FakeAsyncClient)
+        provider = self._oidc_provider()
+        now = datetime.now(timezone.utc)
+        id_token = jwt.encode(
+            {
+                "iss": provider.issuer,
+                "aud": provider.client_id,
+                "sub": "subject-123",
+                "iat": now,
+                "exp": now + timedelta(minutes=5),
+                "nonce": "nonce-123",
+            },
+            private_key,
+            algorithm="RS256",
+            headers={"kid": "signing-key"},
+        )
+
+        claims = await verify_id_token(provider, id_token, nonce="nonce-123")
+
+        assert claims["sub"] == "subject-123"
+        assert captured["url"] == provider.jwks_uri
+        # urllib followed redirects, httpx does not by default
+        assert captured["kwargs"]["follow_redirects"] is True
 
     @pytest.mark.asyncio
     async def test_oidc_token_exchange_uses_client_secret_basic(self, monkeypatch):
@@ -1809,7 +1876,7 @@ class TestOidcAuthentication:
         async def fake_exchange(*args, **kwargs):
             return {"id_token": "id-token-value", "access_token": "access-token"}
 
-        def fake_verify(*args, **kwargs):
+        async def fake_verify(*args, **kwargs):
             return {
                 "sub": "linked-subject",
                 "preferred_username": admin_user.username,
