@@ -41,9 +41,11 @@ from app.services.job_admission import (
 )
 from app.utils.datetime_utils import serialize_datetime
 from app.services.repository_executor import is_agent_executor
+from app.services.operations.enqueue import wake_runner
 from app.services.operations.backup_facade import (
     create_backup_operation,
     refresh_backup_job,
+    release_backup_operation,
     resolve_backup_job,
     wait_out_backup_operation,
 )
@@ -2038,6 +2040,37 @@ async def execute_multi_repo_schedule_by_id(scheduled_job_id: int):
         db.close()
 
 
+def _cancel_queued_backup(db: Session, operation_id: int) -> None:
+    """Cancel the backup if it is still queued; when that fails the runner
+    tries again, and the caller's own error goes on."""
+    from app.database.models import utc_now
+    from app.services.operations.runner import operation_runner
+
+    try:
+        # after an error the session may have to be rolled back first; it
+        # holds no change of its own here
+        db.rollback()
+        db.query(Operation).filter(
+            Operation.id == operation_id, Operation.status == "queued"
+        ).update(
+            {Operation.status: "cancelled", Operation.completed_at: utc_now()},
+            synchronize_session=False,
+        )
+        db.commit()
+    except Exception as e:
+        operation_runner.cancel_held_later(operation_id)
+        logger.error(
+            "Could not cancel the queued backup, the runner tries again",
+            operation_id=operation_id,
+            error=str(e),
+        )
+        try:
+            db.rollback()
+        except Exception:
+            # a connection too broken to roll back is dropped instead
+            db.invalidate()
+
+
 def _backup_executor(repository: Repository) -> str:
     """The executor a schedule's backup of `repository` runs on, chosen from
     the repository as the manual route and backup plans do (#1388)."""
@@ -2179,102 +2212,119 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     "skip_hooks": server_runs_repository_scripts,
                 },
                 scheduled_job_id=scheduled_job.id,
+                # The scripts below get the backup's id, so it exists before
+                # them; no runner starts it before they ran (#1431).
+                held=server_runs_repository_scripts,
+                commit=False,
             )
             backup_jobs.append(backup_job)
-
-            # Run repository-level pre-scripts if enabled
-            if server_runs_repository_scripts:
-                try:
-                    from app.services.script_library_executor import (
-                        ScriptLibraryExecutor,
-                    )
-
-                    # Check for library scripts first (newer system)
-                    library_scripts = (
-                        db.query(RepositoryScript)
-                        .filter(
-                            RepositoryScript.repository_id == repo.id,
-                            RepositoryScript.hook_type == "pre-backup",
-                            RepositoryScript.enabled == True,
-                        )
-                        .order_by(RepositoryScript.execution_order)
-                        .all()
-                    )
-
-                    if library_scripts:
-                        # Execute library scripts in order
-                        for repo_script in library_scripts:
-                            script = (
-                                db.query(Script)
-                                .filter_by(id=repo_script.script_id)
-                                .first()
-                            )
-                            if script:
-                                # Parse parameter values for this repository script
-                                import json
-
-                                param_values = (
-                                    json.loads(repo_script.parameter_values)
-                                    if repo_script.parameter_values
-                                    else None
-                                )
-
-                                await run_script_from_library(
-                                    script=script,
-                                    db=db,
-                                    job_id=backup_job.id,
-                                    repository=repo,
-                                    hook_type="pre-backup",
-                                    script_parameters=param_values,
-                                )
-                                logger.info(
-                                    "Repository library pre-script completed",
-                                    repo_name=repo.name,
-                                    script_name=script.name,
-                                )
-                    elif repo.pre_backup_script:
-                        # Fall back to inline script (legacy)
-                        executor = ScriptLibraryExecutor(db)
-                        timeout = repo.pre_hook_timeout or 300
-                        result = await executor.execute_inline_script(
-                            script_content=repo.pre_backup_script,
-                            script_type="pre-backup",
-                            timeout=timeout,
-                            repository=repo,
-                            backup_job_id=backup_job.id,
-                            backup_result=None,
-                        )
-                        if result["success"]:
-                            logger.info(
-                                "Repository inline pre-script completed",
-                                repo_name=repo.name,
-                            )
-                        else:
-                            logger.error(
-                                "Repository inline pre-script failed",
-                                repo_name=repo.name,
-                                error=result.get("logs"),
-                            )
-                except Exception as e:
-                    logger.error(
-                        "Repository pre-script failed",
-                        repo_name=repo.name,
-                        error=str(e),
-                    )
-                    # Continue with backup even if repo pre-script fails
-
-            # Execute backup.
-            # When run_repository_scripts=True the schedule already ran pre-backup scripts
-            # explicitly above, so tell execute_backup to skip its own hook execution to
-            # avoid running the same scripts a second time. A read of the
-            # backup that fails is waited out: its post-scripts and
-            # maintenance follow the backup, not the read. The wait polls on
-            # a session of its own, so this one ends its transaction first:
-            # a connection held idle for the whole backup is one the runner
-            # cannot use, and one a database may close under it. The id is
-            # read first: the commit expires the row.
+            # read before the commits below expire the row
             operation_id = backup_job.id
-            db.commit()
+            # A schedule that stops before the release below cancels its
+            # backup, which would run without the scripts around it; one
+            # still held when that fails is cancelled at the next start.
+            try:
+                db.commit()
+                wake_runner()
+
+                # Run repository-level pre-scripts if enabled
+                if server_runs_repository_scripts:
+                    try:
+                        from app.services.script_library_executor import (
+                            ScriptLibraryExecutor,
+                        )
+
+                        # Check for library scripts first (newer system)
+                        library_scripts = (
+                            db.query(RepositoryScript)
+                            .filter(
+                                RepositoryScript.repository_id == repo.id,
+                                RepositoryScript.hook_type == "pre-backup",
+                                RepositoryScript.enabled == True,
+                            )
+                            .order_by(RepositoryScript.execution_order)
+                            .all()
+                        )
+
+                        if library_scripts:
+                            # Execute library scripts in order
+                            for repo_script in library_scripts:
+                                script = (
+                                    db.query(Script)
+                                    .filter_by(id=repo_script.script_id)
+                                    .first()
+                                )
+                                if script:
+                                    # Parse parameter values for this repository script
+                                    import json
+
+                                    param_values = (
+                                        json.loads(repo_script.parameter_values)
+                                        if repo_script.parameter_values
+                                        else None
+                                    )
+
+                                    await run_script_from_library(
+                                        script=script,
+                                        db=db,
+                                        job_id=backup_job.id,
+                                        repository=repo,
+                                        hook_type="pre-backup",
+                                        script_parameters=param_values,
+                                    )
+                                    logger.info(
+                                        "Repository library pre-script completed",
+                                        repo_name=repo.name,
+                                        script_name=script.name,
+                                    )
+                        elif repo.pre_backup_script:
+                            # Fall back to inline script (legacy)
+                            executor = ScriptLibraryExecutor(db)
+                            timeout = repo.pre_hook_timeout or 300
+                            result = await executor.execute_inline_script(
+                                script_content=repo.pre_backup_script,
+                                script_type="pre-backup",
+                                timeout=timeout,
+                                repository=repo,
+                                backup_job_id=backup_job.id,
+                                backup_result=None,
+                            )
+                            if result["success"]:
+                                logger.info(
+                                    "Repository inline pre-script completed",
+                                    repo_name=repo.name,
+                                )
+                            else:
+                                logger.error(
+                                    "Repository inline pre-script failed",
+                                    repo_name=repo.name,
+                                    error=result.get("logs"),
+                                )
+                    except Exception as e:
+                        logger.error(
+                            "Repository pre-script failed",
+                            repo_name=repo.name,
+                            error=str(e),
+                        )
+                        # Continue with backup even if repo pre-script fails
+
+                # Execute backup.
+                # When run_repository_scripts=True the schedule already ran pre-backup scripts
+                # explicitly above, so tell execute_backup to skip its own hook execution to
+                # avoid running the same scripts a second time. A read of the
+                # backup that fails is waited out: its post-scripts and
+                # maintenance follow the backup, not the read. The wait polls on
+                # a session of its own, so this one ends its transaction first:
+                # a connection held idle for the whole backup is one the runner
+                # cannot use, and one a database may close under it. So does
+                # the release of the backup the pre-scripts held.
+                db.commit()
+                if server_runs_repository_scripts:
+                    await release_backup_operation(operation_id)
+            except BaseException:
+                if server_runs_repository_scripts:
+                    _cancel_queued_backup(db, operation_id)
+                raise
             await wait_out_backup_operation(operation_id)
 
             # Run repository-level post-scripts if enabled

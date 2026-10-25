@@ -346,6 +346,7 @@ def create_backup_operation(
     retry: Optional[dict] = None,
     repository_path: Optional[str] = None,
     commit: bool = True,
+    held: bool = False,
 ) -> BackupJobFacade:
     """The one creation site (spec 7.1). `executor` is `server` or `agent`
     and decides which path `run_backup` takes. `params` are the
@@ -353,12 +354,18 @@ def create_backup_operation(
     (`SERVICE_PARAMS`); None values are dropped so a service default is not
     shadowed. `retry` holds the details row's retry columns. With
     `repository` None the caller passes the path it was given and is
-    expected to fail the row itself before committing."""
+    expected to fail the row itself before committing. With `held` no
+    runner starts the backup until the caller releases it
+    (`release_backup_operation`)."""
     from app.services.backup_route_planner import apply_repository_route_to_backup_job
     from app.services.operations.enqueue import enqueue, wake_runner
 
     stored = {k: v for k, v in (params or {}).items() if v is not None}
     stored["executor"] = executor
+    if held:
+        from app.services.operations.runner import HOLD_PARAM, PROCESS_HOLD_ID
+
+        stored[HOLD_PARAM] = PROCESS_HOLD_ID
     if repository is None:
         stored["repository"] = repository_path
     operation = enqueue(
@@ -477,6 +484,46 @@ async def wait_out_backup_operation(
                 db.invalidate()
         await asyncio.sleep(delay)
         delay = min(delay * 2, BACKUP_WAIT_MAX_BACKOFF_SECONDS)
+
+
+async def release_backup_operation(operation_id: int) -> None:
+    """Let the runner start a backup created `held`, on a session of its
+    own. A database error is waited out as in `wait_out_backup_operation`:
+    the caller goes on to wait for the backup, which no runner starts while
+    it is held. A row no longer queued (cancelled meanwhile) is left as it
+    is."""
+    from app.database.database import SessionLocal
+    from app.services.operations.enqueue import wake_runner
+    from app.services.operations.runner import HOLD_PARAM
+
+    failed = 0
+    delay = BACKUP_WAIT_BACKOFF_SECONDS
+    while True:
+        db = SessionLocal()
+        try:
+            operation = db.get(Operation, operation_id)
+            if operation is not None and HOLD_PARAM in (operation.params or {}):
+                operation.params = {
+                    k: v for k, v in operation.params.items() if k != HOLD_PARAM
+                }
+                db.commit()
+            break
+        except TRANSIENT_DATABASE_ERRORS as exc:
+            failed += 1
+            logger.warning(
+                "Releasing the backup failed, trying again",
+                operation_id=operation_id,
+                attempt=failed,
+                error=str(exc),
+            )
+        finally:
+            try:
+                db.close()
+            except Exception:
+                db.invalidate()
+        await asyncio.sleep(delay)
+        delay = min(delay * 2, BACKUP_WAIT_MAX_BACKOFF_SECONDS)
+    wake_runner()
 
 
 def backup_job_has_logs(
