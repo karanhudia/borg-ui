@@ -644,6 +644,15 @@ describe('enqueueErrorReport', () => {
     expect(sent()[0]).not.toHaveProperty('instance_key')
   })
 
+  it('drops held reports at once on a decline, before any preference reload', async () => {
+    vi.resetModules()
+    const a = await import('../analytics')
+    a.enqueueErrorReport(report)
+    a.trackConsentResponse(false)
+    vi.advanceTimersByTime(10_000)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
   it('drops held reports when the preference loads with a no', async () => {
     vi.resetModules()
     prefs.value = { analytics_enabled: false, analytics_instance_key: KEY }

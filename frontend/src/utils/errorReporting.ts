@@ -78,6 +78,22 @@ const SCRUBBERS: [RegExp, string][] = [
     new RegExp(`(?<![A-Za-z0-9])((?:${KEYED})\\s*=\\s*)(?:"[^"]*"|'[^']*'|\\S+)`, 'gi'),
     '$1[redacted]',
   ],
+  // Bare HTTP Basic credentials (base64).
+  [/\bBasic\s+[A-Za-z0-9+/_-]{6,}={0,2}/g, 'Basic [redacted]'],
+  // camelCase keys (apiKey=, authToken=, clientSecret=); `monkey=1` stays.
+  [
+    /(?<=[a-z0-9])((?:Key|Token|Secret|Password|Passphrase|Pass)\s*=\s*)(?:"[^"]*"|'[^']*'|\S+)/g,
+    '$1[redacted]',
+  ],
+  // Quoted JSON keys: the key stays, the value goes (escaped quotes allowed).
+  [
+    /("(?:[\w.-]*[_.-])?(?:password|passphrase|token|secret|key|pass)"\s*:\s*)"(?:[^"\\]|\\.)*"/gi,
+    '$1"[redacted]"',
+  ],
+  [
+    /("[\w.-]*(?:Key|Token|Secret|Password|Passphrase)"\s*:\s*)"(?:[^"\\]|\\.)*"/g,
+    '$1"[redacted]"',
+  ],
 ]
 
 /** Replace secrets with `[redacted]`. Paths, hostnames and repository names stay. */
@@ -218,7 +234,8 @@ export const installGlobalErrorHandlers = (): void => {
     reportError(event.error ?? event.message, { kind: 'uncaught' })
   })
   window.addEventListener('unhandledrejection', (event) => {
-    if (isCancelled(event.reason)) return
+    // Axios failures were already reported by trackApiError.
+    if (isCancelled(event.reason) || axios.isAxiosError(event.reason)) return
     reportError(event.reason, { kind: 'rejection' })
   })
 }

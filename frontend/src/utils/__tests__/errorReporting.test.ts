@@ -81,6 +81,28 @@ describe('scrubSecrets', () => {
   })
 })
 
+describe('scrubSecrets more shapes', () => {
+  it('scrubs Basic credentials', () => {
+    expect(scrubSecrets('sent Basic dXNlcjpwYXNz to host')).toBe('sent Basic [redacted] to host')
+  })
+  it('scrubs camelCase keys but not look-alike words', () => {
+    const out = scrubSecrets('apiKey=A1 authToken=B2 accessToken="C 3" clientSecret=D4 monkey=1')
+    for (const v of ['A1', 'B2', 'C 3', 'D4']) expect(out).not.toContain(v)
+    expect(out).toContain('monkey=1')
+    expect(scrubSecrets('ssh://me@nas.local/./repo')).toBe('ssh://me@nas.local/./repo')
+  })
+  it('scrubs quoted JSON values and keeps the key', () => {
+    const out = scrubSecrets(
+      '{"password": "x1", "api_key":"y2", "accessToken": "z3", "pass":"a \\"b\\" c", "name": "keep"}'
+    )
+    for (const v of ['x1', 'y2', 'z3', 'a \\"b']) expect(out).not.toContain(v)
+    expect(out).toContain('"password": "[redacted]"')
+    expect(out).toContain('"accessToken": "[redacted]"')
+    expect(out).toContain('"name": "keep"')
+    expect(out).not.toContain('c"')
+  })
+})
+
 describe('reportError', () => {
   it('sends the Event shape props', () => {
     const sent = spyOnEnqueue()
@@ -301,6 +323,13 @@ describe('global handlers', () => {
     window.dispatchEvent(new Event('pagehide'))
     rejection(new Error('aborted by reload'))
     trackApiError({ isAxiosError: true, config: { method: 'get', url: '/x' } })
+    expect(sent).not.toHaveBeenCalled()
+  })
+
+  it('skips axios rejections, which trackApiError already reported', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    rejection(Object.assign(new Error('Request failed'), { isAxiosError: true }))
     expect(sent).not.toHaveBeenCalled()
   })
 

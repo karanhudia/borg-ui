@@ -592,6 +592,11 @@ export const trackLanguageChange = (languageCode: string): void => {
  * decline rates can be counted.
  */
 export const trackConsentResponse = (accepted: boolean): void => {
+  // A decline closes the gate now, so a failed preference reload cannot release held reports.
+  if (!accepted) {
+    analyticsDeclined = true
+    heldErrorReports = []
+  }
   enqueue(`Consent - ${accepted ? 'Accept' : 'Decline'}`, { name: 'analytics_banner' }, true)
 }
 
