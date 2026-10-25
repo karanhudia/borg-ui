@@ -993,9 +993,14 @@ def queue_agent_backup_job(
         ignore=admission_ignore_for(backup_job),
     )
 
-    archive_name = archive_name or (
-        f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
-    )
+    if not archive_name:
+        # As on the server: Borg 2's unnamed manual backup is one series, so
+        # the prune rules apply to it; Borg 1 names must be unique.
+        archive_name = (
+            "manual-backup"
+            if is_borg2(repository)
+            else f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+        )
     backup_job.execution_mode = EXECUTOR_AGENT
     backup_job.archive_name = archive_name
 
