@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional
 
 from app.core.borg2 import (
     borg2,
-    borg2_encryption_flags,
     borg2_remote_path_env,
     borg2_removed_encryption_refusal,
 )
@@ -38,20 +37,13 @@ class RepositoryV2Service:
                     remote_path=remote_path,
                 )
                 if not needs_custom_ssh_env
-                else await borg2._run(
-                    [
-                        borg2.borg_cmd,
-                        "-r",
-                        path,
-                        "repo-create",
-                        *borg2_encryption_flags(encryption),
-                    ],
+                else await borg2.rcreate(
+                    repository=path,
+                    encryption=encryption,
+                    passphrase=passphrase,
+                    remote_path=remote_path,
                     timeout=init_timeout,
-                    env={
-                        **({"BORG_PASSPHRASE": passphrase} if passphrase else {}),
-                        **env,
-                        **borg2_remote_path_env(remote_path),
-                    },
+                    env=env,
                 )
             )
 
