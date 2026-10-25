@@ -41,15 +41,13 @@ describe('AnalyticsConsentBanner', () => {
 
     it('renders description text', () => {
       render(<AnalyticsConsentBanner onConsentGiven={mockOnConsentGiven} />)
-      expect(
-        screen.getByText(/We collect anonymous usage data to understand how Borg UI is used/)
-      ).toBeInTheDocument()
+      expect(screen.getByText(/We collect usage data and error reports/)).toBeInTheDocument()
     })
 
     it('renders privacy assurance text', () => {
       render(<AnalyticsConsentBanner onConsentGiven={mockOnConsentGiven} />)
       expect(
-        screen.getByText(/No personal information, IP addresses, hostnames/)
+        screen.getByText(/We never collect backup contents, passwords or IP addresses/)
       ).toBeInTheDocument()
     })
 
@@ -61,7 +59,7 @@ describe('AnalyticsConsentBanner', () => {
     it('renders analytics toggle switch', () => {
       render(<AnalyticsConsentBanner onConsentGiven={mockOnConsentGiven} />)
       expect(screen.getByRole('switch')).toBeInTheDocument()
-      expect(screen.getByText('Enable anonymous analytics')).toBeInTheDocument()
+      expect(screen.getByText('Enable analytics')).toBeInTheDocument()
     })
 
     it('renders Continue button', () => {
