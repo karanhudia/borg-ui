@@ -196,3 +196,39 @@ async def test_borg1_interface_runs_borg_with_its_lock_wait(monkeypatch):
     await borg_module.borg._execute_command(["borg", "list", "repo"])
 
     assert seen["cmd"][:3] == ["borg", "--lock-wait", "20"]
+
+
+@pytest.mark.parametrize("builder", ["repository", "ssh_key"])
+def test_env_builders_remove_the_key_file_when_building_fails(
+    builder, tmp_path, monkeypatch
+):
+    """The caller removes the temporary SSH key only once it has the env, so a
+    builder that fails after writing the key removes it itself."""
+    from app.utils import borg_env
+
+    key_file = tmp_path / "ssh-key"
+    key_file.write_text("private-key\n")
+
+    def fail(**kwargs):
+        raise RuntimeError("env setup failed")
+
+    monkeypatch.setattr(borg_env, "setup_borg_env", fail)
+    with pytest.raises(RuntimeError, match="env setup failed"):
+        if builder == "repository":
+            monkeypatch.setattr(
+                borg_env, "resolve_repo_ssh_key_file", lambda repo, db: str(key_file)
+            )
+            borg_env.build_repository_borg_env(
+                SimpleNamespace(path="ssh://borg@example.com/repo"), None
+            )
+        else:
+            monkeypatch.setattr(
+                borg_env,
+                "resolve_ssh_key_file_by_id",
+                lambda key_id, db=None: str(key_file),
+            )
+            borg_env.build_ssh_key_borg_env(
+                path="ssh://borg@example.com/repo", ssh_key_id=1
+            )
+
+    assert not key_file.exists()

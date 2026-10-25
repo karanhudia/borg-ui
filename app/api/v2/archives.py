@@ -198,53 +198,6 @@ def _get_v2_repo(repository: str, db: Session, current_user: User) -> Repository
     return repo
 
 
-async def _resolve_archive_name(repo: Repository, archive_ref: str, db: Session) -> str:
-    """Resolve an archive route parameter to the actual Borg archive name.
-
-    The frontend may pass either the archive name or the archive ID/hash. Borg 2
-    commands such as `list` are most reliable when given the real archive name.
-    """
-    if not archive_ref:
-        return archive_ref
-
-    # Fast path for normal archive names.
-    if not ARCHIVE_ID_RE.fullmatch(archive_ref):
-        return archive_ref
-
-    if _repo_needs_custom_env(repo):
-        with repository_borg_env(repo, db) as env:
-            result = await borg2.list_archives(
-                repo.path,
-                passphrase=repo.passphrase,
-                remote_path=effective_repository_remote_path(repo),
-                bypass_lock=repo.bypass_lock,
-                env=env,
-            )
-    else:
-        result = await borg2.list_archives(
-            repo.path,
-            passphrase=repo.passphrase,
-            remote_path=effective_repository_remote_path(repo),
-            bypass_lock=repo.bypass_lock,
-        )
-    if not result["success"]:
-        return archive_ref
-
-    try:
-        payload = json.loads(result["stdout"])
-        archives = payload.get("archives", [])
-    except Exception:
-        return archive_ref
-
-    for archive in archives:
-        if archive.get("id") == archive_ref:
-            return archive.get("name") or archive_ref
-        if archive.get("name") == archive_ref:
-            return archive_ref
-
-    return archive_ref
-
-
 def _get_archive_selector(archive_ref: str) -> str:
     if not archive_ref:
         return archive_ref
@@ -638,14 +591,10 @@ async def delete_archive(
         )
 
     repo = _get_v2_repo(repository, db, current_user)
-    # An agent repository's archive is addressed by its id: the name lookup
-    # runs Borg on the server, and `aid:` names exactly one archive of a
-    # series, as the v1 route sends it.
-    archive_name = (
-        _get_archive_selector(archive_id)
-        if is_agent_executor(repo)
-        else await _resolve_archive_name(repo, archive_id, db)
-    )
+    # The archive is addressed by its id: the archives of a series share one
+    # name, so `borg2 delete <name>` matches all of them and deletes none,
+    # while `aid:` names exactly one, as the v1 route sends it.
+    archive_name = _get_archive_selector(archive_id)
 
     # Deletes are rejected per archive, not per repository (spec section 13
     # phase 5): two different archives may be removed at once, the same one

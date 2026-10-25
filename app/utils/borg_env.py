@@ -192,27 +192,33 @@ def build_repository_borg_env(
 ):
     """Build Borg env for a stored repository and return env + temp key path."""
     temp_key_file = resolve_repo_ssh_key_file(repository, db)
-    connection = resolve_repository_ssh_connection(repository, db) if db else None
-    ssh_opts = get_standard_ssh_opts(
-        include_key_path=temp_key_file,
-        keepalive=keepalive,
-        connection=connection,
-        db=db,
-    )
-    env = setup_borg_env(
-        base_env=base_env,
-        passphrase=getattr(repository, "passphrase", None),
-        ssh_opts=ssh_opts,
-        lock_wait=lock_wait,
-        show_progress=show_progress,
-    )
-    remote_path = effective_repository_remote_path(repository, db)
-    if remote_path:
-        env["BORG_REMOTE_PATH"] = remote_path
-    # imported here: the router imports this module
-    from app.core.borg_router import BorgRouter
+    # The caller removes the key file only once it has the env; on a failure
+    # before that, nobody else would.
+    try:
+        connection = resolve_repository_ssh_connection(repository, db) if db else None
+        ssh_opts = get_standard_ssh_opts(
+            include_key_path=temp_key_file,
+            keepalive=keepalive,
+            connection=connection,
+            db=db,
+        )
+        env = setup_borg_env(
+            base_env=base_env,
+            passphrase=getattr(repository, "passphrase", None),
+            ssh_opts=ssh_opts,
+            lock_wait=lock_wait,
+            show_progress=show_progress,
+        )
+        remote_path = effective_repository_remote_path(repository, db)
+        if remote_path:
+            env["BORG_REMOTE_PATH"] = remote_path
+        # imported here: the router imports this module
+        from app.core.borg_router import BorgRouter
 
-    BorgRouter(repository).prepare_env(env)
+        BorgRouter(repository).prepare_env(env)
+    except BaseException:
+        cleanup_temp_key_file(temp_key_file)
+        raise
     return env, temp_key_file
 
 
@@ -232,22 +238,27 @@ def build_ssh_key_borg_env(
     connection = None
     if ssh_key_id and path.startswith("ssh://"):
         temp_key_file = resolve_ssh_key_file_by_id(ssh_key_id, db=db)
-    if db is not None and path.startswith("ssh://"):
-        connection = find_ssh_connection_for_path(path, db)
+    # As in build_repository_borg_env: no caller cleans up after a failure here.
+    try:
+        if db is not None and path.startswith("ssh://"):
+            connection = find_ssh_connection_for_path(path, db)
 
-    ssh_opts = get_standard_ssh_opts(
-        include_key_path=temp_key_file,
-        keepalive=keepalive,
-        connection=connection,
-        db=db,
-    )
-    env = setup_borg_env(
-        base_env=base_env,
-        passphrase=passphrase,
-        ssh_opts=ssh_opts,
-        lock_wait=lock_wait,
-        show_progress=show_progress,
-    )
+        ssh_opts = get_standard_ssh_opts(
+            include_key_path=temp_key_file,
+            keepalive=keepalive,
+            connection=connection,
+            db=db,
+        )
+        env = setup_borg_env(
+            base_env=base_env,
+            passphrase=passphrase,
+            ssh_opts=ssh_opts,
+            lock_wait=lock_wait,
+            show_progress=show_progress,
+        )
+    except BaseException:
+        cleanup_temp_key_file(temp_key_file)
+        raise
     return env, temp_key_file
 
 

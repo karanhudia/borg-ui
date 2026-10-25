@@ -2,15 +2,20 @@
 
 from typing import Any, Dict, Optional
 
+from sqlalchemy.orm import object_session
+
 from app.core.borg2 import (
     borg2,
-    borg2_encryption_flags,
     borg2_remote_path_env,
     borg2_removed_encryption_refusal,
 )
 from app.database.database import SessionLocal  # noqa: F401
 from app.utils.fs import calculate_path_size_bytes
-from app.utils.borg_env import effective_repository_remote_path, ssh_key_borg_env
+from app.utils.borg_env import (
+    effective_repository_remote_path,
+    repository_borg_env,
+    ssh_key_borg_env,
+)
 
 
 class RepositoryV2Service:
@@ -38,20 +43,13 @@ class RepositoryV2Service:
                     remote_path=remote_path,
                 )
                 if not needs_custom_ssh_env
-                else await borg2._run(
-                    [
-                        borg2.borg_cmd,
-                        "-r",
-                        path,
-                        "repo-create",
-                        *borg2_encryption_flags(encryption),
-                    ],
+                else await borg2.rcreate(
+                    repository=path,
+                    encryption=encryption,
+                    passphrase=passphrase,
+                    remote_path=remote_path,
                     timeout=init_timeout,
-                    env={
-                        **({"BORG_PASSPHRASE": passphrase} if passphrase else {}),
-                        **env,
-                        **borg2_remote_path_env(remote_path),
-                    },
+                    env=env,
                 )
             )
 
@@ -93,7 +91,12 @@ class RepositoryV2Service:
         env = borg2_remote_path_env(effective_repository_remote_path(repository))
         if repository.passphrase:
             env["BORG_PASSPHRASE"] = repository.passphrase
-        return await borg2._run(cmd, timeout=30, env=env or None)
+        if not repository.path.startswith("ssh://"):
+            return await borg2._run(cmd, timeout=30, env=env or None)
+        # `key export` opens the repository, so it needs the SSH key of the
+        # repository's connection, as every other command on it does.
+        with repository_borg_env(repository, object_session(repository)) as ssh_env:
+            return await borg2._run(cmd, timeout=30, env={**ssh_env, **env})
 
     async def calculate_total_size_bytes(
         self,

@@ -6047,6 +6047,7 @@
         "failedGetRestoreJobs": "Impossibile ottenere i job di ripristino",
         "failedGetRestoreStatus": "Impossibile ottenere lo stato del ripristino",
         "failedPreviewRestore": "Impossibile visualizzare l'anteprima del ripristino",
+        "failedPreviewRestoreWithReason": "Impossibile visualizzare l'anteprima del ripristino: {{reason}}",
         "agentPreviewUnsupported": "Questo repository è eseguito da un agente la cui versione non può mostrare l'anteprima di un ripristino. Aggiorna l'agente oppure avvia invece il ripristino.",
         "repositoryNotFound": "Repository non trovato",
         "restoreJobNotFound": "Job di ripristino non trovato",

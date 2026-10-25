@@ -383,6 +383,7 @@ async def create_repository(
         skip_on_hook_failure=data.skip_on_hook_failure,
         source_ssh_connection_id=source_connection_id,
         source_locations=source_locations_json,
+        has_keyfile=data.encryption.startswith("keyfile-"),
         borg_version=2,
         repository_type="ssh" if data.connection_id else "local",
     )
