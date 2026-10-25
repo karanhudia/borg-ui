@@ -432,6 +432,9 @@ The first implementation supports:
   and goes on, stops at the first failure and says in the failure report how
   many it deleted before (`deleted_archives`); the server sends a wipe's
   confirmed archives in this one job instead of one job per archive
+- Borg operands are separated from options with `--`; option-shaped archive
+  selectors, archive paths, and backup sources are refused before Borg runs,
+  including direct archive-delete helper calls (versioned at its release)
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
   even while Borg prints nothing; so do a restore preview, a key export and

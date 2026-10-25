@@ -710,12 +710,13 @@ def test_build_mount_command_uses_v1_shape():
         "mount",
         "--remote-path",
         "/usr/bin/borg",
-        "/repo/path::archive-1",
-        "/mnt/repo",
         "-o",
         "allow_other",
         "-f",
         "--bypass-lock",
+        "--",
+        "/repo/path::archive-1",
+        "/mnt/repo",
     ]
 
 
@@ -739,11 +740,26 @@ def test_build_mount_command_uses_v2_shape():
         "mount",
         "-a",
         "archive-1",
-        "/mnt/repo",
         "-o",
         "allow_other",
         "-f",
+        "--",
+        "/mnt/repo",
     ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("major", [1, 2])
+def test_build_mount_command_rejects_option_like_archive(major):
+    repo = SimpleNamespace(borg_version=major)
+
+    with patch("app.core.borg2.borg2.borg_cmd", "borg2"):
+        with pytest.raises(ValueError):
+            BorgRouter(repo).build_mount_command(
+                repository_path="/repo/path",
+                archive_name="--sentinel",
+                mount_point="/mnt/repo",
+            )
 
 
 @pytest.mark.unit
@@ -795,6 +811,7 @@ def test_build_backup_create_command_uses_v1_shape():
         "--exclude",
         "*.cache",
         "--read-special",
+        "--",
         "/repos/v1::manual-1",
     ]
 
@@ -856,6 +873,7 @@ def test_build_restore_extract_command_adds_strip_components_for_v1():
         "--bypass-lock",
         "--strip-components",
         "3",
+        "--",
         "/repos/v1::manual-1",
         "home/user/folder",
     ]

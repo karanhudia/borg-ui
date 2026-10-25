@@ -51,6 +51,7 @@ def test_build_backup_create_command_uses_borg2_shape():
         "--exclude",
         "*.tmp",
         "--one-file-system",
+        "--",
         "manual-1",
     ]
 

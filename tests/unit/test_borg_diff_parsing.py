@@ -168,13 +168,14 @@ def test_borg1_diff_command_shape(monkeypatch):
         "/opt/borg",
         "--bypass-lock",
         "--json-lines",
+        "--",
         "/r::a1",
         "a2",
     ]
     assert captured["env"]["BORG_PASSPHRASE"] == "pw"
     assert captured["env"]["BORG_LOCK_WAIT"] == "20"
     b.list_archive_lines("/r", "a1")
-    assert captured["cmd"] == ["borg", "list", "--json-lines", "/r::a1"]
+    assert captured["cmd"] == ["borg", "list", "--json-lines", "--", "/r::a1"]
 
 
 @pytest.mark.unit
@@ -198,10 +199,19 @@ def test_borg2_diff_command_shape(monkeypatch):
         "/r",
         "diff",
         "--json-lines",
+        "--",
         "aid:1",
         "aid:2",
     ]
     assert captured["env"]["BORG_PASSPHRASE"] == "pw"
     assert captured["env"]["BORG_REMOTE_PATH"] == "/opt/borg2"
     b.list_archive_lines("/r", "aid:1")
-    assert captured["cmd"] == ["borg2", "-r", "/r", "list", "--json-lines", "aid:1"]
+    assert captured["cmd"] == [
+        "borg2",
+        "-r",
+        "/r",
+        "list",
+        "--json-lines",
+        "--",
+        "aid:1",
+    ]

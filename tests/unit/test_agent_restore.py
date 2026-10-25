@@ -125,8 +125,8 @@ def test_repository_restore_builds_borg1_command():
         "0022",
         "--strip-components",
         "2",
-        "/agent/repo::arch",
         "--",
+        "/agent/repo::arch",
         "etc/hosts",
     ]
 
@@ -149,8 +149,8 @@ def test_repository_restore_builds_borg2_command():
         "--log-json",
         "--umask",
         "0022",
-        "arch",
         "--",
+        "arch",
         "etc/hosts",
     ]
 

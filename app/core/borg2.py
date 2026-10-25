@@ -63,6 +63,7 @@ from app.utils.repository_paths import (  # noqa: F401  (URL rules re-exported)
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_paths import apply_ssh_command_prefix
 from app.utils.ssh_utils import public_key_only_ssh_args
+from app.utils.borg_arguments import validate_operand, validate_source
 
 logger = structlog.get_logger()
 
@@ -819,7 +820,8 @@ class Borg2Interface:
         env: Optional[Dict] = None,
     ) -> Dict:
         """Get information about a specific archive."""
-        cmd = [self.borg_cmd, "-r", repository, "info", "--json", archive]
+        validate_operand(archive, "archive selector")
+        cmd = [self.borg_cmd, "-r", repository, "info", "--json", "--", archive]
         exec_env = env.copy() if env else {}
         exec_env.update(borg2_remote_path_env(remote_path))
         if passphrase:
@@ -841,10 +843,13 @@ class Borg2Interface:
         env: Optional[Dict] = None,
     ) -> Dict:
         """List contents of an archive with streaming to prevent OOM."""
+        validate_operand(archive, "archive selector")
+        if path:
+            validate_operand(path, "archive path", archive_path=True)
         cmd = [self.borg_cmd, "-r", repository, "list", "--json-lines"]
         if browse_depth is not None:
             cmd.extend(["--depth", str(browse_depth)])
-        cmd.append(archive)
+        cmd.extend(["--", archive])
         if path:
             cmd.append(path.strip("/"))
         exec_env = env.copy() if env else {}
@@ -866,9 +871,11 @@ class Borg2Interface:
         env: Optional[Dict] = None,
         timeout: int = 3600,
     ) -> "CommandLineStream":
+        validate_operand(archive_a, "archive selector")
+        validate_operand(archive_b, "archive selector")
         ensure_borg2_repository_url(repository)
         cmd = [self.borg_cmd, "-r", repository, "diff", "--json-lines"]
-        cmd.extend([archive_a, archive_b])
+        cmd.extend(["--", archive_a, archive_b])
         exec_env = self._command_env(cmd, env)
         exec_env.update(borg2_remote_path_env(remote_path))
         if passphrase:
@@ -887,9 +894,10 @@ class Borg2Interface:
         env: Optional[Dict] = None,
         timeout: int = 3600,
     ) -> "CommandLineStream":
+        validate_operand(archive, "archive selector")
         ensure_borg2_repository_url(repository)
         cmd = [self.borg_cmd, "-r", repository, "list", "--json-lines"]
-        cmd.append(archive)
+        cmd.extend(["--", archive])
         exec_env = self._command_env(cmd, env)
         exec_env.update(borg2_remote_path_env(remote_path))
         if passphrase:
@@ -910,6 +918,10 @@ class Borg2Interface:
         remote_path: Optional[str] = None,
     ) -> Dict:
         """Create a new archive (backup)."""
+        if archive_name is not None:
+            validate_operand(archive_name, "archive name")
+        for source in source_paths or []:
+            validate_source(source)
         if not repository:
             return {
                 "success": False,
@@ -936,6 +948,7 @@ class Borg2Interface:
             compression,
             "--stats",
             "--json",
+            "--",
             archive_name,
         ]
         cmd.extend(source_paths)
@@ -956,10 +969,13 @@ class Borg2Interface:
         env: Optional[Dict] = None,
     ) -> Dict:
         """Extract files from an archive."""
+        validate_operand(archive, "archive selector")
+        for path in paths or []:
+            validate_operand(path, "restore path", archive_path=True)
         cmd = [self.borg_cmd, "-r", repository, "extract", "--umask", "0022"]
         if dry_run:
             cmd.append("--dry-run")
-        cmd.append(archive)
+        cmd.extend(["--", archive])
         if paths:
             cmd.extend(paths)
         exec_env = env.copy() if env else {}
@@ -983,11 +999,14 @@ class Borg2Interface:
         strip_components: int = 0,
     ) -> "CommandByteStream":
         """Stream one archived directory as an uncompressed tar to stdout."""
+        validate_operand(archive, "archive selector")
+        if directory_path:
+            validate_operand(directory_path, "archive path", archive_path=True)
         ensure_borg2_repository_url(repository)
         cmd = [self.borg_cmd, "-r", repository, "export-tar"]
         if strip_components:
             cmd.extend(["--strip-components", str(strip_components)])
-        cmd.extend([archive, "-", "--", directory_path.strip("/")])
+        cmd.extend(["--", archive, "-", directory_path.strip("/")])
         exec_env = env.copy() if env else {}
         exec_env.update(borg2_remote_path_env(remote_path))
         if passphrase:
@@ -1010,7 +1029,8 @@ class Borg2Interface:
         Note: in Borg 2, space is NOT freed automatically after delete.
         Call compact() afterwards to reclaim disk space.
         """
-        cmd = [self.borg_cmd, "-r", repository, "delete", archive]
+        validate_operand(archive, "archive selector")
+        cmd = [self.borg_cmd, "-r", repository, "delete", "--", archive]
         exec_env = env.copy() if env else {}
         exec_env.update(borg2_remote_path_env(remote_path))
         if passphrase:

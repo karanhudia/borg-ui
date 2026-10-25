@@ -20,6 +20,7 @@ from app.database.models import (
     Operation,
     Repository,
     SSHConnection,
+    SSHKey,
     SystemSettings,
 )
 
@@ -593,7 +594,7 @@ class TestBackupService:
             patch(
                 "app.services.backup_service.asyncio.create_subprocess_exec",
                 return_value=fake_process,
-            ),
+            ) as mock_subprocess,
             patch(
                 "app.services.backup_service.asyncio.create_task",
                 side_effect=_discard_background_task,
@@ -605,12 +606,155 @@ class TestBackupService:
             await backup_service.execute_backup(job.id, repo.path, db=test_db)
 
         job = resolve_backup_job(test_db, job.id)
+        create_cmd = mock_subprocess.call_args.args
+        assert create_cmd.count("--") == 1
+        assert list(create_cmd[create_cmd.index("--") + 1 :]) == [
+            f"{repo.path}::{job.archive_name}",
+            str(source_path),
+        ]
         assert job.status == "completed"
         assert job.progress == 100
         assert job.log_file_path is not None
         assert Path(job.log_file_path).exists()
         notifications.send_backup_success.assert_awaited_once()
         notifications.send_backup_failure.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("major", [1, 2])
+    @pytest.mark.parametrize(
+        "remote_path, expected_source", [("/data", "data"), ("/-data", "./-data")]
+    )
+    async def test_execute_backup_preserves_shared_ssh_mount_sources(
+        self,
+        backup_service,
+        test_db,
+        tmp_path,
+        monkeypatch,
+        major,
+        remote_path,
+        expected_source,
+    ):
+        from app.services.mount_service import mount_service
+
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_url = f"ssh://borg@example.com:22{remote_path}"
+        key = SSHKey(name="Source key", private_key="unused")
+        test_db.add(key)
+        test_db.flush()
+        connection = SSHConnection(
+            host="example.com", username="borg", port=22, ssh_key_id=key.id
+        )
+        repo = Repository(
+            name="SSH source repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories=json.dumps([source_url]),
+            compression="lz4",
+            borg_version=major,
+        )
+        test_db.add_all([connection, repo])
+        test_db.flush()
+        job = seed_job_operation(
+            test_db, "backup", repository=repo.path, status="pending"
+        )
+        test_db.commit()
+        mount_root = tmp_path / "sshfs-root"
+        session_factory = sessionmaker(bind=test_db.get_bind())
+        monkeypatch.setattr("app.services.backup_service.SessionLocal", session_factory)
+        monkeypatch.setattr("app.services.mount_service.SessionLocal", session_factory)
+        monkeypatch.setattr(
+            "app.services.backup_service.stable_sshfs_temp_root",
+            lambda _: str(mount_root),
+        )
+        monkeypatch.setattr(mount_service, "active_mounts", {})
+        monkeypatch.setattr(mount_service, "_save_state", Mock())
+        monkeypatch.setattr(
+            mount_service, "_check_sshfs_available", AsyncMock(return_value=True)
+        )
+        monkeypatch.setattr(
+            mount_service,
+            "_decrypt_and_write_key",
+            Mock(return_value=str(tmp_path / "source.key")),
+        )
+        monkeypatch.setattr(
+            mount_service, "_check_remote_is_file", AsyncMock(return_value=False)
+        )
+        monkeypatch.setattr(mount_service, "_execute_sshfs_mount", AsyncMock())
+        monkeypatch.setattr(mount_service, "_verify_mount_readable", AsyncMock())
+        monkeypatch.setattr(backup_service, "_cleanup_ssh_mounts", AsyncMock())
+        monkeypatch.setattr(
+            backup_service, "_calculate_and_update_size_background", AsyncMock()
+        )
+        monkeypatch.setattr(backup_service, "_update_archive_stats", AsyncMock())
+        monkeypatch.setattr(
+            backup_service,
+            "_execute_hooks",
+            AsyncMock(
+                return_value={
+                    "success": True,
+                    "execution_logs": [],
+                    "scripts_executed": 0,
+                    "scripts_failed": 0,
+                    "using_library": False,
+                }
+            ),
+        )
+        notifications = MagicMock()
+        for name in ("start", "success", "warning", "failure"):
+            setattr(notifications, f"send_backup_{name}", AsyncMock())
+        monkeypatch.setattr(
+            "app.services.backup_service.notification_service", notifications
+        )
+        monkeypatch.setattr("app.services.backup_service.mqtt_service", MagicMock())
+        monkeypatch.setattr(
+            "app.services.backup_service.resolve_repo_ssh_key_file",
+            Mock(return_value=None),
+        )
+        monkeypatch.setattr(
+            "app.services.backup_service.asyncio.create_task", _discard_background_task
+        )
+        process = FakeProcess(returncode=0)
+        subprocess = AsyncMock(return_value=process)
+        monkeypatch.setattr(
+            "app.services.backup_service.asyncio.create_subprocess_exec", subprocess
+        )
+        monkeypatch.setattr("app.core.borg2.borg2.borg_cmd", "borg2")
+
+        await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        completed_job = resolve_backup_job(test_db, job.id)
+        assert completed_job.status == "completed", completed_job.error_message
+        cmd = list(subprocess.call_args.args)
+        assert cmd.count("--") == 1
+        assert cmd[cmd.index("--") + 1 :] == [
+            completed_job.archive_name
+            if major == 2
+            else f"{repo.path}::{completed_job.archive_name}",
+            expected_source,
+        ]
+        assert subprocess.call_args.kwargs["cwd"] == str(mount_root)
+        assert (
+            mount_root / expected_source
+        ).resolve() == mount_root / remote_path.lstrip("/")
+
+    @pytest.mark.parametrize("source", ["-data", "--review-sentinel"])
+    def test_resolve_backup_command_paths_keeps_direct_option_shaped_input_invalid(
+        self, backup_service, source
+    ):
+        from app.utils.borg_arguments import validate_source
+
+        paths, cwd = backup_service._resolve_backup_command_paths(
+            [source], [], job_id=42
+        )
+
+        assert cwd is None
+        assert paths == [source]
+        with pytest.raises(ValueError):
+            validate_source(paths[0])
 
     @pytest.mark.asyncio
     async def test_execute_backup_drives_an_operation_row(
@@ -2149,6 +2293,11 @@ class TestBackupService:
         assert str(repo_path) in create_cmd
         assert "create" in create_cmd
         assert f"{repo.path}::" not in " ".join(create_cmd)
+        assert create_cmd.count("--") == 1
+        assert list(create_cmd[create_cmd.index("--") + 1 :]) == [
+            "manual-backup",
+            str(source_file),
+        ]
         assert create_cmd[-2] == "manual-backup"
         assert str(source_file) in create_cmd
         notifications.send_backup_success.assert_awaited_once()

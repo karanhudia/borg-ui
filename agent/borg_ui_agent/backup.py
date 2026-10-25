@@ -21,6 +21,7 @@ from agent.borg_ui_agent.cancel import (
 )
 from agent.borg_ui_agent.client import AgentClient
 from agent.borg_ui_agent.failure_report import FailureTail, failure_report
+from agent.borg_ui_agent.borg_arguments import validate_operand, validate_source
 
 
 # Borg 2.0.0b25 replaced rest:// by ssh:// (REST over ssh, same path rules)
@@ -99,6 +100,10 @@ class BackupCreatePayload:
         ):
             raise ValueError("backup.create payload requires backup.source_paths")
 
+        validate_operand(archive_name.strip(), "archive name")
+        for source in source_paths:
+            validate_source(source.strip())
+
         custom_flags = backup.get("custom_flags", payload.get("custom_flags", []))
         if not isinstance(custom_flags, (str, list)) or (
             isinstance(custom_flags, list)
@@ -152,6 +157,9 @@ class BackupCreatePayload:
         )
 
     def build_command(self) -> list[str]:
+        validate_operand(self.archive_name, "archive name")
+        for source in self.source_paths:
+            validate_source(source)
         borg_cmd = self.borg_binary or ("borg2" if self.borg_version == 2 else "borg")
         if self.borg_version == 2:
             cmd = [
@@ -173,7 +181,7 @@ class BackupCreatePayload:
             for pattern in self.exclude_patterns:
                 cmd.extend(["--exclude", pattern])
             cmd.extend(self.custom_flags)
-            cmd.append(self.archive_name)
+            cmd.extend(["--", self.archive_name])
             cmd.extend(self.source_paths)
             return cmd
 
@@ -196,7 +204,7 @@ class BackupCreatePayload:
         for pattern in self.exclude_patterns:
             cmd.extend(["--exclude", pattern])
         cmd.extend(self.custom_flags)
-        cmd.append(f"{self.repository_path}::{self.archive_name}")
+        cmd.extend(["--", f"{self.repository_path}::{self.archive_name}"])
         cmd.extend(self.source_paths)
         return cmd
 

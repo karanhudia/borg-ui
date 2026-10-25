@@ -23,9 +23,9 @@ class MountV2Service:
             # down to exactly one archive; a trailing positional argument would
             # be interpreted as a path filter instead.
             cmd.extend(["-a", archive_name])
-        if mount_point:
-            cmd.append(mount_point)
         cmd.extend(["-o", "allow_other", "-f"])
+        if mount_point:
+            cmd.extend(["--", mount_point])
         return cmd
 
     def build_unmount_command(self, mount_point: str) -> List[str]:

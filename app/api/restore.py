@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 import structlog
 from typing import Any, List, Literal, Optional
@@ -50,6 +50,7 @@ from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
     resolve_repository_ssh_connection,
 )  # Backward-compatible patch target for tests
+from app.utils.borg_arguments import validate_operand
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -128,6 +129,18 @@ class RestorePathMetadata(BaseModel):
 
 
 class RestoreRequest(BaseModel):
+    @field_validator("archive")
+    @classmethod
+    def validate_archive(cls, value: str) -> str:
+        return validate_operand(value, "archive selector")
+
+    @field_validator("paths")
+    @classmethod
+    def validate_paths(cls, values: List[str]) -> List[str]:
+        for value in values:
+            validate_operand(value, "restore path", archive_path=True)
+        return values
+
     repository: str
     archive: str
     paths: List[str]

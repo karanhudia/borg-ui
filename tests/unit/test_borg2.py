@@ -39,6 +39,7 @@ async def test_list_archive_contents_uses_absolute_depth_for_browse():
             "--json-lines",
             "--depth",
             "3",
+            "--",
             "archive-1",
             "docs/sub",
         ],
@@ -62,7 +63,15 @@ async def test_list_archive_contents_omits_depth_when_not_requested():
         )
 
     mock_run.assert_awaited_once_with(
-        ["borg2", "-r", "/repo", "list", "--json-lines", "archive-1"],
+        [
+            "borg2",
+            "-r",
+            "/repo",
+            "list",
+            "--json-lines",
+            "--",
+            "archive-1",
+        ],
         max_lines=1_000_000,
         env={"TZ": "UTC"},
     )
@@ -91,6 +100,7 @@ async def test_extract_archive_uses_restore_umask():
             "extract",
             "--umask",
             "0022",
+            "--",
             "archive-1",
             "home/user/file.txt",
         ],
@@ -116,9 +126,9 @@ def test_export_archive_tar_builds_stdout_command():
         "export-tar",
         "--strip-components",
         "1",
+        "--",
         "aid:archive-1",
         "-",
-        "--",
         "documents/Projects",
     ]
 
@@ -783,6 +793,7 @@ def test_a_restore_into_an_occupied_directory_is_refused(
             "0022",
             "--strip-components",
             "1",
+            "--",
             "aid:1",
             "etc",
         ]

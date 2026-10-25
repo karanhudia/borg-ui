@@ -33,6 +33,7 @@ from app.utils.ssh_utils import (
     ssh_key_auth_args,
     write_ssh_key_to_tempfile,
 )
+from app.utils.borg_arguments import validate_operand, validate_source
 
 logger = structlog.get_logger()
 
@@ -402,6 +403,10 @@ class RemoteBackupService:
         variables required by the command without granting arbitrary environment
         control through ``SETENV``.
         """
+        validate_operand(archive_name, "archive name")
+        for source in source_paths:
+            validate_source(source)
+
         # Get DB session for connection lookup
         db = SessionLocal()
         try:
@@ -491,7 +496,7 @@ class RemoteBackupService:
 
         # Repository and archive name
         archive_path = f"{repo_url}::{archive_name}"
-        cmd_parts.append(shlex.quote(archive_path))
+        cmd_parts.extend(["--", shlex.quote(archive_path)])
 
         # Source paths
         for path in source_paths:

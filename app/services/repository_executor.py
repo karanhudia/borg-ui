@@ -37,6 +37,7 @@ from app.services.operations.backup_facade import (
     backup_job_link_columns,
     resolve_backup_job,
 )
+from app.utils.borg_arguments import validate_operand, validate_source
 from app.utils.borg_flags import parse_borg_flags
 from app.utils.redaction import redact_secrets
 
@@ -260,6 +261,9 @@ def build_agent_backup_payload(
         source_locations=source_locations,
         repository=repository,
     )
+    validate_operand(archive_name, "archive name")
+    for source in source_paths:
+        validate_source(source)
     repository_payload = {
         "id": repository.id,
         "path": repository.path,

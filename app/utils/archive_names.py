@@ -9,6 +9,8 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
+from app.utils.borg_arguments import validate_operand
+
 TIME_PLACEHOLDER_PATTERN = re.compile(
     r"\{(?:now|utcnow)(?::[^{}]*)?\}|\{(?:date|time|timestamp)\}"
 )
@@ -114,4 +116,4 @@ def build_archive_name(
             safe_job, safe_repo, timestamp, stable_series
         )
 
-    return archive_name
+    return validate_operand(archive_name, "rendered archive name")

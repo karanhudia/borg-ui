@@ -291,8 +291,8 @@ async def test_mount_borg_archive_uses_borg2_binary_for_v2_repo(
     assert "-r" in args
     assert "mount" in args
     assert "-a" not in args
-    mount_index = args.index("mount")
-    assert args[mount_index + 1] == expected_mount_point
+    # the mount point is the operand after "--", the options before it
+    assert args[args.index("--") + 1 :] == (expected_mount_point,)
     assert mount_service_fixture.active_mounts[mount_id].borg_version == 2
 
 
@@ -355,7 +355,7 @@ async def test_mount_borg_archive_uses_archive_filter_for_v2_repo(
     assert "-a" in args
     assert args[args.index("-a") + 1] == "manual-backup-2026-04-09T21:02:46"
     assert "--bypass-lock" not in args
-    assert args[args.index("-a") + 2] == expected_mount_point
+    assert args[args.index("--") + 1 :] == (expected_mount_point,)
 
 
 @pytest.mark.asyncio

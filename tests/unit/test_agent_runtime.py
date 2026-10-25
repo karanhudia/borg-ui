@@ -290,6 +290,7 @@ def test_backup_create_payload_builds_borg1_command():
         "--exclude",
         "*.tmp",
         "--one-file-system",
+        "--",
         "/backup/repo::laptop-2026-05-11",
         "/home/user/docs",
     ]
@@ -325,6 +326,7 @@ def test_backup_create_payload_builds_borg2_command_from_flat_payload():
         "none",
         # no --upload-ratelimit: Borg 2 has none (#1263)
         "--list",
+        "--",
         "laptop",
         "/src",
     ]
@@ -873,6 +875,7 @@ def test_repository_list_archives_payload_keeps_plain_borg1_command():
         "180",
         "list",
         "--json",
+        "--",
         "/agent/repo",
     ]
 
@@ -894,6 +897,7 @@ def test_repository_archive_info_payload_builds_borg2_command():
         "/agent/repo2",
         "info",
         "--json",
+        "--",
         "aid:deadbeef",
     ]
 
@@ -915,6 +919,7 @@ def test_repository_archive_info_payload_builds_borg1_command():
         "180",
         "info",
         "--json",
+        "--",
         "/agent/repo::arch-1",
     ]
 
@@ -2338,6 +2343,7 @@ def test_repository_delete_archive_payload_builds_borg2_command():
         "-r",
         "/agent/repo2",
         "delete",
+        "--",
         "aid:deadbeef",
     ]
 
@@ -2358,6 +2364,7 @@ def test_repository_delete_archive_payload_builds_borg1_command():
         "--lock-wait",
         "180",
         "delete",
+        "--",
         "/agent/repo::arch-1",
     ]
 
@@ -2592,8 +2599,9 @@ def test_repository_archive_contents_payload_builds_agent_list_command():
         "--lock-wait",
         "180",
         "list",
-        "/agent/repo::archive-1",
         "--json-lines",
+        "--",
+        "/agent/repo::archive-1",
     ]
     assert v2_payload.build_command() == [
         "borg2",
@@ -2601,6 +2609,7 @@ def test_repository_archive_contents_payload_builds_agent_list_command():
         "/agent/v2-repo",
         "list",
         "--json-lines",
+        "--",
         "archive-2",
         "home/user",
     ]
@@ -2636,6 +2645,7 @@ def test_repository_extract_file_payload_builds_agent_extract_stdout_command():
         "180",
         "extract",
         "--stdout",
+        "--",
         "/agent/repo::archive-1",
         "docs/report.txt",
     ]
@@ -2645,6 +2655,7 @@ def test_repository_extract_file_payload_builds_agent_extract_stdout_command():
         "/agent/v2-repo",
         "extract",
         "--stdout",
+        "--",
         "archive-2",
         "docs/report.txt",
     ]
@@ -2683,9 +2694,9 @@ def test_repository_export_tar_payload_builds_streaming_tar_commands():
         "export-tar",
         "--strip-components",
         "1",
+        "--",
         "/agent/repo::archive-1",
         "-",
-        "--",
         "docs/Projects",
     ]
     assert v2_payload.build_command() == [
@@ -2695,9 +2706,9 @@ def test_repository_export_tar_payload_builds_streaming_tar_commands():
         "export-tar",
         "--strip-components",
         "1",
+        "--",
         "aid:archive-2",
         "-",
-        "--",
         "docs/Projects",
     ]
 
@@ -2711,6 +2722,7 @@ def test_repository_extract_file_job_returns_base64_content(monkeypatch):
             "180",
             "extract",
             "--stdout",
+            "--",
             "/agent/repo::archive-1",
             "docs/report.txt",
         ]
@@ -3563,7 +3575,7 @@ def test_repository_diff_payload_builds_diff_and_listing_commands():
         "aid:a1",
     ]
 
-    # An archive named like an option is still an archive.
+    # Option-like archive selectors are rejected before execution.
     odd = RepositoryOperationPayload.from_job_payload(
         {
             "job_kind": "repository.diff",
@@ -3571,7 +3583,8 @@ def test_repository_diff_payload_builds_diff_and_listing_commands():
             "operation": {"archive": "--help", "predecessor": "daily-1"},
         }
     )
-    assert odd.build_command()[-3:] == ["--", "/agent/repo::daily-1", "--help"]
+    with pytest.raises(ValueError, match="hyphen"):
+        odd.build_command()
 
 
 @pytest.mark.unit

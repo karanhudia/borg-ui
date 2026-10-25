@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.borg_major import is_borg2
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.borg_flags import parse_borg_flags
+from app.utils.borg_arguments import validate_operand
 
 logger = structlog.get_logger()
 
@@ -197,6 +198,7 @@ class BorgRouter:
         upload_ratelimit_kib: Optional[int] = None,
     ) -> List[str]:
         """Build the version-aware archive creation command."""
+        validate_operand(archive_name, "archive name")
         if self.is_v2:
             from app.services.v2.backup_service import backup_v2_service
 
@@ -224,7 +226,7 @@ class BorgRouter:
         for pattern in exclude_patterns:
             cmd.extend(["--exclude", pattern])
         cmd.extend(parse_borg_flags(custom_flags, "create", 1))
-        cmd.append(f"{repository_path}::{archive_name}")
+        cmd.extend(["--", f"{repository_path}::{archive_name}"])
         return cmd
 
     def upload_ratelimit(self, kib: Optional[int]) -> Optional[int]:
@@ -249,20 +251,21 @@ class BorgRouter:
     def build_archive_info_command(
         self, repository_path: str, archive_name: str
     ) -> List[str]:
+        validate_operand(archive_name, "archive selector")
         if self.is_v2:
             from app.services.v2.backup_service import backup_v2_service
 
             return backup_v2_service.build_archive_info_command(
                 repository_path, archive_name
             )
-        return ["borg", "info", "--json", f"{repository_path}::{archive_name}"]
+        return ["borg", "info", "--json", "--", f"{repository_path}::{archive_name}"]
 
     def build_repo_list_command(self, repository_path: str) -> List[str]:
         if self.is_v2:
             from app.services.v2.backup_service import backup_v2_service
 
             return backup_v2_service.build_repo_list_command(repository_path)
-        return ["borg", "list", "--json", repository_path]
+        return ["borg", "list", "--json", "--", repository_path]
 
     def build_repo_info_command(self, repository_path: str) -> List[str]:
         if self.is_v2:
@@ -286,6 +289,9 @@ class BorgRouter:
         does not extract into one that holds anything, and the restore is
         refused with RestoreRefused unless `existing_files` is "continue";
         Borg 1 writes into such a directory and has no use for either."""
+        validate_operand(archive_name, "archive selector")
+        for path in paths or []:
+            validate_operand(path, "restore path", archive_path=True)
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
@@ -307,7 +313,7 @@ class BorgRouter:
             cmd.append("--bypass-lock")
         if strip_components:
             cmd.extend(["--strip-components", str(strip_components)])
-        cmd.append(f"{repository_path}::{archive_name}")
+        cmd.extend(["--", f"{repository_path}::{archive_name}"])
         if paths:
             cmd.extend(paths)
         return cmd
@@ -315,9 +321,11 @@ class BorgRouter:
     def remote_command_options(
         self, remote_path: Optional[str], *, bypass_lock: bool = False
     ) -> List[str]:
-        """The options a caller appends to a command it got from a builder
-        here. Borg 1 takes both on the command line. Borg 2 has neither:
-        no `--remote-path` (see `remote_path_env`) and no `--bypass-lock`."""
+        """The options a caller adds to a command it got from a builder here,
+        before the command's `--` when it has one: Borg reads everything after
+        `--` as an operand. Borg 1 takes both on the command line. Borg 2 has
+        neither: no `--remote-path` (see `remote_path_env`) and no
+        `--bypass-lock`."""
         if self.is_v2:
             return []
         options: List[str] = []
@@ -452,6 +460,8 @@ class BorgRouter:
         bypass_lock: bool = False,
     ) -> List[str]:
         """Build the version-aware archive mount command."""
+        if archive_name:
+            validate_operand(archive_name, "archive selector")
         if self.is_v2:
             from app.services.v2.mount_service import mount_v2_service
 
@@ -466,14 +476,15 @@ class BorgRouter:
         cmd = ["borg", "mount"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
+        cmd.extend(["-o", "allow_other", "-f"])
+        if bypass_lock:
+            cmd.append("--bypass-lock")
+        cmd.append("--")
         cmd.append(
             f"{repository_path}::{archive_name}" if archive_name else repository_path
         )
         if mount_point:
             cmd.append(mount_point)
-        cmd.extend(["-o", "allow_other", "-f"])
-        if bypass_lock:
-            cmd.append("--bypass-lock")
         return cmd
 
     def build_unmount_command(self, mount_point: str) -> List[str]:

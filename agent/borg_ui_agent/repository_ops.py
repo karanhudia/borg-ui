@@ -43,6 +43,7 @@ from agent.borg_ui_agent.cancel import (
 from agent.borg_ui_agent.client import AgentClient
 from agent.borg_ui_agent.compact_stats import TAIL_LINES, parse_compact_stats
 from agent.borg_ui_agent.failure_report import FailureTail, failure_report
+from agent.borg_ui_agent.borg_arguments import validate_operand
 
 
 REPOSITORY_JOB_KINDS = {
@@ -299,10 +300,11 @@ class RepositoryOperationPayload:
         if self.job_kind == "repository.archive_info":
             archive = _operation_archive(self.operation, self.job_kind)
             if self.borg_version == 2:
-                return [*self._base_borg2("info"), "--json", archive]
+                return [*self._base_borg2("info"), "--json", "--", archive]
             return [
                 *self._base_borg1("info"),
                 "--json",
+                "--",
                 f"{self.repository_path}::{archive}",
             ]
 
@@ -356,22 +358,24 @@ class RepositoryOperationPayload:
                     "--format",
                     "{name}{id}{time}",
                 ]
-            return [*self._base_borg1("list"), "--json", self.repository_path]
+            return [*self._base_borg1("list"), "--json", "--", self.repository_path]
 
         if self.job_kind == "repository.list_archive_contents":
             archive = _operation_archive(self.operation, self.job_kind)
             if self.borg_version == 2:
-                cmd = [*self._base_borg2("list"), "--json-lines", archive]
+                cmd = [*self._base_borg2("list"), "--json-lines", "--", archive]
                 path = (self.operation or {}).get("path")
                 if isinstance(path, str) and path.strip():
+                    validate_operand(path, "archive path", archive_path=True)
                     normalized_path = path.strip("/")
                     if normalized_path:
                         cmd.append(normalized_path)
                 return cmd
             return [
                 *self._base_borg1("list"),
-                f"{self.repository_path}::{archive}",
                 "--json-lines",
+                "--",
+                f"{self.repository_path}::{archive}",
             ]
 
         if self.job_kind == "repository.diff":
@@ -416,12 +420,14 @@ class RepositoryOperationPayload:
                 return [
                     *self._base_borg2("extract"),
                     "--stdout",
+                    "--",
                     archive,
                     file_path,
                 ]
             return [
                 *self._base_borg1("extract"),
                 "--stdout",
+                "--",
                 f"{self.repository_path}::{archive}",
                 file_path,
             ]
@@ -438,7 +444,7 @@ class RepositoryOperationPayload:
                 ]
                 if strip_components:
                     cmd.extend(["--strip-components", str(strip_components)])
-                return [*cmd, archive, "-", "--", directory_path]
+                return [*cmd, "--", archive, "-", directory_path]
             cmd = [
                 *self._base_borg1("export-tar"),
             ]
@@ -446,9 +452,9 @@ class RepositoryOperationPayload:
                 cmd.extend(["--strip-components", str(strip_components)])
             return [
                 *cmd,
+                "--",
                 f"{self.repository_path}::{archive}",
                 "-",
-                "--",
                 directory_path,
             ]
 
@@ -458,7 +464,7 @@ class RepositoryOperationPayload:
             # would go does not matter. Borg still reads every chunk of the
             # selected paths, which is what the preview checks. `--` closes
             # the options before the archive: the archive and the paths
-            # come from the request, and are data whatever they begin with.
+            # come from the request and are validated before command building.
             archive = _operation_archive(self.operation, self.job_kind)
             paths = _restore_paths(self.operation)
             if self.borg_version == 2:
@@ -499,9 +505,8 @@ class RepositoryOperationPayload:
                     cmd.append("--continue")
                 if strip_components:
                     cmd.extend(["--strip-components", str(strip_components)])
-                cmd.append(archive)
+                cmd.extend(["--", archive])
                 if paths:
-                    cmd.append("--")
                     cmd.extend(paths)
                 return cmd
             cmd = [
@@ -513,9 +518,8 @@ class RepositoryOperationPayload:
             ]
             if strip_components:
                 cmd.extend(["--strip-components", str(strip_components)])
-            cmd.append(f"{self.repository_path}::{archive}")
+            cmd.extend(["--", f"{self.repository_path}::{archive}"])
             if paths:
-                cmd.append("--")
                 cmd.extend(paths)
             return cmd
 
@@ -620,10 +624,12 @@ class RepositoryOperationPayload:
         series delete removes only the intended archive. No extra flags:
         mirrors borg.delete_archive / borg2.delete_archive. Space is
         reclaimed by a later compact."""
+        validate_operand(archive, "archive selector")
         if self.borg_version == 2:
-            return [*self._base_borg2("delete"), archive]
+            return [*self._base_borg2("delete"), "--", archive]
         return [
             *self._base_borg1("delete"),
+            "--",
             f"{self.repository_path}::{archive}",
         ]
 
@@ -689,7 +695,7 @@ def _operation_archive(operation: dict[str, Any] | None, job_kind: str) -> str:
     archive = operation.get("archive")
     if not isinstance(archive, str) or not archive.strip():
         raise ValueError(f"{job_kind} requires operation.archive")
-    return archive.strip()
+    return validate_operand(archive.strip(), "archive selector")
 
 
 def _operation_archives(operation: dict[str, Any] | None, job_kind: str) -> list[str]:
@@ -703,7 +709,7 @@ def _operation_archives(operation: dict[str, Any] | None, job_kind: str) -> list
     for archive in archives:
         if not isinstance(archive, str) or not archive.strip():
             raise ValueError(f"{job_kind} requires every archive to be a name")
-        selectors.append(archive.strip())
+        selectors.append(validate_operand(archive.strip(), "archive selector"))
     if len(set(selectors)) != len(selectors):
         raise ValueError(f"{job_kind} names an archive twice")
     return selectors
@@ -724,7 +730,7 @@ def _operation_predecessor(operation: dict[str, Any] | None) -> Optional[str]:
         return None
     if not isinstance(predecessor, str) or not predecessor.strip():
         raise ValueError("repository.diff requires a non-empty operation.predecessor")
-    return predecessor.strip()
+    return validate_operand(predecessor.strip(), "archive selector")
 
 
 def _operation_file_path(operation: dict[str, Any] | None, job_kind: str) -> str:
@@ -736,7 +742,7 @@ def _operation_file_path(operation: dict[str, Any] | None, job_kind: str) -> str
     normalized = file_path.strip().strip("/")
     if not normalized:
         raise ValueError(f"{job_kind} requires operation.file_path")
-    return normalized
+    return validate_operand(normalized, "archive path", archive_path=True)
 
 
 def _operation_directory_path(operation: dict[str, Any] | None, job_kind: str) -> str:
@@ -748,7 +754,7 @@ def _operation_directory_path(operation: dict[str, Any] | None, job_kind: str) -
     normalized = directory_path.strip().strip("/")
     if not normalized:
         raise ValueError(f"{job_kind} requires operation.directory_path")
-    return normalized
+    return validate_operand(normalized, "archive path", archive_path=True)
 
 
 def _restore_paths(operation: dict[str, Any] | None) -> list[str]:
@@ -757,7 +763,11 @@ def _restore_paths(operation: dict[str, Any] | None) -> list[str]:
         return []
     if not isinstance(paths, list):
         raise ValueError("repository.restore requires operation.paths to be a list")
-    return [path for path in paths if isinstance(path, str) and path.strip()]
+    return [
+        validate_operand(path, "restore path", archive_path=True)
+        for path in paths
+        if isinstance(path, str) and path.strip()
+    ]
 
 
 def _operation_strip_components(

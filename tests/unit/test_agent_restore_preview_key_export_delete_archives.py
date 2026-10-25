@@ -88,10 +88,9 @@ class TestAgentCommands:
         payload = _payload(
             "repository.restore_dry_run",
             2,
-            {"archive": "--help", "paths": ["home/a", "-odd"]},
+            {"archive": "daily", "paths": ["home/a", "folder with spaces"]},
         )
 
-        # an option-shaped archive or path stays data
         assert payload.build_command() == [
             "borg2",
             "-r",
@@ -99,10 +98,21 @@ class TestAgentCommands:
             "extract",
             "--dry-run",
             "--",
-            "--help",
+            "daily",
             "home/a",
-            "-odd",
+            "folder with spaces",
         ]
+
+    @pytest.mark.parametrize(
+        "operation",
+        [
+            {"archive": "--help", "paths": ["home/a"]},
+            {"archive": "daily", "paths": ["-odd"]},
+        ],
+    )
+    def test_restore_dry_run_rejects_option_shaped_operands(self, operation):
+        with pytest.raises(ValueError):
+            _payload("repository.restore_dry_run", 2, operation).build_command()
 
     def test_restore_dry_run_borg1_without_paths(self):
         payload = _payload("repository.restore_dry_run", 1, {"archive": "a1"})
@@ -160,16 +170,30 @@ class TestAgentCommands:
                 2,
                 ["aid:11", "aid:22"],
                 [
-                    ["borg2", "-r", "/agent/repo", "delete", "aid:11"],
-                    ["borg2", "-r", "/agent/repo", "delete", "aid:22"],
+                    ["borg2", "-r", "/agent/repo", "delete", "--", "aid:11"],
+                    ["borg2", "-r", "/agent/repo", "delete", "--", "aid:22"],
                 ],
             ),
             (
                 1,
                 ["first", "second"],
                 [
-                    ["borg", "--lock-wait", "180", "delete", "/agent/repo::first"],
-                    ["borg", "--lock-wait", "180", "delete", "/agent/repo::second"],
+                    [
+                        "borg",
+                        "--lock-wait",
+                        "180",
+                        "delete",
+                        "--",
+                        "/agent/repo::first",
+                    ],
+                    [
+                        "borg",
+                        "--lock-wait",
+                        "180",
+                        "delete",
+                        "--",
+                        "/agent/repo::second",
+                    ],
                 ],
             ),
         ],
@@ -427,9 +451,9 @@ class TestAgentDeleteArchives:
 
         assert result.status == "completed_with_warnings"
         assert fake_borg.calls() == [
-            "--lock-wait 180 delete /agent/repo::first",
-            "--lock-wait 180 delete /agent/repo::second",
-            "--lock-wait 180 delete /agent/repo::third",
+            "--lock-wait 180 delete -- /agent/repo::first",
+            "--lock-wait 180 delete -- /agent/repo::second",
+            "--lock-wait 180 delete -- /agent/repo::third",
         ]
         (complete,) = [c for c in client.calls if c[0] == "complete_job"]
         assert complete[1]["return_code"] == 1
@@ -459,8 +483,8 @@ class TestAgentDeleteArchives:
         assert result.status == "failed"
         # the third archive is never touched
         assert fake_borg.calls() == [
-            "-r /agent/repo delete aid:11",
-            "-r /agent/repo delete aid:22",
+            "-r /agent/repo delete -- aid:11",
+            "-r /agent/repo delete -- aid:22",
         ]
         (fail,) = [c for c in client.calls if c[0] == "fail_job"]
         assert "deleting archive aid:22 exited with code 2" in fail[1]
@@ -485,7 +509,7 @@ class TestAgentDeleteArchives:
         )
 
         assert result.status == "canceled"
-        assert fake_borg.calls() == ["--lock-wait 180 delete /agent/repo::first"]
+        assert fake_borg.calls() == ["--lock-wait 180 delete -- /agent/repo::first"]
         assert client.kinds()[-1] == "cancel_job"
         assert "1 of 2" in result.message
 

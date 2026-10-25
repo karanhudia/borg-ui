@@ -29,6 +29,7 @@ from app.utils.restore_layout import (
 from app.services.process_cancel import terminate_tracked_process
 from app.utils.http_detail import detail_text, structured_detail
 from app.utils.local_paths import is_restore_destination_allowed
+from app.utils.borg_arguments import validate_operand
 
 logger = structlog.get_logger()
 
@@ -153,6 +154,10 @@ class RestoreService:
             existing_files: "refuse" (exact restore, an occupied Borg 2
                 destination is refused) or "continue" (write into it, #1261)
         """
+        validate_operand(archive_name, "archive selector")
+        for path in paths or []:
+            validate_operand(path, "restore path", archive_path=True)
+
         # Agent-executor repositories must run the extract on their managed
         # agent: the server can't reach the node's filesystem (or, for
         # agent-owned repos, the repository itself). Delegate like backups do.

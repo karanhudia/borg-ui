@@ -70,6 +70,7 @@ from app.services.process_cancel import (
     terminate_process,
     terminate_tracked_process,
 )
+from app.utils.borg_arguments import validate_source
 
 logger = structlog.get_logger()
 
@@ -1617,7 +1618,12 @@ class BackupService:
             if len(temp_roots) == 1:
                 backup_cwd = temp_roots[0]
                 backup_paths = [
-                    relative_path for _, relative_path in ssh_mount_info
+                    # An absolute SSH source such as /-data becomes -data
+                    # under this cwd. Keep its path meaning and operand shape.
+                    f"./{relative_path}"
+                    if relative_path.startswith("-")
+                    else relative_path
+                    for _, relative_path in ssh_mount_info
                 ] + processed_source_paths[ssh_path_count:]
                 logger.info(
                     "Using cwd for SSH mount backup (preserves original path structure)",
@@ -2380,6 +2386,8 @@ class BackupService:
             )
 
             # Add all source paths to the command
+            for source in backup_paths:
+                validate_source(source)
             cmd.extend(backup_paths)
 
             logger.info(

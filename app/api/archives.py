@@ -54,6 +54,7 @@ from app.utils.ssh_utils import (
     resolve_repository_ssh_connection,
 )  # Backward-compatible patch target for tests
 from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
+from app.utils.borg_arguments import validate_operand
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -563,6 +564,10 @@ async def get_archive_info(
 ):
     """Get detailed information about a specific archive including command line, metadata, and optionally file listing"""
     try:
+        validate_operand(archive_id, "archive selector")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
         agent = is_agent_executor(repo)
@@ -740,6 +745,12 @@ async def get_archive_contents(
 ):
     """Get contents of an archive"""
     try:
+        validate_operand(archive_id, "archive selector")
+        if path:
+            validate_operand(path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
         if is_agent_executor(repo):
@@ -792,6 +803,10 @@ async def delete_archive(
     db: Session = Depends(get_db),
 ):
     """Delete an archive in the background (non-blocking)"""
+    try:
+        validate_operand(archive_id, "archive selector")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         # Validate repository exists first
         repo = require_repository_access_by_path(
@@ -856,6 +871,12 @@ async def download_file_from_archive(
     db: Session = Depends(get_db),
 ):
     """Extract and download a specific file from an archive"""
+    try:
+        validate_operand(archive, "archive selector")
+        if file_path:
+            validate_operand(file_path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         repo = require_repository_access_by_path(
             db,
@@ -922,6 +943,12 @@ async def download_folder_from_archive(
     db: Session = Depends(get_db),
 ):
     """Download one archived directory as a streaming tar file."""
+    try:
+        validate_operand(archive, "archive selector")
+        if directory_path:
+            validate_operand(directory_path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not directory_path.strip().strip("/"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

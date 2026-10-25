@@ -128,6 +128,7 @@ async def test_execute_delete_completes_and_persists_logs(
     job_id, backup_id = job.id, backup.id
 
     process = FakeProcess(returncode=0, stderr_lines=[b"deleting archive\n", b"done\n"])
+    execution = AsyncMock(return_value=process)
 
     with (
         patch(
@@ -136,7 +137,7 @@ async def test_execute_delete_completes_and_persists_logs(
         ),
         patch(
             "app.services.delete_archive_service.asyncio.create_subprocess_exec",
-            new=AsyncMock(return_value=process),
+            new=execution,
         ),
         patch(
             "app.services.delete_archive_service.get_process_start_time",
@@ -145,6 +146,9 @@ async def test_execute_delete_completes_and_persists_logs(
     ):
         await delete_service.execute_delete(job_id, repo.id, "daily-1")
 
+    # Options end with "--" before the archive operand.
+    cmd = list(execution.await_args.args)
+    assert cmd[cmd.index("--") + 1 :] == ["/tmp/repo::daily-1"]
     refreshed = resolve_maintenance_job(db_session_commit, job_id, "delete_archive")
     assert refreshed.status == "completed"
     assert refreshed.progress == 100

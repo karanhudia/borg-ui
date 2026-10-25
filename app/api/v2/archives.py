@@ -54,6 +54,7 @@ from app.services.repository_executor import (
 from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
 from app.utils.borg_env import effective_repository_remote_path, repository_borg_env
 from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
+from app.utils.borg_arguments import validate_operand
 
 logger = structlog.get_logger()
 # Borg 2 support is the Pro feature, but reading an existing Borg 2 archive is
@@ -327,6 +328,10 @@ async def get_archive_info(
     db: Session = Depends(get_db),
 ):
     """Get detailed information about a Borg 2 archive."""
+    try:
+        validate_operand(archive_id, "archive selector")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive_id)
     if is_agent_executor(repo):
@@ -481,6 +486,12 @@ async def get_archive_contents(
     Returns {"items": [...]} matching the v1 /browse/ response shape so
     ArchiveContentsDialog works without version branching.
     """
+    try:
+        validate_operand(archive_id, "archive selector")
+        if path:
+            validate_operand(path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive_id)
     fast_browse = is_fast_browse_enabled(db)
@@ -611,6 +622,10 @@ async def delete_archive(
     Space is NOT freed immediately in Borg 2 — a compact() call is required.
     The scheduled compact after prune/delete handles this automatically.
     """
+    try:
+        validate_operand(archive_id, "archive selector")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
@@ -675,6 +690,12 @@ async def download_file_from_archive(
     db: Session = Depends(get_db),
 ):
     """Extract and download a specific file from a Borg 2 archive."""
+    try:
+        validate_operand(archive, "archive selector")
+        if file_path:
+            validate_operand(file_path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive)
     try:
@@ -728,6 +749,12 @@ async def download_folder_from_archive(
     db: Session = Depends(get_db),
 ):
     """Download one Borg 2 archived directory as a streaming tar file."""
+    try:
+        validate_operand(archive, "archive selector")
+        if directory_path:
+            validate_operand(directory_path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not directory_path.strip().strip("/"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
