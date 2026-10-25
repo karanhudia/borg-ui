@@ -160,6 +160,12 @@ def _admit(fingerprint: str) -> Optional[int]:
 _consent_cache: Optional[tuple[float, bool, Optional[str]]] = None
 
 
+def invalidate_consent_cache() -> None:
+    """An analytics preference changed: the next report reads it again."""
+    global _consent_cache
+    _consent_cache = None
+
+
 def _consent() -> tuple[bool, Optional[str]]:
     """(allowed, instance_key). An unreadable database is not a no."""
     global _consent_cache

@@ -402,3 +402,19 @@ def test_flush_is_bounded_and_never_raises(monkeypatch):
     assert 2.5 < time.monotonic() - start < 4
     monkeypatch.setattr(error_reporter, "_queue", None)
     flush()
+
+
+def test_an_opt_out_applies_without_waiting_for_the_cache(reporter_db, sent):
+    user = User(username="a", password_hash="x", analytics_enabled=True)
+    reporter_db.add(user)
+    reporter_db.commit()
+    report_failure(kind="job", type_="backup_failed", message="first")
+    flush()
+    assert len(sent) == 1
+
+    user.analytics_enabled = False
+    reporter_db.commit()
+    error_reporter.invalidate_consent_cache()
+    report_failure(kind="job", type_="backup_failed", message="second")
+    flush()
+    assert len(sent) == 1

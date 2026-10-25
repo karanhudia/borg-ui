@@ -2693,3 +2693,29 @@ async def test_a_failed_operation_is_reported_once(
             },
         )
     ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_failure_recorded_after_its_terminal_commit_failed_is_reported(
+    db, repo, runner, registry, monkeypatch
+):
+    reports = []
+    monkeypatch.setattr(
+        "app.services.error_reporter.report_failure",
+        lambda **kw: reports.append(kw["type_"]),
+    )
+    failing = _failing_commits(monkeypatch)
+
+    async def nope(ctx):
+        failing["commits"] = 1
+        return Outcome(status="failed", error_message="nope")
+
+    registry["backup"] = nope
+    enqueue(db, "backup", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    assert reports == []
+
+    assert await runner.record_unrecorded_outcomes(db) == 1
+    assert reports == ["backup_failed"]

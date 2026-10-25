@@ -635,6 +635,8 @@ class OperationRunner:
             if not written or op is None:
                 continue
             recorded += 1
+            if op.status == "failed":
+                _report_failed_operation(op, None)
             logger.warning(
                 "Recorded an operation outcome after its terminal commit failed",
                 operation_id=operation_id,
