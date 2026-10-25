@@ -264,6 +264,7 @@ jobs:
           docker run -d --rm --name borg-ui-smoke -p 18088:8088 \
             -e PORT=8088 \
             -e SECRET_KEY=test-secret-key-for-ci \
+            -e CI=true \
             -e ACTIVATION_SERVICE_URL= \
             borg-ui-app:smoke-test
           cleanup() {

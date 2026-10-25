@@ -152,10 +152,16 @@ const admit = (fingerprint: string): number | null => {
   return count
 }
 
+// The dev server and browser automation (Playwright in CI) report the released
+// version they were built from, so neither sends.
+const devOrAutomated = (): boolean =>
+  import.meta.env.MODE === 'development' ||
+  (typeof navigator !== 'undefined' && navigator.webdriver === true)
+
 /** Report an error to Borg UI's analytics. Never throws. */
 export const reportError = (error: unknown, ctx: ErrorContext): void => {
   try {
-    if (unloading) return
+    if (unloading || devOrAutomated()) return
     const obj =
       typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : null
     const type = (typeof obj?.name === 'string' && obj.name ? obj.name : typeof error).slice(
@@ -230,6 +236,14 @@ export const installGlobalErrorHandlers = (): void => {
   window.addEventListener('error', (event) => {
     // Cross-origin scripts and browser extensions are not ours.
     if (event.message === 'Script error.') return
+    // Browser layout notifications have no exception object. Keep real errors reportable.
+    if (
+      event.error == null &&
+      /^ResizeObserver loop (?:limit exceeded|completed with undelivered notifications)\.?$/.test(
+        event.message
+      )
+    )
+      return
     if (event.filename && !sameOrigin(event.filename)) return
     reportError(event.error ?? event.message, { kind: 'uncaught' })
   })

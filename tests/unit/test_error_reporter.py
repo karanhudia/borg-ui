@@ -433,3 +433,11 @@ def test_a_read_overtaken_by_an_opt_out_is_not_cached(monkeypatch):
     monkeypatch.setattr(error_reporter, "SessionLocal", Session)
     assert error_reporter._consent() == (True, None)
     assert error_reporter._consent_cache is None
+
+
+def test_only_production_outside_ci_reports():
+    from app.config import error_reporting_allowed
+
+    assert error_reporting_allowed("production", {}) is True
+    assert error_reporting_allowed("development", {}) is False
+    assert error_reporting_allowed("production", {"CI": "true"}) is False
