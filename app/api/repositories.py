@@ -4610,12 +4610,14 @@ def _has_exportable_keyfile(repository: Repository) -> bool:
     `has_keyfile` marks a keyfile the server keeps: it is set when the server
     creates or imports a keyfile repository, or a key is uploaded. An agent
     repository's keyfile lives on its agent's machine, so its encryption
-    mode says it; the agent exports the key there."""
+    mode says it; the agent exports the key there. A Borg 2 repository's
+    encryption mode says it as well: Borg 2 repositories the server created
+    before it set `has_keyfile` for them still have it false."""
     if repository.has_keyfile:
         return True
-    return is_agent_executor(repository) and (repository.encryption or "").startswith(
-        "keyfile"
-    )
+    if not (repository.encryption or "").startswith("keyfile"):
+        return False
+    return is_agent_executor(repository) or is_borg2(repository)
 
 
 def _offers_keyfile_download(

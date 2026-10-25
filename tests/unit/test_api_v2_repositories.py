@@ -2,6 +2,7 @@ import asyncio
 import base64
 import contextlib
 import json
+import os
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -183,6 +184,142 @@ class TestV2RepositoryRoutes:
         assert repo.source_ssh_connection_id is None
         assert json.loads(repo.source_locations) == source_locations
         mock_rcreate.assert_awaited_once()
+
+    @pytest.mark.parametrize(
+        ("route", "created_status"),
+        [("/api/v2/repositories/", 201), ("/api/repositories/", 200)],
+    )
+    @pytest.mark.parametrize("encryption", BORG2_ENCRYPTION_MODES)
+    def test_created_repository_offers_the_keyfile_download_for_keyfile_modes(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        route,
+        created_status,
+        encryption,
+    ):
+        """A keyfile repository the server creates keeps its key on the
+        server, so the keyfile route exports it; a repokey or authenticated
+        one has no keyfile to download. `/api/repositories/` with
+        `borg_version: 2` delegates to the Borg 2 create."""
+        _enable_borg_v2(test_db)
+        payload = {
+            "name": f"Borg 2 {encryption}",
+            "path": f"/tmp/v2-create-{encryption}",
+            "encryption": encryption,
+            "passphrase": "secret",
+            "compression": "lz4",
+            "borg_version": 2,
+        }
+
+        with patch(
+            "app.api.v2.repositories._rcreate",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "already_existed": False,
+                    "stdout": "",
+                    "stderr": "",
+                }
+            ),
+        ):
+            response = test_client.post(route, json=payload, headers=admin_headers)
+        assert response.status_code == created_status
+
+        repo = test_db.query(Repository).filter_by(name=payload["name"]).one()
+        is_keyfile = encryption.startswith("keyfile-")
+        assert repo.has_keyfile is is_keyfile
+
+        async def fake_run(cmd, *args, **kwargs):
+            # `borg2 -r <repo> key export <output>`
+            assert cmd[1:5] == ["-r", repo.path, "key", "export"]
+            with open(cmd[5], "wb") as handle:
+                handle.write(b"BORG_KEY exported")
+            return {"success": True, "return_code": 0, "stdout": "", "stderr": ""}
+
+        with patch(
+            "app.services.v2.repository_service.borg2._run",
+            new=AsyncMock(side_effect=fake_run),
+        ) as mock_run:
+            download = test_client.get(
+                f"/api/repositories/{repo.id}/keyfile", headers=admin_headers
+            )
+
+        if is_keyfile:
+            assert download.status_code == 200
+            assert download.content == b"BORG_KEY exported"
+            mock_run.assert_awaited_once()
+        else:
+            assert download.status_code == 404
+            assert (
+                download.json()["detail"]["key"]
+                == "backend.errors.repo.repoHasNoKeyfile"
+            )
+            mock_run.assert_not_awaited()
+
+    def test_keyfile_download_of_an_ssh_repository_uses_its_connection_key(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """`borg2 key export` opens the repository, so on an ssh:// repository
+        it runs with the SSH key of the repository's connection; the default
+        key of the server's user may not be authorised there."""
+        _enable_borg_v2(test_db)
+        cipher = Fernet(base64.urlsafe_b64encode(settings.secret_key.encode()[:32]))
+        ssh_key = SSHKey(
+            name="repo-key",
+            public_key="ssh-ed25519 AAAA",
+            private_key=cipher.encrypt(b"connection-private-key").decode(),
+            key_type="ed25519",
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        connection = SSHConnection(
+            ssh_key_id=ssh_key.id, host="example.com", username="borg", port=2222
+        )
+        test_db.add(connection)
+        test_db.commit()
+        repo = Repository(
+            name="SSH Keyfile Repo",
+            path="ssh://borg@example.com:2222/backups/repo",
+            encryption="keyfile-aes-ocb",
+            compression="lz4",
+            repository_type="ssh",
+            connection_id=connection.id,
+            borg_version=2,
+            has_keyfile=True,
+            passphrase="secret",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        seen = {}
+
+        async def fake_run(cmd, *args, env=None, **kwargs):
+            rsh = env["BORG_RSH"].split()
+            key_file = rsh[rsh.index("-i") + 1]
+            with open(key_file, "rb") as handle:
+                seen["key"] = handle.read()
+            seen["key_file"] = key_file
+            seen["passphrase"] = env.get("BORG_PASSPHRASE")
+            with open(cmd[5], "wb") as handle:
+                handle.write(b"BORG_KEY exported")
+            return {"success": True, "return_code": 0, "stdout": "", "stderr": ""}
+
+        with patch(
+            "app.services.v2.repository_service.borg2._run",
+            new=AsyncMock(side_effect=fake_run),
+        ):
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/keyfile", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.content == b"BORG_KEY exported"
+        assert seen["key"].strip() == b"connection-private-key"
+        assert seen["passphrase"] == "secret"
+        assert not os.path.exists(seen["key_file"])
 
     def test_create_repository_rejects_invalid_encryption(
         self, test_client: TestClient, admin_headers, test_db
