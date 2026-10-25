@@ -418,3 +418,18 @@ def test_an_opt_out_applies_without_waiting_for_the_cache(reporter_db, sent):
     report_failure(kind="job", type_="backup_failed", message="second")
     flush()
     assert len(sent) == 1
+
+
+def test_a_read_overtaken_by_an_opt_out_is_not_cached(monkeypatch):
+    class Session:
+        def query(self, *a):
+            # the preference changes while this read is in flight
+            error_reporter.invalidate_consent_cache()
+            raise RuntimeError("stale read")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(error_reporter, "SessionLocal", Session)
+    assert error_reporter._consent() == (True, None)
+    assert error_reporter._consent_cache is None

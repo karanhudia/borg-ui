@@ -158,20 +158,29 @@ def _admit(fingerprint: str) -> Optional[int]:
 # -- consent and instance key --------------------------------------------------
 
 _consent_cache: Optional[tuple[float, bool, Optional[str]]] = None
+# bumped on every invalidation: a read that started before one must not
+# cache what it saw. The lock never covers the database read, so the
+# preferences request that invalidates never waits on the reporter.
+_consent_generation = 0
+_consent_lock = threading.Lock()
 
 
 def invalidate_consent_cache() -> None:
     """An analytics preference changed: the next report reads it again."""
-    global _consent_cache
-    _consent_cache = None
+    global _consent_cache, _consent_generation
+    with _consent_lock:
+        _consent_cache = None
+        _consent_generation += 1
 
 
 def _consent() -> tuple[bool, Optional[str]]:
     """(allowed, instance_key). An unreadable database is not a no."""
     global _consent_cache
     now = time.monotonic()
-    if _consent_cache is not None and _consent_cache[0] > now:
-        return _consent_cache[1], _consent_cache[2]
+    with _consent_lock:
+        if _consent_cache is not None and _consent_cache[0] > now:
+            return _consent_cache[1], _consent_cache[2]
+        generation = _consent_generation
     allowed, key = True, None
     try:
         db = SessionLocal()
@@ -188,7 +197,9 @@ def _consent() -> tuple[bool, Optional[str]]:
             db.close()
     except Exception:
         pass
-    _consent_cache = (now + CONSENT_TTL, allowed, key)
+    with _consent_lock:
+        if generation == _consent_generation:
+            _consent_cache = (now + CONSENT_TTL, allowed, key)
     return allowed, key
 
 
