@@ -474,10 +474,11 @@ class TestCombinedScenarios:
                 execution_order.append(f"repo-library:{script.name}")
             return {"success": True}
 
+        backup_kwargs = []
+
         async def mock_backup(*args, **kwargs):
             execution_order.append("backup")
-            # the backup runs the repository's own scripts (#1431)
-            assert not kwargs.get("skip_hooks")
+            backup_kwargs.append(kwargs)
             # Mark backup as completed
             if args:
                 job_id = args[0]
@@ -510,6 +511,9 @@ class TestCombinedScenarios:
         assert execution_order[-1] == "schedule:Schedule Post", (
             "Schedule post-script should run last"
         )
+        # the backup runs the repository's own scripts (#1431); asserted here,
+        # since the runner would swallow a failure inside the backup
+        assert backup_kwargs and not any(k.get("skip_hooks") for k in backup_kwargs)
         assert "repo-library:Repo Library Script" not in execution_order, (
             "The backup runs the repository's scripts, not the schedule"
         )
