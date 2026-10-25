@@ -22,7 +22,7 @@ from agent.borg_ui_agent.repository_ops import (
     execute_repository_operation_job,
 )
 from agent.borg_ui_agent.runtime import JOB_HANDLERS, get_capabilities
-from app.database.models import AgentJob, AgentJobLog
+from app.database.models import AgentJob, AgentJobLog, Repository
 from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.job_admission import (
     OPERATION_CLASS_REPOSITORY_READ,
@@ -599,7 +599,14 @@ def test_the_fail_route_stores_the_deleted_count(test_client, test_db):
 # -- server: restore preview --------------------------------------------------------
 
 
-def _preview(test_client, admin_headers, repo, paths=("data",), archive=None):
+def _preview(
+    test_client,
+    admin_headers,
+    repo,
+    paths=("data",),
+    archive=None,
+    destination="/restore",
+):
     return test_client.post(
         "/api/restore/preview",
         json={
@@ -607,7 +614,7 @@ def _preview(test_client, admin_headers, repo, paths=("data",), archive=None):
             "repository_id": repo.id,
             "archive": archive or "aid:" + "a" * 64,
             "paths": list(paths),
-            "destination": "/restore",
+            "destination": destination,
         },
         headers=admin_headers,
     )
@@ -712,6 +719,164 @@ class TestRestorePreview:
         (job,) = _agent_jobs(test_db, "repository.restore_dry_run")
         # never claimed: cancelled, so it blocks nothing and never runs
         assert job.status == "canceled"
+
+
+# -- server repository: restore preview --------------------------------------------
+
+
+@pytest.fixture
+def server_runs_fake_borg(fake_borg, monkeypatch):
+    """The server's own Borg 1 and Borg 2 are the stand-in Borg."""
+    from app.core.borg import borg
+    from app.core.borg2 import borg2
+
+    monkeypatch.setattr(borg, "borg_cmd", fake_borg.path)
+    monkeypatch.setattr(borg2, "borg_cmd", fake_borg.path)
+    return fake_borg
+
+
+def _server_repo(db, borg_version):
+    repo = Repository(
+        name=f"server-v{borg_version}",
+        path=f"/repos/server-v{borg_version}",
+        encryption="none",
+        repository_type="local",
+        borg_version=borg_version,
+    )
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+    return repo
+
+
+def _agent_preview_answer(fake_borg, borg_version):
+    """What the preview route answers for an agent repository after the
+    agent's dry run against the same stand-in Borg."""
+    result, client = _run(
+        fake_borg,
+        "repository.restore_dry_run",
+        {"archive": "a1", "paths": ["nope"]},
+        borg_version=borg_version,
+    )
+    (complete,) = [c for c in client.calls if c[0] == "complete_job"]
+    return result, {"preview": complete[1].get("output") or ""}
+
+
+@pytest.mark.unit
+class TestServerRestorePreview:
+    # Borg 1 warns with the legacy rc 1, Borg 2 with a modern warning code
+    @pytest.mark.parametrize("borg_version, warning_rc", [(1, "1"), (2, "101")])
+    def test_a_warning_answers_as_the_agent_path_does(
+        self,
+        test_client,
+        admin_headers,
+        test_db,
+        server_runs_fake_borg,
+        tmp_path,
+        monkeypatch,
+        borg_version,
+        warning_rc,
+    ):
+        monkeypatch.setenv("FAKE_BORG_DRY_RC", warning_rc)
+        agent_result, agent_answer = _agent_preview_answer(
+            server_runs_fake_borg, borg_version
+        )
+        repo = _server_repo(test_db, borg_version)
+        destination = tmp_path / "not-there-yet"
+
+        response = _preview(
+            test_client,
+            admin_headers,
+            repo,
+            paths=["nope"],
+            archive="a1",
+            destination=str(destination),
+        )
+
+        assert agent_result.status == "completed_with_warnings"
+        assert response.status_code == 200, response.text
+        assert response.json() == agent_answer
+        assert response.json() == {"preview": "Include pattern 'nope' never matched."}
+        # a dry run writes nothing, and needs no destination
+        assert not destination.exists()
+
+    @pytest.mark.parametrize("borg_version", [1, 2])
+    def test_a_missing_destination_does_not_stop_the_dry_run(
+        self,
+        test_client,
+        admin_headers,
+        test_db,
+        server_runs_fake_borg,
+        tmp_path,
+        borg_version,
+    ):
+        _, agent_answer = _agent_preview_answer(server_runs_fake_borg, borg_version)
+        repo = _server_repo(test_db, borg_version)
+        destination = tmp_path / "not-there-yet"
+
+        response = _preview(
+            test_client,
+            admin_headers,
+            repo,
+            paths=["nope"],
+            archive="a1",
+            destination=str(destination),
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json() == agent_answer
+        # the agent's run and the server's
+        assert len(server_runs_fake_borg.calls()) == 2
+        assert not destination.exists()
+
+    @pytest.mark.parametrize("borg_version", [1, 2])
+    def test_an_error_fails_the_preview_with_borgs_reason(
+        self,
+        test_client,
+        admin_headers,
+        test_db,
+        server_runs_fake_borg,
+        monkeypatch,
+        borg_version,
+    ):
+        monkeypatch.setenv("FAKE_BORG_DRY_RC", "2")
+        agent_result, _ = _run(
+            server_runs_fake_borg,
+            "repository.restore_dry_run",
+            {"archive": "a1", "paths": ["nope"]},
+            borg_version=borg_version,
+        )
+        repo = _server_repo(test_db, borg_version)
+
+        response = _preview(
+            test_client, admin_headers, repo, paths=["nope"], archive="a1"
+        )
+
+        assert agent_result.status == "failed"
+        assert response.status_code == 500, response.text
+        assert response.json()["detail"] == {
+            "key": "backend.errors.restore.failedPreviewRestoreWithReason",
+            "params": {"reason": "Include pattern 'nope' never matched."},
+        }
+
+    @pytest.mark.parametrize("borg_version", [1, 2])
+    def test_a_borg_that_cannot_start_fails_the_preview(
+        self, test_client, admin_headers, test_db, tmp_path, monkeypatch, borg_version
+    ):
+        from app.core.borg import borg
+        from app.core.borg2 import borg2
+
+        missing = str(tmp_path / "no-borg-here")
+        monkeypatch.setattr(borg, "borg_cmd", missing)
+        monkeypatch.setattr(borg2, "borg_cmd", missing)
+        repo = _server_repo(test_db, borg_version)
+
+        response = _preview(test_client, admin_headers, repo, archive="a1")
+
+        assert response.status_code == 500, response.text
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.restore.failedPreviewRestoreWithReason"
+        assert "no-borg-here" in detail["params"]["reason"]
 
 
 # -- server: key export -------------------------------------------------------------

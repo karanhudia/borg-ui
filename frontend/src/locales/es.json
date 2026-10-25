@@ -6042,6 +6042,7 @@
         "failedGetRestoreJobs": "Error al obtener trabajos de restauración",
         "failedGetRestoreStatus": "Error al obtener el estado de restauración",
         "failedPreviewRestore": "Error al previsualizar la restauración",
+        "failedPreviewRestoreWithReason": "Error al previsualizar la restauración: {{reason}}",
         "agentPreviewUnsupported": "Este repositorio lo ejecuta un agente cuya versión no puede previsualizar una restauración. Actualiza el agente o inicia la restauración en su lugar.",
         "repositoryNotFound": "Repositorio no encontrado",
         "restoreJobNotFound": "Trabajo de restauración no encontrado",

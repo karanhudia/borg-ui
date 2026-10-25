@@ -11,6 +11,7 @@ Use BorgRouter instead so the routing stays in one place.
 """
 
 import asyncio
+import tempfile
 import time
 from typing import Any, Callable, List, Mapping, Optional
 
@@ -546,37 +547,42 @@ class BorgRouter:
         return await borg._execute_command(cmd, env=env)
 
     async def preview_restore(
-        self, archive: str, paths: List[str], destination: str, env: dict = None
+        self, archive: str, paths: List[str], env: dict = None
     ) -> dict:
         """Server-side only: the preview route runs an agent repository's
-        dry run on its agent (`repository.restore_dry_run`)."""
+        dry run on its agent (`repository.restore_dry_run`).
+
+        The dry run writes nothing, so it runs in a temporary directory of
+        its own rather than in the restore's destination, which need not
+        exist yet."""
         self._refuse_agent_repository("preview_restore")
-        if self.is_v2:
-            from app.services.v2.restore_service import restore_v2_service
+        with tempfile.TemporaryDirectory(prefix="borg-ui-restore-preview-") as workdir:
+            if self.is_v2:
+                from app.services.v2.restore_service import restore_v2_service
+
+                kwargs = {
+                    "repo": self.repo,
+                    "archive": archive,
+                    "paths": paths,
+                    "destination": workdir,
+                }
+                if env is not None:
+                    kwargs["env"] = env
+                return await restore_v2_service.preview_restore(**kwargs)
+
+            from app.core.borg import borg
 
             kwargs = {
-                "repo": self.repo,
-                "archive": archive,
-                "paths": paths,
-                "destination": destination,
+                "dry_run": True,
+                "remote_path": effective_repository_remote_path(self.repo),
+                "passphrase": self.repo.passphrase,
+                "bypass_lock": self.repo.bypass_lock,
             }
             if env is not None:
                 kwargs["env"] = env
-            return await restore_v2_service.preview_restore(**kwargs)
-
-        from app.core.borg import borg
-
-        kwargs = {
-            "dry_run": True,
-            "remote_path": effective_repository_remote_path(self.repo),
-            "passphrase": self.repo.passphrase,
-            "bypass_lock": self.repo.bypass_lock,
-        }
-        if env is not None:
-            kwargs["env"] = env
-        return await borg.extract_archive(
-            self.repo.path, archive, paths, destination, **kwargs
-        )
+            return await borg.extract_archive(
+                self.repo.path, archive, paths, workdir, **kwargs
+            )
 
     async def list_archive_contents(
         self,

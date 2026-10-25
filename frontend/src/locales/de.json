@@ -6042,6 +6042,7 @@
         "failedGetRestoreJobs": "Wiederherstellungsaufträge konnten nicht abgerufen werden",
         "failedGetRestoreStatus": "Wiederherstellungsstatus konnte nicht abgerufen werden",
         "failedPreviewRestore": "Vorschau der Wiederherstellung fehlgeschlagen",
+        "failedPreviewRestoreWithReason": "Vorschau der Wiederherstellung fehlgeschlagen: {{reason}}",
         "agentPreviewUnsupported": "Dieses Repository wird von einem Agenten ausgeführt, dessen Version keine Vorschau einer Wiederherstellung erstellen kann. Aktualisiere den Agenten oder starte stattdessen die Wiederherstellung.",
         "repositoryNotFound": "Repository nicht gefunden",
         "restoreJobNotFound": "Wiederherstellungsauftrag nicht gefunden",
