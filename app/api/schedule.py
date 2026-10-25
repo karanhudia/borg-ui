@@ -2164,8 +2164,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
 
             # An agent repository's own scripts are agent scripts: its agent
             # backup runs them around the backup on the agent, so the
-            # schedule neither runs them here nor tells the backup to skip
-            # them.
+            # schedule does not run them here.
             server_runs_repository_scripts = (
                 scheduled_job.run_repository_scripts and not is_agent_executor(repo)
             )
@@ -2176,7 +2175,13 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 executor=_backup_executor(repo),
                 params={
                     "archive_name": archive_name,
-                    "skip_hooks": server_runs_repository_scripts,
+                    # Off, the repository's scripts do not run at all, as on a
+                    # backup plan; on, the backup skips them only when the
+                    # schedule runs them itself.
+                    "skip_hooks": (
+                        not scheduled_job.run_repository_scripts
+                        or server_runs_repository_scripts
+                    ),
                 },
                 scheduled_job_id=scheduled_job.id,
             )
