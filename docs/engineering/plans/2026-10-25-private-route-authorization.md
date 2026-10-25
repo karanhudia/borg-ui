@@ -18,7 +18,7 @@
 
 ### Task 1: Adapt and verify route authorization
 
-**Files:** Non-version implementation and tests from `/Users/karanhudia/Downloads/0001-fix-enforce-missing-authorization-and-declare-route-.patch`; additionally current dispatch-failure helper and focused dashboard tests.
+**Files:** Non-version implementation and tests from `0001-fix-enforce-missing-authorization-and-declare-route-.patch`; additionally current dispatch-failure helper and focused dashboard tests.
 
 - [ ] Apply supplied tests first and add hidden-plan, mixed-access plan, fully visible plan and administrator dispatch-failure cases. Reuse fixtures and real database models. Verify RED before implementation.
 - [ ] Apply supplied implementation. Resolve current import context in `app/api/scripts_library.py` and `app/api/v2/archives.py` without losing newer imports.
