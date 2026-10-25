@@ -21,7 +21,7 @@
 
 ### Task 1: Adapt and verify the supplied argument-boundary patch
 
-**Files:** All non-version implementation and test paths in `/Users/karanhudia/Downloads/0001-fix-separate-Borg-options-from-archive-and-path-oper.patch`; additionally `app/services/repository_executor.py` and `tests/unit/test_agent_argument_dispatch.py`.
+**Files:** All non-version implementation and test paths in `0001-fix-separate-Borg-options-from-archive-and-path-oper.patch`; additionally `app/services/repository_executor.py` and `tests/unit/test_agent_argument_dispatch.py`.
 
 **Interfaces:** Existing `validate_operand(value, field, archive_path=False)`, `validate_source(value)`, `RepositoryOperationPayload.delete_archive_command(archive)`, and `build_agent_backup_payload(repository, archive_name, ...)` retain their interfaces.
 
@@ -43,7 +43,7 @@ for source in source_paths:
 ```
 
 - [x] Add a behavior note in `agent/README.md` without naming a not-yet-assigned fixed version: Borg operands are separated from options and option-shaped names/paths are refused. Record queued old-job/agent-upgrade and Borg 2 runtime requirements in the implementation report and PR draft.
-- [x] Run focused server/agent argument tests, changed command-builder tests, `ruff check app tests agent`, `ruff format --check app tests agent`, and `pytest tests/unit`. Use `/Users/karanhudia/Documents/Projects/borg-ui/.venv/bin/python -m pytest` and the matching ruff binary. Save outputs in the plan workspace. Report environment failures precisely and compare suspected baseline failures in an untouched copy rather than weakening tests.
+- [x] Run focused server/agent argument tests, changed command-builder tests, `ruff check app tests agent`, `ruff format --check app tests agent`, and `pytest tests/unit`. Use `.venv/bin/python -m pytest` and the matching ruff binary. Save outputs in the plan workspace. Report environment failures precisely and compare suspected baseline failures in an untouched copy rather than weakening tests.
 - [x] Inspect the complete diff, confirm no version changes or unrelated files, and commit with Benjamin Stein attribution and `Co-authored-by: Codex <codex@openai.com>`. Do not push; the controller handles private remote/PR creation.
 
 ## Implementation notes (2026-10-25)
