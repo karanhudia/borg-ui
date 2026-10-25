@@ -6,9 +6,11 @@ commands inline.
 """
 
 import asyncio
+from contextlib import nullcontext
 from typing import Any, Dict, Optional
 
 import structlog
+from sqlalchemy.orm import object_session
 
 from app.core.borg import borg
 from app.database.database import SessionLocal
@@ -16,6 +18,7 @@ from app.database.models import SystemSettings
 from app.config import settings
 from app.services.process_cancel import communicate_or_kill
 from app.utils.borg_env import (
+    repository_borg_env,
     setup_borg_env,
     ssh_key_borg_env,
     with_lock_wait,
@@ -158,18 +161,24 @@ class RepositoryService:
             return {"success": False, "error": str(exc)}
 
     async def export_keyfile(self, repository, output_path: str) -> Dict[str, Any]:
-        env = setup_borg_env(passphrase=repository.passphrase)
-        process = await asyncio.create_subprocess_exec(
-            borg.borg_cmd,
-            "key",
-            "export",
-            repository.path,
-            output_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await communicate_or_kill(process, timeout=30)
+        if repository.path.startswith("ssh://"):
+            # `key export` opens the repository, so it needs the SSH key of the
+            # repository's connection, as every other command on it does.
+            borg_env = repository_borg_env(repository, object_session(repository))
+        else:
+            borg_env = nullcontext(setup_borg_env(passphrase=repository.passphrase))
+        with borg_env as env:
+            process = await asyncio.create_subprocess_exec(
+                borg.borg_cmd,
+                "key",
+                "export",
+                repository.path,
+                output_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            stdout, stderr = await communicate_or_kill(process, timeout=30)
         return {
             "success": process.returncode == 0,
             "return_code": process.returncode,
