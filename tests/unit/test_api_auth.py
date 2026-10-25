@@ -1685,6 +1685,28 @@ class TestOidcAuthentication:
                 await verify_id_token(provider, id_token, nonce="nonce-123")
 
     @pytest.mark.asyncio
+    async def test_oidc_unreadable_id_token_is_rejected_before_the_jwks_request(
+        self, monkeypatch
+    ):
+        from jwt.exceptions import PyJWKClientError
+
+        from app.core.oidc import verify_id_token
+
+        fetched = []
+
+        async def fake_fetch_jwks(provider):
+            fetched.append(provider.jwks_uri)
+            return {"keys": []}
+
+        monkeypatch.setattr("app.core.oidc.fetch_jwks", fake_fetch_jwks)
+
+        with pytest.raises(
+            PyJWKClientError, match="Unable to read the ID token header"
+        ):
+            await verify_id_token(self._oidc_provider(), "not-a-jwt", nonce="nonce-123")
+        assert fetched == []
+
+    @pytest.mark.asyncio
     async def test_oidc_jwks_is_fetched_with_httpx(self, monkeypatch):
         """The JWKS must go through httpx like every other provider call.
 

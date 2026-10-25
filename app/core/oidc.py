@@ -327,12 +327,14 @@ async def fetch_jwks(provider: OidcProviderConfiguration) -> dict[str, Any]:
         return response.json()
 
 
-def select_signing_key(jwks: dict[str, Any], id_token: str) -> Any:
+def read_id_token_header(id_token: str) -> dict[str, Any]:
     try:
-        header = jwt.get_unverified_header(id_token)
+        return jwt.get_unverified_header(id_token)
     except PyJWTError as exc:
         raise PyJWKClientError(f"Unable to read the ID token header: {exc}") from exc
 
+
+def select_signing_key(jwks: dict[str, Any], header: dict[str, Any]) -> Any:
     signing_keys = [
         key
         for key in PyJWKSet.from_dict(jwks).keys
@@ -360,7 +362,10 @@ async def verify_id_token(
     # request, and its requests are rejected by reverse proxies and WAFs that
     # accept the discovery and token calls this module already makes with
     # httpx -- Cloudflare answers them with "error code: 1010", for example.
-    signing_key = select_signing_key(await fetch_jwks(provider), id_token)
+    # The header is read before the JWKS request, as PyJWKClient did, so an
+    # unreadable token is rejected without a call to the provider.
+    header = read_id_token_header(id_token)
+    signing_key = select_signing_key(await fetch_jwks(provider), header)
     claims = jwt.decode(
         id_token,
         signing_key.key,
