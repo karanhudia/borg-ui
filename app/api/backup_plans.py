@@ -1407,7 +1407,19 @@ def _clear_legacy_source_settings(
         repository.updated_at = datetime.utcnow()
 
 
+def _schedule_state(plan: BackupPlan) -> tuple:
+    if plan.schedule_mode == "availability":
+        timing = (
+            plan.availability_check_interval_minutes,
+            plan.min_success_interval_minutes,
+        )
+    else:
+        timing = (plan.cron_expression, plan.timezone)
+    return (plan.enabled, plan.schedule_enabled, plan.schedule_mode, timing)
+
+
 def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
+    previous_schedule = _schedule_state(plan)
     plan.name = payload.name.strip()
     plan.description = payload.description.strip() if payload.description else None
     plan.enabled = payload.enabled
@@ -1443,16 +1455,19 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
         else None
     )
     plan.timezone = payload.timezone
-    if not payload.schedule_enabled:
-        plan.next_run = None
-    elif payload.schedule_mode == "availability":
-        plan.next_run = datetime.utcnow()
-    elif plan.cron_expression:
-        plan.next_run = calculate_next_cron_run(
-            plan.cron_expression, schedule_timezone=payload.timezone
-        )
-    else:
-        plan.next_run = None
+    # An unchanged schedule keeps its next_run: recomputing it from now would
+    # skip a slot that is already due but not yet dispatched.
+    if plan.next_run is None or _schedule_state(plan) != previous_schedule:
+        if not payload.schedule_enabled:
+            plan.next_run = None
+        elif payload.schedule_mode == "availability":
+            plan.next_run = datetime.utcnow()
+        elif plan.cron_expression:
+            plan.next_run = calculate_next_cron_run(
+                plan.cron_expression, schedule_timezone=payload.timezone
+            )
+        else:
+            plan.next_run = None
     plan.pre_backup_script_id = payload.pre_backup_script_id
     plan.post_backup_script_id = payload.post_backup_script_id
     plan.pre_backup_script_parameters = payload.pre_backup_script_parameters
@@ -1895,7 +1910,9 @@ def toggle_backup_plan(
                 detail={"key": "backend.errors.backupPlans.repositoriesRequired"},
             )
         raise_backup_plan_feature_error(evaluate_backup_plan_access(db, plan))
-        if plan.schedule_enabled and plan.cron_expression:
+        if plan.schedule_enabled and plan.schedule_mode == "availability":
+            next_run = datetime.utcnow()
+        elif plan.schedule_enabled and plan.cron_expression:
             try:
                 next_run = calculate_next_cron_run(
                     plan.cron_expression,
