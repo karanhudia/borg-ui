@@ -9,7 +9,7 @@ from croniter import croniter
 
 from app.database.database import get_db
 from app.database.models import User, Repository, SystemSettings
-from app.services import backup_monitoring_service
+from app.services import backup_monitoring_service, error_reporter
 from app.core.authorization import authorize_request
 from app.core.security import (
     BcryptPassword,
@@ -1851,6 +1851,8 @@ async def update_preferences(
 
         current_user.updated_at = datetime.utcnow()
         db.commit()
+        if preferences.analytics_enabled is not None:
+            error_reporter.invalidate_consent_cache()
 
         logger.info(
             "User preferences updated",

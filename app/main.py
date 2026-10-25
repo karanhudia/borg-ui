@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import structlog
 import os
 from dotenv import load_dotenv
@@ -46,6 +48,7 @@ from app.api import (
 from app.api.v2 import router as v2_router
 from app.routers import config
 from app.config import get_runtime_app_version, settings
+from app.services.error_reporter import flush, report_exception
 from app.core.proxy_auth import inspect_proxy_auth_config
 from app.core.security import create_first_user
 from app.services.licensing_service import sync_licensing_state
@@ -221,6 +224,30 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     )
 
 
+def _request_component(request: Request) -> str:
+    route = request.scope.get("route")
+    return f"{request.method} {route.path if route else 'unmatched'}"
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    report_exception(exc, kind="request", component=_request_component(request))
+    return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
+    # Routes turn most failures into HTTPException(500) inside `except`; report
+    # the cause they wrap, then answer exactly as FastAPI's default handler does.
+    if exc.status_code >= 500:
+        report_exception(
+            exc.__cause__ or exc.__context__ or exc,
+            kind="request",
+            component=_request_component(request),
+        )
+    return await http_exception_handler(request, exc)
+
+
 if BASE_PATH:
     app.add_middleware(BasePathMiddleware, base_path=BASE_PATH)
 
@@ -317,8 +344,21 @@ async def startup_event():
     # against an empty database and fails every request that reads from it.
     from app.database.db_upgrade import ensure_schema
 
-    ensure_schema()
+    try:
+        ensure_schema()
+    except Exception as exc:
+        report_exception(exc, kind="migration", component="ensure_schema")
+        flush()  # the process exits next and the sender thread with it
+        raise
+    try:
+        await _startup_after_schema()
+    except Exception as exc:
+        report_exception(exc, kind="startup", component="startup_event")
+        flush()  # the process exits next and the sender thread with it
+        raise
 
+
+async def _startup_after_schema() -> None:
     from app.database.database import SessionLocal
 
     app_version = get_runtime_app_version()
