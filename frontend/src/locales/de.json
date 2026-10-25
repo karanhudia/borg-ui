@@ -70,6 +70,11 @@
       "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
     }
   },
+  "errorBoundary": {
+    "title": "Etwas ist schiefgelaufen",
+    "message": "Borg UI ist auf einen unerwarteten Fehler gestoßen. Ein Neuladen behebt das Problem meist.",
+    "reload": "Neu laden"
+  },
   "login": {
     "title": "Borg UI",
     "subtitle": "Zugangsdaten eingeben, um fortzufahren",
@@ -4046,8 +4051,8 @@
     "save": "Einstellungen speichern",
     "saving": "Speichert...",
     "updatedSuccessfully": "Einstellungen erfolgreich aktualisiert",
-    "analyticsTitle": "Anonyme Nutzungsanalyse",
-    "analyticsDescription": "Hilf uns, Borg UI zu verbessern, indem du anonyme Nutzungsdaten teilst. Wir erfassen Seitenaufrufe, Funktionsklicks und Browser-Typ – ohne IP-Adressen, Hostnamen, Cookies oder persönlich identifizierbare Informationen zu verfolgen.",
+    "analyticsTitle": "Nutzungsanalyse",
+    "analyticsDescription": "Hilf uns, Borg UI zu verbessern, indem du Nutzungsdaten und Fehlerberichte teilst. Fehlerberichte können Pfade, Hostnamen und Repository-Namen enthalten; Passwörter, Passphrasen, Tokens und private Schlüssel werden vorher entfernt. Wir erfassen nie Backup-Inhalte, Passwörter oder IP-Adressen.",
     "enableAnalytics": "Analysen aktivieren",
     "languageTitle": "Sprache",
     "languageDescription": "Wähle die Sprache der Benutzeroberfläche",
@@ -4365,11 +4370,11 @@
   },
   "analyticsConsent": {
     "title": "Hilf uns, Borg UI zu verbessern",
-    "message": "Wir erfassen anonyme Nutzungsdaten, um zu verstehen, wie Borg UI verwendet wird, und es zu verbessern. Es werden keine persönlichen Informationen, IP-Adressen, Hostnamen oder Sicherungsdaten erfasst.",
+    "message": "Wir erfassen Nutzungsdaten und Fehlerberichte, um zu verstehen, wie Borg UI verwendet wird, und um Probleme zu beheben. Backup-Inhalte, Passwörter und IP-Adressen werden nie erfasst.",
     "accept": "Akzeptieren",
     "decline": "Ablehnen",
     "learnMore": "Mehr erfahren",
-    "enableToggle": "Anonyme Analysen aktivieren",
+    "enableToggle": "Analysen aktivieren",
     "continue": "Weiter",
     "saving": "Speichert...",
     "changeAnytime": "Du kannst dies jederzeit in Einstellungen → Einstellungen ändern"

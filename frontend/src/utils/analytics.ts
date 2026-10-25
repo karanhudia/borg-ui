@@ -3,14 +3,17 @@
  *
  * Events go to the Borg UI ingest service described in docs/trust.md. Nothing is
  * sent before the user's preferences load or after analytics is turned off, except
- * the single consent answer and opt-out events that count those choices. Only
- * paths are sent, never hostnames, query strings or referrers.
+ * the single consent answer and opt-out events that count those choices. Events
+ * carry only paths, never hostnames, query strings or referrers. Error reports
+ * (see errorReporting.ts) also go through this tracker and stop with it; they can
+ * contain paths, hostnames and repository names, with secrets removed.
  */
 
 import { authAPI } from '../services/api'
 import { fetchJsonForAuthMode } from '../services/authRequest'
 import { BASE_PATH } from './basePath'
 import { randomUuid } from './uuid'
+import { isCancelled, reportError } from './errorReporting'
 
 export const ANALYTICS_ENDPOINT = 'https://t.borgui.com/e'
 
@@ -31,7 +34,8 @@ interface OutgoingEvent {
   source: 'app'
   name: string
   session_key: string
-  instance_key: string
+  // Only error reports may go without one (see enqueueErrorReport).
+  instance_key?: string
   user_key?: string
   path: string
   app_version?: string
@@ -42,6 +46,9 @@ interface OutgoingEvent {
 let userOptedOut: boolean | null = null
 let consentGiven: boolean | null = null
 let preferenceLoaded = false
+// True only when the preference loaded and said no. A logged out user, a preference
+// that is not loaded yet or one that failed to load is not a no (see enqueueErrorReport).
+let analyticsDeclined = false
 let instanceKey: string | null = null
 let userKey: string | null = null
 let currentAppVersion: string | null = null
@@ -57,6 +64,15 @@ let pendingPageviews: { path: string; at: string }[] = []
 // Consent and opt-out answers given before an install key is known (the preference
 // request failed); sent once a later load provides the key.
 let pendingForced: { name: string; data?: Props; at: { path: string; at: string } }[] = []
+
+// Error reports that arrived before the first preference load settled.
+let heldErrorReports: Props[] = []
+let errorHoldTimer: ReturnType<typeof setTimeout> | null = null
+let errorHoldOver = false
+const ERROR_HOLD_MAX = 20
+const ERROR_HOLD_MS = 5000
+// The ingest accepts this much for an error report's props (2 KB for other events).
+const ERROR_PROPS_MAX = 16384
 
 const sessionKey = randomUuid()
 
@@ -324,6 +340,55 @@ const enqueue = (
   else scheduleFlush()
 }
 
+const sendErrorReport = (props: Props): void => {
+  if (analyticsDeclined || JSON.stringify(props).length > ERROR_PROPS_MAX) return
+  queue.push({
+    event_id: randomUuid(),
+    occurred_at: new Date().toISOString(),
+    source: 'app',
+    name: 'Error - Report',
+    session_key: sessionKey,
+    ...(instanceKey ? { instance_key: instanceKey } : {}),
+    ...(userKey ? { user_key: userKey } : {}),
+    path: currentRoute(),
+    ...(currentAppVersion ? { app_version: currentAppVersion } : {}),
+    ...(currentPlan ? { plan: currentPlan } : {}),
+    props,
+  })
+  if (queue.length >= MAX_BATCH) flushAnalytics()
+  else scheduleFlush()
+}
+
+// A no also withdraws reports already queued, not just the held ones.
+const dropErrorReports = (): void => {
+  heldErrorReports = []
+  for (let i = queue.length - 1; i >= 0; i--)
+    if (queue[i].name === 'Error - Report') queue.splice(i, 1)
+}
+
+// The first preference load settled, or the wait ran out: send what was held.
+const releaseErrorReports = (): void => {
+  errorHoldOver = true
+  if (errorHoldTimer) clearTimeout(errorHoldTimer)
+  errorHoldTimer = null
+  const held = heldErrorReports
+  heldErrorReports = []
+  for (const props of held) sendErrorReport(props)
+}
+
+/**
+ * Queue an error report. Unlike other events it is sent unless the user said no
+ * (preferences loaded with analytics off): logged out or not yet loaded is not a no,
+ * and without a known install key it goes without one. Reports from before the first
+ * preference load wait for it, at most 5 seconds and 20 of them. No `scrubProps`:
+ * the caller has already scrubbed secrets, and paths and hosts are wanted here.
+ */
+export const enqueueErrorReport = (props: Props): void => {
+  if (errorHoldOver) return sendErrorReport(props)
+  if (heldErrorReports.length < ERROR_HOLD_MAX) heldErrorReports.push(props)
+  if (!errorHoldTimer) errorHoldTimer = setTimeout(releaseErrorReports, ERROR_HOLD_MS)
+}
+
 /**
  * Load the user's analytics preference and pseudonymous keys from the API.
  * Called on app startup and after login, before any tracking.
@@ -332,6 +397,8 @@ export const loadUserPreference = async (): Promise<void> => {
   try {
     await readPreference()
   } finally {
+    if (analyticsDeclined) dropErrorReports()
+    releaseErrorReports()
     // Views held before the first load go out now if tracking is allowed, otherwise never.
     const held = pendingPageviews
     pendingPageviews = []
@@ -353,6 +420,7 @@ const readPreference = async (): Promise<void> => {
 
     if (!token && !proxyAuthEnabled && !insecureNoAuthEnabled) {
       userOptedOut = true
+      analyticsDeclined = false
       consentGiven = false
       preferenceLoaded = true
       return
@@ -365,6 +433,7 @@ const readPreference = async (): Promise<void> => {
     )
     const prefs = (await response.json()).preferences ?? {}
     userOptedOut = !prefs.analytics_enabled
+    analyticsDeclined = prefs.analytics_enabled === false
     consentGiven = prefs.analytics_consent_given ?? false
     instanceKey = prefs.analytics_instance_key ?? null
     userKey = prefs.analytics_user_key ?? null
@@ -467,6 +536,19 @@ export const trackApiError = (error: unknown): void => {
     return
   }
   const method = err?.config?.method?.toLowerCase()
+  const status = err?.response?.status
+  // 5xx are reported by the backend itself.
+  if (method && !isCancelled(error) && !(status !== undefined && status >= 500)) {
+    reportError(error, {
+      kind: 'api',
+      area,
+      method,
+      ...(status !== undefined ? { status } : {}),
+      ...(typeof detail?.key === 'string'
+        ? { error_key: detail.key.replace(/^backend\.errors\./, '') }
+        : {}),
+    })
+  }
   if (!method || method === 'get' || method === 'head' || err.response?.status === 401) return
   trackEvent(EventCategory.API, EventAction.FAIL, {
     area,
@@ -495,6 +577,8 @@ export const trackOptOut = (): void => {
   // Close the gate now, not when the saved preference reloads: drop anything still
   // queued and send only the opt-out itself.
   userOptedOut = true
+  analyticsDeclined = true
+  heldErrorReports = []
   pendingPageviews = []
   queue.length = 0
   if (flushTimer) {
@@ -516,6 +600,11 @@ export const trackLanguageChange = (languageCode: string): void => {
  * decline rates can be counted.
  */
 export const trackConsentResponse = (accepted: boolean): void => {
+  // A decline closes the gate now, so a failed preference reload cannot release held reports.
+  if (!accepted) {
+    analyticsDeclined = true
+    dropErrorReports()
+  }
   enqueue(`Consent - ${accepted ? 'Accept' : 'Decline'}`, { name: 'analytics_banner' }, true)
 }
 
