@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import structlog
 import os
 from dotenv import load_dotenv
@@ -216,15 +218,28 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     )
 
 
+def _request_component(request: Request) -> str:
+    route = request.scope.get("route")
+    return f"{request.method} {route.path if route else 'unmatched'}"
+
+
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception):
-    route = request.scope.get("route")
-    report_exception(
-        exc,
-        kind="request",
-        component=f"{request.method} {route.path if route else 'unmatched'}",
-    )
+    report_exception(exc, kind="request", component=_request_component(request))
     return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
+    # Routes turn most failures into HTTPException(500) inside `except`; report
+    # the cause they wrap, then answer exactly as FastAPI's default handler does.
+    if exc.status_code >= 500:
+        report_exception(
+            exc.__cause__ or exc.__context__ or exc,
+            kind="request",
+            component=_request_component(request),
+        )
+    return await http_exception_handler(request, exc)
 
 
 if BASE_PATH:

@@ -1,8 +1,10 @@
 import json
 import time
+from contextlib import contextmanager
 
 import pytest
 import requests
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
@@ -256,26 +258,84 @@ def test_disabled_sends_nothing(monkeypatch):
     assert calls == []
 
 
-def test_unhandled_request_reports_and_returns_500(test_db, sent):
+@contextmanager
+def _test_route(path, endpoint):
     from app.main import app
 
-    def boom():
-        raise RuntimeError("kaboom")
-
-    app.add_api_route("/api/__boom", boom)
+    app.add_api_route(path, endpoint)
     route = app.router.routes.pop()
     # ahead of the SPA catch-all, which would otherwise match first
     app.router.routes.insert(0, route)
     try:
-        client = TestClient(app, raise_server_exceptions=False)
-        response = client.get("/api/__boom")
+        yield TestClient(app, raise_server_exceptions=False)
     finally:
         app.router.routes.remove(route)
+
+
+def test_unhandled_request_reports_and_returns_500(test_db, sent):
+    def boom():
+        raise RuntimeError("kaboom")
+
+    with _test_route("/api/__boom", boom) as client:
+        response = client.get("/api/__boom")
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal Server Error"}
     flush()
     assert sent[0]["props"]["kind"] == "request"
     assert sent[0]["props"]["component"] == "GET /api/__boom"
+
+
+def test_http_500_reports_its_cause_and_keeps_the_response(test_db, sent):
+    def wrapped():
+        try:
+            raise ValueError("db down")
+        except ValueError:
+            raise HTTPException(status_code=500, detail="Could not list repos")
+
+    with _test_route("/api/__wrapped", wrapped) as client:
+        response = client.get("/api/__wrapped")
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Could not list repos"}
+    flush()
+    assert len(sent) == 1
+    props = sent[0]["props"]
+    assert props["type"] == "ValueError" and props["message"] == "db down"
+    assert props["component"] == "GET /api/__wrapped"
+
+
+def test_http_4xx_is_not_reported(test_db, sent):
+    def missing():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    with _test_route("/api/__missing", missing) as client:
+        response = client.get("/api/__missing")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not Found"}
+    flush()
+    assert sent == []
+
+
+def test_fingerprint_does_not_depend_on_secrets(sent):
+    report_failure(kind="job", type_="x_failed", message="BORG_PASSPHRASE=a failed")
+    report_failure(kind="job", type_="x_failed", message="BORG_PASSPHRASE=bbbb failed")
+    try:
+        raise RuntimeError("Authorization: Bearer one")
+    except RuntimeError as exc:
+        first = exc
+    try:
+        raise RuntimeError("Authorization: Bearer two")
+    except RuntimeError as exc:
+        second = exc
+    report_exception(first, kind="request")
+    report_exception(second, kind="request")
+    flush()
+    # the second of each pair is folded into the first: same fingerprint
+    assert len(sent) == 2
+
+
+def test_scrub_caps_its_input():
+    out = scrub_secrets("-" * 200_000 + " token=t1")
+    assert len(out) <= error_reporter.SCRUB_INPUT_LIMIT
 
 
 @pytest.mark.asyncio

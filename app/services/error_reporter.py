@@ -2,7 +2,8 @@
 
 The fingerprint, normalization and scrubbing rules are shared with the
 frontend (`frontend/src/utils/errorReporting.ts`): change both together, or the
-same error splits into two rows. The regexes stay within what JavaScript
+same error splits into two rows. The fingerprint's message is scrubbed before it
+is normalized: FNV is unkeyed, so a short secret could be brute-forced from it. The regexes stay within what JavaScript
 supports for that reason.
 
 Nothing here may raise into a caller or block it: the caller only builds the
@@ -115,7 +116,12 @@ _SCRUB = [
 ]
 
 
+SCRUB_INPUT_LIMIT = 65536
+
+
 def scrub_secrets(text: str) -> str:
+    # bounds the regex work on the request path; the result is truncated anyway
+    text = text[:SCRUB_INPUT_LIMIT]
     for pattern, replacement in _SCRUB:
         text = pattern.sub(replacement, text)
     return text
@@ -329,7 +335,7 @@ def report_exception(
                 kind,
                 type_,
                 _top_frame(exc),
-                normalize_message(message),
+                normalize_message(scrub_secrets(message)),
             ],
             component=component,
             handled=False,
@@ -357,7 +363,7 @@ def report_failure(
                 kind,
                 type_,
                 component or "",
-                normalize_message(message),
+                normalize_message(scrub_secrets(message)),
             ],
             component=component,
             handled=handled,
