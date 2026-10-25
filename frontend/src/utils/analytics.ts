@@ -359,6 +359,13 @@ const sendErrorReport = (props: Props): void => {
   else scheduleFlush()
 }
 
+// A no also withdraws reports already queued, not just the held ones.
+const dropErrorReports = (): void => {
+  heldErrorReports = []
+  for (let i = queue.length - 1; i >= 0; i--)
+    if (queue[i].name === 'Error - Report') queue.splice(i, 1)
+}
+
 // The first preference load settled, or the wait ran out: send what was held.
 const releaseErrorReports = (): void => {
   errorHoldOver = true
@@ -390,6 +397,7 @@ export const loadUserPreference = async (): Promise<void> => {
   try {
     await readPreference()
   } finally {
+    if (analyticsDeclined) dropErrorReports()
     releaseErrorReports()
     // Views held before the first load go out now if tracking is allowed, otherwise never.
     const held = pendingPageviews
@@ -595,7 +603,7 @@ export const trackConsentResponse = (accepted: boolean): void => {
   // A decline closes the gate now, so a failed preference reload cannot release held reports.
   if (!accepted) {
     analyticsDeclined = true
-    heldErrorReports = []
+    dropErrorReports()
   }
   enqueue(`Consent - ${accepted ? 'Accept' : 'Decline'}`, { name: 'analytics_banner' }, true)
 }

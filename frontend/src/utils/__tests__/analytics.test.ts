@@ -653,6 +653,13 @@ describe('enqueueErrorReport', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
+  it('drops reports already queued when the user declines', async () => {
+    const a = await load()
+    a.enqueueErrorReport(report)
+    a.trackConsentResponse(false)
+    expect(sent().map((e: { name: string }) => e.name)).toEqual(['Consent - Decline'])
+  })
+
   it('drops held reports when the preference loads with a no', async () => {
     vi.resetModules()
     prefs.value = { analytics_enabled: false, analytics_instance_key: KEY }
