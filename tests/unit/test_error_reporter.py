@@ -338,6 +338,13 @@ def test_scrub_caps_its_input():
     assert len(out) <= error_reporter.SCRUB_INPUT_LIMIT
 
 
+def test_scrub_is_linear_on_long_hyphenated_runs():
+    # an unbounded name prefix took about a minute on this input
+    start = time.monotonic()
+    scrub_secrets("a-" * 32768)
+    assert time.monotonic() - start < 1.0
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failing", ["ensure_schema", "after_schema"])
 async def test_startup_failure_is_sent_before_the_process_exits(

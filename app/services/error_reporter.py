@@ -100,7 +100,7 @@ _SCRUB = [
     # BORG_PASSPHRASE=, BORG_NEW_PASSPHRASE=, password=, api_key=, token= ...
     (
         re.compile(
-            r"\b([\w-]*(?:passphrase|password|pass|token|secret|key))=(\"[^\"]*\"|'[^']*'|[^\s,;&'\"]+)",
+            r"\b([\w-]{0,64}(?:passphrase|password|pass|token|secret|key))=(\"[^\"]*\"|'[^']*'|[^\s,;&'\"]+)",
             re.IGNORECASE,
         ),
         r"\1=[redacted]",
