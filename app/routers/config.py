@@ -284,7 +284,7 @@ async def list_exportable_repositories(
                 "path": repo.path,
                 "repository_type": repo.repository_type,
                 "has_schedule": bool(repo.source_directories),
-                "has_checks": bool(repo.check_interval_days),
+                "has_checks": bool(repo.check_cron_expression),
             }
             for repo in repositories
         ]
