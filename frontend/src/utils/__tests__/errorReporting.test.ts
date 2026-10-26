@@ -104,6 +104,16 @@ describe('scrubSecrets more shapes', () => {
 })
 
 describe('reportError', () => {
+  it('sends nothing from the dev server or under browser automation', () => {
+    const sent = spyOnEnqueue()
+    vi.stubEnv('MODE', 'development')
+    reportError(new Error('dev'), { kind: 'uncaught' })
+    vi.unstubAllEnvs()
+    vi.spyOn(navigator, 'webdriver', 'get').mockReturnValue(true)
+    reportError(new Error('playwright'), { kind: 'uncaught' })
+    expect(sent).not.toHaveBeenCalled()
+  })
+
   it('sends the Event shape props', () => {
     const sent = spyOnEnqueue()
     reportError(new TypeError('boom BORG_PASSPHRASE=hunter2'), { kind: 'render', component: 'Foo' })
@@ -286,6 +296,36 @@ describe('global handlers', () => {
       new ErrorEvent('error', { message: 'plain', filename: `${window.location.origin}/a.js` })
     )
     expect(sent.mock.calls[0][0]).toMatchObject({ kind: 'uncaught', message: 'plain' })
+  })
+
+  it.each([
+    'ResizeObserver loop completed with undelivered notifications.',
+    'ResizeObserver loop completed with undelivered notifications',
+    'ResizeObserver loop limit exceeded',
+    'ResizeObserver loop limit exceeded.',
+  ])('ignores the browser layout notification: %s', (message) => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    window.dispatchEvent(new ErrorEvent('error', { message }))
+    expect(sent).not.toHaveBeenCalled()
+  })
+
+  it('reports genuine exceptions even when their message matches a layout notification', () => {
+    const sent = spyOnEnqueue()
+    const message = 'ResizeObserver loop limit exceeded'
+    installGlobalErrorHandlers()
+    window.dispatchEvent(new ErrorEvent('error', { message, error: new TypeError(message) }))
+    expect(sent).toHaveBeenCalledTimes(1)
+    expect(sent.mock.calls[0][0]).toMatchObject({ kind: 'uncaught', type: 'TypeError', message })
+  })
+
+  it('reports other errors that mention ResizeObserver loops', () => {
+    const sent = spyOnEnqueue()
+    const message = 'ResizeObserver loop callback failed'
+    installGlobalErrorHandlers()
+    window.dispatchEvent(new ErrorEvent('error', { message }))
+    expect(sent).toHaveBeenCalledTimes(1)
+    expect(sent.mock.calls[0][0]).toMatchObject({ kind: 'uncaught', message })
   })
 
   it('ignores cross-origin and extension errors', () => {

@@ -360,6 +360,17 @@ settings.activation_public_key = os.getenv(
 settings.activation_timeout_seconds = int(
     os.getenv("ACTIVATION_TIMEOUT_SECONDS", settings.activation_timeout_seconds)
 )
+
+
+# Development checkouts and CI runners report the released version they were
+# built from, so only production installs outside CI send error reports.
+def error_reporting_allowed(environment: str, environ: Mapping[str, str]) -> bool:
+    return environment == "production" and not environ.get("CI")
+
+
+settings.error_reporting_enabled = settings.error_reporting_enabled and (
+    error_reporting_allowed(settings.environment, os.environ)
+)
 settings.enable_startup_license_sync = os.getenv(
     "ENABLE_STARTUP_LICENSE_SYNC",
     "true" if settings.environment == "production" else "false",

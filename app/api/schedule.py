@@ -2164,14 +2164,16 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             # The backup runs the repository's own pre/post-backup scripts
             # around `borg create` (on the agent for an agent repository), so
             # its pre-backup scripts end before the backup reads the sources
-            # (#1431). They ran either way before: `run_repository_scripts`
-            # only decided whether the schedule or the backup ran them.
+            # (#1431). The schedule flag controls whether the backup runs them.
             backup_job = create_backup_operation(
                 db,
                 repo,
                 trigger="schedule",
                 executor=_backup_executor(repo),
-                params={"archive_name": archive_name},
+                params={
+                    "archive_name": archive_name,
+                    "skip_hooks": not scheduled_job.run_repository_scripts,
+                },
                 scheduled_job_id=scheduled_job.id,
             )
             backup_jobs.append(backup_job)

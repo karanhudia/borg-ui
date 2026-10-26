@@ -191,9 +191,11 @@ class TestRepositoryScriptsRunInBackup:
     """A multi-repository schedule leaves each repository's own scripts to its
     backup, which runs them around `borg create` (#1431)."""
 
-    @pytest.mark.parametrize("run_repository_scripts", [True, False])
+    @pytest.mark.parametrize(
+        ("run_repository_scripts", "skip_hooks"), [(True, False), (False, True)]
+    )
     async def test_the_backup_runs_the_repository_scripts(
-        self, db_session: Session, run_repository_scripts
+        self, db_session: Session, run_repository_scripts, skip_hooks
     ):
         script = Script(name="stop-db", file_path="scripts/stop_db.sh", timeout=300)
         db_session.add(script)
@@ -252,7 +254,7 @@ class TestRepositoryScriptsRunInBackup:
                 await execute_multi_repo_schedule(schedule, db_session)
 
         execute_backup.assert_awaited_once()
-        assert not execute_backup.await_args.kwargs.get("skip_hooks")
+        assert execute_backup.await_args.kwargs.get("skip_hooks") is skip_hooks
         library_script.assert_not_awaited()
         inline_script.assert_not_awaited()
 
