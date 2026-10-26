@@ -19,6 +19,7 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.core.borg_major import is_borg2
+from app.core.borg_errors import ArchiveListingError
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.borg_flags import parse_borg_flags
 from app.utils.borg_arguments import validate_operand
@@ -1278,7 +1279,9 @@ class BorgRouter:
                 job_id, self.repo.id, archive_name
             )
 
-    async def list_archives_checked(self, env: dict = None) -> tuple:
+    async def list_archives_checked(
+        self, env: dict = None, *, raise_on_error: bool = False
+    ) -> tuple:
         """Return (ok, archives) for this repository.
 
         `ok` is False when borg itself failed - a held lock, a wrong
@@ -1286,6 +1289,9 @@ class BorgRouter:
         must not treat that as "the repository has no archives": see
         `list_archives`, which collapses both cases into an empty list and is
         only safe for callers that just need a best-effort listing.
+
+        `raise_on_error` preserves the failed command's diagnostics in an
+        ArchiveListingError for callers that record a failed operation.
 
         Server-side only: the archive index and the wipe list an agent
         repository with `repository.list_archives`.
@@ -1318,6 +1324,8 @@ class BorgRouter:
                 env=env,
             )
             if not result["success"]:
+                if raise_on_error:
+                    raise ArchiveListingError(result)
                 return False, []
             return True, _parse_archives_payload(result.get("stdout", "{}"))
         else:
@@ -1331,6 +1339,8 @@ class BorgRouter:
                 env=env,
             )
             if not result["success"]:
+                if raise_on_error:
+                    raise ArchiveListingError(result)
                 return False, []
             return True, _parse_archives_payload(result.get("stdout", ""))
 

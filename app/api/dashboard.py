@@ -217,7 +217,7 @@ class MetricsResponse(BaseModel):
 
 class ScheduleResponse(BaseModel):
     jobs: List[ScheduledJobInfo]
-    next_execution: str = None
+    next_execution: Optional[str] = None
 
 
 def promote_repository_health(

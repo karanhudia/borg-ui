@@ -10,7 +10,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
-from app.database.models import LicensingState, User
+from app.database.models import LicensingState, Operation, User
 from app.services import error_reporter
 from app.services.error_reporter import (
     flush,
@@ -179,6 +179,40 @@ def test_exception_report_shape(sent):
     assert "hunter2" not in props["message"] and "hunter2" not in props["stack"]
     assert "/srv/repo" in props["message"]
     assert "Traceback" in props["stack"]
+
+
+@pytest.mark.parametrize(
+    "status_code, handled", [(400, True), (403, True), (500, False)]
+)
+def test_operation_http_refusal_classification(sent, status_code, handled):
+    from app.services.operations.runner import _report_failed_operation
+
+    error = HTTPException(
+        status_code=status_code,
+        detail={
+            "key": "backend.errors.repo.agentBorg2TooOld",
+            "params": {"version": "2.0.0b24", "minimum": "2.0.0b25"},
+        },
+    )
+    operation = Operation(
+        kind="archive_sync", status="failed", error_message=str(error)
+    )
+
+    _report_failed_operation(operation, error)
+    flush()
+
+    assert len(sent) == 1
+    props = sent[0]["props"]
+    assert props["handled"] is handled
+    assert props["component"] == "archive_sync"
+    assert "agentBorg2TooOld" in props["message"]
+    assert "2.0.0b24" in props["message"]
+    if handled:
+        assert props["type"] == "archive_sync_failed"
+        assert "stack" not in props
+    else:
+        assert props["type"] == "fastapi.exceptions.HTTPException"
+        assert "stack" in props
 
 
 def test_top_frame_is_the_last_app_frame():

@@ -1125,12 +1125,178 @@ async def test_run_archive_sync_fails_instead_of_wiping_on_failed_listing(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("borg_version", [1, 2])
+@pytest.mark.parametrize(
+    "result, expected_reason",
+    [
+        (
+            {
+                "success": False,
+                "return_code": 73,
+                "stdout": "",
+                "stderr": "Failed to acquire lock BORG_PASSPHRASE=hunter2",
+            },
+            "Failed to acquire lock",
+        ),
+        (
+            {"success": False, "return_code": 2, "stdout": "", "stderr": ""},
+            "exit code 2",
+        ),
+        (
+            {
+                "success": False,
+                "return_code": 2,
+                "stdout": "",
+                "stderr": "Connection refused ssh://user:hunter2@host/repo "
+                + "x" * 4000,
+            },
+            "Connection refused",
+        ),
+    ],
+)
+async def test_archive_sync_preserves_server_listing_failure_reason_and_archives(
+    db, repo, monkeypatch, borg_version, result, expected_reason
+):
+    repo.borg_version = borg_version
+    repo.archive_count = 1
+    repo.last_backup = datetime(2026, 9, 2)
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="existing",
+            name="existing",
+            series="default",
+            start=datetime(2026, 9, 2),
+        )
+    )
+    db.commit()
+    borg_module = "app.core.borg.borg" if borg_version == 1 else "app.core.borg2.borg2"
+    monkeypatch.setattr(f"{borg_module}.list_archives", AsyncMock(return_value=result))
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+
+    outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+
+    assert outcome.status == "failed"
+    assert expected_reason in outcome.error_message
+    assert "hunter2" not in outcome.error_message
+    assert len(outcome.error_message) < 2100
+    db.refresh(repo)
+    assert repo.archive_count == 1
+    assert repo.last_backup == datetime(2026, 9, 2)
+    assert db.query(Archive).one().borg_id == "existing"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_archive_sync_preserves_agent_listing_failure_reason(
+    db, repo, monkeypatch
+):
+    _agent_for(db, repo, "repository.list_archives")
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, repository: "UTC"
+    )
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+        AsyncMock(return_value=True),
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.wait_for_agent_repository_operation_job",
+        AsyncMock(
+            return_value={
+                "success": False,
+                "return_code": 2,
+                "stdout": "",
+                "stderr": "Connection refused password=agent-secret",
+            }
+        ),
+    )
+
+    outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+
+    assert outcome.status == "failed"
+    assert "Connection refused" in outcome.error_message
+    assert "agent-secret" not in outcome.error_message
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("job_status", ["failed", "canceled", "lock_contention"])
+async def test_archive_sync_handles_terminal_agent_listing_failure(
+    db, repo, monkeypatch, job_status
+):
+    from fastapi import HTTPException
+
+    from app.services.operations.runner import repository_busy
+
+    _agent_for(db, repo, "repository.list_archives")
+    repo.archive_count = 1
+    repo.last_backup = datetime(2026, 9, 2)
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="existing",
+            name="existing",
+            series="default",
+            start=datetime(2026, 9, 2),
+        )
+    )
+    db.commit()
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, repository: "UTC"
+    )
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+
+    async def finish_job(db_, job, **kwargs):
+        # Complete the transport boundary; exercise the real database waiter
+        # so a failed agent job raises HTTP 502 instead of returning a result.
+        job.status = "failed" if job_status == "lock_contention" else job_status
+        job.error_message = "repository.list_archives exited with code 2"
+        job.result = {
+            "return_code": 2,
+            "stderr_tail": "Connection refused password=agent-secret",
+            "failure_kind": "lock_contention"
+            if job_status == "lock_contention"
+            else "other",
+        }
+        db_.commit()
+
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort", finish_job
+    )
+
+    if job_status == "failed":
+        outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+        assert outcome.status == "failed"
+        assert "Connection refused" in outcome.error_message
+        assert "exit code 2" in outcome.error_message
+        assert "agent-secret" not in outcome.error_message
+    else:
+        with pytest.raises(HTTPException) as raised:
+            await index_exec.run_archive_sync(_ctx(db, repo))
+        assert raised.value.status_code == 502
+        assert repository_busy(raised.value) is (job_status == "lock_contention")
+
+    db.refresh(repo)
+    assert repo.archive_count == 1
+    assert repo.last_backup == datetime(2026, 9, 2)
+    assert db.query(Archive).one().borg_id == "existing"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_list_archives_for_repository_reports_borg_failure(db, repo, monkeypatch):
     class FailingRouter:
         def __init__(self, repository):
             pass
 
-        async def list_archives_checked(self, env=None):
+        async def list_archives_checked(self, env=None, *, raise_on_error=False):
             return False, []
 
     monkeypatch.setattr(index_exec, "BorgRouter", FailingRouter)

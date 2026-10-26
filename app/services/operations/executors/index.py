@@ -13,6 +13,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.core.borg_major import borg_major, is_borg2
+from app.core.borg_errors import ArchiveListingError
 from app.api.repositories import (
     _agent_result_archives,
     _parse_borg_archive_time,
@@ -23,7 +24,7 @@ from app.api.repositories import (
 )
 from app.config import settings
 from app.core.borg_router import BorgRouter
-from app.database.models import Archive, Repository, SystemSettings, utc_now
+from app.database.models import AgentJob, Archive, Repository, SystemSettings, utc_now
 from app.services.operations import executors
 from app.services.operations.backup_facade import (
     link_archives_to_backups,
@@ -210,13 +211,14 @@ async def list_archives_for_repository(
     """Return (ok, entries, timezone_name): whether the listing succeeded, the
     listing itself, and the zone Borg rendered its naive timestamps in.
 
-    `ok` is False when Borg or the agent failed. Callers must not write
-    derived state from a failed listing: an empty list means "borg told us
-    nothing", which is indistinguishable from an empty repository.
+    A failed Borg or agent result raises ArchiveListingError with its
+    diagnostics. Callers must not write derived state from a failed listing:
+    an empty list alone is indistinguishable from an empty repository.
     """
     if is_agent_executor(repository):
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
         from app.services.repository_executor import (
+            _agent_job_failure_message,
             cancel_unclaimed_agent_repository_job,
             queue_agent_repository_operation_job,
             wait_for_agent_repository_operation_job,
@@ -239,9 +241,22 @@ async def list_archives_for_repository(
                 # job. A list the agent claimed or runs stays: its result
                 # warms the next attempt, and a dead agent's job is reaped.
                 cancel_unclaimed_agent_repository_job(db, job.id)
+            elif exc.status_code == status.HTTP_502_BAD_GATEWAY and not repository_busy(
+                exc
+            ):
+                failed_job = db.get(AgentJob, job.id)
+                if failed_job is not None and failed_job.status == "failed":
+                    raise ArchiveListingError(
+                        {
+                            "return_code": (failed_job.result or {}).get("return_code"),
+                            "stderr": _agent_job_failure_message(db, failed_job),
+                        }
+                    ) from exc
             raise
+        if not _agent_listing_ok(result):
+            raise ArchiveListingError(result)
         return (
-            _agent_listing_ok(result),
+            True,
             _agent_result_archives(result),
             agent_timezone_for_repository(db, repository),
         )
@@ -250,7 +265,7 @@ async def list_archives_for_repository(
     stats_env = _repository_stats_borg_env(env)
     ok, entries = await run_serialized_repository_command(
         repository.id,
-        lambda: router.list_archives_checked(env=stats_env),
+        lambda: router.list_archives_checked(env=stats_env, raise_on_error=True),
         scope="metadata",
     )
     return ok, entries, "UTC"
@@ -675,9 +690,12 @@ async def run_archive_sync(ctx) -> Outcome:
         )
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
     try:
-        ok, entries, timezone_name = await list_archives_for_repository(
-            db, repository, env
-        )
+        try:
+            ok, entries, timezone_name = await list_archives_for_repository(
+                db, repository, env
+            )
+        except ArchiveListingError as exc:
+            return Outcome(status="failed", error_message=str(exc))
         if not ok:
             # An empty list from a failed borg call is not an empty
             # repository. Writing it would zero archive_count, clear
