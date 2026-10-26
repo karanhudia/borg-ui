@@ -113,4 +113,49 @@ describe('PasskeyEnrollmentPrompt', () => {
     expect(trackAuthMock).toHaveBeenCalledWith('Ignore', { surface: 'post_login_passkey_prompt' })
     expect(onIgnoreMock).toHaveBeenCalledTimes(1)
   })
+
+  it('handles enrollment rejection without an unhandled rejection and allows retry', async () => {
+    enrollPasskeyFromRecentLoginMock.mockRejectedValueOnce({
+      response: { data: { detail: 'Passkey enrollment was cancelled.' } },
+    })
+    const unhandledRejection = vi.fn()
+    window.addEventListener('unhandledrejection', unhandledRejection)
+    const user = userEvent.setup()
+
+    try {
+      renderWithProviders(
+        <PasskeyEnrollmentPrompt
+          open
+          onSnooze={onSnoozeMock}
+          onIgnore={onIgnoreMock}
+          onSuccess={onSuccessMock}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /set up passkey/i }))
+
+      await waitFor(() => {
+        expect(trackAuthMock).toHaveBeenCalledWith('Fail', {
+          surface: 'post_login_passkey_prompt',
+          operation: 'enroll_passkey',
+        })
+        expect(toast.error).toHaveBeenCalledWith('Passkey enrollment was cancelled.')
+        expect(screen.getByRole('button', { name: /set up passkey/i })).toBeEnabled()
+      })
+      expect(onSuccessMock).not.toHaveBeenCalled()
+      expect(toast.success).not.toHaveBeenCalled()
+      expect(onSnoozeMock).not.toHaveBeenCalled()
+      expect(onIgnoreMock).not.toHaveBeenCalled()
+
+      await user.click(screen.getByRole('button', { name: /set up passkey/i }))
+
+      await waitFor(() => {
+        expect(enrollPasskeyFromRecentLoginMock).toHaveBeenCalledTimes(2)
+        expect(onSuccessMock).toHaveBeenCalledTimes(1)
+      })
+      expect(unhandledRejection).not.toHaveBeenCalled()
+    } finally {
+      window.removeEventListener('unhandledrejection', unhandledRejection)
+    }
+  })
 })
