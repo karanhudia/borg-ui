@@ -100,7 +100,7 @@ export default function PasskeyEnrollmentPrompt({
       surface: 'post_login_passkey_prompt',
       operation: 'enroll_passkey',
     })
-    void addPasskeyMutation.mutateAsync()
+    addPasskeyMutation.mutate()
   }
 
   return (

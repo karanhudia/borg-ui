@@ -16,6 +16,7 @@ const {
   hasConsentBeenGivenMock,
   loadUserPreferenceMock,
   announcementSurfaceMock,
+  isWebAuthnSupportedMock,
   useAuthMock,
   quickStartProviderMock,
 } = vi.hoisted(() => ({
@@ -25,6 +26,7 @@ const {
   hasConsentBeenGivenMock: vi.fn(),
   loadUserPreferenceMock: vi.fn(),
   announcementSurfaceMock: vi.fn(),
+  isWebAuthnSupportedMock: vi.fn(),
   useAuthMock: vi.fn(),
 }))
 
@@ -51,6 +53,10 @@ vi.mock('../../utils/analytics', async () => {
 
 vi.mock('../../hooks/useAnnouncementSurface', () => ({
   useAnnouncementSurface: () => announcementSurfaceMock(),
+}))
+
+vi.mock('../../utils/webauthn', () => ({
+  isWebAuthnSupported: () => isWebAuthnSupportedMock(),
 }))
 
 vi.mock('../AnalyticsConsentBanner', () => ({
@@ -148,6 +154,7 @@ describe('Layout', () => {
     sessionStorage.clear()
     loadUserPreferenceMock.mockResolvedValue(undefined)
     hasConsentBeenGivenMock.mockReturnValue(true)
+    isWebAuthnSupportedMock.mockReturnValue(true)
     announcementSurfaceMock.mockReturnValue({
       announcement: null,
       acknowledgeAnnouncement: vi.fn(),
@@ -309,6 +316,51 @@ describe('Layout', () => {
     await waitFor(() => {
       expect(screen.queryByText('Passkey Prompt')).not.toBeInTheDocument()
     })
+  })
+
+  it('keeps other post-login surfaces available without dismissing passkey enrollment when unsupported', async () => {
+    isWebAuthnSupportedMock.mockReturnValue(false)
+    hasConsentBeenGivenMock.mockReturnValue(false)
+    sessionStorage.setItem('recent_password_login', '1')
+    const clearRecentPasskeyEnrollmentState = vi.fn()
+    useAuthMock.mockReturnValue({
+      user: { username: 'admin', email: 'admin@example.com', role: 'admin', passkey_count: 0 },
+      proxyAuthEnabled: false,
+      hasGlobalPermission: () => true,
+      canEnrollPasskeyFromRecentLogin: true,
+      clearRecentPasskeyEnrollmentState,
+      refreshUser: refreshUserMock,
+      logout: logoutMock,
+    })
+    announcementSurfaceMock.mockReturnValue({
+      announcement: {
+        id: 'update-1',
+        type: 'update_available',
+        title: 'Update Available',
+        message: 'A new version is ready.',
+      },
+      acknowledgeAnnouncement: vi.fn(),
+      snoozeAnnouncement: vi.fn(),
+      trackAnnouncementCtaClick: vi.fn(),
+      settled: true,
+    })
+    const user = userEvent.setup()
+
+    renderLayout(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    expect(await screen.findByText('Consent Banner')).toBeInTheDocument()
+    expect(screen.queryByText('Passkey Prompt')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Dismiss Banner' }))
+    expect(await screen.findByText('Announcement Modal')).toBeInTheDocument()
+    expect(screen.queryByText('Passkey Prompt')).not.toBeInTheDocument()
+    expect(sessionStorage.getItem('recent_password_login')).toBe('1')
+    expect(clearRecentPasskeyEnrollmentState).not.toHaveBeenCalled()
+    expect(localStorage.getItem('passkey_prompt_snoozed_admin')).toBeNull()
+    expect(localStorage.getItem('passkey_prompt_ignored_admin')).toBeNull()
   })
 
   it('snoozes the passkey prompt and shows it again after the snooze expires', async () => {
