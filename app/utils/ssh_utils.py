@@ -16,6 +16,18 @@ from app.database.models import SSHConnection, SSHKey
 
 logger = structlog.get_logger()
 
+
+class SSHKeyDecryptionError(InvalidToken):
+    """A saved SSH key cannot be read with the configured application secret."""
+
+    def __init__(self, key_id: int):
+        super().__init__(
+            f"Saved SSH private key (ID {key_id}) cannot be decrypted. "
+            "Restore the original app SECRET_KEY (or /data/.secret_key) "
+            "or re-import this SSH key."
+        )
+
+
 PUBLIC_KEY_ONLY_OPTIONS = (
     "BatchMode=yes",
     "PreferredAuthentications=publickey",
@@ -167,9 +179,12 @@ def write_ssh_key_to_tempfile(ssh_key) -> str:
         after use.
     """
     try:
-        private_key = decrypt_secret(ssh_key.private_key)
-    except InvalidToken:
-        private_key = _decrypt_with_module_secret(ssh_key.private_key)
+        try:
+            private_key = decrypt_secret(ssh_key.private_key)
+        except InvalidToken:
+            private_key = _decrypt_with_module_secret(ssh_key.private_key)
+    except (InvalidToken, ValueError) as exc:
+        raise SSHKeyDecryptionError(ssh_key.id) from exc
 
     if not private_key.endswith("\n"):
         private_key += "\n"

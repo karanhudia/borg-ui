@@ -7,6 +7,7 @@
 /frontend/visual-screenshots
 /frontend/visual-report
 /frontend/storybook-snapshots
+/frontend/argos-screenshots
 /updates-worker/node_modules
 /updates-worker/.wrangler
 

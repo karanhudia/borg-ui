@@ -55,6 +55,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { Repository } from '../types'
 import type { RepoAction } from '../hooks/usePermissions'
 import OperationalCard from './OperationalCard'
+import RepositorySyncWarning from './RepositorySyncWarning'
 import { archivesMayArrive, repositoryStatItems, stateText } from '../utils/repositoryStats'
 
 interface RepositoryCardProps {
@@ -690,6 +691,9 @@ export default function RepositoryCard({
                   />
                 )}
                 <BorgVersionChip borgVersion={repository.borg_version} />
+                {repository.index_mode !== 'off' && repository.archive_sync_warning && (
+                  <RepositorySyncWarning warning={repository.archive_sync_warning} />
+                )}
                 {isAgentPrimaryRepository && (
                   <Tooltip
                     title={

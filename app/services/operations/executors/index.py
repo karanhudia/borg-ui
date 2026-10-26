@@ -44,6 +44,7 @@ from app.services.repository_executor import (
 )
 from app.services.storage_usage import measure_repository_size, set_repository_size
 from app.utils.borg_env import cleanup_temp_key_file, effective_repository_remote_path
+from app.utils.ssh_utils import SSHKeyDecryptionError
 
 logger = structlog.get_logger()
 
@@ -688,7 +689,10 @@ async def run_archive_sync(ctx) -> Outcome:
                 "cannot be placed until it does"
             ),
         )
-    env, temp_key_file = _prepare_repository_borg_env(repository, db)
+    try:
+        env, temp_key_file = _prepare_repository_borg_env(repository, db)
+    except SSHKeyDecryptionError as exc:
+        return Outcome(status="failed", error_message=str(exc))
     try:
         try:
             ok, entries, timezone_name = await list_archives_for_repository(

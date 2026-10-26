@@ -3083,7 +3083,15 @@
     "rcloneScheduledNoNextRun": "Geplante Spiegelung hat noch keinen nächsten Lauf ({{timezone}})",
     "rcloneNextSyncBadge": "Spiegel: {{when}}",
     "rcloneNextSyncWithSchedule": "Nächste Spiegel-Synchronisierung {{when}}. Zeitplan: {{cron}} ({{timezone}})",
-    "rcloneScheduleUnknown": "unbekannter Zeitplan"
+    "rcloneScheduleUnknown": "unbekannter Zeitplan",
+    "archiveSyncWarning": {
+      "title": "Archivabgleich fehlgeschlagen",
+      "description": "Die Archivinformationen sind möglicherweise veraltet.",
+      "lastSuccess": "Letzter erfolgreicher Abgleich: {{when}}",
+      "neverSynced": "Noch kein erfolgreicher Archivabgleich.",
+      "viewDetails": "Details anzeigen",
+      "label": "Sync-Fehler"
+    }
   },
   "dialogs": {
     "deleteJob": {

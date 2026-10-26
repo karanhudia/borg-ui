@@ -1089,6 +1089,52 @@ async def test_run_archive_sync_refuses_borg1_agent_listing_without_zone(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_archive_sync_reports_unreadable_saved_ssh_key_without_changing_archives(
+    db, repo, monkeypatch
+):
+    from app.database.models import SSHKey
+
+    key = SSHKey(name="saved-key", private_key="corrupt-saved-key")
+    db.add(key)
+    db.flush()
+    repo.path = "ssh://user@example.test/backup"
+    repo.repository_type = "ssh"
+    repo.ssh_key_id = key.id
+    repo.archive_count = 1
+    repo.last_backup = datetime(2026, 9, 2)
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="existing",
+            name="existing",
+            series="default",
+            start=datetime(2026, 9, 2),
+        )
+    )
+    db.commit()
+    monkeypatch.setattr(
+        index_exec.BorgRouter,
+        "list_archives_checked",
+        AsyncMock(
+            side_effect=AssertionError("Borg must not run with an unreadable key")
+        ),
+    )
+
+    outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+
+    assert outcome.status == "failed"
+    assert "SSH" in outcome.error_message
+    assert "SECRET_KEY" in outcome.error_message
+    assert "re-import" in outcome.error_message
+    assert "corrupt-saved-key" not in outcome.error_message
+    db.refresh(repo)
+    assert repo.archive_count == 1
+    assert repo.last_backup == datetime(2026, 9, 2)
+    assert db.query(Archive).one().borg_id == "existing"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_run_archive_sync_fails_instead_of_wiping_on_failed_listing(
     db, repo, monkeypatch
 ):

@@ -161,6 +161,57 @@ export const Default: Story = {
   ),
 }
 
+export const PersistentArchiveSyncFailure: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      archive_sync_warning: {
+        operation_id: 72,
+        last_success_at: '2026-05-15T16:35:00Z',
+        error_message:
+          'Saved SSH private key (ID 42) cannot be decrypted. Restore the original app SECRET_KEY (or /data/.secret_key) or re-import this SSH key.',
+      },
+    },
+  },
+  render: Default.render,
+}
+
+export const ArchiveSyncNeverSucceeded: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      archive_sync_warning: {
+        operation_id: 73,
+        last_success_at: null,
+        error_message: 'Connection refused. Check the repository connection and retry.',
+      },
+    },
+  },
+  render: Default.render,
+}
+
+export const ArchiveSyncRetrying: Story = {
+  args: {
+    ...PersistentArchiveSyncFailure.args,
+    repository: {
+      ...PersistentArchiveSyncFailure.args!.repository!,
+      index_pending_kinds: ['archive_sync'],
+    },
+  },
+  render: Default.render,
+}
+
+/** The next successful listing clears the standing warning. */
+export const ArchiveSyncRecovered: Story = {
+  args: {
+    ...defaultArgs,
+    repository: { ...sampleRepository, archive_sync_warning: null },
+  },
+  render: Default.render,
+}
+
 /** The delete is out (#1197): the delete action is disabled and shows a
  * spinner until the list no longer has the repository. */
 export const Deleting: Story = {
