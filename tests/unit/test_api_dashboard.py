@@ -807,6 +807,15 @@ class TestDashboardCharts:
 class TestDashboardScheduleAndOverview:
     """Test the live dashboard schedule and overview contracts."""
 
+    def test_dashboard_schedule_without_jobs_returns_null_next_execution(
+        self, test_client: TestClient, admin_headers
+    ):
+        with patch("app.api.dashboard.get_scheduled_jobs", return_value=[]):
+            response = test_client.get("/api/dashboard/schedule", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert response.json() == {"jobs": [], "next_execution": None}
+
     def test_dashboard_schedule_uses_scheduled_jobs_contract(
         self, test_client: TestClient, admin_headers
     ):

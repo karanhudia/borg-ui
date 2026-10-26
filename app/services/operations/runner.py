@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import structlog
+from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
@@ -234,7 +235,10 @@ class OperationContext:
 def _report_failed_operation(op: Operation, failure: Optional[Exception]) -> None:
     # never lets the report touch the run's outcome
     try:
-        if failure is not None:
+        expected_refusal = (
+            isinstance(failure, HTTPException) and 400 <= failure.status_code < 500
+        )
+        if failure is not None and not expected_refusal:
             error_reporter.report_exception(failure, kind="job", component=op.kind)
         else:
             error_reporter.report_failure(
