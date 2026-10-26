@@ -167,6 +167,11 @@ export interface Repository {
   // Index work queued or running for the repository (#1063): `stats`,
   // `archive_sync`, `history_merge`, `history_index`.
   index_pending_kinds?: string[]
+  archive_sync_warning?: {
+    operation_id: number
+    error_message: string
+    last_success_at: string | null
+  } | null
   last_backup?: string | null
   last_check?: string | null
   last_compact?: string | null

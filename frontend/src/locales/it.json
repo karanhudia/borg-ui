@@ -3083,7 +3083,14 @@
     "rcloneScheduledNoNextRun": "Il mirror pianificato non ha ancora una prossima esecuzione ({{timezone}})",
     "rcloneNextSyncBadge": "Mirror: {{when}}",
     "rcloneNextSyncWithSchedule": "Prossima sincronizzazione mirror {{when}}. Pianificazione: {{cron}} ({{timezone}})",
-    "rcloneScheduleUnknown": "pianificazione sconosciuta"
+    "rcloneScheduleUnknown": "pianificazione sconosciuta",
+    "archiveSyncWarning": {
+      "title": "Sincronizzazione archivi non riuscita",
+      "description": "Le informazioni sugli archivi potrebbero non essere aggiornate.",
+      "lastSuccess": "Ultima sincronizzazione riuscita: {{when}}",
+      "neverSynced": "Nessuna sincronizzazione degli archivi riuscita finora.",
+      "viewDetails": "Visualizza dettagli"
+    }
   },
   "dialogs": {
     "deleteJob": {

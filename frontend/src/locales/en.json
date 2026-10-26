@@ -3083,7 +3083,14 @@
     "rcloneScheduledNoNextRun": "Scheduled mirror has no next run yet ({{timezone}})",
     "rcloneNextSyncBadge": "Mirror: {{when}}",
     "rcloneNextSyncWithSchedule": "Next mirror sync {{when}}. Schedule: {{cron}} ({{timezone}})",
-    "rcloneScheduleUnknown": "unknown schedule"
+    "rcloneScheduleUnknown": "unknown schedule",
+    "archiveSyncWarning": {
+      "title": "Archive sync failed",
+      "description": "Archive information may be out of date.",
+      "lastSuccess": "Last successful sync: {{when}}",
+      "neverSynced": "No successful archive sync yet.",
+      "viewDetails": "View details"
+    }
   },
   "dialogs": {
     "deleteJob": {

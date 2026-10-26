@@ -21,3 +21,29 @@ This improves failure handling and recovery guidance; the affected installation 
 - All four new decryption and archive-sync regressions failed before implementation and passed after it.
 - 343 tests passed across SSH utility, Borg-environment, index-executor, SSH maintenance, security, SSH API, error reporter, and runner suites; existing warnings remain.
 - Full backend Ruff lint and format checks passed (803 files); the documentation build and diff whitespace checks passed.
+
+## Repository warning follow-up
+
+Approved UI behavior: a repository card shows an outlined warning after two
+consecutive failed archive-sync verdicts. It includes the last successful sync
+time, or the absence of a successful sync, and opens the existing Error Details
+dialog for the failure reason and recovery guidance. A running retry, canceled
+work, or skipped work does not clear the warning; a successful listing does.
+An off-mode repository does not show it. Single failures stay in Activity.
+
+Compute the latest two terminal verdicts and the last success in batched queries
+for the visible repository page; no schema change or per-card request is needed.
+Return the warning in list and detail payloads, with bounded redacted diagnostics.
+Reuse `ErrorDetailsDialog` and the existing card theme, localize the warning in
+all supported languages, and cover persistent, never-synced, retrying, recovered,
+dark, and open-detail states in Storybook.
+
+Verification: 358 tests passed across the original eight backend suites plus
+warning API and repository-list query-count suites. The 15 warning/list API
+tests were rerun after adding detail-payload coverage. 112 frontend tests passed
+across repository-card, repositories-page, and operation-event suites. Locale
+parity, typecheck, lint, formatting, production build, and docs build passed.
+`npm run snapshots` captured the eight changed stories at desktop and mobile
+sizes (16 ignored PNGs); visual inspection covered the repository card, dark
+warning, and mobile recovery dialog. Snapshot capture used a filtered temporary
+Storybook index and the supported static/output directory overrides.

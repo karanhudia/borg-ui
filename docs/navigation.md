@@ -45,6 +45,15 @@ To set things up by hand, follow the sidebar in this order:
 | Backups | Archives | Browse archives, select files or folders, restore data, and run archive-level actions. |
 | Backups | Archive detail (`/archives/:repositoryId/:archiveId`) | Changes, Files, and Info tabs for one archive, reached from the Archives heatmap or list. |
 
+## Repository Sync Warnings
+
+After two consecutive archive-sync failures, the affected repository card shows
+**Archive sync failed** and the last successful sync time, or says that no sync
+has succeeded. **View details** opens the failure reason and any recovery
+guidance. A single failed attempt stays in background activity; a successful
+sync clears the warning. The warning remains while a retry is running and is
+not shown when background indexing is turned off for that repository.
+
 ## Settings
 
 Settings are grouped so personal preferences stay separate from operational

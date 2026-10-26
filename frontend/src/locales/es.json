@@ -3083,7 +3083,14 @@
     "rcloneScheduledNoNextRun": "La réplica programada aún no tiene próxima ejecución ({{timezone}})",
     "rcloneNextSyncBadge": "Réplica: {{when}}",
     "rcloneNextSyncWithSchedule": "Próxima sincronización de réplica {{when}}. Programa: {{cron}} ({{timezone}})",
-    "rcloneScheduleUnknown": "programa desconocido"
+    "rcloneScheduleUnknown": "programa desconocido",
+    "archiveSyncWarning": {
+      "title": "Error al sincronizar los archivos",
+      "description": "La información de los archivos puede estar desactualizada.",
+      "lastSuccess": "Última sincronización correcta: {{when}}",
+      "neverSynced": "Aún no se han sincronizado los archivos correctamente.",
+      "viewDetails": "Ver detalles"
+    }
   },
   "dialogs": {
     "deleteJob": {

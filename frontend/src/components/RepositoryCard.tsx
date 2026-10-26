@@ -55,6 +55,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { Repository } from '../types'
 import type { RepoAction } from '../hooks/usePermissions'
 import OperationalCard from './OperationalCard'
+import RepositorySyncWarning from './RepositorySyncWarning'
 import { archivesMayArrive, repositoryStatItems, stateText } from '../utils/repositoryStats'
 
 interface RepositoryCardProps {
@@ -888,6 +889,9 @@ export default function RepositoryCard({
         </Box>
 
         {/* ── Key Stats Band ── */}
+        {repository.index_mode !== 'off' && repository.archive_sync_warning && (
+          <RepositorySyncWarning warning={repository.archive_sync_warning} />
+        )}
         <Box
           sx={{
             display: 'grid',

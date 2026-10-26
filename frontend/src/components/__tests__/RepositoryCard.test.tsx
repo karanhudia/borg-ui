@@ -138,6 +138,37 @@ describe('RepositoryCard', () => {
   })
 
   describe('Basic Rendering', () => {
+    it('shows persistent sync guidance and clears it after recovery', () => {
+      const props = {
+        isInJobsSet: false,
+        getCompressionLabel: mockGetCompressionLabel,
+        ...mockCallbacks,
+      }
+      const { rerender } = renderWithProviders(
+        <RepositoryCard
+          {...props}
+          repository={{
+            ...mockRepository,
+            archive_sync_warning: {
+              operation_id: 72,
+              last_success_at: '2024-01-20T12:30:00Z',
+              error_message: 'Saved SSH key cannot be decrypted. Re-import the original SSH key.',
+            },
+          }}
+        />
+      )
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Archive sync failed')
+      expect(screen.getByText('Archive information may be out of date.')).toBeInTheDocument()
+      expect(screen.getByText(/Last successful sync:/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'View details' }))
+      expect(screen.getByText(/Re-import the original SSH key/)).toBeInTheDocument()
+
+      rerender(<RepositoryCard {...props} repository={mockRepository} />)
+      expect(screen.queryByText('Archive sync failed')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Re-import the original SSH key/)).not.toBeInTheDocument()
+    })
+
     it('renders repository name and path', () => {
       renderWithProviders(
         <RepositoryCard

@@ -52,6 +52,7 @@ from app.services.operations.rclone_facade import RcloneSyncFacade
 from app.services.operations.index_mode import MODE_KINDS, indexes_history
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import enqueue_reconcile_run
+from app.services.operations.archive_sync_health import archive_sync_warnings
 from app.services.operations.runner import operation_runner
 from app.services.operations.repository_status import (
     LastRuns,
@@ -3520,6 +3521,13 @@ def get_repositories(
             index_pending = {}
             reload_rows()
 
+        try:
+            sync_warnings = archive_sync_warnings(db, repositories)
+        except Exception as exc:
+            logger.warning("Failed to compute archive sync warnings", error=str(exc))
+            sync_warnings = {}
+            reload_rows()
+
         # What each card reads per repository, loaded once for the page:
         # a query per repository here made the list cost five statements
         # per repository on every poll (#1091).
@@ -3579,6 +3587,7 @@ def get_repositories(
                 "total_size": repo.total_size,
                 "storage": storage_payload(storage.get(repo.id)),
                 "index_pending_kinds": index_pending.get(repo.id, []),
+                "archive_sync_warning": sync_warnings.get(repo.id),
                 "archive_count": repo.archive_count,
                 "created_at": format_datetime(repo.created_at),
                 "updated_at": format_datetime(repo.updated_at),
@@ -4778,6 +4787,12 @@ async def get_repository(
         # session back, which would expire every row the payload still reads
         storage = storage_payload(_storage_summary_or_none(db, repository))
         pending_kinds = _index_pending_kinds_or_empty(db, repository)
+        try:
+            sync_warning = archive_sync_warnings(db, [repository]).get(repository.id)
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Failed to compute archive sync warning", error=str(exc))
+            sync_warning = None
 
         repository_payload = {
             "id": repository.id,
@@ -4793,6 +4808,7 @@ async def get_repository(
             "total_size": repository.total_size,
             "storage": storage,
             "index_pending_kinds": pending_kinds,
+            "archive_sync_warning": sync_warning,
             "archive_count": repository.archive_count,
             "created_at": format_datetime(repository.created_at),
             "updated_at": format_datetime(repository.updated_at),
