@@ -3089,7 +3089,8 @@
       "description": "Die Archivinformationen sind möglicherweise veraltet.",
       "lastSuccess": "Letzter erfolgreicher Abgleich: {{when}}",
       "neverSynced": "Noch kein erfolgreicher Archivabgleich.",
-      "viewDetails": "Details anzeigen"
+      "viewDetails": "Details anzeigen",
+      "label": "Sync-Fehler"
     }
   },
   "dialogs": {

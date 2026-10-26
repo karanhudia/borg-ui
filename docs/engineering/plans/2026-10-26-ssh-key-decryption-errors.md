@@ -24,10 +24,13 @@ This improves failure handling and recovery guidance; the affected installation 
 
 ## Repository warning follow-up
 
-Approved UI behavior: a repository card shows an outlined warning after two
-consecutive failed archive-sync verdicts. It includes the last successful sync
-time, or the absence of a successful sync, and opens the existing Error Details
-dialog for the failure reason and recovery guidance. A running retry, canceled
+Approved revised UI: a repository card shows a compact amber **Sync issue** badge
+beside the Borg version after two consecutive failed archive-sync verdicts.
+Hover or keyboard focus reveals the stale-data notice and last successful sync
+time, or the absence of a successful sync. Clicking opens the existing Error
+Details dialog with that context, the failure reason, and recovery guidance.
+This replaces the large inline warning without adding a card section.
+A running retry, canceled
 work, or skipped work does not clear the warning; a successful listing does.
 An off-mode repository does not show it. Single failures stay in Activity.
 

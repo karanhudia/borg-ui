@@ -158,14 +158,19 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.getByRole('alert')).toHaveTextContent('Archive sync failed')
-      expect(screen.getByText('Archive information may be out of date.')).toBeInTheDocument()
+      const syncIssue = screen.getByRole('button', {
+        name: 'Archive sync failed: View details',
+      })
+      expect(syncIssue).toHaveTextContent('Sync issue')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.queryByText('Archive information may be out of date.')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Last successful sync:/)).not.toBeInTheDocument()
+      fireEvent.click(syncIssue)
       expect(screen.getByText(/Last successful sync:/)).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('button', { name: 'View details' }))
       expect(screen.getByText(/Re-import the original SSH key/)).toBeInTheDocument()
 
       rerender(<RepositoryCard {...props} repository={mockRepository} />)
-      expect(screen.queryByText('Archive sync failed')).not.toBeInTheDocument()
+      expect(screen.queryByText('Sync issue')).not.toBeInTheDocument()
       expect(screen.queryByText(/Re-import the original SSH key/)).not.toBeInTheDocument()
     })
 

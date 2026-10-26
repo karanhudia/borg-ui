@@ -3089,7 +3089,8 @@
       "description": "Le informazioni sugli archivi potrebbero non essere aggiornate.",
       "lastSuccess": "Ultima sincronizzazione riuscita: {{when}}",
       "neverSynced": "Nessuna sincronizzazione degli archivi riuscita finora.",
-      "viewDetails": "Visualizza dettagli"
+      "viewDetails": "Visualizza dettagli",
+      "label": "Errore di sincronizzazione"
     }
   },
   "dialogs": {

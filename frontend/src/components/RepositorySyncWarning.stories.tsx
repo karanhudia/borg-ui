@@ -35,7 +35,9 @@ export const NeverSynced: Story = {
 
 export const RecoveryDetails: Story = {
   play: async ({ canvasElement }) => {
-    await userEvent.click(within(canvasElement).getByRole('button', { name: 'View details' }))
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: 'Archive sync failed: View details' })
+    )
   },
 }
 

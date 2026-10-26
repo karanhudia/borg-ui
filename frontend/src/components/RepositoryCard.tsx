@@ -691,6 +691,9 @@ export default function RepositoryCard({
                   />
                 )}
                 <BorgVersionChip borgVersion={repository.borg_version} />
+                {repository.index_mode !== 'off' && repository.archive_sync_warning && (
+                  <RepositorySyncWarning warning={repository.archive_sync_warning} />
+                )}
                 {isAgentPrimaryRepository && (
                   <Tooltip
                     title={
@@ -889,9 +892,6 @@ export default function RepositoryCard({
         </Box>
 
         {/* ── Key Stats Band ── */}
-        {repository.index_mode !== 'off' && repository.archive_sync_warning && (
-          <RepositorySyncWarning warning={repository.archive_sync_warning} />
-        )}
         <Box
           sx={{
             display: 'grid',

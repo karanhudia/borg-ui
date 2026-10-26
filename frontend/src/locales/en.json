@@ -3089,7 +3089,8 @@
       "description": "Archive information may be out of date.",
       "lastSuccess": "Last successful sync: {{when}}",
       "neverSynced": "No successful archive sync yet.",
-      "viewDetails": "View details"
+      "viewDetails": "View details",
+      "label": "Sync issue"
     }
   },
   "dialogs": {

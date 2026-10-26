@@ -48,9 +48,10 @@ To set things up by hand, follow the sidebar in this order:
 ## Repository Sync Warnings
 
 After two consecutive archive-sync failures, the affected repository card shows
-**Archive sync failed** and the last successful sync time, or says that no sync
-has succeeded. **View details** opens the failure reason and any recovery
-guidance. A single failed attempt stays in background activity; a successful
+a compact **Sync issue** badge beside the Borg version. Hover or focus the badge
+to see the stale-data notice and last successful sync time, or click it to open
+the failure reason and recovery guidance. The details also show when no sync
+has succeeded. A single failed attempt stays in background activity; a successful
 sync clears the warning. The warning remains while a retry is running and is
 not shown when background indexing is turned off for that repository.
 
