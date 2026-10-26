@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -1196,3 +1197,229 @@ async def test_build_remote_command_quotes_allowed_custom_flags(test_db, monkeyp
 
     assert "--one-file-system '--comment=nightly $(id)'" in command
     assert shlex.split(command).count("--comment=nightly $(id)") == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "pre_exit,continue_on_failure,skip_on_failure,borg_exit,post_exit,want_status,want_lines",
+    [
+        (0, False, False, 0, 0, "completed", ["pre", "borg", "success"]),
+        (0, False, False, 1, 0, "completed_with_warnings", ["pre", "borg", "warning"]),
+        (0, False, False, 2, 0, "failed", ["pre", "borg", "failure"]),
+        (2, False, False, 0, 0, "failed", ["pre", "failure"]),
+        (2, True, False, 0, 0, "completed", ["pre", "borg", "success"]),
+        (2, False, True, 0, 0, "skipped", ["pre", "skipped"]),
+        (0, False, False, 0, 2, "failed", ["pre", "borg", "success"]),
+    ],
+)
+async def test_remote_backup_hooks_surround_borg_and_control_outcome(
+    test_db,
+    monkeypatch,
+    tmp_path,
+    pre_exit,
+    continue_on_failure,
+    skip_on_failure,
+    borg_exit,
+    post_exit,
+    want_status,
+    want_lines,
+):
+    """Omitting hooks, running Borg early, or ignoring hook policies breaks this."""
+    connection, repository, job = _remote_entities(test_db)
+    job_id, connection_id, repository_id = job.id, connection.id, repository.id
+    marker = tmp_path / "hook-order"
+    quoted = shlex.quote(str(marker))
+    repository.pre_backup_script = f"echo pre >> {quoted}; exit {pre_exit}"
+    repository.post_backup_script = (
+        f'echo "$BORG_UI_BACKUP_STATUS" >> {quoted}; exit {post_exit}'
+    )
+    repository.continue_on_hook_failure = continue_on_failure
+    repository.skip_on_hook_failure = skip_on_failure
+    test_db.commit()
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    async def borg(**kwargs):
+        with marker.open("a") as output:
+            output.write("borg\n")
+        return {
+            "success": borg_exit == 0,
+            "returncode": borg_exit,
+            "stdout": json.dumps({"archive": {"name": "test-archive"}})
+            if borg_exit < 2
+            else "",
+            "stderr": "borg output",
+            "error": "borg failed" if borg_exit else None,
+        }
+
+    notifications = []
+
+    async def notify(**kwargs):
+        notifications.append((kwargs["job"].status, marker.read_text().splitlines()))
+
+    monkeypatch.setattr(service, "_execute_ssh_command", borg)
+    monkeypatch.setattr(service, "_send_completion_notification", notify)
+    await service.execute_remote_backup(job_id, connection_id, repository_id, ["/data"])
+    saved = resolve_backup_job(test_db, job_id)
+    assert saved.status == want_status
+    assert marker.read_text().splitlines() == want_lines
+    assert notifications == (
+        [] if want_status == "skipped" else [(want_status, want_lines)]
+    )
+    assert saved.completed_at is not None
+    if borg_exit < 2 and "borg" in want_lines:
+        assert saved.archive_name == "test-archive"
+    log_text = (
+        Path(saved.log_file_path).read_text() if saved.log_file_path else saved.logs
+    )
+    assert "INLINE PRE-BACKUP SCRIPT" in log_text
+    assert "INLINE POST-BACKUP SCRIPT" in log_text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("skip_hooks", [False, True])
+async def test_remote_backup_respects_explicit_skip_hooks(
+    test_db, monkeypatch, tmp_path, skip_hooks
+):
+    from app.services.backup_service import backup_service
+
+    connection, repository, job = _remote_entities(test_db)
+    job_id, repository_path = job.id, repository.path
+    marker = tmp_path / "hooks"
+    repository.pre_backup_script = f"echo pre >> {shlex.quote(str(marker))}"
+    repository.post_backup_script = f"echo post >> {shlex.quote(str(marker))}"
+    test_db.commit()
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr("app.services.backup_service.SessionLocal", lambda: test_db)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.remote_backup_service", service
+    )
+    monkeypatch.setattr(service, "_send_completion_notification", AsyncMock())
+    monkeypatch.setattr(
+        service,
+        "_execute_ssh_command",
+        AsyncMock(
+            return_value={
+                "success": True,
+                "returncode": 0,
+                "stdout": json.dumps({"archive": {"name": "archive"}}),
+                "stderr": "",
+            }
+        ),
+    )
+    await backup_service.execute_backup(job_id, repository_path, skip_hooks=skip_hooks)
+    assert resolve_backup_job(test_db, job_id).status == "completed"
+    assert (marker.read_text().splitlines() if marker.exists() else []) == (
+        [] if skip_hooks else ["pre", "post"]
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "continue_on_error,skip_on_failure,want_status,want_lines",
+    [
+        (True, False, "completed", ["pre", "borg", "success"]),
+        (False, False, "failed", ["pre", "failure"]),
+        (False, True, "skipped", ["pre", "skipped"]),
+    ],
+)
+async def test_remote_library_hooks_honor_assignment_policy(
+    test_db,
+    monkeypatch,
+    tmp_path,
+    continue_on_error,
+    skip_on_failure,
+    want_status,
+    want_lines,
+):
+    from app.config import settings
+    from app.database.models import Script, RepositoryScript, ScriptExecution
+
+    connection, repository, job = _remote_entities(test_db)
+    job_id, connection_id, repository_id = job.id, connection.id, repository.id
+    marker = tmp_path / "library-hooks"
+    quoted = shlex.quote(str(marker))
+    for name, hook_type, content in [
+        ("pre", "pre-backup", f"echo pre >> {quoted}; exit 2"),
+        ("post", "post-backup", f'echo "$BORG_UI_BACKUP_STATUS" >> {quoted}'),
+    ]:
+        script = Script(name=name, file_path=f"remote-{name}.sh", category="custom")
+        test_db.add(script)
+        test_db.flush()
+        script_path = Path(settings.data_dir) / "scripts" / script.file_path
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        script_path.write_text(content)
+        test_db.add(
+            RepositoryScript(
+                repository_id=repository_id,
+                script_id=script.id,
+                hook_type=hook_type,
+                enabled=True,
+                continue_on_error=continue_on_error,
+                skip_on_failure=skip_on_failure if name == "pre" else False,
+                custom_run_on="always",
+            )
+        )
+    test_db.commit()
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_send_completion_notification", AsyncMock())
+
+    async def borg(**kwargs):
+        with marker.open("a") as output:
+            output.write("borg\n")
+        return {"success": True, "returncode": 0, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(service, "_execute_ssh_command", borg)
+    await service.execute_remote_backup(job_id, connection_id, repository_id, ["/data"])
+    assert resolve_backup_job(test_db, job_id).status == want_status
+    assert marker.read_text().splitlines() == want_lines
+    assert (
+        test_db.query(ScriptExecution)
+        .filter(ScriptExecution.operation_id == job_id)
+        .count()
+        == 2
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_point", ["build", "ssh", "cancel"])
+async def test_remote_failure_after_pre_hooks_runs_cleanup_once(
+    test_db, monkeypatch, tmp_path, failure_point
+):
+    import asyncio
+
+    connection, repository, job = _remote_entities(test_db)
+    job_id, connection_id, repository_id = job.id, connection.id, repository.id
+    marker = tmp_path / "cleanup"
+    quoted = shlex.quote(str(marker))
+    repository.pre_backup_script = f"echo pre >> {quoted}"
+    repository.post_backup_script = f'echo "$BORG_UI_BACKUP_STATUS" >> {quoted}'
+    test_db.commit()
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    error = (
+        asyncio.CancelledError()
+        if failure_point == "cancel"
+        else RuntimeError("remote broke")
+    )
+    monkeypatch.setattr(
+        service,
+        "_build_remote_command" if failure_point == "build" else "_execute_ssh_command",
+        AsyncMock(side_effect=error),
+    )
+    with pytest.raises(type(error)):
+        await service.execute_remote_backup(
+            job_id, connection_id, repository_id, ["/data"]
+        )
+    assert marker.read_text().splitlines() == ["pre", "failure"]
+    assert resolve_backup_job(test_db, job_id).status == "failed"

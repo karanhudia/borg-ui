@@ -1,7 +1,4 @@
-"""`run_repository_scripts` on a multi-repository schedule: off, the
-repositories' own pre/post-backup scripts do not run; on, they run once,
-from the schedule on a server repository and from the agent backup on an
-agent repository."""
+"""`run_repository_scripts` controls whether the backup runs repository hooks."""
 
 import json
 from unittest.mock import AsyncMock, patch
@@ -72,16 +69,16 @@ def _repo(db, *, agent):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("agent", "run_repository_scripts", "skip_hooks", "schedule_runs_them"),
+    ("agent", "run_repository_scripts", "skip_hooks"),
     [
-        (False, False, True, False),
-        (False, True, True, True),
-        (True, False, True, False),
-        (True, True, False, False),
+        (False, False, True),
+        (False, True, False),
+        (True, False, True),
+        (True, True, False),
     ],
 )
 async def test_the_flag_decides_whether_repository_scripts_run(
-    test_db, agent, run_repository_scripts, skip_hooks, schedule_runs_them
+    test_db, agent, run_repository_scripts, skip_hooks
 ):
     repo = _repo(test_db, agent=agent)
     schedule = _schedule(test_db, repo, run_repository_scripts)
@@ -91,7 +88,9 @@ async def test_the_flag_decides_whether_repository_scripts_run(
             "app.api.schedule.wait_out_backup_operation",
             new=AsyncMock(return_value="completed"),
         ),
-        patch("app.api.schedule.run_script_from_library", new=AsyncMock()),
+        patch(
+            "app.api.schedule.run_script_from_library", new=AsyncMock()
+        ) as library_script,
         patch(
             "app.services.script_library_executor.ScriptLibraryExecutor"
             ".execute_inline_script",
@@ -101,6 +100,7 @@ async def test_the_flag_decides_whether_repository_scripts_run(
         await execute_multi_repo_schedule(schedule, test_db)
 
     operation = test_db.query(Operation).filter_by(kind="backup").one()
-    # the backup skips the repository's scripts unless it is the one to run them
+    # The schedule delegates hook execution to the backup operation.
     assert bool(operation.params.get("skip_hooks")) is skip_hooks
-    assert inline_script.await_count == (1 if schedule_runs_them else 0)
+    assert library_script.await_count == 0
+    assert inline_script.await_count == 0

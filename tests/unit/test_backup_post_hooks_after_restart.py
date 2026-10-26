@@ -745,7 +745,7 @@ async def test_a_backup_without_hooks_waits_too(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_a_multi_repo_schedule_waits_before_its_pre_scripts(test_db):
+async def test_a_multi_repo_schedule_waits_before_its_backups(test_db):
     from app.api import schedule as schedule_api
     from app.database.models import ScheduledJob, ScheduledJobRepository
 
@@ -771,12 +771,9 @@ async def test_a_multi_repo_schedule_waits_before_its_pre_scripts(test_db):
     async def wait_for(**kwargs):
         order.append(("wait", kwargs.get("repository_id")))
 
-    async def pre_script(**kwargs):
-        order.append(("pre-script", kwargs["script"].name))
-        return {"success": True}
-
     # no runner runs here: stand in for the verdict it would write
     async def complete(db, operation_id, **kwargs):
+        order.append(("backup", operation_id))
         db.get(Operation, operation_id).status = "completed"
         db.commit()
         return "completed"
@@ -785,7 +782,6 @@ async def test_a_multi_repo_schedule_waits_before_its_pre_scripts(test_db):
         patch.object(
             backup_service, "wait_for_post_hooks_after_restart", side_effect=wait_for
         ),
-        patch.object(schedule_api, "run_script_from_library", side_effect=pre_script),
         patch(
             "app.services.operations.backup_facade.wait_for_backup_operation",
             new=complete,
@@ -795,7 +791,8 @@ async def test_a_multi_repo_schedule_waits_before_its_pre_scripts(test_db):
             schedule_api.execute_multi_repo_schedule(schedule, test_db), 30
         )
 
-    assert order[:2] == [("wait", repository.id), ("pre-script", "stop-db")]
+    assert order[0] == ("wait", repository.id)
+    assert order[1][0] == "backup"
 
 
 @pytest.mark.asyncio

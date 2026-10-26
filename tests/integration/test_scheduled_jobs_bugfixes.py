@@ -187,352 +187,76 @@ class TestBackupJobTimestamps:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-class TestRepositoryInlineScripts:
-    """Test repository inline script execution (Bug #3 - inline scripts)"""
+class TestRepositoryScriptsRunInBackup:
+    """A multi-repository schedule leaves each repository's own scripts to its
+    backup, which runs them around `borg create` (#1431)."""
 
-    async def test_schedule_executes_repository_inline_pre_script(
-        self, db_session: Session
+    @pytest.mark.parametrize(
+        ("run_repository_scripts", "skip_hooks"), [(True, False), (False, True)]
+    )
+    async def test_the_backup_runs_the_repository_scripts(
+        self, db_session: Session, run_repository_scripts, skip_hooks
     ):
-        """Test that schedule with run_repository_scripts=True executes repo's inline pre-script"""
-        # Setup: Create repository with inline pre-script
+        script = Script(name="stop-db", file_path="scripts/stop_db.sh", timeout=300)
+        db_session.add(script)
         repo = Repository(
-            name="Repo with Inline Script",
-            path="/tmp/repo-inline",
+            name="Repo with Scripts",
+            path="/tmp/repo-scripts",
             encryption="none",
             repository_type="local",
             source_directories=json.dumps(["/tmp/data"]),
             mode="full",
-            pre_backup_script="echo 'Pre-backup inline script'",  # Inline script
-            pre_hook_timeout=300,
+            pre_backup_script="echo pre",
+            post_backup_script="echo post",
         )
         db_session.add(repo)
         db_session.commit()
-        db_session.refresh(repo)
-
-        # Setup: Create schedule with run_repository_scripts enabled
+        db_session.add(
+            RepositoryScript(
+                repository_id=repo.id,
+                script_id=script.id,
+                hook_type="pre-backup",
+                execution_order=1,
+                enabled=True,
+            )
+        )
         schedule = ScheduledJob(
             name="Schedule with Repo Scripts",
             cron_expression="0 2 * * *",
             enabled=True,
-            run_repository_scripts=True,  # Enable repo-level scripts
+            run_repository_scripts=run_repository_scripts,
             created_at=datetime.now(timezone.utc),
         )
         db_session.add(schedule)
         db_session.commit()
-        db_session.refresh(schedule)
-
-        # Link repo to schedule
-        link = ScheduledJobRepository(
-            scheduled_job_id=schedule.id, repository_id=repo.id, execution_order=0
+        db_session.add(
+            ScheduledJobRepository(
+                scheduled_job_id=schedule.id, repository_id=repo.id, execution_order=0
+            )
         )
-        db_session.add(link)
         db_session.commit()
 
-        # Mock script execution and backup
-        script_executed = False
-
-        async def mock_execute_inline_script(*args, **kwargs):
-            nonlocal script_executed
-            script_executed = True
-            assert kwargs.get("script_content") == "echo 'Pre-backup inline script'"
-            assert kwargs.get("script_type") == "pre-backup"
-            return {"success": True, "logs": "Script executed"}
-
-        with patch(
-            "app.services.script_library_executor.ScriptLibraryExecutor.execute_inline_script",
-            new=mock_execute_inline_script,
-        ):
-            with patch(
+        with (
+            patch(
+                "app.api.schedule.run_script_from_library", new=AsyncMock()
+            ) as library_script,
+            patch(
+                "app.services.script_library_executor.ScriptLibraryExecutor"
+                ".execute_inline_script",
+                new=AsyncMock(),
+            ) as inline_script,
+            patch(
                 "app.services.backup_service.BackupService.execute_backup",
                 new=AsyncMock(),
-            ):
-                # Execute the schedule
-                # Phase 8: the schedule enqueues and waits for the runner.
-                async with operations_runner_for(db_session, patch_session_local=True):
-                    await execute_multi_repo_schedule(schedule, db_session)
-
-        # Verify: Inline script was executed
-        assert script_executed, "Repository inline pre-script should have been executed"
-
-    async def test_schedule_executes_repository_inline_post_script(
-        self, db_session: Session
-    ):
-        """Test that schedule executes repo's inline post-script after backup"""
-        # Setup: Create repository with inline post-script
-        repo = Repository(
-            name="Repo with Post Script",
-            path="/tmp/repo-post",
-            encryption="none",
-            repository_type="local",
-            source_directories=json.dumps(["/tmp/data"]),
-            mode="full",
-            post_backup_script="echo 'Post-backup inline script'",  # Inline script
-            post_hook_timeout=300,
-        )
-        db_session.add(repo)
-        db_session.commit()
-        db_session.refresh(repo)
-
-        # Setup: Create schedule
-        schedule = ScheduledJob(
-            name="Schedule with Post Script",
-            cron_expression="0 2 * * *",
-            enabled=True,
-            run_repository_scripts=True,
-            created_at=datetime.now(timezone.utc),
-        )
-        db_session.add(schedule)
-        db_session.commit()
-        db_session.refresh(schedule)
-
-        # Link repo
-        link = ScheduledJobRepository(
-            scheduled_job_id=schedule.id, repository_id=repo.id, execution_order=0
-        )
-        db_session.add(link)
-        db_session.commit()
-
-        # Mock execution
-        post_script_executed = False
-
-        async def mock_execute_inline_script(*args, **kwargs):
-            nonlocal post_script_executed
-            if kwargs.get("script_type") == "post-backup":
-                post_script_executed = True
-                assert (
-                    kwargs.get("script_content") == "echo 'Post-backup inline script'"
-                )
-                assert kwargs.get("backup_result") == "success"
-            return {"success": True, "logs": "Script executed"}
-
-        async def mock_backup(
-            self, job_id, repository_path, db, archive_name=None, **kwargs
+            ) as execute_backup,
         ):
-            # Simulate successful backup (self is the BackupService instance)
-            backup_job = resolve_backup_job(db, job_id)
-            if backup_job:
-                backup_job.status = "completed"
-                backup_job.nfiles = 10
-                backup_job.original_size = 1000
-                backup_job.compressed_size = 800
-                backup_job.deduplicated_size = 600
-                db.commit()
+            async with operations_runner_for(db_session, patch_session_local=True):
+                await execute_multi_repo_schedule(schedule, db_session)
 
-        with patch(
-            "app.services.script_library_executor.ScriptLibraryExecutor.execute_inline_script",
-            new=mock_execute_inline_script,
-        ):
-            with patch(
-                "app.services.backup_service.BackupService.execute_backup",
-                new=mock_backup,
-            ):
-                # Phase 8: the schedule enqueues and waits for the runner.
-                async with operations_runner_for(db_session, patch_session_local=True):
-                    await execute_multi_repo_schedule(schedule, db_session)
-
-        # Verify: Post-script was executed
-        assert post_script_executed, (
-            "Repository inline post-script should have been executed"
-        )
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-class TestRepositoryLibraryScripts:
-    """Test repository library script execution (Bug #3 - library scripts)"""
-
-    async def test_schedule_executes_repository_library_scripts(
-        self, db_session: Session
-    ):
-        """Test that schedule executes library scripts assigned to repository"""
-        # Setup: Create script library script
-        script = Script(
-            name="Pre-Backup Library Script",
-            description="Test library script",
-            file_path="scripts/test_pre.sh",
-            category="backup",
-            timeout=300,
-            run_on="always",
-        )
-        db_session.add(script)
-        db_session.commit()
-        db_session.refresh(script)
-
-        # Create the actual script file
-        import os
-        from app.config import settings
-
-        os.makedirs(os.path.join(settings.data_dir, "scripts"), exist_ok=True)
-        script_path = os.path.join(settings.data_dir, "scripts", "test_pre.sh")
-        with open(script_path, "w") as f:
-            f.write("#!/bin/bash\necho 'Library script executed'\n")
-        os.chmod(script_path, 0o755)
-
-        # Setup: Create repository
-        repo = Repository(
-            name="Repo with Library Script",
-            path="/tmp/repo-library",
-            encryption="none",
-            repository_type="local",
-            source_directories=json.dumps(["/tmp/data"]),
-            mode="full",
-        )
-        db_session.add(repo)
-        db_session.commit()
-        db_session.refresh(repo)
-
-        # Assign script to repository
-        repo_script = RepositoryScript(
-            repository_id=repo.id,
-            script_id=script.id,
-            hook_type="pre-backup",
-            execution_order=1,
-            enabled=True,
-            continue_on_error=True,
-        )
-        db_session.add(repo_script)
-        db_session.commit()
-
-        # Setup: Create schedule
-        schedule = ScheduledJob(
-            name="Schedule with Library Script",
-            cron_expression="0 2 * * *",
-            enabled=True,
-            run_repository_scripts=True,  # Enable repo scripts
-            created_at=datetime.now(timezone.utc),
-        )
-        db_session.add(schedule)
-        db_session.commit()
-        db_session.refresh(schedule)
-
-        # Link repo
-        link = ScheduledJobRepository(
-            scheduled_job_id=schedule.id, repository_id=repo.id, execution_order=0
-        )
-        db_session.add(link)
-        db_session.commit()
-
-        # Track execution
-        library_script_executed = False
-
-        async def mock_run_script_from_library(
-            script,
-            db,
-            job_id=None,
-            repository=None,
-            hook_type=None,
-            backup_result=None,
-            script_parameters=None,
-        ):
-            nonlocal library_script_executed
-            library_script_executed = True
-            assert script.name == "Pre-Backup Library Script"
-            return {"success": True, "stdout": "Library script executed"}
-
-        with patch(
-            "app.api.schedule.run_script_from_library", new=mock_run_script_from_library
-        ):
-            with patch(
-                "app.services.backup_service.BackupService.execute_backup",
-                new=AsyncMock(),
-            ):
-                # Phase 8: the schedule enqueues and waits for the runner.
-                async with operations_runner_for(db_session, patch_session_local=True):
-                    await execute_multi_repo_schedule(schedule, db_session)
-
-        # Verify: Library script was executed
-        assert library_script_executed, (
-            "Repository library script should have been executed"
-        )
-
-    async def test_library_scripts_priority_over_inline(self, db_session: Session):
-        """Test that library scripts take priority over inline scripts"""
-        # Setup: Create script
-        script = Script(
-            name="Library Script",
-            description="Should execute instead of inline",
-            file_path="scripts/test_priority.sh",
-            timeout=300,
-        )
-        db_session.add(script)
-        db_session.commit()
-        db_session.refresh(script)
-
-        # Setup: Create repository with BOTH inline and library scripts
-        repo = Repository(
-            name="Repo with Both Scripts",
-            path="/tmp/repo-both",
-            encryption="none",
-            repository_type="local",
-            source_directories=json.dumps(["/tmp/data"]),
-            mode="full",
-            pre_backup_script="echo 'This inline script should NOT execute'",  # Should be ignored
-        )
-        db_session.add(repo)
-        db_session.commit()
-        db_session.refresh(repo)
-
-        # Assign library script
-        repo_script = RepositoryScript(
-            repository_id=repo.id,
-            script_id=script.id,
-            hook_type="pre-backup",
-            execution_order=1,
-            enabled=True,
-        )
-        db_session.add(repo_script)
-        db_session.commit()
-
-        # Setup schedule
-        schedule = ScheduledJob(
-            name="Priority Test Schedule",
-            cron_expression="0 2 * * *",
-            enabled=True,
-            run_repository_scripts=True,
-            created_at=datetime.now(timezone.utc),
-        )
-        db_session.add(schedule)
-        db_session.commit()
-
-        link = ScheduledJobRepository(
-            scheduled_job_id=schedule.id, repository_id=repo.id, execution_order=0
-        )
-        db_session.add(link)
-        db_session.commit()
-
-        # Track what gets executed
-        library_executed = False
-        inline_executed = False
-
-        async def mock_library(*args, **kwargs):
-            nonlocal library_executed
-            library_executed = True
-
-        async def mock_inline(*args, **kwargs):
-            nonlocal inline_executed
-            inline_executed = True
-            return {"success": True, "logs": ""}
-
-        with patch("app.api.schedule.run_script_from_library", new=mock_library):
-            with patch(
-                "app.services.script_library_executor.ScriptLibraryExecutor.execute_inline_script",
-                new=mock_inline,
-            ):
-                with patch(
-                    "app.services.backup_service.BackupService.execute_backup",
-                    new=AsyncMock(),
-                ):
-                    # Phase 8: the schedule enqueues and waits for the runner.
-                    async with operations_runner_for(
-                        db_session, patch_session_local=True
-                    ):
-                        await execute_multi_repo_schedule(schedule, db_session)
-
-        # Verify: Only library script executed, inline ignored
-        assert library_executed, "Library script should have been executed"
-        assert not inline_executed, (
-            "Inline script should NOT have been executed when library script exists"
-        )
+        execute_backup.assert_awaited_once()
+        assert execute_backup.await_args.kwargs.get("skip_hooks") is skip_hooks
+        library_script.assert_not_awaited()
+        inline_script.assert_not_awaited()
 
 
 @pytest.mark.integration
@@ -752,8 +476,11 @@ class TestCombinedScenarios:
                 execution_order.append(f"repo-library:{script.name}")
             return {"success": True}
 
+        backup_kwargs = []
+
         async def mock_backup(*args, **kwargs):
             execution_order.append("backup")
+            backup_kwargs.append(kwargs)
             # Mark backup as completed
             if args:
                 job_id = args[0]
@@ -775,7 +502,7 @@ class TestCombinedScenarios:
                     await execute_multi_repo_schedule(schedule, db_session)
 
         # Verify: Execution order is correct
-        # Expected: Schedule Pre -> Repo Library Script -> Backup -> Schedule Post
+        # Expected: Schedule Pre -> Backup (with its repository scripts) -> Schedule Post
         assert len(execution_order) >= 3, (
             f"Should have at least 3 executions, got {execution_order}"
         )
@@ -786,8 +513,11 @@ class TestCombinedScenarios:
         assert execution_order[-1] == "schedule:Schedule Post", (
             "Schedule post-script should run last"
         )
-        assert "repo-library:Repo Library Script" in execution_order, (
-            "Repo library script should execute"
+        # the backup runs the repository's own scripts (#1431); asserted here,
+        # since the runner would swallow a failure inside the backup
+        assert backup_kwargs and not any(k.get("skip_hooks") for k in backup_kwargs)
+        assert "repo-library:Repo Library Script" not in execution_order, (
+            "The backup runs the repository's scripts, not the schedule"
         )
 
 
