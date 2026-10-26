@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Feature, Plan, PLAN_LABEL } from '../core/features'
 import { getPlanAccent } from './planDrawerColors'
-import { buildBuyUrl } from '../utils/externalLinks'
+import { buildBuyUrl, refreshBuyLink } from '../utils/externalLinks'
 import PlanInfoDrawer from './PlanInfoDrawer'
 import { usePlan } from '../hooks/usePlan'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -194,6 +194,9 @@ export default function UpgradePrompt({
             <Button
               component="a"
               href={buyUrl}
+              onClickCapture={refreshBuyLink}
+              onAuxClickCapture={refreshBuyLink}
+              onContextMenuCapture={refreshBuyLink}
               onClick={handleBuyClick}
               target="_blank"
               rel="noreferrer"
@@ -267,6 +270,9 @@ export default function UpgradePrompt({
         <Button
           component="a"
           href={buyUrl}
+          onClickCapture={refreshBuyLink}
+          onAuxClickCapture={refreshBuyLink}
+          onContextMenuCapture={refreshBuyLink}
           onClick={handleBuyClick}
           target="_blank"
           rel="noreferrer"

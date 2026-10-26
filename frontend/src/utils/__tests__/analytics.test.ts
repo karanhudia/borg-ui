@@ -45,6 +45,7 @@ beforeEach(() => {
   window.history.pushState({}, '', '/repositories?secret=1#x')
 })
 afterEach(() => {
+  vi.unstubAllEnvs()
   vi.useRealTimers()
   localStorage.clear()
 })
@@ -669,5 +670,203 @@ describe('enqueueErrorReport', () => {
     await a.loadUserPreference()
     vi.advanceTimersByTime(10_000)
     expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('analytics startup integrity', () => {
+  it('uses the build version before runtime system info arrives', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '2.4.1')
+    const a = await load()
+    a.trackPageView()
+    a.flushAnalytics()
+    expect(sent()[0].app_version).toBe('2.4.1')
+  })
+
+  it('enriches queued page views and early errors when the runtime version arrives', async () => {
+    const a = await load()
+    a.trackPageView()
+    a.enqueueErrorReport({ message: 'early failure' })
+    a.setAppVersion('2.4.2')
+    a.flushAnalytics()
+    expect(sent()).toHaveLength(2)
+    expect(sent().every((event) => event.app_version === '2.4.2')).toBe(true)
+  })
+
+  it('does not overwrite a version already known when the event happened', async () => {
+    const a = await load()
+    a.setAppVersion('2.4.1')
+    a.trackPageView()
+    a.setAppVersion('2.4.2')
+    a.flushAnalytics()
+    expect(sent()[0].app_version).toBe('2.4.1')
+  })
+
+  it.each([undefined, '', 'bad', 123, {}])(
+    'rejects malformed or absent identity %j',
+    async (key) => {
+      const a = await load({ analytics_instance_key: key })
+      expect(a.getAnalyticsInstanceKey()).toBeNull()
+      a.trackPageView()
+      a.flushAnalytics()
+      expect(sent()).toHaveLength(0)
+    }
+  )
+})
+
+describe('analytics retry integrity', () => {
+  it.each(['network', 'server', 'rate-limit'])(
+    'retries %s failures with the same event id and a bounded attempt count',
+    async (failure) => {
+      const a = await load()
+      globalThis.fetch = vi.fn(async () => {
+        if (failure === 'network') throw new TypeError('offline')
+        return new Response(null, { status: failure === 'server' ? 503 : 429 })
+      }) as unknown as typeof fetch
+      a.trackPageView()
+      a.flushAnalytics()
+      await vi.runAllTimersAsync()
+      expect(sent()).toHaveLength(3)
+      expect(new Set(sent().map((event) => event.event_id)).size).toBe(1)
+    }
+  )
+
+  it('does not retry a permanently rejected payload', async () => {
+    const a = await load()
+    globalThis.fetch = vi.fn(
+      async () => new Response(null, { status: 400 })
+    ) as unknown as typeof fetch
+    a.trackPageView()
+    a.flushAnalytics()
+    await vi.runAllTimersAsync()
+    expect(sent()).toHaveLength(1)
+  })
+
+  it('withdraws pending retries immediately on opt-out', async () => {
+    const a = await load()
+    globalThis.fetch = vi.fn(
+      async () => new Response(null, { status: 503 })
+    ) as unknown as typeof fetch
+    a.trackPageView()
+    a.flushAnalytics()
+    await vi.advanceTimersByTimeAsync(0)
+    a.trackOptOut()
+    await vi.runAllTimersAsync()
+    expect(sent().filter((event) => event.name === 'pageview')).toHaveLength(1)
+  })
+
+  it('does not revive an in-flight failure after preferences switch off', async () => {
+    const a = await load()
+    let fail!: (value: Response) => void
+    globalThis.fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          fail = resolve
+        })
+    ) as unknown as typeof fetch
+    a.trackPageView()
+    a.flushAnalytics()
+    prefs.value.analytics_enabled = false
+    await a.resetOptOutCache()
+    fail(new Response(null, { status: 503 }))
+    await vi.runAllTimersAsync()
+    expect(sent()).toHaveLength(1)
+  })
+})
+
+describe('consent withdrawal during pending delivery', () => {
+  it('drops usage queued before a decline and cancels retry delivery', async () => {
+    const a = await load()
+    globalThis.fetch = vi.fn(
+      async () => new Response(null, { status: 503 })
+    ) as unknown as typeof fetch
+    a.trackPageView()
+    a.flushAnalytics()
+    await vi.advanceTimersByTimeAsync(0)
+    a.trackEvent('Backup', 'Start')
+    a.trackConsentResponse(false)
+    expect(a.getAnalyticsInstanceKey()).toBeNull()
+    await vi.runAllTimersAsync()
+    expect(sent().filter((event) => event.name === 'pageview')).toHaveLength(1)
+    expect(sent().filter((event) => event.name === 'Backup - Start')).toHaveLength(0)
+  })
+
+  it('does not send unknown versions as a fabricated value', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '')
+    const a = await load()
+    a.trackPageView()
+    a.flushAnalytics()
+    expect(sent()[0]).not.toHaveProperty('app_version')
+  })
+
+  it('cannot revive queued startup errors or pageviews by learning a version after opting out', async () => {
+    const a = await load()
+    a.enqueueErrorReport({ message: 'early failure' })
+    a.trackPageView()
+    a.trackOptOut()
+    a.setAppVersion('2.4.2')
+    await vi.runAllTimersAsync()
+    expect(sent().map((event) => event.name)).toEqual(['Settings - OptOut'])
+  })
+})
+
+describe('preference response ordering', () => {
+  it('does not reopen tracking when a stale preference response settles after opt-out', async () => {
+    const a = await load()
+    const req = await import('../../services/authRequest')
+    let complete!: (response: Response) => void
+    vi.mocked(req.fetchJsonForAuthMode).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve
+        })
+    )
+    const reloading = a.resetOptOutCache()
+    await vi.advanceTimersByTimeAsync(0)
+    a.trackOptOut()
+    complete(new Response(JSON.stringify({ preferences: prefs.value })))
+    await reloading
+    expect(a.getAnalyticsInstanceKey()).toBeNull()
+    a.trackPageView()
+    a.flushAnalytics()
+    expect(sent().map((event) => event.name)).toEqual(['Settings - OptOut'])
+  })
+})
+
+describe('bounded analytics delivery', () => {
+  it('times out hung requests and stops after bounded attempts', async () => {
+    const a = await load()
+    globalThis.fetch = vi.fn(() => new Promise<Response>(() => {})) as unknown as typeof fetch
+    a.trackPageView()
+    a.flushAnalytics()
+    await vi.runAllTimersAsync()
+    expect(fetchMock()).toHaveBeenCalledTimes(3)
+    for (const [, init] of fetchMock().mock.calls) expect(init.signal.aborted).toBe(true)
+  })
+
+  it('caps simultaneous detached batches while the endpoint hangs', async () => {
+    const a = await load()
+    globalThis.fetch = vi.fn(() => new Promise<Response>(() => {})) as unknown as typeof fetch
+    for (let i = 0; i < 500; i++) a.trackEvent('Backup', 'Start')
+    a.flushAnalytics()
+    expect(fetchMock()).toHaveBeenCalledTimes(4)
+    a.trackOptOut()
+    await vi.runAllTimersAsync()
+  })
+
+  it('does not retry events whose delivery window has expired', async () => {
+    const a = await load()
+    let complete!: (response: Response) => void
+    globalThis.fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          complete = resolve
+        })
+    ) as unknown as typeof fetch
+    a.trackPageView()
+    a.flushAnalytics()
+    vi.setSystemTime(Date.now() + 61_000)
+    complete(new Response(null, { status: 503 }))
+    await vi.runAllTimersAsync()
+    expect(fetchMock()).toHaveBeenCalledTimes(1)
   })
 })

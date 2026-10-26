@@ -16,6 +16,16 @@ export function buildBuyUrl({ plan, src, offer }: BuyLinkContext): string {
   if (offer) params.set('offer', offer)
   // Joins the storefront visit to this install's usage; absent when analytics is off.
   const ik = getAnalyticsInstanceKey()
-  if (ik) params.set('ik', ik)
+  if (ik && /^[a-f0-9]{64}$/.test(ik)) params.set('ik', ik)
   return `${BUY_URL}?${params.toString()}`
+}
+
+/** Refresh synchronously so ordinary, keyboard and new-tab activation use current consent. */
+export function refreshBuyLink({ currentTarget }: { currentTarget: HTMLAnchorElement }): void {
+  const url = new URL(currentTarget.href)
+  if (url.origin !== new URL(BUY_URL).origin || url.pathname !== '/buy') return
+  url.searchParams.delete('ik')
+  const ik = getAnalyticsInstanceKey()
+  if (ik && /^[a-f0-9]{64}$/.test(ik)) url.searchParams.set('ik', ik)
+  currentTarget.href = url.toString()
 }

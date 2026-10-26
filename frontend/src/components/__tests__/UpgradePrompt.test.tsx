@@ -4,7 +4,10 @@ import { licensingAPI } from '../../services/api'
 import { renderWithProviders } from '../../test/test-utils'
 import UpgradePrompt from '../UpgradePrompt'
 
-const { trackEventMock } = vi.hoisted(() => ({ trackEventMock: vi.fn() }))
+const { trackEventMock, identity } = vi.hoisted(() => ({
+  trackEventMock: vi.fn(),
+  identity: { value: null as string | null },
+}))
 
 vi.mock('../../hooks/usePlan', () => ({
   usePlan: () => ({ plan: 'community', features: {}, entitlement: null, can: () => false }),
@@ -16,7 +19,7 @@ vi.mock('../../services/api', async (importOriginal) => {
 vi.mock('../../utils/analytics', async () => {
   const actual =
     await vi.importActual<typeof import('../../utils/analytics')>('../../utils/analytics')
-  return { ...actual, trackEvent: trackEventMock }
+  return { ...actual, trackEvent: trackEventMock, getAnalyticsInstanceKey: () => identity.value }
 })
 
 describe('UpgradePrompt buy link', () => {
@@ -144,4 +147,41 @@ describe('UpgradePrompt trial', () => {
       })
     )
   })
+})
+
+describe('UpgradePrompt activation identity', () => {
+  it.each(['click', 'auxclick', 'contextmenu'])(
+    'refreshes both card and compact links on %s after preferences settle',
+    (type) => {
+      identity.value = null
+      renderWithProviders(
+        <>
+          <UpgradePrompt requiredPlan="pro" />
+          <UpgradePrompt requiredPlan="enterprise" compact />
+        </>
+      )
+      const links = screen
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('href')?.startsWith('https://borgui.com/buy'))
+      expect(links).toHaveLength(2)
+      identity.value = 'a'.repeat(64)
+      for (const link of links) {
+        fireEvent(
+          link,
+          new MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            button: type === 'auxclick' ? 1 : 0,
+          })
+        )
+        expect(new URL(link.getAttribute('href')!).searchParams.get('ik')).toBe('a'.repeat(64))
+        expect(link).toHaveAttribute('target', '_blank')
+      }
+      identity.value = null
+      for (const link of links) {
+        fireEvent(link, new MouseEvent(type, { bubbles: true, cancelable: true }))
+        expect(new URL(link.getAttribute('href')!).searchParams.has('ik')).toBe(false)
+      }
+    }
+  )
 })

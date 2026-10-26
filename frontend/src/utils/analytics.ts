@@ -51,9 +51,27 @@ let preferenceLoaded = false
 let analyticsDeclined = false
 let instanceKey: string | null = null
 let userKey: string | null = null
-let currentAppVersion: string | null = null
+let currentAppVersion: string | null = import.meta.env.VITE_APP_VERSION?.trim() || null
 let currentPlan: string | null = null
 const queue: OutgoingEvent[] = []
+const retryTimers = new Set<ReturnType<typeof setTimeout>>()
+let deliveryGeneration = 0
+const MAX_ATTEMPTS = 3
+const REQUEST_TIMEOUT_MS = 10_000
+const MAX_EVENT_AGE_MS = 60_000
+const MAX_IN_FLIGHT_BATCHES = 4
+const activeDeliveries = new Set<AbortController>()
+
+const cancelRetries = (): void => {
+  deliveryGeneration++
+  for (const timer of retryTimers) clearTimeout(timer)
+  retryTimers.clear()
+  for (const controller of activeDeliveries) controller.abort()
+  activeDeliveries.clear()
+}
+
+const validKey = (key: unknown): string | null =>
+  typeof key === 'string' && /^[a-f0-9]{64}$/.test(key) ? key : null
 // Bytes of keepalive sends not yet settled, across flushes: the browser's budget is shared.
 let keepaliveBytes = 0
 let flushTimer: ReturnType<typeof setTimeout> | null = null
@@ -267,35 +285,78 @@ export const flushAnalytics = (keepalive = false): void => {
   }
   while (queue.length) {
     let count = 0
-    let body = ''
     // At least one event per batch; props are capped, so any single event fits.
     while (count < Math.min(MAX_BATCH, queue.length)) {
       const next = JSON.stringify({ events: queue.slice(0, count + 1) })
       if (count > 0 && bytes(next) > MAX_BYTES) break
-      body = next
       count++
     }
-    queue.splice(0, count)
-    const size = bytes(body)
-    const keep = keepalive && keepaliveBytes + size <= MAX_BYTES
-    if (keep) keepaliveBytes += size
-    // text/plain keeps this a CORS simple request, so self-hosted origins need no preflight.
-    // sendBeacon is not used because it cannot suppress the Referer header.
-    void fetch(ANALYTICS_ENDPOINT, {
+    sendBatch(queue.splice(0, count), keepalive)
+  }
+}
+
+// Retry transient failures in memory only, with stable event ids for ingest deduplication.
+// Withdrawing consent invalidates both scheduled retries and failures still in flight.
+const sendBatch = (
+  events: OutgoingEvent[],
+  keepalive: boolean,
+  attempt = 1,
+  generation = deliveryGeneration
+): void => {
+  if (generation !== deliveryGeneration || activeDeliveries.size >= MAX_IN_FLIGHT_BATCHES) return
+  events = events.filter((event) => Date.now() - Date.parse(event.occurred_at) <= MAX_EVENT_AGE_MS)
+  if (!events.length) return
+  const controller = new AbortController()
+  activeDeliveries.add(controller)
+  const body = JSON.stringify({ events })
+  const size = bytes(body)
+  const keep = keepalive && keepaliveBytes + size <= MAX_BYTES
+  if (keep) keepaliveBytes += size
+  const retry = (): void => {
+    if (
+      generation !== deliveryGeneration ||
+      attempt >= MAX_ATTEMPTS ||
+      retryTimers.size >= MAX_BATCH
+    )
+      return
+    const timer = setTimeout(
+      () => {
+        retryTimers.delete(timer)
+        if (generation === deliveryGeneration) sendBatch(events, false, attempt + 1, generation)
+      },
+      1000 * 2 ** (attempt - 1)
+    )
+    retryTimers.add(timer)
+  }
+  // text/plain avoids preflight; referrers and credentials must never accompany analytics.
+  // Race the request deadline too: an abort-ignoring transport must not retain a slot forever.
+  const deadline = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener('abort', () => reject(new Error('Analytics send ended')), {
+      once: true,
+    })
+  })
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  void Promise.race([
+    fetch(ANALYTICS_ENDPOINT, {
       method: 'POST',
       body,
       headers: { 'Content-Type': 'text/plain' },
       keepalive: keep,
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
+      signal: controller.signal,
+    }),
+    deadline,
+  ])
+    .then((response) => {
+      if (response.status === 408 || response.status === 429 || response.status >= 500) retry()
     })
-      .catch(() => {
-        // Best-effort analytics transport should never affect the UI.
-      })
-      .finally(() => {
-        if (keep) keepaliveBytes -= size
-      })
-  }
+    .catch(retry)
+    .finally(() => {
+      clearTimeout(timeout)
+      activeDeliveries.delete(controller)
+      if (keep) keepaliveBytes -= size
+    })
 }
 
 const scheduleFlush = (): void => {
@@ -397,6 +458,10 @@ export const loadUserPreference = async (): Promise<void> => {
   try {
     await readPreference()
   } finally {
+    if (userOptedOut) {
+      queue.length = 0
+      cancelRetries()
+    }
     if (analyticsDeclined) dropErrorReports()
     releaseErrorReports()
     // Views held before the first load go out now if tracking is allowed, otherwise never.
@@ -412,8 +477,10 @@ export const loadUserPreference = async (): Promise<void> => {
 }
 
 const readPreference = async (): Promise<void> => {
+  const generation = deliveryGeneration
   try {
     const authConfig = (await authAPI.getAuthConfig()).data
+    if (generation !== deliveryGeneration) return
     const proxyAuthEnabled = authConfig.proxy_auth_enabled
     const insecureNoAuthEnabled = authConfig.insecure_no_auth_enabled
     const token = localStorage.getItem('access_token')
@@ -432,12 +499,15 @@ const readPreference = async (): Promise<void> => {
       insecureNoAuthEnabled ? 'insecure-no-auth' : proxyAuthEnabled ? 'proxy' : 'jwt'
     )
     const prefs = (await response.json()).preferences ?? {}
+    // A response begun before an explicit decline must not reopen the tracking gate.
+    if (generation !== deliveryGeneration) return
     userOptedOut = !prefs.analytics_enabled
     analyticsDeclined = prefs.analytics_enabled === false
     consentGiven = prefs.analytics_consent_given ?? false
-    instanceKey = prefs.analytics_instance_key ?? null
-    userKey = prefs.analytics_user_key ?? null
+    instanceKey = validKey(prefs.analytics_instance_key)
+    userKey = validKey(prefs.analytics_user_key)
   } catch {
+    if (generation !== deliveryGeneration) return
     userOptedOut = true
     consentGiven = false
   }
@@ -559,7 +629,12 @@ export const trackApiError = (error: unknown): void => {
 }
 
 export const setAppVersion = (version: string): void => {
-  currentAppVersion = version || null
+  const knownVersion = version?.trim()
+  if (!knownVersion) return
+  currentAppVersion = knownVersion
+  for (const event of queue) {
+    if (!event.app_version) event.app_version = knownVersion
+  }
 }
 
 /**
@@ -578,6 +653,7 @@ export const trackOptOut = (): void => {
   // queued and send only the opt-out itself.
   userOptedOut = true
   analyticsDeclined = true
+  cancelRetries()
   heldErrorReports = []
   pendingPageviews = []
   queue.length = 0
@@ -602,7 +678,11 @@ export const trackLanguageChange = (languageCode: string): void => {
 export const trackConsentResponse = (accepted: boolean): void => {
   // A decline closes the gate now, so a failed preference reload cannot release held reports.
   if (!accepted) {
+    userOptedOut = true
     analyticsDeclined = true
+    pendingPageviews = []
+    queue.length = 0
+    cancelRetries()
     dropErrorReports()
   }
   enqueue(`Consent - ${accepted ? 'Accept' : 'Decline'}`, { name: 'analytics_banner' }, true)
