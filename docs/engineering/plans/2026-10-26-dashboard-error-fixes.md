@@ -32,3 +32,9 @@
 - `ruff check --no-cache app tests`, `ruff format --no-cache --check app tests` (800 files), and `git diff --check` passed.
 - Local diff review completed. CodeRabbit review was unavailable because its CLI is signed out.
 - Deployment is still required before new reports expose the underlying causes of the existing archive-sync failures. These patches do not establish or repair those installation-specific causes.
+
+## Review follow-up
+
+The agent waiter raises HTTP 502 for a terminal failed job before returning a result. Map that path to `ArchiveListingError` only when the job is actually failed, using the existing failure-message extractor. Preserve canceled-job HTTP errors, marked lock contention (the runner must defer it), and HTTP 504 cleanup. A regression using the real queue and database waiter reproduced this missing path; all 91 index-executor tests passed after the fix.
+
+The review follow-up also passed all 529 tests across the original eight affected suites and the full backend Ruff lint/format checks.

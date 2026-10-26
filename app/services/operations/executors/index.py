@@ -24,7 +24,7 @@ from app.api.repositories import (
 )
 from app.config import settings
 from app.core.borg_router import BorgRouter
-from app.database.models import Archive, Repository, SystemSettings, utc_now
+from app.database.models import AgentJob, Archive, Repository, SystemSettings, utc_now
 from app.services.operations import executors
 from app.services.operations.backup_facade import (
     link_archives_to_backups,
@@ -218,6 +218,7 @@ async def list_archives_for_repository(
     if is_agent_executor(repository):
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
         from app.services.repository_executor import (
+            _agent_job_failure_message,
             cancel_unclaimed_agent_repository_job,
             queue_agent_repository_operation_job,
             wait_for_agent_repository_operation_job,
@@ -240,6 +241,17 @@ async def list_archives_for_repository(
                 # job. A list the agent claimed or runs stays: its result
                 # warms the next attempt, and a dead agent's job is reaped.
                 cancel_unclaimed_agent_repository_job(db, job.id)
+            elif exc.status_code == status.HTTP_502_BAD_GATEWAY and not repository_busy(
+                exc
+            ):
+                failed_job = db.get(AgentJob, job.id)
+                if failed_job is not None and failed_job.status == "failed":
+                    raise ArchiveListingError(
+                        {
+                            "return_code": (failed_job.result or {}).get("return_code"),
+                            "stderr": _agent_job_failure_message(db, failed_job),
+                        }
+                    ) from exc
             raise
         if not _agent_listing_ok(result):
             raise ArchiveListingError(result)

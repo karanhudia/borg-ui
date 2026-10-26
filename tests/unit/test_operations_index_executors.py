@@ -1225,6 +1225,72 @@ async def test_archive_sync_preserves_agent_listing_failure_reason(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("job_status", ["failed", "canceled", "lock_contention"])
+async def test_archive_sync_handles_terminal_agent_listing_failure(
+    db, repo, monkeypatch, job_status
+):
+    from fastapi import HTTPException
+
+    from app.services.operations.runner import repository_busy
+
+    _agent_for(db, repo, "repository.list_archives")
+    repo.archive_count = 1
+    repo.last_backup = datetime(2026, 9, 2)
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="existing",
+            name="existing",
+            series="default",
+            start=datetime(2026, 9, 2),
+        )
+    )
+    db.commit()
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, repository: "UTC"
+    )
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+
+    async def finish_job(db_, job, **kwargs):
+        # Complete the transport boundary; exercise the real database waiter
+        # so a failed agent job raises HTTP 502 instead of returning a result.
+        job.status = "failed" if job_status == "lock_contention" else job_status
+        job.error_message = "repository.list_archives exited with code 2"
+        job.result = {
+            "return_code": 2,
+            "stderr_tail": "Connection refused password=agent-secret",
+            "failure_kind": "lock_contention"
+            if job_status == "lock_contention"
+            else "other",
+        }
+        db_.commit()
+
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort", finish_job
+    )
+
+    if job_status == "failed":
+        outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+        assert outcome.status == "failed"
+        assert "Connection refused" in outcome.error_message
+        assert "exit code 2" in outcome.error_message
+        assert "agent-secret" not in outcome.error_message
+    else:
+        with pytest.raises(HTTPException) as raised:
+            await index_exec.run_archive_sync(_ctx(db, repo))
+        assert raised.value.status_code == 502
+        assert repository_busy(raised.value) is (job_status == "lock_contention")
+
+    db.refresh(repo)
+    assert repo.archive_count == 1
+    assert repo.last_backup == datetime(2026, 9, 2)
+    assert db.query(Archive).one().borg_id == "existing"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_list_archives_for_repository_reports_borg_failure(db, repo, monkeypatch):
     class FailingRouter:
         def __init__(self, repository):
