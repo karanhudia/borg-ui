@@ -15,7 +15,7 @@ import base64
 import os
 import pytest
 from unittest.mock import MagicMock, patch
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.database.models import Repository, SSHConnection, SSHKey
 
@@ -248,6 +248,34 @@ class TestWriteSshKeyToTempfile:
     """Tests for the write_ssh_key_to_tempfile utility function."""
 
     SECRET = "testsecretkey1234567890123456789"
+
+    @pytest.mark.parametrize("stored_value", ["malformed", "wrong-key", "empty"])
+    def test_unreadable_key_explains_recovery_without_writing_a_file(
+        self, monkeypatch, tmp_path, stored_value
+    ):
+        from app.config import settings
+        from app.utils.ssh_utils import write_ssh_key_to_tempfile
+
+        monkeypatch.setattr(settings, "secret_key", "c" * 32)
+        monkeypatch.setattr("app.utils.ssh_utils.tempfile.tempdir", str(tmp_path))
+        encrypted = {
+            "malformed": "corrupt-saved-key",
+            "wrong-key": _make_encrypted_key("o" * 32),
+            "empty": "",
+        }[stored_value]
+        ssh_key = SSHKey(id=42, private_key=encrypted)
+
+        with pytest.raises(
+            InvalidToken, match="SSH.*key.*cannot be decrypted"
+        ) as raised:
+            write_ssh_key_to_tempfile(ssh_key)
+
+        message = str(raised.value)
+        assert "SECRET_KEY" in message
+        assert "re-import" in message
+        if encrypted:
+            assert encrypted not in message
+        assert list(tmp_path.iterdir()) == []
 
     def test_decrypts_and_writes_key(self):
         """Decrypts the SSHKey and writes to a readable temp file."""
