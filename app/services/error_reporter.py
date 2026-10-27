@@ -122,6 +122,11 @@ _SCRUB = [
         r"\1[redacted]",
     ),
     (re.compile(r"(Bearer\s+)[A-Za-z0-9._~+/=-]+", re.IGNORECASE), r"\1[redacted]"),
+    # Diagnostics can include an auth scheme without an Authorization header.
+    (
+        re.compile(r"\bBasic\s+[A-Za-z0-9+/_-]{6,}={0,2}", re.IGNORECASE),
+        "Basic [redacted]",
+    ),
 ]
 
 

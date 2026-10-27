@@ -131,6 +131,30 @@ def test_cleanup_memory_addresses_share_a_fingerprint(sent):
     assert len(sent) == 1
 
 
+@pytest.mark.parametrize(
+    "padding", ["", "  intermediate frame\n" * 80], ids=["summary", "detail"]
+)
+def test_bare_basic_credentials_are_redacted_before_details_and_fingerprinting(
+    sent, padding
+):
+    tokens = ("YWxpY2U6c2VjcmV0", "Ym9iOm90aGVyc2VjcmV0")
+    for token in tokens:
+        report_failure(
+            kind="job",
+            type_="rclone_sync_failed",
+            component="rclone_sync",
+            message=f"rclone failed\n{padding}OSError: Basic {token}",
+        )
+    flush()
+
+    assert len(sent) == 1
+    props = sent[0]["props"]
+    for token in tokens:
+        assert token not in json.dumps(props)
+    detail = props["stack"] if padding else props["message"]
+    assert "OSError: Basic [redacted]" in detail
+
+
 @pytest.mark.parametrize("long_detail", [False, True])
 @pytest.mark.parametrize(
     "url,secret",
