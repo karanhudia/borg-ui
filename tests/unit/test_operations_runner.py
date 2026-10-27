@@ -2719,3 +2719,190 @@ async def test_a_failure_recorded_after_its_terminal_commit_failed_is_reported(
 
     assert await runner.record_unrecorded_outcomes(db) == 1
     assert reports == ["backup_failed"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("diagnostics_fail", [False, True])
+async def test_server_archive_lock_waits_then_completes_without_error_report(
+    db, repo, runner, registry, monkeypatch, diagnostics_fail
+):
+    from app.core.borg import borg
+    from app.database.models import Archive
+    from app.services.operations.executors import index as index_exec
+
+    repo.borg_version = 1
+    repo.archive_count = 1
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="existing",
+            name="existing",
+            series="default",
+            start=datetime(2026, 9, 2),
+        )
+    )
+    db.commit()
+    attempts = []
+    reports = []
+    if diagnostics_fail:
+
+        def broken_diagnostics(*args):
+            raise OSError("unavailable cache mount")
+
+        monkeypatch.setattr(index_exec, "cache_lock_diagnostics", broken_diagnostics)
+
+    async def list_result(*args, **kwargs):
+        attempts.append(repo.id)
+        if len(attempts) == 1:
+            return {
+                "success": False,
+                "return_code": 73,
+                "stdout": "",
+                "stderr": "Failed to create/acquire the lock /cache/lock.exclusive (timeout).",
+            }
+        return {
+            "success": True,
+            "return_code": 0,
+            "stdout": '{"archives": []}',
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(borg, "list_archives", list_result)
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repo, db: ({}, None)
+    )
+    monkeypatch.setattr(
+        "app.services.operations.runner._report_failed_operation",
+        lambda *args: reports.append(args),
+    )
+    registry["archive_sync"] = index_exec.run_archive_sync
+    registry["stats"] = lambda ctx: _done()
+    op = enqueue(db, "archive_sync", repository_id=repo.id)
+    child = enqueue(db, "stats", repository_id=repo.id, depends_on_id=op.id)
+    # A real backoff holds the operation despite other runner ticks.
+    runner._deferral_delay = 0.2
+    await runner.tick()
+    await asyncio.gather(*list(runner.running_tasks.values()), return_exceptions=True)
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "queued"
+    assert row.params["deferrals"] == 1
+    assert row.error_message is None
+    assert db.get(Operation, child.id).status == "queued"
+    assert db.get(Repository, repo.id).archive_count == 1
+    assert db.query(Archive).one().borg_id == "existing"
+    assert reports == []
+    row.params = {**row.params, "deferred_until": time.time() + 60}
+    db.commit()
+    await runner.tick()
+    assert not runner.running_tasks
+    assert len(attempts) == 1
+    row.params = {**row.params, "deferred_until": 0}
+    db.commit()
+    await _drain(runner)
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "completed"
+    assert db.get(Operation, child.id).status == "completed"
+    assert len(attempts) == 2
+    assert reports == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "code, reason, expected",
+    [
+        (
+            73,
+            "Failed to create/acquire the lock /cache/lock.exclusive (timeout).",
+            "queued",
+        ),
+        (72, "Permission denied", "failed"),
+        (73, "Our lock was killed by another borg", "failed"),
+    ],
+)
+async def test_server_archive_lock_cancel_and_terminal_failures(
+    db, repo, runner, registry, monkeypatch, code, reason, expected
+):
+    from unittest.mock import AsyncMock
+    from app.core.borg import borg
+    from app.services.operations.executors import index as index_exec
+
+    repo.borg_version = 1
+    db.commit()
+    monkeypatch.setattr(
+        borg,
+        "list_archives",
+        AsyncMock(
+            return_value={
+                "success": False,
+                "return_code": code,
+                "stdout": "",
+                "stderr": reason,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repo, db: ({}, None)
+    )
+    registry["archive_sync"] = index_exec.run_archive_sync
+    op = enqueue(db, "archive_sync", repository_id=repo.id)
+    await runner.tick()
+    await asyncio.gather(*list(runner.running_tasks.values()), return_exceptions=True)
+    db.expire_all()
+    assert db.get(Operation, op.id).status == expected
+    if expected == "queued":
+        assert await runner.request_cancel(op.id)
+        await _drain(runner)
+        db.expire_all()
+        assert db.get(Operation, op.id).status == "cancelled"
+    else:
+        assert (db.get(Operation, op.id).params or {}).get("deferrals") is None
+        assert reason in db.get(Operation, op.id).error_message
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_server_archive_lock_exhaustion_retains_diagnostics(
+    db, repo, runner, registry, monkeypatch, tmp_path
+):
+    from unittest.mock import AsyncMock
+    from app.core.borg import borg
+    from app.services.operations.executors import index as index_exec
+    from app.services.operations import runner as runner_module
+
+    cache = tmp_path / "cache"
+    lock = cache / ("a" * 64) / "lock.exclusive"
+    lock.mkdir(parents=True)
+    (lock / "old-container.123-0").touch()
+    repo.borg_version = 1
+    db.commit()
+    monkeypatch.setattr(
+        borg,
+        "list_archives",
+        AsyncMock(
+            return_value={
+                "success": False,
+                "return_code": 73,
+                "stdout": "",
+                "stderr": f"Failed to create/acquire the lock {lock} (timeout).",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        index_exec,
+        "_prepare_repository_borg_env",
+        lambda repo, db: ({"BORG_CACHE_DIR": str(cache)}, None),
+    )
+    registry["archive_sync"] = index_exec.run_archive_sync
+    op = enqueue(db, "archive_sync", repository_id=repo.id)
+    await _drain(runner, rounds=runner_module.MAX_DEFERRALS + 5)
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "failed"
+    assert row.params["deferrals"] == runner_module.MAX_DEFERRALS
+    assert "old-container.123-0" in row.error_message
+    assert "owner_liveness" in row.error_message
+    assert lock.exists()
+    assert (lock / "old-container.123-0").exists()

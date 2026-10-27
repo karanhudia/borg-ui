@@ -1222,12 +1222,21 @@ async def test_archive_sync_preserves_server_listing_failure_reason_and_archives
         index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
     )
 
-    outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+    if result["return_code"] == 73:
+        from app.core.borg_errors import ArchiveListingError
+        from app.services.operations.runner import repository_busy
 
-    assert outcome.status == "failed"
-    assert expected_reason in outcome.error_message
-    assert "hunter2" not in outcome.error_message
-    assert len(outcome.error_message) < 2100
+        with pytest.raises(ArchiveListingError) as raised:
+            await index_exec.run_archive_sync(_ctx(db, repo))
+        assert repository_busy(raised.value)
+        message = str(raised.value)
+    else:
+        outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+        assert outcome.status == "failed"
+        message = outcome.error_message
+    assert expected_reason in message
+    assert "hunter2" not in message
+    assert len(message) < 2100
     db.refresh(repo)
     assert repo.archive_count == 1
     assert repo.last_backup == datetime(2026, 9, 2)
@@ -2611,3 +2620,47 @@ def test_apply_listing_links_a_borg1_archive_dated_before_its_backup(db, repo):
     )
 
     assert db.query(Archive).one().backup_operation_id == backup.id
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_server_contention_context_contains_only_running_operations_on_this_repo(
+    db, repo, monkeypatch
+):
+    from app.core.borg_errors import ArchiveListingError
+    from app.services.operations.enqueue import enqueue
+
+    other_repo = Repository(
+        name="other",
+        path="/other",
+        encryption="none",
+        compression="lz4",
+        borg_version=1,
+    )
+    db.add(other_repo)
+    db.commit()
+    active = enqueue(db, "stats", repository_id=repo.id)
+    active.status = "running"
+    other = enqueue(db, "stats", repository_id=other_repo.id)
+    other.status = "running"
+    enqueue(db, "archive_sync", repository_id=repo.id)
+    db.commit()
+    monkeypatch.setattr(
+        "app.core.borg.borg.list_archives",
+        AsyncMock(
+            return_value={
+                "success": False,
+                "return_code": 73,
+                "stdout": "",
+                "stderr": "Failed to acquire the lock /repo/lock.",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+    with pytest.raises(ArchiveListingError) as raised:
+        await index_exec.run_archive_sync(_ctx(db, repo))
+    (note,) = raised.value.__notes__
+    context = json.loads(note.removeprefix("Lock diagnostics: "))
+    assert context["running_operations"] == [{"id": active.id, "kind": "stats"}]

@@ -73,6 +73,39 @@ docker exec borg-web-ui sh -lc 'find "${BORG_CACHE_DIR:-/home/borg/.cache/borg}"
 docker compose ps redis
 ```
 
+## Archive sync lock failures
+
+Background archive sync waits and retries when a server-side Borg listing
+reports temporary lock contention (modern exit codes 70, 71, or 73), using
+the operations runner's bounded backoff. The existing archive list stays
+intact while the sync waits; dependent index work waits too. A sync that stays
+blocked after 20 deferrals ends with a visible failure. You can cancel a
+waiting sync from the operations queue.
+
+The operation log includes a `Lock diagnostics` entry on each server listing
+contention. For a lock under the configured local Borg cache, this records up
+to five owner filenames, the current hostname, any configured `BORG_HOST_ID`,
+and up to ten running operations on that repository. The final failure keeps
+the latest diagnostic context if retries are exhausted. Owner filenames encode
+Borg's host identity and PID; their presence does **not** prove the owner is
+alive or dead. Remote/repository lock directories are not inspected, and these
+diagnostics never remove locks.
+
+A cache lock can survive a container replacement while Borg's host identity
+changes. Check the owner entry against the old container and current Borg
+processes, including other processes sharing that cache. A lock at
+`/home/borg/.cache/borg/<repository-id>/lock.exclusive` is a local cache lock,
+even when the repository itself is remote. `--bypass-lock` does not bypass
+Borg 1's cache security checks, so it does not solve that case. Confirm the
+owner has stopped before an administrator performs lock recovery; see
+[Repository Locks](security#repository-locks).
+
+Permission denial while creating a lock (exit code 72) is a filesystem access
+problem and fails immediately rather than retrying. Check repository mount
+permissions and the container's `PUID`, `PGID`, and supplementary groups as
+below. Borg 2's `Our lock was killed by another borg` is also terminal: it is
+not treated as contention that waiting can fix.
+
 ## Paths and Permissions
 
 ### Permission denied

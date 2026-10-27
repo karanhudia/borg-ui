@@ -140,6 +140,11 @@ class ArchiveListingError(Exception):
         if result.get("return_code") is not None:
             message += f" (exit code {result['return_code']})"
         reason = result.get("stderr") or result.get("error")
+        # Classify before bounding the diagnostic: Borg 2 can use 73 when
+        # another process killed our own lock, which must remain terminal.
+        self.is_lock_contention = is_lock_contention_exit_code(
+            result.get("return_code")
+        ) and "Our lock was killed by another borg" not in str(reason or "")
         if reason:
             # Redact before truncation: cutting a quoted secret first could
             # leave part of its value outside the redactor's match.
