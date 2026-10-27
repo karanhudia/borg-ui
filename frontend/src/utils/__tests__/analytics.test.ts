@@ -529,7 +529,7 @@ describe('trackApiError', () => {
     ])
   })
 
-  it('reports a failed change as API - Fail with only its area, method and class', async () => {
+  it('reports a failed change without raw error details', async () => {
     const a = await load()
     a.trackApiError({
       isAxiosError: true,
@@ -543,6 +543,49 @@ describe('trackApiError', () => {
       props: { area: 'repositories', method: 'put', status: 500, error_class: 'server' },
     })
     expect(JSON.stringify(event)).not.toContain('secret')
+  })
+
+  it.each([400, 500])(
+    'retains a structured repository failure reason for HTTP %s',
+    async (status) => {
+      const a = await load()
+      a.trackApiError({
+        isAxiosError: true,
+        config: { method: 'post', url: '/repositories/' },
+        response: {
+          status,
+          data: {
+            detail: {
+              key: 'backend.errors.repo.failedToInitializeRepository',
+              params: { error: 'private repository details' },
+            },
+          },
+        },
+      })
+      vi.advanceTimersByTime(5000)
+      const event = sent().find((event) => event.name === 'API - Fail')
+      expect(event.props.error_key).toBe('repo.failedToInitializeRepository')
+      expect(JSON.stringify(event)).not.toContain('private repository details')
+    }
+  )
+
+  it.each([
+    'private details',
+    'backend.errors.repo.private/path',
+    'backend.errors.repo.failedToInitializeRepository\n',
+    'backend.errors.' + 'x'.repeat(200),
+    42,
+  ])('omits a non-machine-readable reason key (%s)', async (key) => {
+    const a = await load()
+    a.trackApiError({
+      isAxiosError: true,
+      config: { method: 'post', url: '/repositories/' },
+      response: { status: 500, data: { detail: { key } } },
+    })
+    vi.advanceTimersByTime(5000)
+    expect(sent().find((event) => event.name === 'API - Fail').props).not.toHaveProperty(
+      'error_key'
+    )
   })
 
   it('skips a base path in an absolute URL and gives up without an api prefix', async () => {
