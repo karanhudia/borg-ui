@@ -81,6 +81,19 @@ class TestSftpBrowseFailures:
                 "backend.errors.filesystem.permissionDenied",
             ),
             (1, "Connection closed by remote host", 500, None),
+            (255, "backup@example.com: Permission denied (publickey).", 500, None),
+            (
+                255,
+                "Permission denied (publickey,password,keyboard-interactive).",
+                500,
+                None,
+            ),
+            (
+                1,
+                "Couldn't canonicalize: Permission denied",
+                403,
+                "backend.errors.filesystem.permissionDenied",
+            ),
         ],
     )
     @pytest.mark.asyncio
@@ -110,7 +123,7 @@ class TestSftpBrowseFailures:
                 "params": {"path": "/nextcloud/data"},
             }
         else:
-            assert "Connection closed by remote host" in exc.value.detail
+            assert stderr in exc.value.detail
         assert key_paths
         assert all(not Path(path).exists() for path in key_paths)
 
