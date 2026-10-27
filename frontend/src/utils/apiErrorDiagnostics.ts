@@ -83,17 +83,20 @@ function endpointTemplate(url?: string): string {
 
 export function apiErrorDiagnostics(error: ApiError): ApiDiagnostics {
   const code = error.code && CODES.has(error.code) ? error.code : undefined
+  const status = error.response?.status
   const error_class: ApiFailureClass = CONFIG_CODES.has(code ?? '')
     ? 'configuration'
-    : code === 'ERR_BAD_RESPONSE' || code === 'ERR_FR_TOO_MANY_REDIRECTS'
-      ? 'response'
-      : error.response?.status !== undefined
-        ? 'http'
-        : code === 'ECONNABORTED' || code === 'ETIMEDOUT'
-          ? 'timeout'
-          : code === 'ERR_NETWORK' || error.request != null
-            ? 'network'
-            : 'unknown'
+    : status !== undefined && status >= 400
+      ? 'http'
+      : code === 'ERR_BAD_RESPONSE' || code === 'ERR_FR_TOO_MANY_REDIRECTS'
+        ? 'response'
+        : status !== undefined
+          ? 'http'
+          : code === 'ECONNABORTED' || code === 'ETIMEDOUT'
+            ? 'timeout'
+            : code === 'ERR_NETWORK' || error.request != null
+              ? 'network'
+              : 'unknown'
   const started = error.config?.analyticsStartedAt
   const elapsed = typeof started === 'number' ? performance.now() - started : NaN
   const timeout = error.config?.timeout

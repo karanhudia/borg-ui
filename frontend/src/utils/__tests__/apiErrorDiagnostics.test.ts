@@ -38,6 +38,32 @@ describe('allowlisted API diagnostics', () => {
     expect(detail.error_class).toBe(expected)
     if (expected === 'unknown') expect(detail.error_code).toBeUndefined()
   })
+  it.each([
+    ['ERR_BAD_REQUEST', 422, 'http'],
+    ['ERR_BAD_RESPONSE', 502, 'http'],
+    ['ERR_BAD_RESPONSE', 503, 'http'],
+    ['ERR_BAD_RESPONSE', 200, 'response'],
+    ['ERR_FR_TOO_MANY_REDIRECTS', 302, 'response'],
+  ])('classifies %s with HTTP %s as %s', (code, status, expected) => {
+    expect(apiErrorDiagnostics({ code, request: {}, response: { status } }).error_class).toBe(
+      expected
+    )
+  })
+  it.each([
+    ['/source-discovery/apps/inspect', '/source-discovery/apps/inspect'],
+    ['/system/licensing/feature-trial', '/system/licensing/feature-trial'],
+    ['/settings/tokens', '/settings/tokens'],
+    [
+      '/repositories/private-name/prune/comparison/refresh?auto=true&token=private-token',
+      '/repositories/:id/prune/comparison/refresh',
+    ],
+    ['/backup-plans/from-repository/private-name', '/backup-plans/from-repository/:id'],
+  ])('captures the fixed template for %s', (url, expected) => {
+    const diagnostic = apiErrorDiagnostics({ config: { url } })
+    expect(diagnostic.endpoint).toBe(expected)
+    expect(JSON.stringify(diagnostic)).not.toContain('private-name')
+    expect(JSON.stringify(diagnostic)).not.toContain('private-token')
+  })
   it('distinguishes a response from a request that received no response', () => {
     expect(apiErrorDiagnostics({ response: { status: 502 } }).error_class).toBe('http')
     expect(apiErrorDiagnostics({ request: {} }).error_class).toBe('network')

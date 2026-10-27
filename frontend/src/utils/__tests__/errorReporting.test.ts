@@ -517,6 +517,7 @@ describe('actionable API reports', () => {
     const sent = spyOnEnqueue()
     trackApiError({
       name: 'AxiosError',
+      code: axios.AxiosError.ERR_BAD_RESPONSE,
       config: { method: 'get', url: '/dashboard/status' },
       response: { status: 502, data: '<html>private</html>' },
     })
