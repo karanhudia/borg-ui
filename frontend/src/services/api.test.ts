@@ -22,6 +22,9 @@ describe('API failure analytics', () => {
     await expect(freshApi.post('/repositories/')).rejects.toBeTruthy()
     await expect(freshClient.post('/v2/repositories/')).rejects.toBeTruthy()
     expect(trackApiError).toHaveBeenCalledTimes(2)
+    for (const [error] of trackApiError.mock.calls) {
+      expect(error.config.analyticsStartedAt).toEqual(expect.any(Number))
+    }
     vi.doUnmock('@/utils/analytics')
   })
 })

@@ -9,11 +9,13 @@
  * contain paths, hostnames and repository names, with secrets removed.
  */
 
+import axios from 'axios'
+import { apiErrorDiagnostics } from './apiErrorDiagnostics'
 import { authAPI } from '../services/api'
 import { fetchJsonForAuthMode } from '../services/authRequest'
 import { BASE_PATH } from './basePath'
 import { randomUuid } from './uuid'
-import { isCancelled, reportError } from './errorReporting'
+import { claimApiError, isCancelled, reportError } from './errorReporting'
 
 export const ANALYTICS_ENDPOINT = 'https://t.borgui.com/e'
 
@@ -183,7 +185,8 @@ const currentRoute = (): string => normalizeRoute(window.location.pathname)
 interface ErrorLike {
   isAxiosError?: boolean
   code?: string
-  config?: { method?: string; url?: string }
+  config?: { method?: string; url?: string; timeout?: number; analyticsStartedAt?: number }
+  request?: unknown
   response?: { status?: number; data?: { detail?: unknown } }
 }
 
@@ -589,6 +592,7 @@ const planDetail = (detail: unknown): PlanDetail | undefined => {
  * read, not an expired session) is `API - Fail` with its area, method and class.
  */
 export const trackApiError = (error: unknown): void => {
+  if (!claimApiError(error)) return
   const err = error as ErrorLike
   const detail = planDetail(err?.response?.data?.detail)
   const area = apiArea(err?.config?.url)
@@ -605,7 +609,15 @@ export const trackApiError = (error: unknown): void => {
     })
     return
   }
-  const method = err?.config?.method?.toLowerCase()
+  if (isCancelled(error)) return
+  const rawMethod = err?.config?.method?.toLowerCase()
+  const method =
+    rawMethod && /^(get|head|post|put|patch|delete|options)$/.test(rawMethod)
+      ? rawMethod
+      : axios.isAxiosError(error)
+        ? 'unknown'
+        : undefined
+  const diagnostic = apiErrorDiagnostics(err ?? {})
   const status = err?.response?.status
   // Backend translation keys identify a failure without copying private params.
   const key = detail?.key
@@ -615,17 +627,28 @@ export const trackApiError = (error: unknown): void => {
     /^backend\.errors\.[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*$/.test(key)
       ? key.slice('backend.errors.'.length)
       : undefined
-  // 5xx are reported by the backend itself.
-  if (method && !isCancelled(error) && !(status !== undefined && status >= 500)) {
+  // Keep client-visible 5xx failures: a proxy may fail before the backend sees them.
+  if (method) {
     reportError(error, {
       kind: 'api',
-      area,
+      ...diagnostic,
+      area: diagnostic.endpoint
+        .split('/')
+        .filter(Boolean)
+        .filter((part) => part !== 'v2')[0],
       method,
       ...(status !== undefined ? { status } : {}),
       ...(errorKey ? { error_key: errorKey } : {}),
     })
   }
-  if (!method || method === 'get' || method === 'head' || err.response?.status === 401) return
+  if (
+    !method ||
+    method === 'unknown' ||
+    method === 'get' ||
+    method === 'head' ||
+    err.response?.status === 401
+  )
+    return
   trackEvent(EventCategory.API, EventAction.FAIL, {
     area,
     method,

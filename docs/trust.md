@@ -146,7 +146,16 @@ and [Analytics](analytics).
 When an action fails or the UI crashes, an error report is sent so it can be
 fixed before anyone files an issue. It carries the error message, the stack trace
 or backend traceback, the route or job, your app version and your browser. These
-can contain paths, hostnames and repository names. Passphrases, passwords, tokens
+can contain paths, hostnames and repository names. Failed API requests also carry
+the HTTP method and status, an allowlisted endpoint template (with identifiers
+replaced), a machine-readable backend error key when supplied, a failure class,
+an allowlisted Axios code, elapsed/configured timeout milliseconds when known,
+and an opaque request ID when the server supplies one.
+Raw request URLs, query values, request/response bodies and headers are not added
+to these diagnostics. Intentional cancellations are ignored; expected API refusals
+are counted without bug alerts, and network/timeout reports alert only on spikes.
+A frontend server-failure report describes the failed request; a separate backend
+report, if present, contains the server traceback. Passphrases, passwords, tokens
 and private keys are removed before sending. Error reports are part of analytics,
 so turning analytics off stops them too. Errors that happen before you sign in,
 such as on the login page, are sent without the install hash, since no answer is

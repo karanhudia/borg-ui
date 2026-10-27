@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { markApiRequest } from '@/utils/apiErrorDiagnostics'
 import type { RepositoryStorage } from '../types'
 import type { SyncState } from '../types/archives'
 import { toast } from 'react-hot-toast'
@@ -108,6 +109,7 @@ function isPlanGatedError(error: unknown): boolean {
 
 // Request interceptor to add auth token
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  markApiRequest(config)
   const target = getActiveBackendTarget()
   const targetConfig = config as BackendTargetRequestConfig
   targetConfig.baseURL = getApiBaseUrl(target)

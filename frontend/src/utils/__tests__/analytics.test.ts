@@ -537,7 +537,7 @@ describe('trackApiError', () => {
       response: { status: 500, data: { detail: 'borg: /srv/secret is locked' } },
     })
     vi.advanceTimersByTime(5000)
-    const [event] = sent()
+    const event = sent().find((event) => event.name === 'API - Fail')
     expect(event).toMatchObject({
       name: 'API - Fail',
       props: { area: 'repositories', method: 'put', status: 500, error_class: 'server' },
@@ -599,7 +599,11 @@ describe('trackApiError', () => {
     fail('https://nas.local/acme-backups/api/v2/archives/3')
     fail('https://nas.local/acme-backups/repositories')
     vi.advanceTimersByTime(5000)
-    expect(sent().map((event) => event.props.area)).toEqual(['archives', 'other'])
+    expect(
+      sent()
+        .filter((event) => event.name === 'API - Fail')
+        .map((event) => event.props.area)
+    ).toEqual(['archives', 'other'])
   })
 
   it('takes the area from an absolute request URL', async () => {
@@ -631,8 +635,13 @@ describe('trackApiError', () => {
     vi.advanceTimersByTime(5000)
     expect(sent().filter((event) => event.name === 'API - Fail')).toEqual([])
     const reports = sent().filter((event) => event.name === 'Error - Report')
-    expect(reports).toHaveLength(1)
-    expect(reports[0].props).toMatchObject({ kind: 'api', method: 'post', status: 401 })
+    expect(reports).toHaveLength(2)
+    expect(reports.map((event) => event.props)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'api', method: 'get', status: 500 }),
+        expect.objectContaining({ kind: 'api', method: 'post', status: 401 }),
+      ])
+    )
   })
 })
 

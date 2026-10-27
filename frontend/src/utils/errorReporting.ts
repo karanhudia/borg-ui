@@ -6,11 +6,12 @@
  */
 
 import axios from 'axios'
-import { enqueueErrorReport, normalizeRoute } from './analytics'
+import { apiFailureMessage, type ApiDiagnostics } from './apiErrorDiagnostics'
+import { enqueueErrorReport, normalizeRoute, trackApiError } from './analytics'
 
 export type FrontendErrorKind = 'render' | 'uncaught' | 'rejection' | 'api'
 
-export interface ErrorContext {
+export interface ErrorContext extends Partial<ApiDiagnostics> {
   kind: FrontendErrorKind
   component?: string
   area?: string
@@ -142,11 +143,21 @@ interface Seen {
 // Set once the page is going away: requests aborted by a reload or navigation are not errors.
 let unloading = false
 const seen = new Map<string, Seen>()
+let handledApiErrors = new WeakSet<object>()
+
+/** Claim an Axios failure so its interceptor and global rejection handler cannot count it twice. */
+export function claimApiError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return true
+  if (handledApiErrors.has(error)) return false
+  handledApiErrors.add(error)
+  return true
+}
 let sentAt: number[] = []
 
 /** Tests only: clear the flood-control state. */
 export const resetErrorReporting = (): void => {
   seen.clear()
+  handledApiErrors = new WeakSet<object>()
   sentAt = []
   unloading = false
 }
@@ -182,11 +193,32 @@ export const reportError = (error: unknown, ctx: ErrorContext): void => {
       0,
       TYPE_MAX
     )
-    const message = scrubSecrets(typeof obj?.message === 'string' ? obj.message : stringify(error))
-    const rawStack = typeof obj?.stack === 'string' ? obj.stack : ''
+    const message =
+      ctx.kind === 'api' && ctx.endpoint && ctx.error_class
+        ? apiFailureMessage(ctx.method ?? 'unknown', ctx as ApiDiagnostics, ctx.status)
+        : scrubSecrets(typeof obj?.message === 'string' ? obj.message : stringify(error))
+    const capturedStack = typeof obj?.stack === 'string' ? obj.stack : ''
+    // Firefox may start with a frame rather than an error-message header.
+    const apiFrames = /^(?:\s*at\s|(?:global code|[^\s@]*)@(?:https?:|file:))/.test(capturedStack)
+      ? capturedStack
+      : capturedStack.split('\n').slice(1).join('\n')
+    // The Axios header can contain a raw URL; retain frames with the safe summary.
+    const rawStack =
+      ctx.kind === 'api' && ctx.endpoint && capturedStack
+        ? `${type}: ${message}\n${apiFrames}`
+        : capturedStack
     const parts =
       ctx.kind === 'api'
-        ? ['api', ctx.method, ctx.area, String(ctx.status ?? 'network'), ctx.error_key ?? '']
+        ? ctx.endpoint
+          ? [
+              'api:v2',
+              ctx.method,
+              ctx.endpoint,
+              String(ctx.status ?? ctx.error_class),
+              ctx.error_code ?? '',
+              ctx.error_key ?? '',
+            ]
+          : ['api', ctx.method, ctx.area, String(ctx.status ?? 'network'), ctx.error_key ?? '']
         : ['frontend', ctx.kind, type, topFrame(rawStack), normalizeMessage(message)]
     const fingerprint = fnv1a64(parts.join('|'))
     const count = admit(fingerprint)
@@ -204,6 +236,12 @@ export const reportError = (error: unknown, ctx: ErrorContext): void => {
       ...(ctx.method ? { method: ctx.method } : {}),
       ...(ctx.status !== undefined ? { status: ctx.status } : {}),
       ...(ctx.error_key ? { error_key: ctx.error_key } : {}),
+      ...(ctx.endpoint ? { endpoint: ctx.endpoint } : {}),
+      ...(ctx.error_class ? { error_class: ctx.error_class } : {}),
+      ...(ctx.error_code ? { error_code: ctx.error_code } : {}),
+      ...(ctx.request_id ? { request_id: ctx.request_id } : {}),
+      ...(ctx.duration_ms !== undefined ? { duration_ms: ctx.duration_ms } : {}),
+      ...(ctx.timeout_ms !== undefined ? { timeout_ms: ctx.timeout_ms } : {}),
       route: normalizeRoute(window.location.pathname),
       count,
     }
@@ -262,8 +300,12 @@ export const installGlobalErrorHandlers = (): void => {
     reportError(event.error ?? event.message, { kind: 'uncaught' })
   })
   window.addEventListener('unhandledrejection', (event) => {
-    // Axios failures were already reported by trackApiError.
-    if (isCancelled(event.reason) || axios.isAxiosError(event.reason)) return
+    if (isCancelled(event.reason)) return
+    // Setup errors can reject before the response interceptor is installed.
+    if (axios.isAxiosError(event.reason)) {
+      trackApiError(event.reason)
+      return
+    }
     reportError(event.reason, { kind: 'rejection' })
   })
 }
