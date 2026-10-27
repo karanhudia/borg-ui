@@ -35,6 +35,29 @@ describe('fnv1a64', () => {
 })
 
 describe('normalizeMessage', () => {
+  it.each([JSON.stringify, (value: unknown) => JSON.stringify(value).replace(/"/g, "'")])(
+    'keeps structured error keys distinct while grouping different repository paths',
+    (serialize) => {
+      const missing = serialize({
+        key: 'backend.errors.repo.repositoryDirNotExist',
+        params: { path: '/mnt/borg-repository' },
+      })
+      const invalid = serialize({
+        key: 'backend.errors.repo.notValidBorgRepository',
+        params: { path: '/mnt/borg-repository' },
+      })
+      const anotherPath = serialize({
+        key: 'backend.errors.repo.repositoryDirNotExist',
+        params: { path: '/backups/photos' },
+      })
+
+      expect(normalizeMessage(missing)).not.toBe(normalizeMessage(invalid))
+      expect(normalizeMessage(missing)).toBe(normalizeMessage(anotherPath))
+      expect(normalizeMessage(missing)).toContain('backend.errors.repo.repositoryDirNotExist')
+      expect(normalizeMessage(missing)).not.toContain('/mnt/borg-repository')
+    }
+  )
+
   it('normalizes volatile parts of a message', () => {
     expect(normalizeMessage("Repo '/mnt/backup/photos' id 42 (3f2a9c1d7b) not found")).toBe(
       'Repo <str> id <n> (<hex>) not found'
@@ -82,6 +105,15 @@ describe('scrubSecrets', () => {
 })
 
 describe('scrubSecrets more shapes', () => {
+  it('keeps structured error keys while scrubbing actual secret keys', () => {
+    expect(
+      scrubSecrets('{"key":"backend.errors.repo.repositoryDirNotExist","api_key":"secret"}')
+    ).toBe('{"key":"backend.errors.repo.repositoryDirNotExist","api_key":"[redacted]"}')
+    expect(scrubSecrets('{"key":"secret","password":"backend.errors.repo.example"}')).toBe(
+      '{"key":"[redacted]","password":"[redacted]"}'
+    )
+  })
+
   it('scrubs Basic credentials', () => {
     expect(scrubSecrets('sent Basic dXNlcjpwYXNz to host')).toBe('sent Basic [redacted] to host')
   })
@@ -104,6 +136,19 @@ describe('scrubSecrets more shapes', () => {
 })
 
 describe('reportError', () => {
+  it('reports distinct structured failures without folding them together', () => {
+    const sent = spyOnEnqueue()
+    for (const key of ['repositoryDirNotExist', 'notValidBorgRepository']) {
+      const error = new Error(
+        JSON.stringify({ key: `backend.errors.repo.${key}`, params: { path: '/mnt/repo' } })
+      )
+      error.stack = ''
+      reportError(error, { kind: 'rejection' })
+    }
+    expect(sent).toHaveBeenCalledTimes(2)
+    expect(sent.mock.calls[0][0].fingerprint).not.toBe(sent.mock.calls[1][0].fingerprint)
+  })
+
   it('sends nothing from the dev server or under browser automation', () => {
     const sent = spyOnEnqueue()
     vi.stubEnv('MODE', 'development')

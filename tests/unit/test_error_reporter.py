@@ -71,6 +71,49 @@ def test_normalize_matches_frontend():
     )
 
 
+@pytest.mark.parametrize("serialize", [json.dumps, repr])
+def test_structured_error_keys_do_not_collide(serialize):
+    missing = serialize(
+        {
+            "key": "backend.errors.repo.repositoryDirNotExist",
+            "params": {"path": "/mnt/borg-repository"},
+        }
+    )
+    invalid = serialize(
+        {
+            "key": "backend.errors.repo.notValidBorgRepository",
+            "params": {"path": "/mnt/borg-repository"},
+        }
+    )
+    another_path = serialize(
+        {
+            "key": "backend.errors.repo.repositoryDirNotExist",
+            "params": {"path": "/backups/photos"},
+        }
+    )
+
+    assert normalize_message(missing) != normalize_message(invalid)
+    assert normalize_message(missing) == normalize_message(another_path)
+    assert "backend.errors.repo.repositoryDirNotExist" in normalize_message(missing)
+    assert "/mnt/borg-repository" not in normalize_message(missing)
+
+
+def test_distinct_structured_failures_are_not_folded_together(sent):
+    for key in ("repositoryDirNotExist", "notValidBorgRepository"):
+        report_failure(
+            kind="job",
+            type_="backup_failed",
+            component="backup",
+            message=json.dumps(
+                {"key": f"backend.errors.repo.{key}", "params": {"path": "/mnt/repo"}}
+            ),
+        )
+    flush()
+
+    assert len(sent) == 2
+    assert sent[0]["props"]["fingerprint"] != sent[1]["props"]["fingerprint"]
+
+
 def test_scrub_secrets():
     out = scrub_secrets("BORG_PASSPHRASE=hunter2 borg create ssh://me@nas.local/./repo")
     assert "hunter2" not in out and "ssh://me@nas.local/./repo" in out
