@@ -647,6 +647,20 @@ async def browse_ssh_filesystem(
                 if result.stdout
                 else "Unknown error"
             )
+            if "permission denied" in error_msg.lower():
+                logger.warning(
+                    "SFTP directory access denied",
+                    host=host,
+                    path=path,
+                    returncode=result.returncode,
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "key": "backend.errors.filesystem.permissionDenied",
+                        "params": {"path": path},
+                    },
+                )
             logger.error(
                 "SFTP ls command failed",
                 host=host,
