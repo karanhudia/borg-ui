@@ -647,6 +647,24 @@ async def browse_ssh_filesystem(
                 if result.stdout
                 else "Unknown error"
             )
+            if any(
+                line.startswith(("remote readdir(", "couldn't canonicalize:"))
+                and line.endswith(": permission denied")
+                for line in error_msg.lower().splitlines()
+            ):
+                logger.warning(
+                    "SFTP directory access denied",
+                    host=host,
+                    path=path,
+                    returncode=result.returncode,
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "key": "backend.errors.filesystem.permissionDenied",
+                        "params": {"path": path},
+                    },
+                )
             logger.error(
                 "SFTP ls command failed",
                 host=host,

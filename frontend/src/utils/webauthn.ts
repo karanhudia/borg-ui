@@ -147,7 +147,25 @@ export function prepareAuthenticationOptions(
   } as PublicKeyCredentialRequestOptions
 }
 
+export function isWebAuthnSupported(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.isSecureContext === true &&
+    typeof PublicKeyCredential !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    typeof navigator.credentials?.create === 'function' &&
+    typeof navigator.credentials?.get === 'function'
+  )
+}
+
+function requireWebAuthn() {
+  if (!isWebAuthnSupported()) {
+    throw new Error('Passkeys require a secure context and a browser with WebAuthn support')
+  }
+}
+
 export async function createPasskeyCredential(options: Record<string, unknown>) {
+  requireWebAuthn()
   const credential = (await navigator.credentials.create({
     publicKey: prepareRegistrationOptions(options),
   })) as PublicKeyCredential | null
@@ -160,6 +178,7 @@ export async function createPasskeyCredential(options: Record<string, unknown>) 
 }
 
 export async function getPasskeyAssertion(options: Record<string, unknown>) {
+  requireWebAuthn()
   const credential = (await navigator.credentials.get({
     publicKey: prepareAuthenticationOptions(options),
   })) as PublicKeyCredential | null
@@ -172,7 +191,7 @@ export async function getPasskeyAssertion(options: Record<string, unknown>) {
 }
 
 export async function isConditionalMediationAvailable(): Promise<boolean> {
-  if (typeof PublicKeyCredential === 'undefined') return false
+  if (!isWebAuthnSupported()) return false
   const conditionalCheck = (
     PublicKeyCredential as typeof PublicKeyCredential & {
       isConditionalMediationAvailable?: () => Promise<boolean>
@@ -186,6 +205,7 @@ export async function getConditionalPasskeyAssertion(
   options: Record<string, unknown>,
   signal?: AbortSignal
 ) {
+  requireWebAuthn()
   const credential = (await navigator.credentials.get({
     publicKey: prepareAuthenticationOptions(options),
     mediation: 'conditional' as CredentialMediationRequirement,
