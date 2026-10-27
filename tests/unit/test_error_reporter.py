@@ -327,6 +327,7 @@ def test_unhandled_request_reports_and_returns_500(test_db, sent):
     flush()
     assert sent[0]["props"]["kind"] == "request"
     assert sent[0]["props"]["component"] == "GET /api/__boom"
+    assert sent[0]["props"]["status"] == 500
 
 
 def test_http_500_reports_its_cause_and_keeps_the_response(test_db, sent):
@@ -357,6 +358,58 @@ def test_http_4xx_is_not_reported(test_db, sent):
     assert response.json() == {"detail": "Not Found"}
     flush()
     assert sent == []
+
+
+def test_repository_http_failure_preserves_status_and_reason_with_cause(test_db, sent):
+    detail = {
+        "key": "backend.errors.repo.failedToInitializeRepository",
+        "params": {"error": "private repository details"},
+    }
+
+    def wrapped(repo_id: int):
+        try:
+            raise ValueError("borg initialization failed")
+        except ValueError:
+            raise HTTPException(status_code=502, detail=detail)
+
+    with _test_route("/api/__repositories/{repo_id}", wrapped) as client:
+        response = client.get("/api/__repositories/123?passphrase=private-input")
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": detail}
+    flush()
+    assert len(sent) == 1
+    props = sent[0]["props"]
+    assert props["type"] == "ValueError"
+    assert props["status"] == 502
+    assert props["error_key"] == "repo.failedToInitializeRepository"
+    assert props["component"] == "GET /api/__repositories/{repo_id}"
+    assert "private repository details" not in json.dumps(props)
+    assert "private-input" not in json.dumps(props)
+
+
+@pytest.mark.parametrize(
+    "detail",
+    [
+        "private details",
+        {"key": "private details"},
+        {"key": 42},
+        {"key": "backend.errors.repo.private/path"},
+        {"key": "backend.errors." + "x" * 200},
+    ],
+)
+def test_http_failure_omits_unstructured_reason_keys(test_db, sent, detail):
+    def wrapped():
+        try:
+            raise RuntimeError("failed")
+        except RuntimeError:
+            raise HTTPException(status_code=500, detail=detail)
+
+    with _test_route("/api/__bad_reason", wrapped) as client:
+        response = client.get("/api/__bad_reason")
+    assert response.status_code == 500
+    flush()
+    assert "error_key" not in sent[0]["props"]
 
 
 def test_fingerprint_does_not_depend_on_secrets(sent):

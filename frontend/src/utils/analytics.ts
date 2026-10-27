@@ -607,6 +607,14 @@ export const trackApiError = (error: unknown): void => {
   }
   const method = err?.config?.method?.toLowerCase()
   const status = err?.response?.status
+  // Backend translation keys identify a failure without copying private params.
+  const key = detail?.key
+  const errorKey =
+    typeof key === 'string' &&
+    key.length <= 160 &&
+    /^backend\.errors\.[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*$/.test(key)
+      ? key.slice('backend.errors.'.length)
+      : undefined
   // 5xx are reported by the backend itself.
   if (method && !isCancelled(error) && !(status !== undefined && status >= 500)) {
     reportError(error, {
@@ -614,9 +622,7 @@ export const trackApiError = (error: unknown): void => {
       area,
       method,
       ...(status !== undefined ? { status } : {}),
-      ...(typeof detail?.key === 'string'
-        ? { error_key: detail.key.replace(/^backend\.errors\./, '') }
-        : {}),
+      ...(errorKey ? { error_key: errorKey } : {}),
     })
   }
   if (!method || method === 'get' || method === 'head' || err.response?.status === 401) return
@@ -625,6 +631,7 @@ export const trackApiError = (error: unknown): void => {
     method,
     ...(err.response?.status ? { status: err.response.status } : {}),
     error_class: errorClass(error),
+    ...(errorKey ? { error_key: errorKey } : {}),
   })
 }
 

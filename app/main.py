@@ -231,7 +231,9 @@ def _request_component(request: Request) -> str:
 
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception):
-    report_exception(exc, kind="request", component=_request_component(request))
+    report_exception(
+        exc, kind="request", component=_request_component(request), status=500
+    )
     return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
 
 
@@ -240,10 +242,13 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException):
     # Routes turn most failures into HTTPException(500) inside `except`; report
     # the cause they wrap, then answer exactly as FastAPI's default handler does.
     if exc.status_code >= 500:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
         report_exception(
             exc.__cause__ or exc.__context__ or exc,
             kind="request",
             component=_request_component(request),
+            status=exc.status_code,
+            error_key=detail.get("key"),
         )
     return await http_exception_handler(request, exc)
 

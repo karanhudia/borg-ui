@@ -18,8 +18,9 @@ rejected as `unknown_name`. Props are the event's `props` object.
 | `plan`, `app_version` | Current plan name and app version. |
 
 Privacy rules, enforced in `frontend/src/utils/analytics.ts`: any `*_name` prop and any
-string that looks like a path, URL or user@host is hashed at any depth. Errors are a
-coarse `error_class` only, never a message.
+string that looks like a path, URL or user@host is hashed at any depth. Journey
+failure events include a coarse `error_class` and, when available, a bounded
+backend translation `error_key`, never a message or error parameters.
 
 `error_class` values: `network`, `timeout`, `validation` (400, 422), `auth` (401),
 `permission` (403), `not_found`, `conflict`, `rate_limited`, `server` (5xx), `client`
@@ -61,9 +62,16 @@ archive history hidden in the pipeline board.
 | `method` | `post`, `put`, `patch`, `delete`. |
 | `status` | HTTP status, absent on network errors. |
 | `error_class` | See above. |
+| `error_key` | Optional backend translation key without `backend.errors.` (for example, `repo.failedToInitializeRepository`). Only dot-separated identifiers from that namespace, at most 160 characters including the prefix, are accepted. Free text and error parameters are omitted. |
 
 Not sent for GET/HEAD, for 401 (expired session), or for plan refusals (those are
 `Plan - FeatureBlocked`).
+
+Backend `Error - Report` request diagnostics also retain the HTTP `status` and
+the same optional `error_key`, even when reporting the underlying exception of a
+wrapped HTTP failure. The existing `component` identifies the matched API route
+template, without concrete resource IDs or query strings. Exception grouping
+and API responses are unchanged.
 
 Wizard funnels, from `useWizardFunnel`:
 

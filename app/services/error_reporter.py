@@ -279,6 +279,8 @@ def _report(
     component: Optional[str],
     handled: bool,
     stack: Optional[str] = None,
+    status: Optional[int] = None,
+    error_key: Optional[str] = None,
 ) -> None:
     if not settings.error_reporting_enabled:
         return
@@ -300,6 +302,16 @@ def _report(
     props["fingerprint"] = fingerprint
     if component:
         props["component"] = component
+    if status is not None:
+        props["status"] = status
+    # Keep only a bounded translation key, never detail params or free text.
+    if isinstance(error_key, str) and len(error_key) <= 160:
+        match = re.fullmatch(
+            r"backend\.errors\.([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*)",
+            error_key,
+        )
+        if match:
+            props["error_key"] = match.group(1)
     props["handled"] = handled
     props["count"] = count
     if len(json.dumps(props, separators=(",", ":"))) > PROPS_LIMIT:
@@ -341,7 +353,12 @@ def _format_stack(exc: BaseException) -> str:
 
 
 def report_exception(
-    exc: BaseException, *, kind: BackendErrorKind, component: Optional[str] = None
+    exc: BaseException,
+    *,
+    kind: BackendErrorKind,
+    component: Optional[str] = None,
+    status: Optional[int] = None,
+    error_key: Optional[str] = None,
 ) -> None:
     try:
         type_ = _type_name(exc)
@@ -360,6 +377,8 @@ def report_exception(
             component=component,
             handled=False,
             stack=_format_stack(exc),
+            status=status,
+            error_key=error_key,
         )
     except Exception:
         pass
