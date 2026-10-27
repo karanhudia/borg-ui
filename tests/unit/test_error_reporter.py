@@ -131,6 +131,43 @@ def test_cleanup_memory_addresses_share_a_fingerprint(sent):
     assert len(sent) == 1
 
 
+@pytest.mark.parametrize("long_detail", [False, True])
+@pytest.mark.parametrize(
+    "url,secret",
+    [
+        ("https://alice:demo-url-secret@storage.example/repo", "demo-url-secret"),
+        ("https://demo-bare-token@storage.example/repo", "demo-bare-token"),
+        (
+            "https%3A%2F%2Falice%3Ademo-encoded-secret%40storage.example/repo",
+            "demo-encoded-secret",
+        ),
+    ],
+)
+def test_handled_failure_redacts_url_credentials_before_telemetry(
+    sent, long_detail, url, secret
+):
+    from app.services.operations.runner import _report_failed_operation
+
+    message = f"rclone failed at {url}\n"
+    if long_detail:
+        message += "  intermediate frame\n" * 80
+    message += f"OSError: unable to access {url}"
+    _report_failed_operation(
+        Operation(kind="rclone_sync", status="failed", error_message=message), None
+    )
+    flush()
+
+    props = sent[0]["props"]
+    assert props["handled"] is True
+    assert secret not in json.dumps(props)
+    assert "storage.example/repo" in props["message"]
+    if long_detail:
+        assert "OSError: unable to access" in props["stack"]
+        assert "storage.example/repo" in props["stack"]
+    else:
+        assert "stack" not in props
+
+
 def test_long_handled_failure_keeps_inspectable_redacted_diagnostics(sent):
     from app.core.borg_errors import ArchiveListingError
     from app.services.operations.runner import _report_failed_operation

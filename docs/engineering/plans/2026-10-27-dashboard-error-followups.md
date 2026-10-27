@@ -35,3 +35,7 @@ This change does not break locks, repair repositories, disable Borg self-tests, 
 ## PR validation on latest main
 
 After applying the scoped patch over the merged structured-fingerprint fix, 464 affected backend tests and 45 frontend reporter tests pass. Full frontend locale parity, typecheck, lint, and production build pass; Ruff lint/format and diff whitespace checks pass.
+
+## Review follow-up
+
+URL userinfo in handled rclone failures is now redacted before deriving the analytics message, fingerprint, or long diagnostic detail. Six short/long plain, bare-token, and percent-encoded URL regressions failed before the fix; all 204 affected reporter, redaction, and archive-index tests pass afterward, with Ruff checks clean.
