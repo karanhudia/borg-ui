@@ -1342,12 +1342,36 @@ async def test_list_archives_for_repository_reports_borg_failure(db, repo, monke
         def __init__(self, repository):
             pass
 
-        async def list_archives_checked(self, env=None, *, raise_on_error=False):
+        async def list_archives_checked(
+            self, env=None, *, raise_on_error=False, bypass_lock=None
+        ):
             return False, []
 
     monkeypatch.setattr(index_exec, "BorgRouter", FailingRouter)
     ok, entries, zone = await index_exec.list_archives_for_repository(db, repo, {})
     assert ok is False and entries == [] and zone == "UTC"
+
+
+@pytest.mark.parametrize(
+    "global_bypass,repo_bypass,expected",
+    [(True, False, True), (False, True, True), (False, False, False)],
+)
+@pytest.mark.asyncio
+async def test_background_listing_resolves_global_and_repository_bypass(
+    db, repo, monkeypatch, global_bypass, repo_bypass, expected
+):
+    from app.core.borg import borg
+
+    db.query(SystemSettings).first().bypass_lock_on_list = global_bypass
+    repo.bypass_lock = repo_bypass
+    db.commit()
+    command = AsyncMock(return_value={"success": True, "stdout": '{"archives": []}'})
+    monkeypatch.setattr(borg, "_execute_command", command)
+
+    ok, entries, zone = await index_exec.list_archives_for_repository(db, repo, {})
+
+    assert ok and entries == [] and zone == "UTC"
+    assert ("--bypass-lock" in command.call_args.args[0]) is expected
 
 
 @pytest.mark.unit

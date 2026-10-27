@@ -19,6 +19,7 @@ from app.api.repositories import (
     _parse_borg_archive_time,
     _prepare_repository_borg_env,
     _repository_stats_borg_env,
+    _resolve_bypass_lock,
     agent_timezone_for_repository,
     get_operation_timeouts,
 )
@@ -264,9 +265,12 @@ async def list_archives_for_repository(
 
     router = BorgRouter(repository)
     stats_env = _repository_stats_borg_env(env)
+    use_bypass_lock, _ = _resolve_bypass_lock(repository, db, "bypass_lock_on_list")
     ok, entries = await run_serialized_repository_command(
         repository.id,
-        lambda: router.list_archives_checked(env=stats_env, raise_on_error=True),
+        lambda: router.list_archives_checked(
+            env=stats_env, raise_on_error=True, bypass_lock=use_bypass_lock
+        ),
         scope="metadata",
     )
     return ok, entries, "UTC"

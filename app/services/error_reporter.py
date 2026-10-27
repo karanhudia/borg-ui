@@ -35,6 +35,7 @@ import requests
 from app.config import get_runtime_app_version, settings
 from app.database.database import SessionLocal
 from app.database.models import LicensingState, User
+from app.utils.redaction import redact_secrets
 
 BackendErrorKind = Literal["request", "startup", "migration", "job"]
 
@@ -69,6 +70,7 @@ _NORMALIZE = [
         ),
         "<uuid>",
     ),
+    (re.compile(r"\b0[xX][0-9a-fA-F]+\b"), "<hex>"),
     (re.compile(r"\b[0-9a-fA-F]{8,}\b"), "<hex>"),
     (re.compile(r"'[^']*'|\"[^\"]*\""), "<str>"),
     (re.compile(r"(^|[^\w.])(?:[A-Za-z]:\\|/(?=[^\s/]))[^\s,;)]*"), r"\1<path>"),
@@ -120,6 +122,11 @@ _SCRUB = [
         r"\1[redacted]",
     ),
     (re.compile(r"(Bearer\s+)[A-Za-z0-9._~+/=-]+", re.IGNORECASE), r"\1[redacted]"),
+    # Diagnostics can include an auth scheme without an Authorization header.
+    (
+        re.compile(r"\bBasic\s+[A-Za-z0-9+/_-]+={0,2}", re.IGNORECASE),
+        "Basic [redacted]",
+    ),
 ]
 
 
@@ -381,19 +388,24 @@ def report_failure(
     handled: bool = True,
 ) -> None:
     try:
+        safe_message = redact_secrets(message) or ""
         _report(
             kind=kind,
             type_=type_,
-            message=message,
+            message=safe_message,
             fingerprint_parts=[
                 "backend",
                 kind,
                 type_,
                 component or "",
-                normalize_message(scrub_secrets(message)),
+                normalize_message(scrub_secrets(safe_message)),
             ],
             component=component,
             handled=handled,
+            # Handled Borg failures carry stderr in the message rather than
+            # an exception traceback. Keep it inspectable beyond the 500-char
+            # summary through the same bounded, redacted detail field.
+            stack=safe_message if len(safe_message) > MESSAGE_LIMIT else None,
         )
     except Exception:
         pass

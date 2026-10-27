@@ -44,6 +44,7 @@ export const fnv1a64 = (text: string): string => {
 // Applied in this order. The backend uses the same patterns.
 const NORMALIZERS: [RegExp, string][] = [
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<uuid>'],
+  [/\b0x[0-9a-f]+\b/gi, '<hex>'],
   [/\b[0-9a-f]{8,}\b/gi, '<hex>'],
   [/'[^']*'|"[^"]*"|`[^`]*`/g, '<str>'],
   [/[A-Za-z]:\\\S*|(?<![\w<])\/\S+/g, '<path>'],

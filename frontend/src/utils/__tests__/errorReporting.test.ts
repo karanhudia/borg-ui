@@ -35,6 +35,14 @@ describe('fnv1a64', () => {
 })
 
 describe('normalizeMessage', () => {
+  it('groups Python cleanup errors across process-specific memory addresses', () => {
+    expect(
+      normalizeMessage('Exception ignored in: <function Repository.__del__ at 0x1541083437e0>')
+    ).toBe('Exception ignored in: <function Repository.__del__ at <hex>>')
+    expect(
+      normalizeMessage('Exception ignored in: <function Repository.__del__ at 0X14AC9995F7E0>')
+    ).toBe('Exception ignored in: <function Repository.__del__ at <hex>>')
+  })
   it.each([JSON.stringify, (value: unknown) => JSON.stringify(value).replace(/"/g, "'")])(
     'keeps structured error keys distinct while grouping different repository paths',
     (serialize) => {

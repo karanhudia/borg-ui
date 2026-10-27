@@ -143,7 +143,15 @@ class ArchiveListingError(Exception):
         if reason:
             # Redact before truncation: cutting a quoted secret first could
             # leave part of its value outside the redactor's match.
-            message += f": {redact_secrets(str(reason)).strip()[:2000]}"
+            diagnostic = redact_secrets(str(reason)).strip()
+            if len(diagnostic) > 2000:
+                # The last exception follows the frames; keeping only the
+                # start can turn a useful error into an unexplained traceback.
+                marker = "\n... [truncated] ...\n"
+                diagnostic = (
+                    diagnostic[:400] + marker + diagnostic[-(1600 - len(marker)) :]
+                )
+            message += f": {diagnostic}"
         super().__init__(message)
 
 
