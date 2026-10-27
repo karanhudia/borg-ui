@@ -25,7 +25,14 @@ from app.api.repositories import (
 )
 from app.config import settings
 from app.core.borg_router import BorgRouter
-from app.database.models import AgentJob, Archive, Repository, SystemSettings, utc_now
+from app.database.models import (
+    AgentJob,
+    Archive,
+    Operation,
+    Repository,
+    SystemSettings,
+    utc_now,
+)
 from app.services.operations import executors
 from app.services.operations.backup_facade import (
     link_archives_to_backups,
@@ -44,6 +51,7 @@ from app.services.repository_executor import (
     is_agent_executor,
 )
 from app.services.storage_usage import measure_repository_size, set_repository_size
+from app.services.borg_lock_diagnostics import cache_lock_diagnostics
 from app.utils.borg_env import cleanup_temp_key_file, effective_repository_remote_path
 from app.utils.ssh_utils import SSHKeyDecryptionError
 
@@ -703,6 +711,32 @@ async def run_archive_sync(ctx) -> Outcome:
                 db, repository, env
             )
         except ArchiveListingError as exc:
+            if exc.is_lock_contention:
+                # Agent contention normally reaches the runner through its
+                # waiter. Only inspect local cache paths for server commands.
+                if not is_agent_executor(repository):
+                    try:
+                        context = cache_lock_diagnostics(str(exc), env)
+                        context["running_operations"] = [
+                            {"id": op_id, "kind": kind}
+                            for op_id, kind in db.query(Operation.id, Operation.kind)
+                            .filter(
+                                Operation.repository_id == repository.id,
+                                Operation.status == "running",
+                            )
+                            .order_by(Operation.id)
+                            .limit(10)
+                        ]
+                        note = "Lock diagnostics: " + json.dumps(context)
+                        exc.add_note(note)
+                        ctx.log(note)
+                    except Exception:
+                        # Diagnostic collection must never turn a retry into
+                        # a terminal failure or change any lock on disk.
+                        logger.warning(
+                            "Could not collect archive sync lock diagnostics"
+                        )
+                raise
             return Outcome(status="failed", error_message=str(exc))
         if not ok:
             # An empty list from a failed borg call is not an empty

@@ -18,7 +18,7 @@ from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from sqlalchemy.orm import Session
 
 import app.config as app_config
-from app.core.borg_errors import LOCK_CONTENTION_DETAIL_KEY
+from app.core.borg_errors import ArchiveListingError, LOCK_CONTENTION_DETAIL_KEY
 from app.database.models import (
     Operation,
     OperationsRunnerLease,
@@ -122,8 +122,10 @@ def repository_busy(exc: BaseException) -> bool:
     """True when the repository is taken for now: the admission's 409
     (repositoryOperationActive), or the waiter's 502 for an agent job whose
     Borg run ended on a lock another process holds (marked
-    `lock_contention`, see `wait_for_agent_repository_operation_job`). Both
-    are deferred the same way."""
+    `lock_contention`, see `wait_for_agent_repository_operation_job`), or
+    a server listing's ArchiveListingError. All use the same backoff."""
+    if isinstance(exc, ArchiveListingError):
+        return exc.is_lock_contention
     detail = getattr(exc, "detail", None)
     if not isinstance(detail, dict):
         return False
@@ -935,7 +937,7 @@ class OperationRunner:
                 raise
             except Exception as exc:
                 if repository_busy(exc):
-                    busy_error = str(exc)
+                    busy_error = "\n".join((str(exc), *getattr(exc, "__notes__", ())))
                     # a cancel that arrived while the operation was being
                     # refused wins: requeueing would drop the request in
                     # `finally`, so the refusal falls through to the
