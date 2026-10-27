@@ -419,11 +419,16 @@ describe('global handlers', () => {
     expect(sent).not.toHaveBeenCalled()
   })
 
-  it('skips axios rejections, which trackApiError already reported', () => {
+  it('does not duplicate Axios failures already observed by the interceptor', () => {
     const sent = spyOnEnqueue()
     installGlobalErrorHandlers()
-    rejection(Object.assign(new Error('Request failed'), { isAxiosError: true }))
-    expect(sent).not.toHaveBeenCalled()
+    const error = Object.assign(new Error('Request failed'), {
+      isAxiosError: true,
+      config: { method: 'get', url: '/settings' },
+    })
+    trackApiError(error)
+    rejection(error)
+    expect(sent).toHaveBeenCalledTimes(1)
   })
 
   it('reports again after a pageshow (bfcache restore)', () => {
@@ -446,7 +451,7 @@ describe('global handlers', () => {
 })
 
 describe('trackApiError reporting', () => {
-  it('reports failed reads with the error key stripped, skips 5xx and cancels', () => {
+  it('reports failed reads and 5xx with the error key stripped, skips cancels', () => {
     const sent = spyOnEnqueue()
     trackApiError({
       isAxiosError: true,
@@ -463,7 +468,8 @@ describe('trackApiError reporting', () => {
       code: 'ERR_CANCELED',
       config: { method: 'get', url: '/repositories' },
     })
-    expect(sent).toHaveBeenCalledTimes(1)
+    expect(sent).toHaveBeenCalledTimes(2)
+    expect(sent.mock.calls[1][0]).toMatchObject({ status: 500 })
     expect(sent.mock.calls[0][0]).toMatchObject({
       kind: 'api',
       area: 'ssh-keys',
@@ -479,4 +485,80 @@ describe('trackApiError reporting', () => {
     expect(sent.mock.calls[0][0]).toMatchObject({ kind: 'api', method: 'put' })
     expect(sent.mock.calls[0][0].status).toBeUndefined()
   })
+})
+
+describe('actionable API reports', () => {
+  it('separates timeouts, network failures and different endpoint templates', () => {
+    const sent = spyOnEnqueue()
+    for (const [url, code] of [
+      ['/archives/12/info', 'ETIMEDOUT'],
+      ['/archives/12/info', 'ERR_NETWORK'],
+      ['/archives/12/contents', 'ETIMEDOUT'],
+      ['/archives/99/info', 'ETIMEDOUT'],
+    ]) {
+      trackApiError({
+        name: 'AxiosError',
+        message: 'private URL secret',
+        code,
+        config: { method: 'get', url },
+      })
+    }
+    expect(sent).toHaveBeenCalledTimes(3)
+    expect(new Set(sent.mock.calls.map(([props]) => props.fingerprint)).size).toBe(3)
+    expect(sent.mock.calls[0][0]).toMatchObject({
+      endpoint: '/archives/:id/info',
+      error_class: 'timeout',
+      error_code: 'ETIMEDOUT',
+      message: 'GET /archives/:id/info — request timed out',
+    })
+    expect(JSON.stringify(sent.mock.calls)).not.toContain('private URL secret')
+  })
+  it('reports proxy/server failures and still excludes intentional cancellation', () => {
+    const sent = spyOnEnqueue()
+    trackApiError({
+      name: 'AxiosError',
+      code: axios.AxiosError.ERR_BAD_RESPONSE,
+      config: { method: 'get', url: '/dashboard/status' },
+      response: { status: 502, data: '<html>private</html>' },
+    })
+    trackApiError({ code: 'ERR_CANCELED', config: { method: 'post', url: '/backup/start' } })
+    expect(sent).toHaveBeenCalledTimes(1)
+    expect(sent.mock.calls[0][0]).toMatchObject({
+      status: 502,
+      error_class: 'http',
+      endpoint: '/dashboard/status',
+    })
+    expect(JSON.stringify(sent.mock.calls)).not.toContain('private')
+  })
+})
+
+it('reports unhandled Axios configuration failures even when no interceptor ran', () => {
+  const sent = spyOnEnqueue()
+  installGlobalErrorHandlers()
+  const error = new axios.AxiosError('private invalid option', 'ERR_BAD_OPTION')
+  const event = new Event('unhandledrejection')
+  Object.defineProperty(event, 'reason', { value: error })
+  window.dispatchEvent(event)
+  expect(sent).toHaveBeenCalledTimes(1)
+  expect(sent.mock.calls[0][0]).toMatchObject({
+    kind: 'api',
+    method: 'unknown',
+    error_class: 'configuration',
+    error_code: 'ERR_BAD_OPTION',
+  })
+  expect(JSON.stringify(sent.mock.calls)).not.toContain('private invalid option')
+})
+
+it('retains Firefox application frames when an API stack has no error header', () => {
+  const sent = spyOnEnqueue()
+  trackApiError({
+    name: 'AxiosError',
+    code: 'ERR_NETWORK',
+    config: { method: 'get', url: '/settings/preferences' },
+    stack:
+      'loadSettings@https://app.example/assets/app.js:10:12\nrequest@https://app.example/assets/app.js:8:4',
+  })
+  expect(sent.mock.calls[0][0].stack).toContain(
+    'loadSettings@https://app.example/assets/app.js:10:12'
+  )
 })

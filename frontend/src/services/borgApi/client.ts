@@ -10,6 +10,7 @@
  */
 
 import axios from 'axios'
+import { markApiRequest } from '@/utils/apiErrorDiagnostics'
 import { BASE_PATH } from '@/utils/basePath'
 import { trackApiError } from '@/utils/analytics'
 import type { Repository } from '@/types'
@@ -36,6 +37,7 @@ function isOnLoginRoute(): boolean {
 
 // Mirror the shared auth interceptor so this client also attaches tokens.
 httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  markApiRequest(config)
   const target = getActiveBackendTarget()
   const targetConfig = config as BackendTargetRequestConfig
   targetConfig.baseURL = getApiBaseUrl(target)
