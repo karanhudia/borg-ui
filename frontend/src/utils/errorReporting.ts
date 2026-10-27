@@ -50,9 +50,19 @@ const NORMALIZERS: [RegExp, string][] = [
   [/\b\d+\b/g, '<n>'],
 ]
 
+// Keep translation keys in JSON and Python dict reprs before normalizing quoted params.
+const STRUCTURED_ERROR_KEY =
+  /(['"])key\1\s*:\s*(['"])(backend\.errors\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\2/g
+const ERROR_KEY_VALUE = /^backend\.errors\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/
+
 /** The message with its volatile parts (ids, names, paths, numbers) replaced, for fingerprinting. */
-export const normalizeMessage = (message: string): string =>
-  NORMALIZERS.reduce((text, [pattern, token]) => text.replace(pattern, token), message)
+export const normalizeMessage = (message: string): string => {
+  const keyed = message.replace(
+    STRUCTURED_ERROR_KEY,
+    (_match, _quote, _valueQuote, key) => `key: ${key}`
+  )
+  return NORMALIZERS.reduce((text, [pattern, token]) => text.replace(pattern, token), keyed)
+}
 
 const KEYED = [
   'BORG_PASSPHRASE',
@@ -85,11 +95,6 @@ const SCRUBBERS: [RegExp, string][] = [
     /(?<=[a-z0-9])((?:Key|Token|Secret|Password|Passphrase|Pass)\s*=\s*)(?:"[^"]*"|'[^']*'|\S+)/g,
     '$1[redacted]',
   ],
-  // Quoted JSON keys: the key stays, the value goes (escaped quotes allowed).
-  [
-    /("(?:[\w.-]*[_.-])?(?:password|passphrase|token|secret|key|pass)"\s*:\s*)"(?:[^"\\]|\\.)*"/gi,
-    '$1"[redacted]"',
-  ],
   [
     /("[\w.-]*(?:Key|Token|Secret|Password|Passphrase)"\s*:\s*)"(?:[^"\\]|\\.)*"/g,
     '$1"[redacted]"',
@@ -98,7 +103,15 @@ const SCRUBBERS: [RegExp, string][] = [
 
 /** Replace secrets with `[redacted]`. Paths, hostnames and repository names stay. */
 export const scrubSecrets = (text: string): string =>
-  SCRUBBERS.reduce((out, [pattern, replacement]) => out.replace(pattern, replacement), text)
+  SCRUBBERS.reduce(
+    (out, [pattern, replacement]) => out.replace(pattern, replacement),
+    text
+  ).replace(
+    // A translation code in "key" is public error identity, not a secret key.
+    /("(?:[\w.-]*[_.-])?(?:password|passphrase|token|secret|key|pass)"\s*:\s*)"((?:[^"\\]|\\.)*)"/gi,
+    (match, prefix: string, value: string) =>
+      /^"key"\s*:\s*$/.test(prefix) && ERROR_KEY_VALUE.test(value) ? match : `${prefix}"[redacted]"`
+  )
 
 // The function name and file basename of the first stack frame served from this
 // origin, without line and column (Chrome `at fn (url:1:2)`, Firefox `fn@url:1:2`).

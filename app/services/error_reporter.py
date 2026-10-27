@@ -75,8 +75,15 @@ _NORMALIZE = [
     (re.compile(r"\b\d+\b"), "<n>"),
 ]
 
+# Translation keys identify the failure; quoted paths and other params do not.
+# Match JSON and Python dict reprs (HTTPException messages use the latter).
+_STRUCTURED_ERROR_KEY = re.compile(
+    r"""(['"])key\1\s*:\s*(['"])(backend\.errors\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\2"""
+)
+
 
 def normalize_message(message: str) -> str:
+    message = _STRUCTURED_ERROR_KEY.sub(lambda match: f"key: {match[3]}", message)
     for pattern, replacement in _NORMALIZE:
         message = pattern.sub(replacement, message)
     return message
