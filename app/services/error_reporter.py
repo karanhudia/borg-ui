@@ -69,6 +69,7 @@ _NORMALIZE = [
         ),
         "<uuid>",
     ),
+    (re.compile(r"\b0[xX][0-9a-fA-F]+\b"), "<hex>"),
     (re.compile(r"\b[0-9a-fA-F]{8,}\b"), "<hex>"),
     (re.compile(r"'[^']*'|\"[^\"]*\""), "<str>"),
     (re.compile(r"(^|[^\w.])(?:[A-Za-z]:\\|/(?=[^\s/]))[^\s,;)]*"), r"\1<path>"),
@@ -394,6 +395,10 @@ def report_failure(
             ],
             component=component,
             handled=handled,
+            # Handled Borg failures carry stderr in the message rather than
+            # an exception traceback. Keep it inspectable beyond the 500-char
+            # summary through the same bounded, redacted detail field.
+            stack=message if len(message) > MESSAGE_LIMIT else None,
         )
     except Exception:
         pass

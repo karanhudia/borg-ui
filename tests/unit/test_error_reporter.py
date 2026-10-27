@@ -119,6 +119,45 @@ def test_scrub_secrets():
     assert "hunter2" not in out and "ssh://me@nas.local/./repo" in out
 
 
+def test_cleanup_memory_addresses_share_a_fingerprint(sent):
+    for address in ("0x1541083437e0", "0x14ac9995f7e0"):
+        report_failure(
+            kind="job",
+            type_="archive_sync_failed",
+            component="archive_sync",
+            message=f"Exception ignored in: <function Repository.__del__ at {address}>",
+        )
+    flush()
+    assert len(sent) == 1
+
+
+def test_long_handled_failure_keeps_inspectable_redacted_diagnostics(sent):
+    from app.core.borg_errors import ArchiveListingError
+    from app.services.operations.runner import _report_failed_operation
+
+    message = str(
+        ArchiveListingError(
+            {
+                "return_code": 2,
+                "stderr": "Traceback\n"
+                + "  frame\n" * 400
+                + "PermissionError: cannot open config BORG_PASSPHRASE=hunter2",
+            }
+        )
+    )
+    _report_failed_operation(
+        Operation(kind="archive_sync", status="failed", error_message=message), None
+    )
+    flush()
+
+    props = sent[0]["props"]
+    assert props["handled"] is True
+    assert len(props["message"]) <= 500
+    assert "PermissionError: cannot open config" in props["stack"]
+    assert len(props["stack"]) <= 8192
+    assert "hunter2" not in json.dumps(props)
+
+
 def test_scrub_secrets_matches_frontend():
     out = scrub_secrets(
         "BORG_PASSPHRASE=hunter2 borg create ssh://me@nas.local/./repo "

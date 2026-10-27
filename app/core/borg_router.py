@@ -1280,7 +1280,11 @@ class BorgRouter:
             )
 
     async def list_archives_checked(
-        self, env: dict = None, *, raise_on_error: bool = False
+        self,
+        env: dict = None,
+        *,
+        raise_on_error: bool = False,
+        bypass_lock: Optional[bool] = None,
     ) -> tuple:
         """Return (ok, archives) for this repository.
 
@@ -1292,11 +1296,14 @@ class BorgRouter:
 
         `raise_on_error` preserves the failed command's diagnostics in an
         ArchiveListingError for callers that record a failed operation.
+        `bypass_lock` overrides the repository default when the caller has
+        resolved a global setting; None keeps the repository default.
 
         Server-side only: the archive index and the wipe list an agent
         repository with `repository.list_archives`.
         """
         self._refuse_agent_repository("list_archives")
+        use_bypass_lock = self.repo.bypass_lock if bypass_lock is None else bypass_lock
         import json
 
         def _parse_archives_payload(payload) -> list:
@@ -1320,7 +1327,7 @@ class BorgRouter:
                 self.repo.path,
                 passphrase=self.repo.passphrase,
                 remote_path=effective_repository_remote_path(self.repo),
-                bypass_lock=self.repo.bypass_lock,
+                bypass_lock=use_bypass_lock,
                 env=env,
             )
             if not result["success"]:
@@ -1335,7 +1342,7 @@ class BorgRouter:
                 self.repo.path,
                 remote_path=effective_repository_remote_path(self.repo),
                 passphrase=self.repo.passphrase,
-                bypass_lock=self.repo.bypass_lock,
+                bypass_lock=use_bypass_lock,
                 env=env,
             )
             if not result["success"]:

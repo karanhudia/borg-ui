@@ -6,6 +6,7 @@ import pytest
 import json
 
 from app.core.borg_errors import (
+    ArchiveListingError,
     BORG_EXIT_CODES,
     BORG_MESSAGE_IDS,
     format_error_message,
@@ -14,6 +15,20 @@ from app.core.borg_errors import (
     is_borg_warning_exit_code,
     is_lock_error,
 )
+
+
+def test_long_archive_listing_error_keeps_final_exception_and_redacts_secrets():
+    stderr = (
+        "self test failed BORG_PASSPHRASE=hunter2\n"
+        + "  intermediate frame\n" * 300
+        + "PermissionError: no writable temp directory password=tail-secret"
+    )
+    message = str(ArchiveListingError({"return_code": 2, "stderr": stderr}))
+
+    assert message.startswith("listing archives failed (exit code 2): self test failed")
+    assert "PermissionError: no writable temp directory" in message
+    assert "hunter2" not in message and "tail-secret" not in message
+    assert len(message) < 2100
 
 
 @pytest.mark.unit
