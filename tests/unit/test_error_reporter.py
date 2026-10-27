@@ -137,7 +137,7 @@ def test_cleanup_memory_addresses_share_a_fingerprint(sent):
 def test_bare_basic_credentials_are_redacted_before_details_and_fingerprinting(
     sent, padding
 ):
-    tokens = ("YWxpY2U6c2VjcmV0", "Ym9iOm90aGVyc2VjcmV0")
+    tokens = ("YWxpY2U6c2VjcmV0", "Ym9iOm90aGVyc2VjcmV0", "YTpi")
     for token in tokens:
         report_failure(
             kind="job",

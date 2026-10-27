@@ -41,3 +41,5 @@ After applying the scoped patch over the merged structured-fingerprint fix, 464 
 URL userinfo in handled rclone failures is now redacted before deriving the analytics message, fingerprint, or long diagnostic detail. Six short/long plain, bare-token, and percent-encoded URL regressions failed before the fix; all 204 affected reporter, redaction, and archive-index tests pass afterward, with Ruff checks clean.
 
 A second review identified bare Basic-auth values without an Authorization header. The backend scrubber now masks these before fingerprinting and transmission; two summary/detail regressions failed before the fix and all 206 affected tests pass afterward.
+
+A further review caught valid four-character Basic-auth credentials (for example, the Base64 encoding of `a:b`). Removed the scrubber length threshold and extended both summary/detail regressions with a short credential. Both regressions failed first; all 206 affected tests and Ruff checks pass after the fix.
