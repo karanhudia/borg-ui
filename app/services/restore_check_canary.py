@@ -119,9 +119,9 @@ def remote_restore_canary_staging(
 
     Remote-direct backups run Borg on the SSH host, so the canary payload must
     exist there. Returns ``(script, canary_root, archive_source_path)`` where
-    ``script`` writes the same files ``ensure_restore_canary`` writes locally,
-    ``canary_root`` is the remote directory the payload is staged under (with
-    ``$HOME`` left for the remote shell to expand), and
+    ``script`` writes the same files ``ensure_restore_canary`` writes locally
+    under the SSH user's ``$HOME``, ``canary_root`` is the directory Borg must
+    run from (``$HOME``, so the relative source resolves), and
     ``archive_source_path`` is the path to hand to Borg relative to that root
     so the archive keeps the hidden ``.borg-ui/restore-canaries`` namespace the
     restore check extracts. Returns None when the repository does not use
@@ -136,7 +136,10 @@ def remote_restore_canary_staging(
         return None
 
     archive_root = _canary_archive_root(repository)
-    canary_root = f"$HOME/{archive_root}"
+    # Borg is run from $HOME so the relative archive source keeps the hidden
+    # .borg-ui/restore-canaries/repository-<id> namespace in the archive.
+    canary_root = "$HOME"
+    canary_dir = f"$HOME/{archive_root}"
     entries = _build_canary_entries(repository)
     files = {
         **entries,
@@ -146,11 +149,11 @@ def remote_restore_canary_staging(
     commands = []
     for relative_path, content in files.items():
         parent = relative_path.rsplit("/", 1)[0]
-        commands.append(f'mkdir -p "{canary_root}/{parent}"')
+        commands.append(f'mkdir -p "{canary_dir}/{parent}"')
         encoded = base64.b64encode(content).decode("ascii")
         commands.append(
             f"printf '%s' {shlex.quote(encoded)} | base64 -d > "
-            f'"{canary_root}/{relative_path}"'
+            f'"{canary_dir}/{relative_path}"'
         )
 
     return (
