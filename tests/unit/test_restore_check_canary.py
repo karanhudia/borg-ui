@@ -124,7 +124,7 @@ def test_remote_restore_canary_staging_writes_the_local_canary_files(
 
     assert staging is not None
     script, canary_root, archive_source_path = staging
-    assert canary_root == "$HOME/.borg-ui/restore-canaries/repository-2"
+    assert canary_root == "$HOME"
     assert archive_source_path == get_restore_canary_archive_paths(repository)[0]
 
     # Every written file is a base64 payload aimed at a path under the root.
@@ -132,12 +132,16 @@ def test_remote_restore_canary_staging_writes_the_local_canary_files(
     assert writes, script
     staged = {}
     for encoded, target in writes:
-        assert target.startswith(f"{canary_root}/{CANARY_DIRNAME}/")
+        assert target.startswith(f'{canary_root}/.borg-ui/restore-canaries/repository-{repository.id}/.borgui-canary/')
         relative = target.removeprefix(f"{canary_root}/")
         staged[relative] = base64.b64decode(shlex.split(encoded)[0].encode("ascii"))
 
+    # The staged dict has paths relative to $HOME.
+    # The local_root already includes .borgui-canary, so relative_to(local_root)
+    # gives paths like .borgui-canary/README.txt. The staged dict has the full
+    # path under $HOME which is canary_root + relative_prefix + subpath.
     expected = {
-        f"{CANARY_DIRNAME}/{path.relative_to(local_root).as_posix()}": (
+        f".borg-ui/restore-canaries/repository-{repository.id}/.borgui-canary/{path.relative_to(local_root).as_posix()}": (
             path.read_bytes()
         )
         for path in sorted(local_root.rglob("*"))
@@ -145,4 +149,4 @@ def test_remote_restore_canary_staging_writes_the_local_canary_files(
     }
     assert staged == expected
     # The manifest lands inside the canary dir, next to the payload files.
-    assert f"{CANARY_DIRNAME}/manifest.json" in staged
+    assert f".borg-ui/restore-canaries/repository-{repository.id}/{CANARY_DIRNAME}/manifest.json" in staged

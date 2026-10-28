@@ -1453,11 +1453,12 @@ async def test_build_remote_command_stages_restore_canary_on_the_remote_host(
     canary_dir = f"{archive_root}/.borgui-canary"
     assert command.startswith(f'mkdir -p "$HOME/{archive_root}/.borgui-canary"')
     assert " | base64 -d > " in command
-    assert f'&& cd "$HOME/{archive_root}" && ' in command
-    # The canary is handed to borg relative to the staging cwd, so it archives
-    # under the hidden namespace the restore check extracts.
+    assert f'cd "$HOME" && ' in command
+    # The canary is handed to borg relative to $HOME, so it archives under the
+    # hidden namespace the restore check extracts.
     sources = command.split(" -- ", 1)[1]
-    assert canary_dir in sources
+    assert archive_root in sources
+    assert ".borgui-canary" in sources
     assert "/srv/data" in sources
 
 
@@ -1553,6 +1554,7 @@ async def test_execute_remote_backup_includes_canary_when_canary_mode_enabled(
     assert result["success"] is True
     assert commands
     archive_root = f".borg-ui/restore-canaries/repository-{repository.id}"
+    assert f'cd "$HOME" && ' in commands[0]
     assert " | base64 -d > " in commands[0]
-    assert f'&& cd "$HOME/{archive_root}" && ' in commands[0]
-    assert f"{archive_root}/.borgui-canary" in commands[0].split(" -- ", 1)[1]
+    assert archive_root in commands[0]
+    assert ".borgui-canary" in commands[0].split(" -- ", 1)[1]
