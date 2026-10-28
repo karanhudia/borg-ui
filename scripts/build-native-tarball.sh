@@ -59,6 +59,8 @@ cp -R app "${STAGE}/app"
 find "${STAGE}/app" -name '__pycache__' -type d -prune -exec rm -rf {} +
 rm -rf "${STAGE}/app/static"
 cp -R frontend/build "${STAGE}/app/static"
+# Source maps ship as a release asset (docker-publish.yml), not to installs.
+find "${STAGE}/app/static" -name '*.map' -delete
 
 cp VERSION requirements.txt "${STAGE}/"
 mkdir -p "${STAGE}/packaging" "${STAGE}/scripts"
