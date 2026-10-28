@@ -132,7 +132,9 @@ def test_remote_restore_canary_staging_writes_the_local_canary_files(
     assert writes, script
     staged = {}
     for encoded, target in writes:
-        assert target.startswith(f'{canary_root}/.borg-ui/restore-canaries/repository-{repository.id}/.borgui-canary/')
+        assert target.startswith(
+            f"{canary_root}/.borg-ui/restore-canaries/repository-{repository.id}/.borgui-canary/"
+        )
         relative = target.removeprefix(f"{canary_root}/")
         staged[relative] = base64.b64decode(shlex.split(encoded)[0].encode("ascii"))
 
@@ -149,4 +151,7 @@ def test_remote_restore_canary_staging_writes_the_local_canary_files(
     }
     assert staged == expected
     # The manifest lands inside the canary dir, next to the payload files.
-    assert f".borg-ui/restore-canaries/repository-{repository.id}/{CANARY_DIRNAME}/manifest.json" in staged
+    assert (
+        f".borg-ui/restore-canaries/repository-{repository.id}/{CANARY_DIRNAME}/manifest.json"
+        in staged
+    )

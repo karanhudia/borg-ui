@@ -1,0 +1,1 @@
+fixed in 6277844: now staging under $HOME/.borg-ui/restore-canaries/repository-{id}/.borgui-canary and running Borg from $HOME so the relative source path resolves correctly. tests updated to expect this.
