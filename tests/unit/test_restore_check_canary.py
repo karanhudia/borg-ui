@@ -1,3 +1,6 @@
+import base64
+import re
+import shlex
 import shutil
 
 import pytest
@@ -9,6 +12,7 @@ from app.services.restore_check_canary import (
     CANARY_DIRNAME,
     ensure_restore_canary,
     get_restore_canary_archive_paths,
+    remote_restore_canary_staging,
     should_include_restore_canary,
     to_restore_canary_archive_source_path,
     verify_restored_canary,
@@ -77,3 +81,68 @@ def test_should_include_restore_canary_requires_explicit_canary_mode():
     repository.restore_check_paths = "[]"
     repository.restore_check_full_archive = True
     assert should_include_restore_canary(repository) is False
+
+
+@pytest.mark.unit
+def test_remote_restore_canary_staging_follows_canary_mode():
+    repository = Repository(
+        id=2,
+        name="Documents",
+        restore_check_canary_enabled=False,
+        restore_check_paths=None,
+        restore_check_full_archive=False,
+    )
+
+    assert remote_restore_canary_staging(repository) is None
+
+    repository.restore_check_canary_enabled = True
+    assert remote_restore_canary_staging(repository) is not None
+
+    repository.restore_check_paths = '["etc/hostname"]'
+    assert remote_restore_canary_staging(repository) is None
+
+    repository.restore_check_paths = "[]"
+    repository.restore_check_full_archive = True
+    assert remote_restore_canary_staging(repository) is None
+
+
+@pytest.mark.unit
+def test_remote_restore_canary_staging_writes_the_local_canary_files(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "data_dir", str(tmp_path))
+    repository = Repository(
+        id=2,
+        name="Documents",
+        restore_check_canary_enabled=True,
+        restore_check_paths=None,
+        restore_check_full_archive=False,
+    )
+    local_root = ensure_restore_canary(repository)
+
+    staging = remote_restore_canary_staging(repository)
+
+    assert staging is not None
+    script, canary_root, archive_source_path = staging
+    assert canary_root == "$HOME/.borg-ui/restore-canaries/repository-2"
+    assert archive_source_path == get_restore_canary_archive_paths(repository)[0]
+
+    # Every written file is a base64 payload aimed at a path under the root.
+    writes = re.findall(r"printf '%s' ([^ ]+) \| base64 -d > \"([^\"]+)\"", script)
+    assert writes, script
+    staged = {}
+    for encoded, target in writes:
+        assert target.startswith(f"{canary_root}/{CANARY_DIRNAME}/")
+        relative = target.removeprefix(f"{canary_root}/")
+        staged[relative] = base64.b64decode(shlex.split(encoded)[0].encode("ascii"))
+
+    expected = {
+        f"{CANARY_DIRNAME}/{path.relative_to(local_root).as_posix()}": (
+            path.read_bytes()
+        )
+        for path in sorted(local_root.rglob("*"))
+        if path.is_file()
+    }
+    assert staged == expected
+    # The manifest lands inside the canary dir, next to the payload files.
+    assert f"{CANARY_DIRNAME}/manifest.json" in staged

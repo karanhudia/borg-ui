@@ -9,6 +9,7 @@ import shlex
 from app.database.models import Operation, Repository, SSHConnection, SSHKey
 from app.services.operations.backup_facade import resolve_backup_job
 from app.services.operations.details import backup_details
+from app.services.restore_check_canary import remote_restore_canary_staging
 from tests.utils.operations import seed_job_operation
 from app.services.remote_backup_service import (
     RemoteBackupService,
@@ -1423,3 +1424,135 @@ async def test_remote_failure_after_pre_hooks_runs_cleanup_once(
         )
     assert marker.read_text().splitlines() == ["pre", "failure"]
     assert resolve_backup_job(test_db, job_id).status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_build_remote_command_stages_restore_canary_on_the_remote_host(
+    test_db, monkeypatch
+):
+    connection, repository, _job = _remote_entities(test_db)
+    repository.restore_check_canary_enabled = True
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    canary_staging = remote_restore_canary_staging(repository)
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        source_ssh_connection=connection,
+        archive_name="{hostname}-{now}",
+        source_paths=["/srv/data"],
+        exclude_patterns=[],
+        borg_binary_path=connection.borg_binary_path,
+        use_sudo=False,
+        canary_staging=canary_staging,
+    )
+
+    archive_root = f".borg-ui/restore-canaries/repository-{repository.id}"
+    canary_dir = f"{archive_root}/.borgui-canary"
+    assert command.startswith(f'mkdir -p "$HOME/{archive_root}/.borgui-canary"')
+    assert " | base64 -d > " in command
+    assert f'&& cd "$HOME/{archive_root}" && ' in command
+    # The canary is handed to borg relative to the staging cwd, so it archives
+    # under the hidden namespace the restore check extracts.
+    sources = command.split(" -- ", 1)[1]
+    assert canary_dir in sources
+    assert "/srv/data" in sources
+
+
+@pytest.mark.asyncio
+async def test_build_remote_command_stages_canary_before_sudo(test_db, monkeypatch):
+    connection, repository, _job = _remote_entities(test_db)
+    repository.restore_check_canary_enabled = True
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    canary_staging = remote_restore_canary_staging(repository)
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        source_ssh_connection=connection,
+        archive_name="{hostname}-{now}",
+        source_paths=["/srv/data"],
+        exclude_patterns=[],
+        borg_binary_path="borg",
+        use_sudo=True,
+        canary_staging=canary_staging,
+    )
+
+    # Staging and the cd run as the SSH user, ahead of the sudo chain.
+    assert command.index("base64 -d") < command.index("sudo -n -H")
+    assert command.index("&& cd ") < command.index("sudo -n -H")
+    assert "sudo -n -H" in command
+
+
+@pytest.mark.asyncio
+async def test_build_remote_command_without_canary_has_no_staging(test_db, monkeypatch):
+    connection, repository, _job = _remote_entities(test_db)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        source_ssh_connection=connection,
+        archive_name="{hostname}-{now}",
+        source_paths=["/srv/data"],
+        exclude_patterns=[],
+        borg_binary_path=connection.borg_binary_path,
+        use_sudo=False,
+        canary_staging=None,
+    )
+
+    assert "base64" not in command
+    assert "&& cd " not in command
+    assert ".borg-ui/restore-canaries" not in command
+
+
+@pytest.mark.asyncio
+async def test_execute_remote_backup_includes_canary_when_canary_mode_enabled(
+    test_db, monkeypatch
+):
+    connection, repository, job = _remote_entities(test_db)
+    repository.restore_check_canary_enabled = True
+    test_db.commit()
+    service = RemoteBackupService()
+    commands = []
+
+    async def fake_execute_ssh_command(ssh_connection, command, job_id, db):
+        commands.append(command)
+        return {
+            "success": True,
+            "returncode": 0,
+            "stdout": json.dumps(
+                {"archive": {"name": "docker-host.example-2026-10-28T09:00:00"}}
+            ),
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_execute_ssh_command", fake_execute_ssh_command)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.notification_service.send_backup_success",
+        AsyncMock(),
+    )
+
+    result = await service.execute_remote_backup(
+        job_id=job.id,
+        source_ssh_connection_id=connection.id,
+        repository_id=repository.id,
+        source_paths=["/var/lib/docker/volumes/app"],
+        exclude_patterns=[],
+        compression="lz4",
+    )
+
+    assert result["success"] is True
+    assert commands
+    archive_root = f".borg-ui/restore-canaries/repository-{repository.id}"
+    assert " | base64 -d > " in commands[0]
+    assert f'&& cd "$HOME/{archive_root}" && ' in commands[0]
+    assert f"{archive_root}/.borgui-canary" in commands[0].split(" -- ", 1)[1]
