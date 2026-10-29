@@ -1,1 +1,1 @@
-fixed in 2b49ae7: removed ruff from runtime dependencies; test now asserts full canary path including repo directory
+fixed in 0ad2c1e: made restore-check mode selection use same predicate as remote_restore_canary_staging; test now asserts full relative canary path including archive_root and .borgui-canary
