@@ -22,6 +22,7 @@ from app.services.restore_check_canary import (
     CANARY_MANIFEST,
     get_legacy_restore_canary_archive_paths,
     get_restore_canary_archive_paths,
+    should_include_restore_canary,
     verify_restored_canary,
 )
 from app.utils.http_detail import detail_text
@@ -293,7 +294,12 @@ class RestoreCheckService:
             probe_paths = _parse_probe_paths(
                 job.probe_paths or repository.restore_check_paths
             )
-            use_canary = not full_archive and not probe_paths
+            # Canary mode requires job-level overrides disabled, then check repo setting
+            use_canary = (
+                not full_archive
+                and not probe_paths
+                and should_include_restore_canary(repository)
+            )
             archives = await BorgRouter(repository).list_archives(env=env)
             archive = _select_latest_archive(archives, job.archive_name, job.archive_id)
             archive_name = _get_archive_name(archive)

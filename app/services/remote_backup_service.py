@@ -27,6 +27,7 @@ from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.operations.backup_facade import resolve_backup_job
 from app.services.notification_service import notification_service
+from app.services.restore_check_canary import remote_restore_canary_staging
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import (
     resolve_repository_ssh_connection,
@@ -228,6 +229,12 @@ class RemoteBackupService:
 
             archive_name = f"{{hostname}}-{{now}}"
             if result is None:
+                # Stage the managed restore canary on the remote host too:
+                # Borg runs there, so it can only archive the canary if the
+                # payload exists under a remote path (#1490).
+                # Use job-level overrides (full_archive, probe_paths) if set.
+                canary_staging = remote_restore_canary_staging(repository, job)
+
                 # Build borg command
                 borg_command = await self._build_remote_command(
                     repository=repository,
@@ -240,6 +247,7 @@ class RemoteBackupService:
                     upload_ratelimit_kib=upload_ratelimit_kib,
                     borg_binary_path=ssh_connection.borg_binary_path or "borg",
                     use_sudo=ssh_connection.use_sudo,
+                    canary_staging=canary_staging,
                 )
 
                 logger.info(
@@ -481,6 +489,7 @@ class RemoteBackupService:
         borg_binary_path: str = "/usr/bin/borg",
         use_sudo: bool = False,
         source_ssh_connection: SSHConnection | None = None,
+        canary_staging: tuple[str, str, str] | None = None,
     ) -> str:
         """
         Build the borg create command for remote execution
@@ -495,8 +504,20 @@ class RemoteBackupService:
         With use_sudo, the sudoers ``env_keep`` allowlist preserves the Borg
         variables required by the command without granting arbitrary environment
         control through ``SETENV``.
+
+        With canary_staging, the command first writes the managed restore
+        canary on the remote host and then runs borg from the staging root, so
+        the canary archives under the same hidden .borg-ui/restore-canaries
+        namespace a local backup produces and the restore check can extract
+        it (#1490). Staging runs as the SSH user ahead of any sudo: the
+        generated payload is world-readable, so root can archive it, and every
+        other source is absolute, so the changed cwd only shapes the canary.
         """
         validate_operand(archive_name, "archive name")
+        canary_root = None
+        if canary_staging is not None:
+            staging_script, canary_root, archive_source_path = canary_staging
+            source_paths = [*source_paths, archive_source_path]
         for source in source_paths:
             validate_source(source)
 
@@ -595,7 +616,10 @@ class RemoteBackupService:
         for path in source_paths:
             cmd_parts.append(shlex.quote(path))
 
-        return " ".join(cmd_parts)
+        command = " ".join(cmd_parts)
+        if canary_staging is not None:
+            command = f'{staging_script} && cd "{canary_root}" && {command}'
+        return command
 
     def _extract_remote_repository_path(self, repository_path: str) -> str:
         """Return the path part of a repository location as seen from the SSH host."""

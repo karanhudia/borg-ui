@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -81,30 +83,94 @@ def should_include_restore_canary(repository: Repository) -> bool:
     )
 
 
+def _canary_manifest_bytes(entries: dict[str, bytes]) -> bytes:
+    manifest_entries: list[dict[str, str | int]] = [
+        {
+            "path": relative_path,
+            "size": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+        }
+        for relative_path, content in entries.items()
+    ]
+    return json.dumps({"files": manifest_entries}, indent=2, sort_keys=True).encode(
+        "utf-8"
+    )
+
+
 def ensure_restore_canary(repository: Repository) -> Path:
     root = _repo_canary_root(repository)
     root.mkdir(parents=True, exist_ok=True)
 
     entries = _build_canary_entries(repository)
-    manifest_entries: list[dict[str, str | int]] = []
     for relative_path, content in entries.items():
         target = root / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content)
-        manifest_entries.append(
-            {
-                "path": relative_path,
-                "size": len(content),
-                "sha256": hashlib.sha256(content).hexdigest(),
-            }
-        )
 
     manifest_target = root / CANARY_DIRNAME / CANARY_MANIFEST
-    manifest_target.write_text(
-        json.dumps({"files": manifest_entries}, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
+    manifest_target.write_bytes(_canary_manifest_bytes(entries))
     return root / CANARY_DIRNAME
+
+
+def remote_restore_canary_staging(
+    repository: Repository,
+    job: Any | None = None,
+) -> tuple[str, str, str] | None:
+    """Shell snippet that stages the managed canary on a remote-direct host.
+
+    Remote-direct backups run Borg on the SSH host, so the canary payload must
+    exist there. Returns ``(script, canary_root, archive_source_path)`` where
+    ``script`` writes the same files ``ensure_restore_canary`` writes locally
+    under the SSH user's ``$HOME``, ``canary_root`` is the directory Borg must
+    run from (``$HOME``, so the relative source resolves), and
+    ``archive_source_path`` is the path to hand to Borg relative to that root
+    so the archive keeps the hidden ``.borg-ui/restore-canaries`` namespace the
+    restore check extracts. Returns None when the repository does not use
+    canary mode.
+
+    If job is provided, job-level overrides (full_archive, probe_paths) take
+    precedence over repository settings and disable canary staging.
+
+    The script never carries user-controlled text outside base64: every path
+    is built from constants and the integer repository id, and every file body
+    is written as ``printf '%s' <b64> | base64 -d`` so the generated README
+    (which names the repository) cannot inject shell.
+    """
+    # Job-level overrides take precedence over repository settings
+    if job and (
+        getattr(job, "full_archive", False) or getattr(job, "probe_paths", None)
+    ):
+        return None
+
+    if not should_include_restore_canary(repository):
+        return None
+
+    archive_root = _canary_archive_root(repository)
+    # Borg is run from $HOME so the relative archive source keeps the hidden
+    # .borg-ui/restore-canaries/repository-<id> namespace in the archive.
+    canary_root = "$HOME"
+    canary_dir = f"$HOME/{archive_root}"
+    entries = _build_canary_entries(repository)
+    files = {
+        **entries,
+        f"{CANARY_DIRNAME}/{CANARY_MANIFEST}": _canary_manifest_bytes(entries),
+    }
+
+    commands = []
+    for relative_path, content in files.items():
+        parent = relative_path.rsplit("/", 1)[0]
+        commands.append(f'mkdir -p "{canary_dir}/{parent}"')
+        encoded = base64.b64encode(content).decode("ascii")
+        commands.append(
+            f"printf '%s' {shlex.quote(encoded)} | base64 -d > "
+            f'"{canary_dir}/{relative_path}"'
+        )
+
+    return (
+        " && ".join(commands),
+        canary_root,
+        f"{archive_root}/{CANARY_DIRNAME}",
+    )
 
 
 def get_restore_canary_archive_paths(repository: Repository) -> list[str]:
