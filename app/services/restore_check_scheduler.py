@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.database.database import SessionLocal
 from app.database.models import Repository
 from app.services.operations.maintenance_start import start_maintenance
-from app.services.restore_check_canary import is_canary_restore_check
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
     calculate_next_cron_run,
@@ -21,13 +20,15 @@ logger = structlog.get_logger()
 
 
 def _scheduled_restore_check_is_canary(repo: Repository) -> bool:
+    # Deliberately flag-independent: the first due run for an observe-mode
+    # repo disables restore_check_canary_enabled and skips, so a predicate
+    # that requires the flag would stop skipping and enqueue a no-mode check
+    # on every later schedule.
     try:
         probe_paths = json.loads(repo.restore_check_paths or "[]")
     except (TypeError, json.JSONDecodeError):
         probe_paths = []
-    return is_canary_restore_check(
-        repo, bool(repo.restore_check_full_archive), probe_paths
-    )
+    return not bool(repo.restore_check_full_archive) and not bool(probe_paths)
 
 
 async def run_due_scheduled_restore_checks(
