@@ -1553,8 +1553,7 @@ async def test_execute_remote_backup_includes_canary_when_canary_mode_enabled(
 
     assert result["success"] is True
     assert commands
-    archive_root = f".borg-ui/restore-canaries/repository-{repository.id}"
+    full_canary_path = f".borg-ui/restore-canaries/repository-{repository.id}/.borgui-canary"
     assert f'cd "$HOME" && ' in commands[0]
     assert " | base64 -d > " in commands[0]
-    assert archive_root in commands[0]
-    assert ".borgui-canary" in commands[0].split(" -- ", 1)[1]
+    assert full_canary_path in commands[0].split(" -- ", 1)[1]
