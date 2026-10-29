@@ -232,7 +232,8 @@ class RemoteBackupService:
                 # Stage the managed restore canary on the remote host too:
                 # Borg runs there, so it can only archive the canary if the
                 # payload exists under a remote path (#1490).
-                canary_staging = remote_restore_canary_staging(repository)
+                # Use job-level overrides (full_archive, probe_paths) if set.
+                canary_staging = remote_restore_canary_staging(repository, job)
 
                 # Build borg command
                 borg_command = await self._build_remote_command(

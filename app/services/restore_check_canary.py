@@ -114,6 +114,7 @@ def ensure_restore_canary(repository: Repository) -> Path:
 
 def remote_restore_canary_staging(
     repository: Repository,
+    job: Any | None = None,
 ) -> tuple[str, str, str] | None:
     """Shell snippet that stages the managed canary on a remote-direct host.
 
@@ -127,11 +128,18 @@ def remote_restore_canary_staging(
     restore check extracts. Returns None when the repository does not use
     canary mode.
 
+    If job is provided, job-level overrides (full_archive, probe_paths) take
+    precedence over repository settings and disable canary staging.
+
     The script never carries user-controlled text outside base64: every path
     is built from constants and the integer repository id, and every file body
     is written as ``printf '%s' <b64> | base64 -d`` so the generated README
     (which names the repository) cannot inject shell.
     """
+    # Job-level overrides take precedence over repository settings
+    if job and (getattr(job, "full_archive", False) or getattr(job, "probe_paths", None)):
+        return None
+
     if not should_include_restore_canary(repository):
         return None
 
