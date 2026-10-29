@@ -294,12 +294,11 @@ class RestoreCheckService:
             probe_paths = _parse_probe_paths(
                 job.probe_paths or repository.restore_check_paths
             )
-            # Canary mode is only used when the repository allows it AND the job
-            # doesn't explicitly request full_archive or paths
+            # Canary mode requires job-level overrides disabled, then check repo setting
             use_canary = (
-                should_include_restore_canary(repository)
-                and not full_archive
+                not full_archive
                 and not probe_paths
+                and should_include_restore_canary(repository)
             )
             archives = await BorgRouter(repository).list_archives(env=env)
             archive = _select_latest_archive(archives, job.archive_name, job.archive_id)
