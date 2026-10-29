@@ -1,1 +1,1 @@
-fixed in 0ad2c1e: made restore-check mode selection use same predicate as remote_restore_canary_staging; test now asserts full relative canary path including archive_root and .borgui-canary
+fixed in 01e7fc1: reorder use_canary condition so job-level overrides (full_archive, probe_paths) are checked before should_include_restore_canary; CodeRabbit nit on restore-check selection predicate addressed.
