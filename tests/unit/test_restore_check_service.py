@@ -68,6 +68,9 @@ def restore_check_repository(db_session):
         compression="lz4",
         repository_type="local",
         bypass_lock=True,
+        restore_check_canary_enabled=True,
+        restore_check_full_archive=False,
+        restore_check_paths=None,
     )
     db_session.add(repo)
     db_session.commit()
