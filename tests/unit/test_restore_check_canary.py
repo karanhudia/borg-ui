@@ -12,6 +12,7 @@ from app.services.restore_check_canary import (
     CANARY_DIRNAME,
     ensure_restore_canary,
     get_restore_canary_archive_paths,
+    is_canary_restore_check,
     remote_restore_canary_staging,
     should_include_restore_canary,
     to_restore_canary_archive_source_path,
@@ -104,6 +105,84 @@ def test_remote_restore_canary_staging_follows_canary_mode():
     repository.restore_check_paths = "[]"
     repository.restore_check_full_archive = True
     assert remote_restore_canary_staging(repository) is None
+
+
+@pytest.mark.unit
+def test_remote_restore_canary_staging_respects_job_overrides():
+    class _Job:
+        full_archive = False
+        probe_paths = None
+
+    repository = Repository(
+        id=2,
+        name="Documents",
+        restore_check_canary_enabled=True,
+        restore_check_paths=None,
+        restore_check_full_archive=False,
+    )
+
+    assert remote_restore_canary_staging(repository, _Job()) is not None
+
+    # Job-level probe paths or full archive disable staging even when the
+    # repository has canary mode enabled.
+    class _ProbeJob:
+        full_archive = False
+        probe_paths = '["etc/hostname"]'
+
+    class _FullJob:
+        full_archive = True
+        probe_paths = None
+
+    assert remote_restore_canary_staging(repository, _ProbeJob()) is None
+    assert remote_restore_canary_staging(repository, _FullJob()) is None
+
+    # Staging also stays off when the repository canary flag is disabled.
+    repository.restore_check_canary_enabled = False
+    assert remote_restore_canary_staging(repository, _Job()) is None
+
+
+@pytest.mark.unit
+def test_is_canary_restore_check_is_the_shared_mode_predicate():
+    repository = Repository(
+        id=2,
+        name="Documents",
+        restore_check_canary_enabled=True,
+        restore_check_paths=None,
+        restore_check_full_archive=False,
+    )
+
+    # Job-level overrides take precedence over repository settings.
+    assert (
+        is_canary_restore_check(repository, full_archive=True, probe_paths=[]) is False
+    )
+    assert (
+        is_canary_restore_check(
+            repository, full_archive=False, probe_paths=["etc/hostname"]
+        )
+        is False
+    )
+
+    # With no overrides, the repository canary setting decides.
+    assert (
+        is_canary_restore_check(repository, full_archive=False, probe_paths=[]) is True
+    )
+
+    repository.restore_check_canary_enabled = False
+    assert (
+        is_canary_restore_check(repository, full_archive=False, probe_paths=[]) is False
+    )
+
+    # A repository in probe/full-archive mode never selects canary.
+    repository.restore_check_canary_enabled = True
+    repository.restore_check_paths = '["etc/hostname"]'
+    assert (
+        is_canary_restore_check(repository, full_archive=False, probe_paths=[]) is False
+    )
+    repository.restore_check_paths = "[]"
+    repository.restore_check_full_archive = True
+    assert (
+        is_canary_restore_check(repository, full_archive=False, probe_paths=[]) is False
+    )
 
 
 @pytest.mark.unit
