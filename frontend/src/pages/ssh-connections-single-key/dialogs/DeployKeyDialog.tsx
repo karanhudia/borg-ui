@@ -29,13 +29,18 @@ import {
   type RemoteMachineSetupPreset,
   type RemoteMachineSetupPresetId,
 } from '../connectionPresets'
-import type { DeployConnectionPayload } from '../types'
+import SshKeySelect from '../../../components/shared/SshKeySelect'
+import type { DeployConnectionPayload, SSHKeySummary } from '../types'
 import { SshHostField } from './SshHostField'
 
 interface DeployKeyDialogProps {
   t: TFunction
   open: boolean
   setOpen: Dispatch<SetStateAction<boolean>>
+  /** The key picker only shows when there is more than one key to choose from. */
+  sshKeys: SSHKeySummary[]
+  /** Preselected when the form has not picked a key yet. */
+  systemKeyId?: number
   connectionForm: DeployConnectionPayload
   setConnectionForm: Dispatch<SetStateAction<DeployConnectionPayload>>
   hostError?: string
@@ -62,6 +67,8 @@ export function DeployKeyDialog({
   t,
   open,
   setOpen,
+  sshKeys,
+  systemKeyId,
   connectionForm,
   setConnectionForm,
   hostError,
@@ -229,6 +236,13 @@ export function DeployKeyDialog({
             </Select>
             <FormHelperText>{t('sshConnections.deployDialog.setupPresetHint')}</FormHelperText>
           </FormControl>
+          {sshKeys.length > 1 && (
+            <SshKeySelect
+              value={connectionForm.ssh_key_id ?? systemKeyId ?? ''}
+              onChange={(ssh_key_id) => setConnectionForm({ ...connectionForm, ssh_key_id })}
+              keys={sshKeys}
+            />
+          )}
           <SshHostField
             label={t('sshConnections.deployDialog.host')}
             value={connectionForm.host}

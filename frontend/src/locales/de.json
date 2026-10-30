@@ -2707,6 +2707,50 @@
         "delete": "Schlüssel löschen"
       }
     },
+    "extraKeys": {
+      "title": "Weitere SSH-Schlüssel",
+      "description": "Gib einer Remote-Maschine einen eigenen Schlüssel, zum Beispiel einen Schlüssel pro Repository auf einem Borgserver. Verbindungen nutzen den Systemschlüssel, solange du keinen anderen wählst.",
+      "add": "Schlüssel hinzufügen",
+      "empty": "Noch keine weiteren Schlüssel.",
+      "connections_one": "{{count}} Verbindung",
+      "connections_other": "{{count}} Verbindungen",
+      "unused": "Noch nicht verwendet",
+      "copyPublicKey": "Öffentlichen Schlüssel kopieren",
+      "delete": "Schlüssel löschen",
+      "picker": {
+        "label": "SSH-Schlüssel",
+        "system": "Systemschlüssel",
+        "changeHint": "Beim Wechsel des Schlüssels gilt die Verbindung als ungetestet. Stelle den neuen Schlüssel danach auf dem Server bereit."
+      },
+      "addDialog": {
+        "title": "SSH-Schlüssel hinzufügen",
+        "tabGenerate": "Generieren",
+        "tabImport": "Aus Pfad importieren",
+        "tabPaste": "Einfügen",
+        "keyName": "Schlüsselname",
+        "keyNamePlaceholder": "borgserver-repo1",
+        "keyType": "Schlüsseltyp",
+        "privateKeyPath": "Pfad zum privaten Schlüssel",
+        "privateKeyPathHelper": "Absoluter Pfad zur Datei mit dem privaten Schlüssel auf dem Borg-UI-Host",
+        "publicKeyPath": "Pfad zum öffentlichen Schlüssel (optional)",
+        "publicKeyPathHelper": "Leer lassen, um den Pfad des privaten Schlüssels plus .pub zu verwenden",
+        "privateKey": "Privater Schlüssel",
+        "privateKeyHelper": "Füge den privaten Schlüssel ein. Schlüssel mit Passphrase werden nicht unterstützt.",
+        "submit": "Hinzufügen",
+        "submitting": "Wird hinzugefügt..."
+      },
+      "deleteDialog": {
+        "title": "SSH-Schlüssel löschen",
+        "confirm": "Schlüssel \"{{name}}\" löschen? Das kann nicht rückgängig gemacht werden.",
+        "inUse": "Diese Verbindungen verwenden diesen Schlüssel. Stelle sie zuerst auf einen anderen Schlüssel um.",
+        "delete": "Löschen",
+        "deleting": "Wird gelöscht..."
+      },
+      "toasts": {
+        "added": "SSH-Schlüssel hinzugefügt",
+        "addFailed": "SSH-Schlüssel konnte nicht hinzugefügt werden"
+      }
+    },
     "generateDialog": {
       "title": "System-SSH-Schlüssel generieren",
       "info": "Dies erzeugt ein neues SSH-Schlüsselpaar für dein System. Es kann immer nur einen Systemschlüssel geben.",
@@ -6084,6 +6128,7 @@
         "invalidPublicKeyFormat": "Ungültiges Format des öffentlichen Schlüssels",
         "keyDeployFailed": "SSH-Schlüssel konnte nicht bereitgestellt werden: {{error}}",
         "keyGeneratedButDeployFailed": "SSH-Schlüssel generiert, aber Bereitstellung fehlgeschlagen: {{error}}",
+        "keyInUse": "Dieser SSH-Schlüssel wird verwendet von: {{connections}}. Stelle diese Verbindungen zuerst auf einen anderen Schlüssel um.",
         "keyNameAlreadyExists": "SSH-Schlüsselname bereits vorhanden",
         "keyRemoveFailed": "SSH-Schlüssel konnte nicht entfernt werden: {{error}}",
         "noSystemKeyFound": "Kein System-SSH-Schlüssel gefunden",

@@ -2707,6 +2707,50 @@
         "delete": "Elimina Chiave"
       }
     },
+    "extraKeys": {
+      "title": "Chiavi SSH aggiuntive",
+      "description": "Dai a una macchina remota una chiave propria, ad esempio una chiave per repository su un borgserver. Le connessioni usano la chiave di sistema finché non ne scegli un'altra.",
+      "add": "Aggiungi chiave",
+      "empty": "Nessuna chiave aggiuntiva per ora.",
+      "connections_one": "{{count}} connessione",
+      "connections_other": "{{count}} connessioni",
+      "unused": "Non ancora usata",
+      "copyPublicKey": "Copia chiave pubblica",
+      "delete": "Elimina chiave",
+      "picker": {
+        "label": "Chiave SSH",
+        "system": "Chiave di sistema",
+        "changeHint": "Cambiando la chiave la connessione risulta non testata. Distribuisci poi la nuova chiave sul server."
+      },
+      "addDialog": {
+        "title": "Aggiungi chiave SSH",
+        "tabGenerate": "Genera",
+        "tabImport": "Importa da percorso",
+        "tabPaste": "Incolla",
+        "keyName": "Nome chiave",
+        "keyNamePlaceholder": "borgserver-repo1",
+        "keyType": "Tipo di chiave",
+        "privateKeyPath": "Percorso chiave privata",
+        "privateKeyPathHelper": "Percorso assoluto del file della chiave privata sull'host di Borg UI",
+        "publicKeyPath": "Percorso chiave pubblica (facoltativo)",
+        "publicKeyPathHelper": "Lascia vuoto per usare il percorso della chiave privata più .pub",
+        "privateKey": "Chiave privata",
+        "privateKeyHelper": "Incolla la chiave privata. Le chiavi protette da passphrase non sono supportate.",
+        "submit": "Aggiungi",
+        "submitting": "Aggiunta..."
+      },
+      "deleteDialog": {
+        "title": "Elimina chiave SSH",
+        "confirm": "Eliminare la chiave \"{{name}}\"? L'operazione non può essere annullata.",
+        "inUse": "Queste connessioni usano questa chiave. Passale prima a un'altra chiave.",
+        "delete": "Elimina",
+        "deleting": "Eliminazione..."
+      },
+      "toasts": {
+        "added": "Chiave SSH aggiunta",
+        "addFailed": "Impossibile aggiungere la chiave SSH"
+      }
+    },
     "generateDialog": {
       "title": "Genera Chiave SSH di Sistema",
       "info": "Questo genererà una nuova coppia di chiavi SSH per il tuo sistema. Puoi avere una sola chiave di sistema alla volta.",
@@ -6084,6 +6128,7 @@
         "invalidPublicKeyFormat": "Formato chiave pubblica non valido",
         "keyDeployFailed": "Impossibile distribuire la chiave SSH: {{error}}",
         "keyGeneratedButDeployFailed": "Chiave SSH generata ma distribuzione fallita: {{error}}",
+        "keyInUse": "Questa chiave SSH è usata da: {{connections}}. Passa prima quelle connessioni a un'altra chiave.",
         "keyNameAlreadyExists": "Nome chiave SSH già esistente",
         "keyRemoveFailed": "Impossibile rimuovere la chiave SSH: {{error}}",
         "noSystemKeyFound": "Nessuna chiave SSH di sistema trovata",

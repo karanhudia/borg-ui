@@ -14,7 +14,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import type { SSHConnection, UpdateConnectionPayload } from '../types'
+import SshKeySelect from '../../../components/shared/SshKeySelect'
+import type { SSHConnection, SSHKeySummary, UpdateConnectionPayload } from '../types'
 import { SshHostField } from './SshHostField'
 
 interface EditConnectionDialogProps {
@@ -22,6 +23,8 @@ interface EditConnectionDialogProps {
   open: boolean
   setOpen: Dispatch<SetStateAction<boolean>>
   setSelectedConnection: Dispatch<SetStateAction<SSHConnection | null>>
+  /** The key picker only shows when there is more than one key to choose from. */
+  sshKeys: SSHKeySummary[]
   editConnectionForm: UpdateConnectionPayload
   setEditConnectionForm: Dispatch<SetStateAction<UpdateConnectionPayload>>
   hostError?: string
@@ -35,6 +38,7 @@ export function EditConnectionDialog({
   open,
   setOpen,
   setSelectedConnection,
+  sshKeys,
   editConnectionForm,
   setEditConnectionForm,
   hostError,
@@ -52,6 +56,23 @@ export function EditConnectionDialog({
       <DialogTitle>{t('sshConnections.editConnectionDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          {sshKeys.length > 1 && (
+            <Box>
+              <SshKeySelect
+                value={editConnectionForm.ssh_key_id ?? ''}
+                onChange={(ssh_key_id) =>
+                  setEditConnectionForm({ ...editConnectionForm, ssh_key_id })
+                }
+                keys={sshKeys}
+              />
+              <Typography
+                variant="caption"
+                sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}
+              >
+                {t('sshConnections.extraKeys.picker.changeHint')}
+              </Typography>
+            </Box>
+          )}
           <SshHostField
             label={t('sshConnections.deployDialog.host')}
             value={editConnectionForm.host}
