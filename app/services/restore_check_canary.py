@@ -83,27 +83,6 @@ def should_include_restore_canary(repository: Repository) -> bool:
     )
 
 
-def is_canary_restore_check(
-    repository: Repository,
-    full_archive: bool,
-    probe_paths: list[str],
-) -> bool:
-    """Return whether a restore check should run in canary mode.
-
-    Single predicate shared by the local, agent, scheduler, and notification
-    paths so they can never disagree on the selected mode: job-level
-    full_archive / probe_paths overrides take precedence, then the repository
-    must have canary mode enabled. Backups gate canary staging on
-    ``should_include_restore_canary`` with the same overrides, so a check only
-    selects canary mode when a backup would have included the payload.
-    """
-    return (
-        not full_archive
-        and not probe_paths
-        and should_include_restore_canary(repository)
-    )
-
-
 def _canary_manifest_bytes(entries: dict[str, bytes]) -> bytes:
     manifest_entries: list[dict[str, str | int]] = [
         {
@@ -135,7 +114,6 @@ def ensure_restore_canary(repository: Repository) -> Path:
 
 def remote_restore_canary_staging(
     repository: Repository,
-    job: Any | None = None,
 ) -> tuple[str, str, str] | None:
     """Shell snippet that stages the managed canary on a remote-direct host.
 
@@ -149,24 +127,11 @@ def remote_restore_canary_staging(
     restore check extracts. Returns None when the repository does not use
     canary mode.
 
-    If job is provided, job-level overrides (full_archive, probe_paths) take
-    precedence over repository settings and disable canary staging.
-
     The script never carries user-controlled text outside base64: every path
     is built from constants and the integer repository id, and every file body
     is written as ``printf '%s' <b64> | base64 -d`` so the generated README
     (which names the repository) cannot inject shell.
     """
-    # Job-level overrides take precedence over repository settings, using the
-    # same predicate as restore-check mode selection so a backup always
-    # includes the canary exactly when a check would look for it.
-    if job and not is_canary_restore_check(
-        repository,
-        bool(getattr(job, "full_archive", False)),
-        _parse_restore_check_paths(getattr(job, "probe_paths", None)),
-    ):
-        return None
-
     if not should_include_restore_canary(repository):
         return None
 

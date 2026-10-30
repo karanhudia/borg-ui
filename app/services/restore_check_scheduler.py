@@ -20,10 +20,6 @@ logger = structlog.get_logger()
 
 
 def _scheduled_restore_check_is_canary(repo: Repository) -> bool:
-    # Deliberately flag-independent: the first due run for an observe-mode
-    # repo disables restore_check_canary_enabled and skips, so a predicate
-    # that requires the flag would stop skipping and enqueue a no-mode check
-    # on every later schedule.
     try:
         probe_paths = json.loads(repo.restore_check_paths or "[]")
     except (TypeError, json.JSONDecodeError):

@@ -22,7 +22,6 @@ from app.services.restore_check_canary import (
     CANARY_MANIFEST,
     get_legacy_restore_canary_archive_paths,
     get_restore_canary_archive_paths,
-    is_canary_restore_check,
     verify_restored_canary,
 )
 from app.utils.http_detail import detail_text
@@ -218,8 +217,6 @@ class RestoreCheckService:
                 else "probe_paths"
                 if probe_paths
                 else "canary"
-                if is_canary_restore_check(repository, full_archive, probe_paths)
-                else "probe_paths"
             )
 
             await NotificationService.send_restore_check_completion(
@@ -296,10 +293,7 @@ class RestoreCheckService:
             probe_paths = _parse_probe_paths(
                 job.probe_paths or repository.restore_check_paths
             )
-            # Canary mode requires job-level overrides disabled, then the
-            # repository canary setting. Shared predicate keeps the local,
-            # agent, scheduler, and notification paths in agreement.
-            use_canary = is_canary_restore_check(repository, full_archive, probe_paths)
+            use_canary = not full_archive and not probe_paths
             archives = await BorgRouter(repository).list_archives(env=env)
             archive = _select_latest_archive(archives, job.archive_name, job.archive_id)
             archive_name = _get_archive_name(archive)
@@ -583,7 +577,7 @@ class RestoreCheckService:
         probe_paths = _parse_probe_paths(
             job.probe_paths or repository.restore_check_paths
         )
-        use_canary = is_canary_restore_check(repository, full_archive, probe_paths)
+        use_canary = not full_archive and not probe_paths
         mode = (
             "Full Archive"
             if full_archive
