@@ -270,7 +270,8 @@ export default function WizardStepLocation({
           disabled
           surface="repository_wizard"
           operation="select_borg_version"
-          label={t('wizard.location.borgVersion')}
+          // The switch itself is inert, so the name carries the version in use.
+          label={`${t('wizard.location.borgVersion')} v${data.borgVersion ?? 1}`}
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>

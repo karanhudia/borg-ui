@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { Box, Dialog, IconButton } from '@mui/material'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { FEATURES } from '../core/features'
+import { FEATURES, PLAN_LABEL } from '../core/features'
 import { closeUpgradeDialog, upgradeDialogStore } from '../utils/upgradeDialog'
 import UpgradePrompt from './UpgradePrompt'
 
@@ -27,7 +27,11 @@ export default function UpgradeDialog() {
       onClose={closeUpgradeDialog}
       maxWidth={false}
       slotProps={{
-        paper: { sx: { bgcolor: 'transparent', boxShadow: 'none', m: 2, overflow: 'visible' } },
+        // The paper is the element with role="dialog", so it carries the name.
+        paper: {
+          'aria-label': t('upgradePrompt.featureLabel', { plan: PLAN_LABEL[FEATURES[feature]] }),
+          sx: { bgcolor: 'transparent', boxShadow: 'none', m: 2, overflow: 'visible' },
+        },
       }}
     >
       <Box sx={{ position: 'relative', width: 'min(100vw - 32px, 360px)' }}>

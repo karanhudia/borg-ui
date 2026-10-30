@@ -203,7 +203,8 @@ describe('PlanGate', () => {
         control: 'select_borg_version',
       })
     )
-    expect(await screen.findByText(/create and import borg 2 repositories/i)).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'Pro feature' })).toBeInTheDocument()
+    expect(screen.getByText(/create and import borg 2 repositories/i)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /upgrade at borgui.com/i })).toHaveAttribute(
       'href',
       `${BUY_URL}?plan=pro&src=app-gate-borg_v2`
