@@ -358,7 +358,9 @@ export function SourceStep({
                               textAlign: 'left',
                             }}
                           >
-                            {commonPrefix}
+                            {/* rtl cuts long prefixes at the front; the isolated ltr run keeps
+                                leading "_" or digits from being reordered to the end. */}
+                            <bdi dir="ltr">{commonPrefix}</bdi>
                           </Typography>
                         </>
                       ) : null}

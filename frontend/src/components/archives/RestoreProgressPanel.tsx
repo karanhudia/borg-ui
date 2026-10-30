@@ -179,7 +179,8 @@ export function RestoreProgressPanelView({
                 noWrap
                 sx={{ color: 'text.secondary', fontFamily: 'monospace', mt: 0.5, direction: 'rtl' }}
               >
-                {job.progress_details.current_file}
+                {/* rtl cuts the path at the front; ltr isolation keeps it in order. */}
+                <bdi dir="ltr">{job.progress_details.current_file}</bdi>
               </Typography>
             )}
           </>
