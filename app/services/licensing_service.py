@@ -579,6 +579,37 @@ async def request_feature_trial(
     }
 
 
+async def request_paywall_offer(
+    db: Session, *, trigger: str, intent_days: int
+) -> dict[str, Any]:
+    """Ask the activation service for this install's one-time offer.
+
+    Sent only when the user clicks "claim" in an upgrade card. The service
+    decides whether to issue it (once per instance, ever) and answers either
+    `issued` with an offer id for the buy link, or `denied` with a reason.
+    Nothing is stored here: the entitlement does not change.
+    """
+    if trigger not in ("expired", "repeat"):
+        raise RuntimeError(f"Unknown offer trigger: {trigger!r}")
+    state = get_or_create_licensing_state(db)
+    data = await _post_activation(
+        "/v1/offers/claim",
+        {
+            "instance_id": state.instance_id,
+            "trigger": trigger,
+            "intent_days": max(0, int(intent_days)),
+        },
+    )
+    if data.get("result") == "issued":
+        return {
+            "result": "issued",
+            "offer_id": data.get("offer_id"),
+            "percent": data.get("percent"),
+            "expires_at": data.get("expires_at"),
+        }
+    return {"result": "denied", "reason": data.get("reason") or "denied"}
+
+
 async def deactivate_paid_license(db: Session) -> dict[str, Any]:
     state = get_or_create_licensing_state(db)
     if not state.license_id:
