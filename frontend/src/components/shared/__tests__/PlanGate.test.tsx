@@ -173,6 +173,7 @@ describe('PlanGate', () => {
           disabled
           surface="repository_wizard"
           operation="select_borg_version"
+          label="Borg version"
         >
           <button>v2</button>
         </PlanGate>
@@ -187,7 +188,8 @@ describe('PlanGate', () => {
     )
     expect(screen.queryByRole('link', { name: /upgrade at borgui.com/i })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /requires pro plan/i }))
+    // Named after the control, not only the plan, so each lock is told apart.
+    fireEvent.click(screen.getByRole('button', { name: 'Borg version, Requires Pro plan' }))
 
     expect(trackEventMock).toHaveBeenCalledTimes(2)
     expect(trackEventMock).toHaveBeenLastCalledWith(

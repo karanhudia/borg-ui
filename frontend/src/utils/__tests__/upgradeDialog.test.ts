@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { closeUpgradeDialog, openUpgradeForRefusal, upgradeDialogStore } from '../upgradeDialog'
+import {
+  closeUpgradeDialog,
+  isAnsweredRefusal,
+  openUpgradeForRefusal,
+  upgradeDialogStore,
+} from '../upgradeDialog'
 
 const refusal = (method: string, detail: unknown) => ({
   config: { method },
@@ -36,5 +41,13 @@ describe('openUpgradeForRefusal', () => {
     openUpgradeForRefusal(refusal('post', { ...borgV2, feature: 'no_such_feature' }))
     openUpgradeForRefusal(new Error('network'))
     expect(upgradeDialogStore.get()).toBeNull()
+  })
+
+  it('lets the caller keep its message for a plan error the dialog cannot answer', () => {
+    expect(isAnsweredRefusal(refusal('post', borgV2))).toBe(true)
+    expect(isAnsweredRefusal(refusal('post', { ...borgV2, feature: 'no_such_feature' }))).toBe(
+      false
+    )
+    expect(isAnsweredRefusal(refusal('post', { key: borgV2.key }))).toBe(false)
   })
 })

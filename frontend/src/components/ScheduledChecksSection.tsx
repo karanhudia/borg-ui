@@ -19,7 +19,8 @@ import {
 } from '@mui/material'
 import ResponsiveDialog from './shared/ResponsiveDialog'
 import { Shield, Info } from 'lucide-react'
-import { isPlanGatedError, repositoriesAPI } from '../services/api'
+import { repositoriesAPI } from '../services/api'
+import { isAnsweredRefusal } from '../utils/upgradeDialog'
 import { BorgApiClient } from '../services/borgApi'
 import RepoSelect from './RepoSelect'
 import { toast } from 'react-hot-toast'
@@ -210,8 +211,8 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      // The plan refused it: the upgrade card already says why (utils/upgradeDialog).
-      if (isPlanGatedError(error)) return
+      // The plan refused it and the upgrade card already says why.
+      if (isAnsweredRefusal(error)) return
       toast.error(
         translateBackendKey(error.response?.data?.detail) || t('scheduledChecks.toasts.checkFailed')
       )

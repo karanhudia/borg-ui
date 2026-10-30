@@ -26,6 +26,9 @@ interface PlanGateProps {
   analyticsData?: Record<string, unknown>
   /** Optional feature-specific upgrade prompt message */
   message?: string
+  /** With `disabled`: the control's own name, so a screen reader hears which
+   *  lock it is (its children are inert and cannot name it) */
+  label?: string
 }
 
 export default function PlanGate({
@@ -39,6 +42,7 @@ export default function PlanGate({
   operation = 'render_gate',
   analyticsData,
   message,
+  label,
 }: PlanGateProps) {
   const { t } = useTranslation()
   const { can, isLoading } = usePlan()
@@ -88,6 +92,7 @@ export default function PlanGate({
         <Box
           role="button"
           tabIndex={0}
+          aria-label={label ? `${label}, ${requiresPlan}` : requiresPlan}
           onClick={openLock}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' && event.key !== ' ') return

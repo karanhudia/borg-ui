@@ -342,6 +342,7 @@ const MonitoringReportsTab: React.FC = () => {
               disabled
               surface="monitoring_reports"
               operation="run_check"
+              label={t('monitoringReports.runCheckNow')}
             >
               <Button
                 variant="outlined"
@@ -514,6 +515,7 @@ const MonitoringReportsTab: React.FC = () => {
               disabled
               surface="monitoring_reports"
               operation="send_report"
+              label={t('monitoringReports.sendReportNow')}
             >
               <Button
                 variant="outlined"

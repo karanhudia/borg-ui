@@ -5,7 +5,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { Box } from '@mui/material'
-import { backupPlansAPI, isPlanGatedError, repositoriesAPI, RepositoryData } from '../services/api'
+import { backupPlansAPI, repositoriesAPI, RepositoryData } from '../services/api'
+import { isAnsweredRefusal } from '../utils/upgradeDialog'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { resyncStoredArchives } from '../utils/archiveResync'
@@ -495,8 +496,8 @@ export default function Repositories() {
     onError: (error: any) => {
       const detail =
         translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.checkFailed')
-      // The plan refused it: the upgrade card already says why (utils/upgradeDialog).
-      if (!isPlanGatedError(error)) {
+      // The plan refused it and the upgrade card already says why.
+      if (!isAnsweredRefusal(error)) {
         toast.error(detail, error.response?.status === 409 ? { duration: 5000 } : undefined)
       }
       setCheckingRepository(null)
@@ -524,8 +525,8 @@ export default function Repositories() {
     onError: (error: any) => {
       const detail =
         translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.compactFailed')
-      // The plan refused it: the upgrade card already says why (utils/upgradeDialog).
-      if (!isPlanGatedError(error)) {
+      // The plan refused it and the upgrade card already says why.
+      if (!isAnsweredRefusal(error)) {
         toast.error(detail, error.response?.status === 409 ? { duration: 5000 } : undefined)
       }
       setCompactingRepository(null)
@@ -570,8 +571,8 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      // The plan refused it: the upgrade card already says why (utils/upgradeDialog).
-      if (!isPlanGatedError(error)) {
+      // The plan refused it and the upgrade card already says why.
+      if (!isAnsweredRefusal(error)) {
         toast.error(
           translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.pruneFailed')
         )

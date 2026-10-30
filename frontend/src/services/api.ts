@@ -102,8 +102,7 @@ function getBackendErrorKey(detail: unknown): string | null {
   return null
 }
 
-/** A refusal by the plan, which the upgrade dialog answers (utils/upgradeDialog). */
-export function isPlanGatedError(error: unknown): boolean {
+function isPlanGatedError(error: unknown): boolean {
   if (!axios.isAxiosError(error)) return false
   const key = getBackendErrorKey(error.response?.data?.detail)
   return key?.startsWith('backend.errors.plan.') ?? false

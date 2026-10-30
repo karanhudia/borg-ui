@@ -120,9 +120,17 @@ describe('MonitoringReportsTab', () => {
     expect(
       await screen.findByRole('switch', { name: /Enable stale-backup monitoring/i })
     ).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Run check now/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Run check now' })).toBeDisabled()
+    // The lock around it is named after it and opens the upgrade card on click.
+    expect(
+      screen.getByRole('button', { name: 'Run check now, Requires Pro plan' })
+    ).toBeInTheDocument()
     expect(screen.getByRole('switch', { name: /Enable backup reports/i })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Send report now/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send report now' })).toBeDisabled()
+    // The lock around it is named after it and opens the upgrade card on click.
+    expect(
+      screen.getByRole('button', { name: 'Send report now, Requires Pro plan' })
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Save/i })).toBeDisabled()
   }, 30000)
 })

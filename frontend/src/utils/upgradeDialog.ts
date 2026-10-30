@@ -40,18 +40,31 @@ export function closeUpgradeDialog() {
   emit()
 }
 
-/** Called by the API interceptors on every failed request. An action the plan
- *  refused (a Borg 2 backup after full access ended, say) answers with the
- *  upgrade card instead of a bare error. Reads are left alone: a page loading
- *  must never pop a dialog. */
-export function openUpgradeForRefusal(error: unknown) {
+/** The feature an action the plan refused names, when the upgrade dialog can
+ *  answer it: a non-GET request refused with a plan error for a known feature.
+ *  Reads are left alone, so a page loading never pops a dialog. */
+function refusedFeature(error: unknown): Feature | null {
   const err = error as {
     config?: { method?: string }
     response?: { data?: { detail?: unknown } }
   } | null
-  if ((err?.config?.method ?? 'get').toLowerCase() === 'get') return
+  if ((err?.config?.method ?? 'get').toLowerCase() === 'get') return null
   const detail = planDetail(err?.response?.data?.detail)
-  if (!detail?.key?.startsWith('backend.errors.plan.')) return
-  if (!detail.feature || !(detail.feature in FEATURES)) return
-  openUpgradeDialog({ feature: detail.feature as Feature, surface: 'api', refused: true })
+  if (!detail?.key?.startsWith('backend.errors.plan.')) return null
+  if (!detail.feature || !(detail.feature in FEATURES)) return null
+  return detail.feature as Feature
+}
+
+/** Called by the API interceptors on every failed request. An action the plan
+ *  refused (a Borg 2 backup after full access ended, say) answers with the
+ *  upgrade card instead of a bare error. */
+export function openUpgradeForRefusal(error: unknown) {
+  const feature = refusedFeature(error)
+  if (feature) openUpgradeDialog({ feature, surface: 'api', refused: true })
+}
+
+/** True when the upgrade dialog already answered this error, so a caller skips
+ *  its own toast. Any other plan error keeps the caller's message. */
+export function isAnsweredRefusal(error: unknown): boolean {
+  return refusedFeature(error) !== null
 }
