@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { getBrowserTimeZone } from '@/utils/dateUtils'
 import { trackApiError } from '@/utils/analytics'
+import { openUpgradeForRefusal } from '@/utils/upgradeDialog'
 import {
   API_BASE_URL,
   buildApiUrl,
@@ -101,7 +102,8 @@ function getBackendErrorKey(detail: unknown): string | null {
   return null
 }
 
-function isPlanGatedError(error: unknown): boolean {
+/** A refusal by the plan, which the upgrade dialog answers (utils/upgradeDialog). */
+export function isPlanGatedError(error: unknown): boolean {
   if (!axios.isAxiosError(error)) return false
   const key = getBackendErrorKey(error.response?.data?.detail)
   return key?.startsWith('backend.errors.plan.') ?? false
@@ -122,6 +124,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     trackApiError(error)
+    openUpgradeForRefusal(error)
     // Only redirect to login for 401 errors on authenticated endpoints
     // Don't redirect if:
     // 1. We're trying to login

@@ -16,7 +16,7 @@ import {
   Typography,
 } from '@mui/material'
 import { Clock, Info, Play } from 'lucide-react'
-import { backupAPI, backupPlansAPI, repositoriesAPI } from '../services/api'
+import { backupAPI, backupPlansAPI, isPlanGatedError, repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -229,6 +229,8 @@ const Backup: React.FC = () => {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      // The plan refused it: the upgrade card already says why (utils/upgradeDialog).
+      if (isPlanGatedError(error)) return
       toast.error(
         translateBackendKey(error.response?.data?.detail) || t('backup.toasts.startFailed')
       )
