@@ -135,7 +135,7 @@ For setup details and the native install options, see the
 
 ## Plans and pricing
 
-Community is free forever and runs the whole backup workflow on as many installations as you like. Paid plans fund development and add fleet features; every new install gets all of them for its first 30 days.
+Community is free forever and runs the whole backup workflow on as many installations as you like. Paid plans fund development and add fleet features. New installations that contact the activation service get a full-access period with every paid feature (currently 30 days); with `ENABLE_STARTUP_LICENSE_SYNC=false` they start on Community.
 
 - [What stays free](https://borgui.com/free-forever)
 - [Plans, yearly or lifetime keys](https://borgui.com/buy)
