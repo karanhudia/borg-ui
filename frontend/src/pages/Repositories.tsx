@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { Box } from '@mui/material'
 import { backupPlansAPI, repositoriesAPI, RepositoryData } from '../services/api'
+import { isAnsweredRefusal } from '../utils/upgradeDialog'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { resyncStoredArchives } from '../utils/archiveResync'
@@ -495,10 +496,9 @@ export default function Repositories() {
     onError: (error: any) => {
       const detail =
         translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.checkFailed')
-      if (error.response?.status === 409) {
-        toast.error(detail, { duration: 5000 })
-      } else {
-        toast.error(detail)
+      // The plan refused it and the upgrade card already says why.
+      if (!isAnsweredRefusal(error)) {
+        toast.error(detail, error.response?.status === 409 ? { duration: 5000 } : undefined)
       }
       setCheckingRepository(null)
     },
@@ -525,10 +525,9 @@ export default function Repositories() {
     onError: (error: any) => {
       const detail =
         translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.compactFailed')
-      if (error.response?.status === 409) {
-        toast.error(detail, { duration: 5000 })
-      } else {
-        toast.error(detail)
+      // The plan refused it and the upgrade card already says why.
+      if (!isAnsweredRefusal(error)) {
+        toast.error(detail, error.response?.status === 409 ? { duration: 5000 } : undefined)
       }
       setCompactingRepository(null)
     },
@@ -572,9 +571,12 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(
-        translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.pruneFailed')
-      )
+      // The plan refused it and the upgrade card already says why.
+      if (!isAnsweredRefusal(error)) {
+        toast.error(
+          translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.pruneFailed')
+        )
+      }
       setPruneResults(null)
     },
   })

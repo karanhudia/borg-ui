@@ -6548,7 +6548,17 @@
     "trialNeedsAdmin": "Bitten Sie eine Administratorin oder einen Administrator, den Test zu starten.",
     "trialUnavailable": "Derzeit ist kein kostenloser Test verfügbar.",
     "trialEnded": "Ihre Pro-Vorschau ist beendet.",
-    "tryFree": "Kostenlos testen"
+    "tryFree": "Kostenlos testen",
+    "locked": {
+      "database_discovery": "Durchsuche die Quellmaschine nach Datenbanken und füge sie mit wenigen Klicks einem Backup-Plan hinzu. Teil von Pro.",
+      "container_backups": "Sichere das Dateisystem eines Docker-Containers: Borg UI exportiert es in einen Staging-Pfad, bevor Borg es liest. Teil von Pro.",
+      "borg_v2": "Borg-2-Repositories (Beta) anlegen und importieren. Teil von Pro.",
+      "alerting_monitoring": "Werde benachrichtigt, wenn das neueste Archiv eines Repositorys älter ist als erlaubt. Teil von Pro.",
+      "backup_reports": "Sende geplante Zusammenfassungen zur Aktualität der Backups und zur letzten Aktivität. Teil von Pro."
+    },
+    "refused": {
+      "borg_v2": "Dies ist ein Borg-2-Repository. Borg 2 ist Teil von Pro und dein 30-tägiger Vollzugriff ist abgelaufen, daher braucht diese Aktion Pro. Deine Archive sind sicher: Du kannst weiterhin Dateien darin durchsuchen und herunterladen."
+    }
   },
   "announcements": {
     "latestRelease": "Neueste Version",

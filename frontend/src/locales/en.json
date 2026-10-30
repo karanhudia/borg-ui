@@ -6548,7 +6548,17 @@
     "trialNeedsAdmin": "Ask an administrator to start the trial.",
     "trialUnavailable": "A free trial is not available right now.",
     "trialEnded": "Your Pro preview has ended.",
-    "tryFree": "Try it free"
+    "tryFree": "Try it free",
+    "locked": {
+      "database_discovery": "Scan the source machine for databases and add them to a backup plan in a few clicks. Part of Pro.",
+      "container_backups": "Back up a Docker container's filesystem: Borg UI exports it to a staging path before Borg reads it. Part of Pro.",
+      "borg_v2": "Create and import Borg 2 repositories (beta). Part of Pro.",
+      "alerting_monitoring": "Get alerted when a repository's newest archive is older than you allow. Part of Pro.",
+      "backup_reports": "Send scheduled summaries of backup freshness and recent activity. Part of Pro."
+    },
+    "refused": {
+      "borg_v2": "This is a Borg 2 repository. Borg 2 is part of Pro and your 30-day full access has ended, so this action needs Pro. Your archives are safe: you can still browse and download files from them."
+    }
   },
   "announcements": {
     "latestRelease": "Latest release",
