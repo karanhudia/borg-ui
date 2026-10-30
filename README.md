@@ -133,13 +133,14 @@ For setup details and the native install options, see the
 - [Installation guide](https://docs.borgui.com/installation)
 - [Usage guide](https://docs.borgui.com/usage-guide)
 
-## Enterprise
+## Plans and pricing
 
-For teams that need commercial support, larger rollouts, or an enterprise conversation, Borg UI can also support evaluation and deployment beyond the core open source setup.
+Community is free forever and runs the whole backup workflow on as many installations as you like. Paid plans fund development and add fleet features. New installations that contact the activation service get a full-access period with every paid feature (currently 30 days); with `ENABLE_STARTUP_LICENSE_SYNC=false` they start on Community.
 
-- [Learn more](https://borgui.com/buy)
-- Contact: [sales@borgui.com](mailto:sales@borgui.com)
-- You can also explore the live product and documentation at [borgui.com](https://borgui.com)
+- [What stays free](https://borgui.com/free-forever)
+- [Plans, yearly or lifetime keys](https://borgui.com/buy)
+- [How Borg UI compares to Vorta, borgmatic and plain Borg](https://borgui.com/compare)
+- Enterprise and larger rollouts: [sales@borgui.com](mailto:sales@borgui.com)
 
 ## Support
 
