@@ -2712,6 +2712,50 @@
         "delete": "Delete Key"
       }
     },
+    "extraKeys": {
+      "title": "Additional SSH Keys",
+      "description": "Give a remote machine its own key, for example one key per repository on a borgserver. Connections use the system key unless you pick another.",
+      "add": "Add Key",
+      "empty": "No additional keys yet.",
+      "connections_one": "{{count}} connection",
+      "connections_other": "{{count}} connections",
+      "unused": "Not used yet",
+      "copyPublicKey": "Copy public key",
+      "delete": "Delete key",
+      "picker": {
+        "label": "SSH key",
+        "system": "System key",
+        "changeHint": "Changing the key marks the connection as untested. Deploy the new key to the server afterwards."
+      },
+      "addDialog": {
+        "title": "Add SSH Key",
+        "tabGenerate": "Generate",
+        "tabImport": "Import from path",
+        "tabPaste": "Paste",
+        "keyName": "Key Name",
+        "keyNamePlaceholder": "borgserver-repo1",
+        "keyType": "Key Type",
+        "privateKeyPath": "Private Key Path",
+        "privateKeyPathHelper": "Absolute path to the private key file on the Borg UI host",
+        "publicKeyPath": "Public Key Path (Optional)",
+        "publicKeyPathHelper": "Leave empty to use the private key path plus .pub",
+        "privateKey": "Private Key",
+        "privateKeyHelper": "Paste the private key. Keys protected with a passphrase are not supported.",
+        "submit": "Add Key",
+        "submitting": "Adding..."
+      },
+      "deleteDialog": {
+        "title": "Delete SSH Key",
+        "confirm": "Delete the key \"{{name}}\"? This cannot be undone.",
+        "inUse": "These connections use this key. Switch them to another key first.",
+        "delete": "Delete",
+        "deleting": "Deleting..."
+      },
+      "toasts": {
+        "added": "SSH key added",
+        "addFailed": "Failed to add SSH key"
+      }
+    },
     "generateDialog": {
       "title": "Generate System SSH Key",
       "info": "This will generate a new SSH key pair for your system. You can only have one system key at a time.",
@@ -6100,6 +6144,7 @@
         "invalidPublicKeyFormat": "Invalid public key format",
         "keyDeployFailed": "Failed to deploy SSH key: {{error}}",
         "keyGeneratedButDeployFailed": "SSH key generated but deployment failed: {{error}}",
+        "keyInUse": "This SSH key is used by: {{connections}}. Switch those connections to another key first.",
         "keyNameAlreadyExists": "SSH key name already exists",
         "keyRemoveFailed": "Failed to remove SSH key: {{error}}",
         "noSystemKeyFound": "No system SSH key found",

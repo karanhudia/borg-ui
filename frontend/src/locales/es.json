@@ -2712,6 +2712,50 @@
         "delete": "Eliminar clave"
       }
     },
+    "extraKeys": {
+      "title": "Claves SSH adicionales",
+      "description": "Da a una máquina remota su propia clave, por ejemplo una clave por repositorio en un borgserver. Las conexiones usan la clave del sistema salvo que elijas otra.",
+      "add": "Añadir clave",
+      "empty": "Aún no hay claves adicionales.",
+      "connections_one": "{{count}} conexión",
+      "connections_other": "{{count}} conexiones",
+      "unused": "Sin usar todavía",
+      "copyPublicKey": "Copiar clave pública",
+      "delete": "Eliminar clave",
+      "picker": {
+        "label": "Clave SSH",
+        "system": "Clave del sistema",
+        "changeHint": "Al cambiar la clave, la conexión pasa a estar sin probar. Despliega después la nueva clave en el servidor."
+      },
+      "addDialog": {
+        "title": "Añadir clave SSH",
+        "tabGenerate": "Generar",
+        "tabImport": "Importar desde ruta",
+        "tabPaste": "Pegar",
+        "keyName": "Nombre de la clave",
+        "keyNamePlaceholder": "borgserver-repo1",
+        "keyType": "Tipo de clave",
+        "privateKeyPath": "Ruta de la clave privada",
+        "privateKeyPathHelper": "Ruta absoluta del archivo de la clave privada en el host de Borg UI",
+        "publicKeyPath": "Ruta de la clave pública (opcional)",
+        "publicKeyPathHelper": "Déjalo vacío para usar la ruta de la clave privada más .pub",
+        "privateKey": "Clave privada",
+        "privateKeyHelper": "Pega la clave privada. No se admiten claves protegidas con frase de contraseña.",
+        "submit": "Añadir",
+        "submitting": "Añadiendo..."
+      },
+      "deleteDialog": {
+        "title": "Eliminar clave SSH",
+        "confirm": "¿Eliminar la clave \"{{name}}\"? Esta acción no se puede deshacer.",
+        "inUse": "Estas conexiones usan esta clave. Cámbialas primero a otra clave.",
+        "delete": "Eliminar",
+        "deleting": "Eliminando..."
+      },
+      "toasts": {
+        "added": "Clave SSH añadida",
+        "addFailed": "No se pudo añadir la clave SSH"
+      }
+    },
     "generateDialog": {
       "title": "Generar clave SSH del sistema",
       "info": "Esto generará un nuevo par de claves SSH para tu sistema. Solo puedes tener una clave del sistema a la vez.",
@@ -6100,6 +6144,7 @@
         "invalidPublicKeyFormat": "Formato de clave pública no válido",
         "keyDeployFailed": "Error al desplegar la clave SSH: {{error}}",
         "keyGeneratedButDeployFailed": "Clave SSH generada pero el despliegue falló: {{error}}",
+        "keyInUse": "Esta clave SSH la usan: {{connections}}. Cambia primero esas conexiones a otra clave.",
         "keyNameAlreadyExists": "El nombre de la clave SSH ya existe",
         "keyRemoveFailed": "Error al eliminar la clave SSH: {{error}}",
         "noSystemKeyFound": "No se encontró clave SSH del sistema",

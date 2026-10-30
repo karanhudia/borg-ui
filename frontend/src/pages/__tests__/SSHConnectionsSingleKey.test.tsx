@@ -30,6 +30,7 @@ function DeployDialogHarness({
       t={i18n.t.bind(i18n)}
       open={open}
       setOpen={setOpen}
+      sshKeys={[]}
       connectionForm={connectionForm}
       setConnectionForm={setConnectionForm}
       hostError={hostError}

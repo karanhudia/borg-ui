@@ -272,6 +272,8 @@ class SSHKeyGenerate(BaseModel):
     name: str
     key_type: str = "rsa"
     description: Optional[str] = None
+    # False adds an extra key that connections can pick; it is never written to ~/.ssh
+    system_key: bool = True
 
 
 class SSHQuickSetup(BaseModel):
@@ -348,6 +350,7 @@ class SSHConnectionTest(BaseModel):
 
 
 class SSHConnectionUpdate(BaseModel):
+    ssh_key_id: Optional[int] = None
     host: Optional[str] = None
     username: Optional[str] = None
     port: Optional[int] = None
@@ -625,6 +628,40 @@ class SSHKeyImport(BaseModel):
         None  # If not provided, will try {private_key_path}.pub
     )
     description: Optional[str] = None
+    system_key: bool = True
+
+
+def _ensure_key_name_free(db: Session, name: str) -> None:
+    if db.query(SSHKey).filter(SSHKey.name == name).first():
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.ssh.keyNameAlreadyExists"},
+        )
+
+
+def _deploy_system_key_to_filesystem() -> None:
+    """Write the system key to settings.ssh_home_dir. Extra keys never go there."""
+    try:
+        deploy_result = subprocess.run(
+            [sys.executable, str(DEPLOY_SSH_KEY_SCRIPT)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if deploy_result.returncode == 0:
+            logger.info(
+                "System SSH key deployed to filesystem",
+                ssh_home_dir=settings.ssh_home_dir,
+                stdout=deploy_result.stdout,
+            )
+        else:
+            logger.warning(
+                "SSH key deployment had warnings",
+                stderr=deploy_result.stderr,
+                stdout=deploy_result.stdout,
+            )
+    except Exception as e:
+        logger.warning("Failed to deploy SSH key to filesystem", error=str(e))
 
 
 @router.post("/generate")
@@ -633,17 +670,19 @@ async def generate_ssh_key(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Generate the system SSH key (one-time only)"""
+    """Generate the system SSH key (one-time only), or an extra key with system_key=false"""
     try:
-        # Check if system key already exists
-        existing_system_key = (
-            db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
-        )
-        if existing_system_key:
-            raise HTTPException(
-                status_code=400,
-                detail={"key": "backend.errors.ssh.systemKeyAlreadyExists"},
+        if key_data.system_key:
+            existing_system_key = (
+                db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
             )
+            if existing_system_key:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.ssh.systemKeyAlreadyExists"},
+                )
+
+        _ensure_key_name_free(db, key_data.name)
 
         # Validate key type
         valid_types = ["rsa", "ed25519", "ecdsa"]
@@ -678,12 +717,16 @@ async def generate_ssh_key(
         ssh_key = SSHKey(
             name=key_data.name or "System SSH Key",
             description=key_data.description
-            or "System SSH key for all remote connections",
+            or (
+                "System SSH key for all remote connections"
+                if key_data.system_key
+                else None
+            ),
             key_type=key_data.key_type,
             public_key=key_result["public_key"],
             private_key=encrypted_private_key,
             fingerprint=fingerprint,
-            is_system_key=True,
+            is_system_key=key_data.system_key,
             is_active=True,
         )
 
@@ -699,30 +742,14 @@ async def generate_ssh_key(
             user=current_user.username,
         )
 
-        # Deploy SSH key immediately to filesystem
-        try:
-            deploy_result = subprocess.run(
-                [sys.executable, str(DEPLOY_SSH_KEY_SCRIPT)],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if deploy_result.returncode == 0:
-                logger.info(
-                    "System SSH key deployed to filesystem", stdout=deploy_result.stdout
-                )
-            else:
-                logger.warning(
-                    "SSH key deployment had warnings",
-                    stderr=deploy_result.stderr,
-                    stdout=deploy_result.stdout,
-                )
-        except Exception as e:
-            logger.warning("Failed to deploy SSH key to filesystem", error=str(e))
+        if key_data.system_key:
+            _deploy_system_key_to_filesystem()
 
         return {
             "success": True,
-            "message": "backend.success.ssh.systemKeyGenerated",
+            "message": "backend.success.ssh.systemKeyGenerated"
+            if key_data.system_key
+            else "backend.success.ssh.sshKeyCreated",
             "ssh_key": {
                 "id": ssh_key.id,
                 "name": ssh_key.name,
@@ -755,23 +782,17 @@ async def import_ssh_key(
 ):
     """Import an existing SSH key from filesystem (e.g., mounted volume)"""
     try:
-        # Check if system key already exists
-        existing_system_key = (
-            db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
-        )
-        if existing_system_key:
-            raise HTTPException(
-                status_code=400,
-                detail={"key": "backend.errors.ssh.systemKeyAlreadyExists"},
+        if key_data.system_key:
+            existing_system_key = (
+                db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
             )
+            if existing_system_key:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.ssh.systemKeyAlreadyExists"},
+                )
 
-        # Check if name already exists
-        existing_name = db.query(SSHKey).filter(SSHKey.name == key_data.name).first()
-        if existing_name:
-            raise HTTPException(
-                status_code=400,
-                detail={"key": "backend.errors.ssh.keyNameAlreadyExists"},
-            )
+        _ensure_key_name_free(db, key_data.name)
 
         # Read private key from filesystem
         private_key_path = key_data.private_key_path
@@ -860,7 +881,7 @@ async def import_ssh_key(
             public_key=public_key,
             private_key=encrypted_private_key,
             fingerprint=fingerprint,
-            is_system_key=True,
+            is_system_key=key_data.system_key,
             is_active=True,
         )
 
@@ -869,7 +890,7 @@ async def import_ssh_key(
         db.refresh(ssh_key)
 
         logger.info(
-            "System SSH key imported",
+            "System SSH key imported" if key_data.system_key else "SSH key imported",
             name=ssh_key.name,
             key_type=key_type,
             fingerprint=fingerprint,
@@ -877,32 +898,14 @@ async def import_ssh_key(
             user=current_user.username,
         )
 
-        # Deploy SSH key to filesystem (writes to settings.ssh_home_dir)
-        try:
-            deploy_result = subprocess.run(
-                [sys.executable, str(DEPLOY_SSH_KEY_SCRIPT)],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if deploy_result.returncode == 0:
-                logger.info(
-                    "Imported SSH key deployed to filesystem",
-                    ssh_home_dir=settings.ssh_home_dir,
-                    stdout=deploy_result.stdout,
-                )
-            else:
-                logger.warning(
-                    "SSH key deployment had warnings",
-                    stderr=deploy_result.stderr,
-                    stdout=deploy_result.stdout,
-                )
-        except Exception as e:
-            logger.warning("Failed to deploy SSH key to filesystem", error=str(e))
+        if key_data.system_key:
+            _deploy_system_key_to_filesystem()
 
         return {
             "success": True,
-            "message": "backend.success.ssh.systemKeyImported",
+            "message": "backend.success.ssh.systemKeyImported"
+            if key_data.system_key
+            else "backend.success.ssh.sshKeyCreated",
             "ssh_key": {
                 "id": ssh_key.id,
                 "name": ssh_key.name,
@@ -1867,6 +1870,24 @@ def update_ssh_connection(
                 detail={"key": "backend.errors.ssh.sshConnectionNotFound"},
             )
 
+        if (
+            connection_data.ssh_key_id is not None
+            and connection_data.ssh_key_id != connection.ssh_key_id
+        ):
+            if (
+                not db.query(SSHKey)
+                .filter(SSHKey.id == connection_data.ssh_key_id)
+                .first()
+            ):
+                raise HTTPException(
+                    status_code=404,
+                    detail={"key": "backend.errors.ssh.sshKeyNotFound"},
+                )
+            connection.ssh_key_id = connection_data.ssh_key_id
+            # The new key may not be authorised on the server yet
+            connection.status = "unknown"
+            connection.error_message = None
+
         # Update connection details
         if connection_data.host is not None:
             connection.host = connection_data.host
@@ -2367,7 +2388,7 @@ async def redeploy_key_to_connection(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Redeploy the current system SSH key to an existing connection"""
+    """Redeploy the connection's SSH key (the system key if it has none) to it"""
     try:
         # Get the connection
         connection = (
@@ -2379,12 +2400,7 @@ async def redeploy_key_to_connection(
                 detail={"key": "backend.errors.ssh.sshConnectionNotFound"},
             )
 
-        # Get system SSH key
-        system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
-        if not system_key:
-            raise HTTPException(
-                status_code=404, detail={"key": "backend.errors.ssh.noSystemKeyFound"}
-            )
+        ssh_key = _resolve_connection_ssh_key(connection, db)
 
         logger.info(
             "Redeploying SSH key to existing connection",
@@ -2395,7 +2411,7 @@ async def redeploy_key_to_connection(
 
         # Deploy key using existing function
         deploy_result = await deploy_ssh_key_with_copy_id(
-            ssh_key=system_key,
+            ssh_key=ssh_key,
             host=connection.host,
             username=connection.username,
             password=password,
@@ -2404,8 +2420,6 @@ async def redeploy_key_to_connection(
         )
 
         if deploy_result["success"]:
-            # Link connection to system key and update status
-            connection.ssh_key_id = system_key.id
             connection.status = "connected"
             connection.last_success = datetime.utcnow()
             connection.error_message = None
@@ -2664,6 +2678,20 @@ async def delete_ssh_key(
         if not ssh_key:
             raise HTTPException(
                 status_code=404, detail={"key": "backend.errors.ssh.sshKeyNotFound"}
+            )
+
+        if ssh_key.connections and not ssh_key.is_system_key:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "key": "backend.errors.ssh.keyInUse",
+                    "params": {
+                        "connections": [
+                            f"{c.username}@{c.host}:{c.port}"
+                            for c in ssh_key.connections
+                        ]
+                    },
+                },
             )
 
         key_name = ssh_key.name

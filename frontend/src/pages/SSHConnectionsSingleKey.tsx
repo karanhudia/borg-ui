@@ -24,6 +24,7 @@ import {
   createTestConnectionForm,
 } from './ssh-connections-single-key/formDefaults'
 import { normalizeSshHostInput } from './ssh-connections-single-key/hostValidation'
+import { SSH_KEYS_QUERY_KEY, useSshKeys } from './ssh-connections-single-key/useSshKeys'
 import { ConnectionDiagnosticsDialog } from './ssh-connections-single-key/dialogs/ConnectionDiagnosticsDialog'
 import type {
   DeployConnectionPayload,
@@ -89,6 +90,8 @@ export default function SSHConnectionsSingleKey() {
     refetchInterval: 30000,
   })
 
+  const { keys: sshKeys } = useSshKeys(canManageSsh)
+
   const systemKey = systemKeyData?.data?.ssh_key
   const keyExists = systemKeyData?.data?.exists
   const connections: SSHConnection[] = connectionsData?.data?.connections || []
@@ -135,6 +138,7 @@ export default function SSHConnectionsSingleKey() {
     onSuccess: () => {
       toast.success(t('sshConnections.toasts.keyDeployed'))
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })
       setDeployDialogOpen(false)
       setConnectionForm(createConnectionForm())
       track(EventCategory.SSH, EventAction.CREATE, { resource: 'connection' })
@@ -182,6 +186,7 @@ export default function SSHConnectionsSingleKey() {
       sshKeysAPI.updateSSHConnection(data.connectionId, data.connectionData),
     onSuccess: async (_response, variables) => {
       toast.success(t('sshConnections.toasts.connectionUpdated'))
+      queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })
       setEditConnectionDialogOpen(false)
       setSelectedConnection(null)
       track(EventCategory.SSH, EventAction.EDIT, { resource: 'connection' })
@@ -220,6 +225,7 @@ export default function SSHConnectionsSingleKey() {
     onSuccess: async () => {
       toast.success(t('sshConnections.toasts.connectionDeleted'))
       track(EventCategory.SSH, EventAction.DELETE, { resource: 'connection' })
+      queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })
       // The dialog stays open until the list no longer has the row (#1197).
       await queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
       setDeleteConnectionDialogOpen(false)
@@ -333,6 +339,7 @@ export default function SSHConnectionsSingleKey() {
       toast.success(t('sshConnections.toasts.keyDeleted'))
       track(EventCategory.SSH, EventAction.DELETE, { resource: 'key' })
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+      queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })
       // The dialog stays open until the key card no longer shows it (#1197).
       await queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
       setDeleteKeyDialogOpen(false)
@@ -461,9 +468,11 @@ export default function SSHConnectionsSingleKey() {
       return
     }
     setConnectionHostError(undefined)
+    // The chosen key goes in the URL, so keep it out of the body.
+    const { ssh_key_id: chosenKeyId, ...connectionBody } = connectionForm
     deployKeyMutation.mutate({
-      keyId: systemKey.id,
-      connectionData: { ...connectionForm, host: normalizedHost.host },
+      keyId: chosenKeyId ?? systemKey.id,
+      connectionData: { ...connectionBody, host: normalizedHost.host },
     })
   }
 
@@ -487,6 +496,7 @@ export default function SSHConnectionsSingleKey() {
     setSelectedConnection(connection)
     setEditConnectionHostError(undefined)
     setEditConnectionForm({
+      ssh_key_id: connection.ssh_key_id,
       host: connection.host,
       username: connection.username,
       port: connection.port,
@@ -507,9 +517,17 @@ export default function SSHConnectionsSingleKey() {
       return
     }
     setEditConnectionHostError(undefined)
+    // Only send the key when it was changed; the backend resets the status for a new key.
+    const { ssh_key_id: chosenKeyId, ...connectionBody } = editConnectionForm
     updateConnectionMutation.mutate({
       connectionId: selectedConnection.id,
-      connectionData: { ...editConnectionForm, host: normalizedHost.host },
+      connectionData: {
+        ...connectionBody,
+        host: normalizedHost.host,
+        ...(chosenKeyId !== undefined && chosenKeyId !== selectedConnection.ssh_key_id
+          ? { ssh_key_id: chosenKeyId }
+          : {}),
+      },
     })
   }
 
@@ -621,6 +639,7 @@ export default function SSHConnectionsSingleKey() {
         connectionsLoading={connectionsLoading}
         keyExists={keyExists}
         systemKey={systemKey}
+        sshKeys={sshKeys}
         connections={connections}
         canManageSsh={canManageSsh}
         keyVisible={keyVisible}
