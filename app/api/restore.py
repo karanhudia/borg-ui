@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 import structlog
 from typing import Any, List, Literal, Optional
@@ -8,6 +8,11 @@ from datetime import datetime, timezone
 
 from app.database.models import User, Repository
 from app.database.database import get_db
+from app.core.borg_errors import (
+    get_exit_code_message,
+    is_borg_warning_exit_code,
+    is_lock_contention_exit_code,
+)
 from app.core.borg_router import BorgRouter
 from app.core.permissions import REPOSITORY_ACTION_RULES
 from app.core.security import (
@@ -25,9 +30,22 @@ from app.services.operations.restore_facade import (
     resolve_restore_job,
 )
 from app.services.operations.runner import operation_runner
-from app.services.repository_executor import is_agent_executor
+from app.services.agent_job_dispatcher import (
+    dispatch_agent_cancel_if_connected,
+    dispatch_agent_job_best_effort,
+)
+from app.services.repository_executor import (
+    AGENT_RESTORE_DRY_RUN_JOB_KIND,
+    _tail_reason_line,
+    abandon_agent_repository_operation_job,
+    agent_supports_job,
+    is_agent_executor,
+    queue_agent_repository_operation_job,
+    wait_for_agent_repository_operation_job,
+)
 from app.services.restore_service import restore_service
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.redaction import redact_secrets
 from app.utils.local_paths import is_restore_destination_allowed
 from app.utils.borg_env import (
     get_standard_ssh_opts,
@@ -39,6 +57,7 @@ from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
     resolve_repository_ssh_connection,
 )  # Backward-compatible patch target for tests
+from app.utils.borg_arguments import validate_operand
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -70,10 +89,19 @@ def _require_restore_job_access(
 def _require_allowed_local_destination(
     restore_request: "RestoreRequest", repository: Repository, user: User
 ) -> None:
-    # SSH destinations and agent repositories write on another host; only a
-    # restore that lands on this server is checked. Admins set up the mounts
-    # themselves, so only other users are confined to the mount points.
-    if restore_request.destination_type == "ssh" or is_agent_executor(repository):
+    # An agent repository restores on the agent's host, where no mount points
+    # confine a path: only administrators choose a destination there.
+    if is_agent_executor(repository):
+        if user.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"key": "backend.errors.auth.notEnoughPermissions"},
+            )
+        return
+    # SSH destinations write on another host; only a restore that lands on this
+    # server is checked. Admins set up the mounts themselves, so only other
+    # users are confined to the mount points.
+    if restore_request.destination_type == "ssh":
         return
     if not is_restore_destination_allowed(
         restore_request.destination,
@@ -117,6 +145,18 @@ class RestorePathMetadata(BaseModel):
 
 
 class RestoreRequest(BaseModel):
+    @field_validator("archive")
+    @classmethod
+    def validate_archive(cls, value: str) -> str:
+        return validate_operand(value, "archive selector")
+
+    @field_validator("paths")
+    @classmethod
+    def validate_paths(cls, values: List[str]) -> List[str]:
+        for value in values:
+            validate_operand(value, "restore path", archive_path=True)
+        return values
+
     repository: str
     archive: str
     paths: List[str]
@@ -139,6 +179,82 @@ def _restore_path_metadata_to_dict(item: RestorePathMetadata) -> dict:
     return item.dict()
 
 
+async def _agent_restore_preview(
+    db: Session, repo: Repository, restore_request: RestoreRequest
+) -> dict:
+    """An agent repository's restore preview: the extract dry run, on its
+    agent (`repository.restore_dry_run`). The answer is the last lines Borg
+    printed, as the server's own preview answers with Borg's output. An
+    agent from before the job is refused, as before it existed.
+
+    A wait that ends without the job's verdict (the timeout, a client that
+    left) takes the job back: the dry run reads every chunk of the selected
+    paths and must not go on for nobody."""
+    if not agent_supports_job(db, repo, AGENT_RESTORE_DRY_RUN_JOB_KIND):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.restore.agentPreviewUnsupported"},
+        )
+    from app.api.archives import _archive_extract_selector
+    from app.api.repositories import get_operation_timeouts
+
+    agent_job = queue_agent_repository_operation_job(
+        db,
+        repo,
+        job_kind=AGENT_RESTORE_DRY_RUN_JOB_KIND,
+        operation={
+            # a Borg 2 archive id names one archive only as `aid:`
+            "archive": _archive_extract_selector(restore_request.archive, repo),
+            "paths": list(restore_request.paths),
+        },
+    )
+    try:
+        await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo.id)
+        result = await wait_for_agent_repository_operation_job(
+            db,
+            agent_job.id,
+            timeout_seconds=get_operation_timeouts(db)["backup_timeout"],
+        )
+    except BaseException:
+        # a job that is over is left as it is
+        abandoned = abandon_agent_repository_operation_job(db, agent_job.id)
+        if abandoned is not None and abandoned.status == "cancel_requested":
+            await dispatch_agent_cancel_if_connected(abandoned)
+        raise
+    return {"preview": result.get("output") or ""}
+
+
+def _server_preview_answer(result: dict) -> dict:
+    """A server repository's preview answer from its extract dry run, as an
+    agent repository's: Borg's output, a warning (a path that matched
+    nothing) included, for a run that went through; a failure with Borg's
+    reason for one that did not (or could not start)."""
+    return_code = result.get("return_code")
+    stdout = (result.get("stdout") or "").rstrip("\n")
+    stderr = (result.get("stderr") or "").rstrip("\n")
+    if return_code == 0 or is_borg_warning_exit_code(return_code):
+        return {"preview": "\n".join(part for part in (stdout, stderr) if part)}
+
+    reason = _tail_reason_line(
+        stderr if stderr.strip() else stdout,
+        lock_contention=is_lock_contention_exit_code(return_code),
+    )
+    if not reason:
+        reason = (
+            get_exit_code_message(return_code)
+            if isinstance(return_code, int)
+            else "Borg did not run"
+        )
+    logger.warning("Restore preview failed", return_code=return_code, reason=reason)
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail={
+            "key": "backend.errors.restore.failedPreviewRestoreWithReason",
+            "params": {"reason": redact_secrets(reason)},
+        },
+    )
+
+
 @router.post("/preview")
 async def preview_restore(
     restore_request: RestoreRequest,
@@ -154,6 +270,10 @@ async def preview_restore(
             restore_request.repository,
             RESTORE_ROLE,
         )
+        if is_agent_executor(repo):
+            # The preview is Borg's extract dry run: on the agent, never on
+            # the server.
+            return await _agent_restore_preview(db, repo, restore_request)
 
         if (
             repo.repository_type == "ssh"
@@ -165,7 +285,6 @@ async def preview_restore(
                 result = await BorgRouter(repo).preview_restore(
                     archive=restore_request.archive,
                     paths=restore_request.paths,
-                    destination=restore_request.destination,
                     env=env,
                 )
             finally:
@@ -174,9 +293,8 @@ async def preview_restore(
             result = await BorgRouter(repo).preview_restore(
                 archive=restore_request.archive,
                 paths=restore_request.paths,
-                destination=restore_request.destination,
             )
-        return {"preview": result["stdout"]}
+        return _server_preview_answer(result)
     except HTTPException:
         raise
     except Exception as e:

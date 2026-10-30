@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 
 import { useAuth } from '../../hooks/useAuth'
-import QuickStartDialog from './QuickStartDialog'
+import QuickStartDialog, { type QuickStartTrigger } from './QuickStartDialog'
 import { QuickStartContext } from './quickStartContext'
 import { useQuickStartAutoOpen } from './useQuickStartAutoOpen'
 
@@ -15,12 +15,14 @@ export function QuickStartProvider({ children, allowAutoOpen }: QuickStartProvid
   const { hasGlobalPermission } = useAuth()
   // Quick Start creates a repository; the Repositories page gates that on the same permission.
   const canQuickStart = hasGlobalPermission('repositories.manage_all')
-  const [open, setOpen] = useState(false)
-  const openQuickStart = useCallback(() => setOpen(true), [])
+  // How it was opened, for analytics; null while closed.
+  const [openedBy, setOpenedBy] = useState<QuickStartTrigger | null>(null)
+  const openQuickStart = useCallback(() => setOpenedBy('manual'), [])
+  const autoOpen = useCallback(() => setOpenedBy('auto'), [])
 
   useQuickStartAutoOpen({
-    enabled: canQuickStart && allowAutoOpen && !open,
-    onOpen: openQuickStart,
+    enabled: canQuickStart && allowAutoOpen && openedBy === null,
+    onOpen: autoOpen,
   })
 
   const value = useMemo(
@@ -33,8 +35,10 @@ export function QuickStartProvider({ children, allowAutoOpen }: QuickStartProvid
       {children}
       {canQuickStart && (
         <QuickStartDialog
-          open={open}
-          onClose={() => setOpen(false)}
+          open={openedBy !== null}
+          // Only read while open.
+          trigger={openedBy ?? 'manual'}
+          onClose={() => setOpenedBy(null)}
           canAddMachine={hasGlobalPermission('settings.ssh.manage')}
         />
       )}

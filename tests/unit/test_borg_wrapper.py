@@ -66,6 +66,7 @@ class TestBorgWrapper:
             "--noacls",
             "--noxattrs",
             "--noflags",
+            "--",
             "/repo::archive-1",
             "home/user/file.txt",
         ]
@@ -98,6 +99,7 @@ class TestBorgWrapper:
             "--noacls",
             "--noxattrs",
             "--noflags",
+            "--",
             "/repo::archive-1",
             "home/user/file.txt",
         ]
@@ -118,9 +120,9 @@ class TestBorgWrapper:
             "--bypass-lock",
             "--strip-components",
             "2",
+            "--",
             "/repo::archive-1",
             "-",
-            "--",
             "home/user/Documents",
         ]
 

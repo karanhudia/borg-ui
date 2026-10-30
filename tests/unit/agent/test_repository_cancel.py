@@ -1,6 +1,7 @@
 """A cancelled repository operation ends its process on the agent even while
 the process prints nothing (agent 0.1.7, `jobs.cancel`)."""
 
+import base64
 import os
 import subprocess
 import sys
@@ -187,6 +188,170 @@ def test_delete_archive_without_a_cancel_reports_its_output():
     assert result.status == "completed"
     complete = [call for call in client.calls if call[0] == "complete"]
     assert complete[0][1]["data"] == {"ok": True}
+
+
+# Ends half a second after its SIGTERM, as Borg does while it lets go of
+# the repository lock.
+SLOW_TO_END = [
+    sys.executable,
+    "-c",
+    "import signal, sys, time\n"
+    "def end(*args):\n"
+    "    time.sleep(0.5)\n"
+    "    sys.exit(143)\n"
+    "signal.signal(signal.SIGTERM, end)\n"
+    "time.sleep(30)\n",
+]
+
+
+class ArtifactClient(RecordingClient):
+    def upload_artifact(self, job_id, data):
+        while data.read(65536):
+            pass
+        return {"accepted": True}
+
+
+@pytest.mark.parametrize(
+    "client_class,job_kind,operation",
+    [
+        (
+            ArtifactClient,
+            "repository.extract_archive_file",
+            {"archive": "a", "file_path": "f", "delivery": "artifact"},
+        ),
+        (
+            ArtifactClient,
+            "repository.export_archive_tar",
+            {"archive": "a", "directory_path": "d", "delivery": "artifact"},
+        ),
+        (
+            ArtifactClient,
+            "repository.diff",
+            {"archive": "daily-2", "predecessor": "daily-1"},
+        ),
+        # the base64 answer of a transport without artifact uploads
+        (
+            RecordingClient,
+            "repository.extract_archive_file",
+            {"archive": "a", "file_path": "f"},
+        ),
+    ],
+)
+def test_a_streamed_artifact_job_reports_its_cancel_once_borg_ended(
+    monkeypatch, client_class, job_kind, operation
+):
+    """The session leaves the cancel report of these kinds to the worker,
+    which sends it only once Borg has ended: the server hands the
+    repository to other work on that report."""
+    started = []
+    real_popen = subprocess.Popen
+
+    class RecordingPopen(real_popen):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            started.append(self)
+
+    monkeypatch.setattr(repository_ops.subprocess, "Popen", RecordingPopen)
+    monkeypatch.setattr(
+        RepositoryOperationPayload, "build_command", lambda self: SLOW_TO_END
+    )
+
+    class Client(client_class):
+        def cancel_job(self, job_id):
+            self.calls.append(("cancel", started[0].poll() is not None))
+
+    client = Client()
+
+    result = execute_repository_operation_job(
+        {
+            "id": 14,
+            "payload": {
+                "schema_version": 1,
+                "job_kind": job_kind,
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": operation,
+            },
+        },
+        client,
+        should_cancel=_cancel_after(0.3),
+    )
+
+    assert result.status == "canceled"
+    assert client.calls[-1] == ("cancel", True)
+    assert not {"complete", "fail"} & set(client.kinds())
+
+
+def test_a_cancelled_stream_kills_a_child_that_holds_only_stderr(monkeypatch):
+    """Borg ends on SIGTERM, a child that ignores it keeps only stderr open:
+    the worker reads stderr to its end, so the group kill must still come
+    or the cancel is never reported."""
+    from agent.borg_ui_agent import cancel
+
+    monkeypatch.setattr(cancel, "KILL_GROUP_AFTER_SECONDS", 0.5)
+    wrapper = (
+        "import subprocess, time; "
+        "subprocess.Popen(['sh', '-c', 'trap \"\" TERM; exec sleep 30'], "
+        "stdout=subprocess.DEVNULL); "
+        "time.sleep(30)"
+    )
+    monkeypatch.setattr(
+        RepositoryOperationPayload,
+        "build_command",
+        lambda self: [sys.executable, "-c", wrapper],
+    )
+    client = ArtifactClient()
+    started = time.monotonic()
+
+    result = execute_repository_operation_job(
+        {
+            "id": 16,
+            "payload": {
+                "schema_version": 1,
+                "job_kind": "repository.diff",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "daily-2", "predecessor": "daily-1"},
+            },
+        },
+        client,
+        should_cancel=_cancel_after(0.3),
+    )
+
+    assert result.status == "canceled"
+    assert time.monotonic() - started < 15
+    assert ("cancel", 16) in client.calls
+
+
+def test_a_base64_extract_without_a_cancel_returns_its_bytes(monkeypatch):
+    monkeypatch.setattr(
+        RepositoryOperationPayload,
+        "build_command",
+        lambda self: [
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.buffer.write(bytes([0, 255, 10]))",
+        ],
+    )
+    client = RecordingClient()
+
+    result = execute_repository_operation_job(
+        {
+            "id": 15,
+            "payload": {
+                "schema_version": 1,
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "a", "file_path": "f"},
+            },
+        },
+        client,
+        should_cancel=lambda: False,
+    )
+
+    assert result.status == "completed"
+    complete = [call for call in client.calls if call[0] == "complete"]
+    assert complete[0][1]["content_base64"] == base64.b64encode(
+        bytes([0, 255, 10])
+    ).decode("ascii")
 
 
 def test_cancellable_run_keeps_the_timeout():

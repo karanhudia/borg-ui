@@ -52,6 +52,7 @@ from app.services.operations.rclone_facade import RcloneSyncFacade
 from app.services.operations.index_mode import MODE_KINDS, indexes_history
 from app.services.operations.index_mode import mode_of as index_mode_of
 from app.services.operations.reconcile import enqueue_reconcile_run
+from app.services.operations.archive_sync_health import archive_sync_warnings
 from app.services.operations.runner import operation_runner
 from app.services.operations.repository_status import (
     LastRuns,
@@ -60,7 +61,7 @@ from app.services.operations.repository_status import (
     storage_summaries,
 )
 from app.core.authorization import authorize_request
-from app.core.security import get_current_user, check_repo_access
+from app.core.security import get_current_user, check_repo_access, require_any_role
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error, is_repository_exists_failure
@@ -93,6 +94,8 @@ from app.services.repository_wipe_service import (
     repository_wipe_service,
 )
 from app.services.repository_executor import (
+    AGENT_KEY_EXPORT_JOB_KIND,
+    agent_supports_job,
     agent_timezone_for_repository,
     is_agent_executor,
     legacy_execution_target,
@@ -3518,6 +3521,13 @@ def get_repositories(
             index_pending = {}
             reload_rows()
 
+        try:
+            sync_warnings = archive_sync_warnings(db, repositories)
+        except Exception as exc:
+            logger.warning("Failed to compute archive sync warnings", error=str(exc))
+            sync_warnings = {}
+            reload_rows()
+
         # What each card reads per repository, loaded once for the page:
         # a query per repository here made the list cost five statements
         # per repository on every poll (#1091).
@@ -3577,6 +3587,7 @@ def get_repositories(
                 "total_size": repo.total_size,
                 "storage": storage_payload(storage.get(repo.id)),
                 "index_pending_kinds": index_pending.get(repo.id, []),
+                "archive_sync_warning": sync_warnings.get(repo.id),
                 "archive_count": repo.archive_count,
                 "created_at": format_datetime(repo.created_at),
                 "updated_at": format_datetime(repo.updated_at),
@@ -3609,7 +3620,7 @@ def get_repositories(
                 "schedule_name": schedule_summary["schedule_name"],
                 "schedule_timezone": schedule_summary["schedule_timezone"],
                 "next_run": schedule_summary["next_run"],
-                "has_keyfile": repo.has_keyfile or False,
+                "has_keyfile": _offers_keyfile_download(db, repo, agents=page.agents),
                 "source_ssh_connection_id": repo.source_ssh_connection_id,
                 "borg_version": borg_major(repo),
             }
@@ -4602,6 +4613,40 @@ async def upload_keyfile(
         )
 
 
+def _has_exportable_keyfile(repository: Repository) -> bool:
+    """Whether the repository's key is a keyfile that can be exported.
+
+    `has_keyfile` marks a keyfile the server keeps: it is set when the server
+    creates or imports a keyfile repository, or a key is uploaded. An agent
+    repository's keyfile lives on its agent's machine, so its encryption
+    mode says it; the agent exports the key there. A Borg 2 repository's
+    encryption mode says it as well: Borg 2 repositories the server created
+    before it set `has_keyfile` for them still have it false."""
+    if repository.has_keyfile:
+        return True
+    if not (repository.encryption or "").startswith("keyfile"):
+        return False
+    return is_agent_executor(repository) or is_borg2(repository)
+
+
+def _offers_keyfile_download(
+    db: Session,
+    repository: Repository,
+    *,
+    agents: Optional[Dict[int, AgentMachine]] = None,
+) -> bool:
+    """`has_keyfile` as the repository payload reports it: whether the key
+    can be downloaded (the info dialog shows its button by it). An agent
+    repository's key is exported by its agent, so an agent from before
+    `repository.key_export` offers none; the download route refuses it.
+    `agents` as in `_agent_machine_summary`."""
+    if not _has_exportable_keyfile(repository):
+        return False
+    if not is_agent_executor(repository):
+        return True
+    return agent_supports_job(db, repository, AGENT_KEY_EXPORT_JOB_KIND, agents=agents)
+
+
 @router.get("/{repo_id}/keyfile")
 async def download_keyfile(repo_id: int, db: Session = Depends(get_db)):
     """Export and download the keyfile for a repository that uses keyfile encryption.
@@ -4615,9 +4660,30 @@ async def download_keyfile(repo_id: int, db: Session = Depends(get_db)):
             status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"}
         )
 
-    if not repository.has_keyfile:
+    if not _has_exportable_keyfile(repository):
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.repo.repoHasNoKeyfile"}
+        )
+    if is_agent_executor(repository):
+        # `borg key export` runs on the agent, never on the server; an agent
+        # from before the job is refused. The upload above stays either way:
+        # it keeps a copy of the key.
+        if not agent_supports_job(db, repository, AGENT_KEY_EXPORT_JOB_KIND):
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.agentKeyfileExportUnsupported"},
+            )
+        from app.services.agent_key_export import export_agent_repository_key
+
+        content = await export_agent_repository_key(db, repository)
+        return Response(
+            content=content,
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="{_borg_keyfile_name(repository.path)}"'
+                )
+            },
         )
 
     try:
@@ -4721,6 +4787,12 @@ async def get_repository(
         # session back, which would expire every row the payload still reads
         storage = storage_payload(_storage_summary_or_none(db, repository))
         pending_kinds = _index_pending_kinds_or_empty(db, repository)
+        try:
+            sync_warning = archive_sync_warnings(db, [repository]).get(repository.id)
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Failed to compute archive sync warning", error=str(exc))
+            sync_warning = None
 
         repository_payload = {
             "id": repository.id,
@@ -4736,10 +4808,11 @@ async def get_repository(
             "total_size": repository.total_size,
             "storage": storage,
             "index_pending_kinds": pending_kinds,
+            "archive_sync_warning": sync_warning,
             "archive_count": repository.archive_count,
             "created_at": format_datetime(repository.created_at),
             "updated_at": format_datetime(repository.updated_at),
-            "has_keyfile": repository.has_keyfile or False,
+            "has_keyfile": _offers_keyfile_download(db, repository),
             "source_ssh_connection_id": repository.source_ssh_connection_id,
             "source_directories": _decode_json_list_field(
                 repository.source_directories
@@ -5958,6 +6031,9 @@ async def delete_repository(
     db: Session = Depends(get_db),
 ):
     """Delete repository (admin only)"""
+    require_any_role(
+        current_user, "admin", detail_key="backend.errors.repo.adminAccessRequired"
+    )
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
@@ -6067,6 +6143,9 @@ async def permanently_delete_repository(
     db: Session = Depends(get_db),
 ):
     """Delete a local repository directory, then remove the Borg UI record."""
+    require_any_role(
+        current_user, "admin", detail_key="backend.errors.repo.adminAccessRequired"
+    )
     try:
         repository = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repository:
@@ -6691,14 +6770,17 @@ async def list_repository_archives(
         )
         router = BorgRouter(repository)
         cmd = router.build_repo_list_command(repository.path)
-        cmd.extend(
+        options = list(
             router.remote_command_options(effective_repository_remote_path(repository))
         )
         # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
         # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
         # where it exists.
         if use_bypass_lock and not router.is_v2:
-            cmd.append("--bypass-lock")
+            options.append("--bypass-lock")
+        # Options must precede "--": Borg reads anything after it as an operand.
+        boundary = cmd.index("--") if "--" in cmd else len(cmd)
+        cmd[boundary:boundary] = options
 
         stdout = await _run_repository_command_with_retries(
             repository,

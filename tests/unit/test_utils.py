@@ -249,11 +249,13 @@ class TestProcessUtils:
 
         query_results = [
             [],  # active backup plan runs
+            [],  # finished runs whose post-backup hooks are still to run
         ]
 
         def build_query(result):
             mock_query = MagicMock()
             mock_query.filter.return_value = mock_query
+            mock_query.order_by.return_value = result
             mock_query.all.return_value = result
             mock_query.first.return_value = None
             return mock_query
@@ -565,6 +567,116 @@ class TestProcessUtils:
         assert child.completed_at is not None
         assert run.status == "failed"
         assert run.completed_at is not None
+
+    @staticmethod
+    def _interrupted_plan_run(db_session, name):
+        repo = Repository(
+            name=f"{name} Repo",
+            path=f"/repos/{name}",
+            encryption="none",
+            repository_type="local",
+        )
+        plan = BackupPlan(
+            name=name,
+            source_directories=json.dumps(["/src"]),
+            repositories=[],
+        )
+        db_session.add_all([repo, plan])
+        db_session.flush()
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="schedule",
+            status="running",
+            started_at=datetime.utcnow(),
+        )
+        db_session.add(run)
+        db_session.flush()
+        return repo, run
+
+    @staticmethod
+    def _operation(db_session, repo, kind, status, run=None, trigger="plan"):
+        operation = Operation(
+            repository_id=repo.id,
+            kind=kind,
+            category="index" if kind == "archive_sync" else "backup",
+            status=status,
+            trigger=trigger,
+            priority=0,
+            run_id=f"run-{kind}-{status}",
+            backup_plan_run_id=run.id if run is not None else None,
+        )
+        db_session.add(operation)
+        db_session.flush()
+        return operation
+
+    def test_cleanup_orphaned_jobs_cancels_queued_operations_of_interrupted_plan_run(
+        self, db_session
+    ):
+        """A run the restart interrupted takes the work it queued with it:
+        nothing of it starts after the restart (#1450)."""
+        repo, run = self._interrupted_plan_run(db_session, "Swept")
+        queued_backup = self._operation(db_session, repo, "backup", "queued", run)
+        queued_followups = [
+            self._operation(db_session, repo, kind, "queued", run, "followup")
+            for kind in ("archive_sync", "prune_compare", "prune")
+        ]
+        running_backup = self._operation(db_session, repo, "backup", "running", run)
+        unrelated = self._operation(
+            db_session, repo, "backup", "queued", trigger="schedule"
+        )
+        live_repo, live_run = self._interrupted_plan_run(db_session, "Kept")
+        live_backup = self._operation(
+            db_session, live_repo, "backup", "queued", live_run
+        )
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session, {live_run.id})
+
+        db_session.refresh(queued_backup)
+        assert queued_backup.status == "cancelled"
+        assert queued_backup.completed_at is not None
+        assert "containerRestartedDuringBackup" in queued_backup.error_message
+        for operation in [*queued_followups, unrelated, live_backup]:
+            db_session.refresh(operation)
+            assert operation.status == "queued"
+            assert operation.completed_at is None
+        # the runner's own recovery fails a running row (spec 7.6)
+        db_session.refresh(running_backup)
+        assert running_backup.status == "running"
+        db_session.refresh(run)
+        assert run.status == "failed"
+        db_session.refresh(live_run)
+        assert live_run.status == "running"
+
+    def test_cleanup_orphaned_jobs_keeps_queued_operations_of_live_plan_run(
+        self, db_session
+    ):
+        repo, run = self._interrupted_plan_run(db_session, "Live")
+        queued_backup = self._operation(db_session, repo, "backup", "queued", run)
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session, {run.id})
+
+        db_session.refresh(queued_backup)
+        db_session.refresh(run)
+        assert queued_backup.status == "queued"
+        assert run.status == "running"
+
+    def test_interrupted_plan_run_is_deletable_after_cleanup(self, db_session):
+        """The failed run the sweep leaves has no queued work that refuses
+        its delete (#1450)."""
+        from app.api.activity import _delete_failed_plan_run
+
+        repo, run = self._interrupted_plan_run(db_session, "Deletable")
+        self._operation(db_session, repo, "backup", "queued", run)
+        db_session.commit()
+        run_id = run.id
+
+        cleanup_orphaned_jobs(db_session)
+        _delete_failed_plan_run(db_session, run_id)
+
+        db_session.expire_all()
+        assert db_session.get(BackupPlanRun, run_id) is None
 
     @patch("app.utils.process_utils.settings")
     @patch("app.utils.process_utils.subprocess.run")

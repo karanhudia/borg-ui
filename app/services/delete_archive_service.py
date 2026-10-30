@@ -114,7 +114,7 @@ class DeleteArchiveService:
             cmd = [borg.borg_cmd, "delete", "--stats", "--progress"]
             if remote_path := effective_repository_remote_path(repository):
                 cmd.extend(["--remote-path", remote_path])
-            cmd.append(f"{repository.path}::{archive_name}")
+            cmd.extend(["--", f"{repository.path}::{archive_name}"])
 
             logger.info(
                 "Starting borg delete",

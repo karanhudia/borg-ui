@@ -421,6 +421,21 @@ The first implementation supports:
   (#1383). It also carries #1387: a
   job naming a present but falsey Borg major (`0`, `""`) is refused instead of
   run as Borg 1
+- since #1425 (versioned at its release), three repository jobs:
+  `repository.restore_dry_run` runs the restore preview's
+  `extract --dry-run` and reports the last lines Borg printed as `output`
+  (a warning, such as a path that matched nothing, completes it with
+  warnings); `repository.key_export` runs `key export` and streams the key
+  only as the job's artifact upload, never as a log line or in the
+  completion report; `repository.delete_archives` deletes the archives it
+  names one after the other (Borg 2's delete takes one), notes a warning
+  and goes on, stops at the first failure and says in the failure report how
+  many it deleted before (`deleted_archives`); the server sends a wipe's
+  confirmed archives in this one job instead of one job per archive
+- Borg operands are separated from options with `--`; option-shaped archive
+  selectors, archive paths, and backup sources are refused before Borg runs,
+  including direct archive-delete helper calls (versioned at its release)
 - cancellation through heartbeat; from 0.1.7 (`jobs.cancel`) a running
   backup, check, prune, compact, restore or archive delete stops as well,
-  even while Borg prints nothing
+  even while Borg prints nothing; so do a restore preview, a key export and
+  the delete of several archives (#1425)

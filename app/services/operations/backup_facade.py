@@ -286,6 +286,17 @@ class BackupJobFacade:
         self.operation.log_file_path = str(path)
 
 
+def backup_result_summary(job: "BackupJobFacade") -> dict:
+    """The `result` the runner writes on a completed backup."""
+    return {
+        "archive_name": job.archive_name,
+        "original_size": job.original_size or 0,
+        "compressed_size": job.compressed_size or 0,
+        "deduplicated_size": job.deduplicated_size or 0,
+        "nfiles": job.nfiles or 0,
+    }
+
+
 def is_backup_operation(job: Any) -> bool:
     """True for every job `resolve_backup_job` returns, since phase 9 left
     one table. Callers keep asking, so the question keeps an answer."""
@@ -687,16 +698,21 @@ def backup_jobs_started_since(
     return _facades(db, ops.all())
 
 
-def recent_backup_jobs(db: Session, limit: int) -> list:
-    """The newest backups by start time, with queued rows kept.
-
-    A queued backup has no `started_at`; it sorts last here rather than being
-    filtered out.
-    """
+def recent_backup_jobs(
+    db: Session, limit: int, *, accessible: Optional[set] = None
+) -> list:
+    """The newest visible backups by start time, with queued rows kept."""
+    query = _operations_query(db)
+    if accessible is not None:
+        query = query.filter(
+            or_(
+                Operation.repository_id.is_(None),
+                Operation.repository_id.in_(accessible),
+            )
+        )
     return _facades(
         db,
-        _operations_query(db)
-        .order_by(nullslast(Operation.started_at.desc()), Operation.id.desc())
+        query.order_by(nullslast(Operation.started_at.desc()), Operation.id.desc())
         .limit(limit)
         .all(),
     )

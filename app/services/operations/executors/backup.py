@@ -19,6 +19,7 @@ transport has notified is notified from here.
 import asyncio
 import json
 from datetime import datetime
+from typing import Optional
 
 import structlog
 
@@ -35,6 +36,7 @@ from app.services.operations.backup_facade import (
     SERVICE_PARAMS,
     BackupJobFacade,
     admission_ignore_for,
+    backup_result_summary,
     failed_after_create,
     resolve_backup_job,
 )
@@ -42,6 +44,7 @@ from app.services.operations.executors.maintenance import cancel_watcher
 from app.services.operations.runner import Outcome
 from app.services.operations.vocab import TERMINAL_STATUSES
 from app.services.agent_job_notifications import notify_backup_job_finished
+from app.services.agent_presence import AGENT_OFFLINE_SKIP_REASON
 from app.services.agent_repository_hooks import (
     SKIPPED,
     AgentHookResult,
@@ -55,8 +58,10 @@ from app.services.job_admission import (
     ensure_repository_admission,
 )
 from app.services.repository_executor import (
+    EXECUTOR_AGENT,
     cancel_agent_backup_job,
     get_agent_job_for_backup,
+    is_agent_executor,
     queue_agent_backup_job,
     wait_for_agent_backup_job,
 )
@@ -287,10 +292,22 @@ async def _run_agent_backup(ctx, job, repository, params) -> None:
 
     db.expire_all()
     job = BackupJobFacade(db, db.get(Operation, ctx.operation_id))
+    if job.operation.skip_reason == AGENT_OFFLINE_SKIP_REASON and not (
+        pre_ran or _pre_hooks_ran(db, ctx.operation_id)
+    ):
+        # The agent never got the backup (#1331), and has nothing to undo:
+        # its post-backup hooks would only wait for it as well. Once a
+        # pre-backup hook ran, in this run or before a restart it resumed
+        # from, they run, so a service it stopped is started again when the
+        # agent is back.
+        return
     status = "cancelled" if ctx.cancelled() else job.status
     backup_result = {
         "completed": "success",
         "completed_with_warnings": "warning",
+        # skipped after a pre-backup hook ran (#1331): the hooks hear what
+        # they hear after a skipping pre-backup hook
+        "skipped": SKIPPED,
     }.get(status, "failure")
     if backup_result == "success" and (unrunnable or warnings):
         # the backup ends with a warning, and its post-backup hooks hear so,
@@ -328,6 +345,18 @@ async def _run_agent_backup(ctx, job, repository, params) -> None:
                 )
             )
             db.commit()
+        elif status == "skipped":
+            # a skip whose cleanup failed is not a graceful one: what a
+            # pre-backup hook stopped may still be stopped (#1331)
+            job.status = "failed"
+            job.error_message = (job.error_message or "") + (
+                "\n"
+                + _hook_failure_message(
+                    "backend.errors.service.postBackupHooksAlsoFailed", post
+                )
+            )
+            db.commit()
+            await notify_backup_job_finished(db, job)
     elif status == "completed" and (unrunnable or warnings):
         job.status = "completed_with_warnings"
         messages = []
@@ -350,6 +379,61 @@ async def _run_agent_backup(ctx, job, repository, params) -> None:
         await notify_backup_job_finished(db, job)
 
 
+def _backup_executor(ctx, job, repository) -> str:
+    """Where the backup runs, decided now from the repository's current
+    executor rather than the one it was queued with: a repository moved to
+    an agent (or back) while the backup waited has its Borg on the other
+    side now. A backup resumed after a restart whose agent job is still live
+    stays with that job."""
+    if is_agent_executor(repository):
+        return EXECUTOR_AGENT
+    if ctx.params.get("executor") == EXECUTOR_AGENT:
+        live_job = get_agent_job_for_backup(ctx.db, job)
+        if live_job is not None and live_job.status in ACTIVE_AGENT_STATUSES:
+            return EXECUTOR_AGENT
+    return "server"
+
+
+def _record_backup_executor(ctx, job, repository, executor: str) -> None:
+    """Store a changed executor on the row, with the execution mode the
+    creation site would have given it, so the cancel path and the UI read
+    where the backup runs."""
+    from app.services.backup_route_planner import apply_repository_route_to_backup_job
+
+    operation = ctx.db.get(Operation, ctx.operation_id)
+    logger.info(
+        "Backup executor follows the repository",
+        operation_id=ctx.operation_id,
+        repository_id=repository.id,
+        queued_executor=ctx.params.get("executor"),
+        executor=executor,
+    )
+    operation.params = {**(operation.params or {}), "executor": executor}
+    if executor == EXECUTOR_AGENT:
+        job.route_strategy = None
+        job.execution_mode = EXECUTOR_AGENT
+    else:
+        job.execution_mode = "local"
+        apply_repository_route_to_backup_job(job, repository)
+    ctx.db.commit()
+
+
+def _sources_refusal(repository, params) -> Optional[str]:
+    """The error a backup that changes executor gets for the source
+    locations it was queued with (a plan's), or None. An agent's paths are
+    no server paths, nor the other way round, so they are checked against
+    the repository's new executor as the plan route checks them."""
+    from app.services.backup_route_planner import plan_repository_route
+
+    source_locations = params.get("source_locations")
+    if not source_locations:
+        return None
+    route = plan_repository_route(repository, source_locations)
+    if route.supported:
+        return None
+    return json.dumps({"key": route.reason_key, "params": route.display_params})
+
+
 async def run_backup(ctx) -> Outcome:
     from app.services.backup_service import backup_service
 
@@ -364,7 +448,17 @@ async def run_backup(ctx) -> Outcome:
     params = ctx.params
     job = BackupJobFacade(ctx.db, ctx.db.get(Operation, ctx.operation_id))
 
-    if params.get("executor") == "agent":
+    executor = _backup_executor(ctx, job, repository)
+    if executor != (params.get("executor") or "server"):
+        refusal = _sources_refusal(repository, params)
+        if refusal is not None:
+            job.status = "failed"
+            job.error_message = refusal
+            job.completed_at = datetime.utcnow()
+            ctx.db.commit()
+            return Outcome(status="failed", error_message=refusal)
+        _record_backup_executor(ctx, job, repository, executor)
+    if executor == EXECUTOR_AGENT:
         await _run_agent_backup(ctx, job, repository, params)
     else:
         watcher = asyncio.create_task(cancel_watcher(ctx, _cancel_server_backup))
@@ -398,17 +492,18 @@ async def run_backup(ctx) -> Outcome:
             error_message=job.error_message or "backup returned no result",
         )
     if status == "skipped":
+        if operation.skip_reason == AGENT_OFFLINE_SKIP_REASON:
+            # the reaper's skip keeps its reason and says why (#1331)
+            return Outcome(
+                status="skipped",
+                skip_reason=operation.skip_reason,
+                error_message=job.error_message,
+            )
         return Outcome(status="skipped", skip_reason=job.error_message)
     if status in ("completed", "completed_with_warnings"):
         return Outcome(
             status=status,
-            result={
-                "archive_name": job.archive_name,
-                "original_size": job.original_size or 0,
-                "compressed_size": job.compressed_size or 0,
-                "deduplicated_size": job.deduplicated_size or 0,
-                "nfiles": job.nfiles or 0,
-            },
+            result=backup_result_summary(job),
             # the runner writes the outcome's message onto the row: a
             # warning keeps the one that says what it was
             error_message=(

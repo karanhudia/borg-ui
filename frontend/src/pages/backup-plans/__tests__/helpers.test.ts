@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { BackupPlan } from '../../../types'
 
-import { backupPlanUsesRepository, parseRepositoryFilterId, processBackupPlans } from '../helpers'
+import {
+  backupPlanRunAnalytics,
+  backupPlanUsesRepository,
+  parseRepositoryFilterId,
+  processBackupPlans,
+} from '../helpers'
 
 const basePlan: BackupPlan = {
   id: 1,
@@ -97,5 +102,41 @@ describe('processBackupPlans', () => {
       { name: 'backupPlans.groups.localSource', plans: [basePlan] },
       { name: 'backupPlans.sourceChooser.mixedSources', plans: [mixedPlan] },
     ])
+  })
+})
+
+describe('backupPlanRunAnalytics', () => {
+  const run = {
+    id: 5,
+    backup_plan_id: 1,
+    trigger: 'manual',
+    status: 'failed',
+    started_at: '2026-10-22T10:00:00Z',
+    completed_at: '2026-10-22T10:01:30Z',
+    error_message: 'borg: /srv/secret: permission denied',
+    repositories: [
+      { id: 1, status: 'completed' },
+      { id: 2, status: 'failed', error_message: 'lock on /srv/x' },
+    ],
+  }
+
+  it('maps a finished run to Complete or Fail with counts, never messages', () => {
+    const [action, props] = backupPlanRunAnalytics(run)
+    expect(action).toBe('Fail')
+    expect(props).toEqual({
+      entity: 'backup_plan',
+      trigger: 'manual',
+      status: 'failed',
+      duration_seconds: 90,
+      repository_count: 2,
+      failed_repository_count: 1,
+    })
+    expect(JSON.stringify(props)).not.toContain('secret')
+    expect(backupPlanRunAnalytics({ ...run, status: 'completed_with_warnings' })[0]).toBe(
+      'Complete'
+    )
+    expect(
+      backupPlanRunAnalytics({ ...run, status: 'skipped', skip_reason: 'source_unavailable' })[1]
+    ).toMatchObject({ status: 'skipped', skip_reason: 'source_unavailable' })
   })
 })

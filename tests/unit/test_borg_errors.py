@@ -6,6 +6,7 @@ import pytest
 import json
 
 from app.core.borg_errors import (
+    ArchiveListingError,
     BORG_EXIT_CODES,
     BORG_MESSAGE_IDS,
     format_error_message,
@@ -14,6 +15,20 @@ from app.core.borg_errors import (
     is_borg_warning_exit_code,
     is_lock_error,
 )
+
+
+def test_long_archive_listing_error_keeps_final_exception_and_redacts_secrets():
+    stderr = (
+        "self test failed BORG_PASSPHRASE=hunter2\n"
+        + "  intermediate frame\n" * 300
+        + "PermissionError: no writable temp directory password=tail-secret"
+    )
+    message = str(ArchiveListingError({"return_code": 2, "stderr": stderr}))
+
+    assert message.startswith("listing archives failed (exit code 2): self test failed")
+    assert "PermissionError: no writable temp directory" in message
+    assert "hunter2" not in message and "tail-secret" not in message
+    assert len(message) < 2100
 
 
 @pytest.mark.unit
@@ -220,3 +235,30 @@ def test_message_id_still_wins_over_the_exit_code():
     assert json.loads(format_error_message(msgid="PassphraseWrong", exit_code=13)) == {
         "key": "backend.errors.borg.passphraseWrong"
     }
+
+
+@pytest.mark.parametrize(
+    "code, diagnostic, expected",
+    [
+        (70, "Failed to acquire the lock /repo/lock.", True),
+        (71, "Failed to acquire the lock /repo/lock.", True),
+        (
+            73,
+            "Failed to create/acquire the lock /cache/lock.exclusive (timeout).",
+            True,
+        ),
+        (72, "Permission denied (timeout)", False),
+        (74, "Not locked", False),
+        (75, "Not my lock", False),
+        (2, "Failed to create/acquire the lock /repo/lock (timeout).", False),
+        (None, "timeout", False),
+        (True, "timeout", False),
+        (73, "Our lock was killed by another borg", False),
+        (73, "x" * 4000 + "Our lock was killed by another borg" + "y" * 4000, False),
+    ],
+)
+def test_listing_retains_contention_classification_before_truncation(
+    code, diagnostic, expected
+):
+    error = ArchiveListingError({"return_code": code, "stderr": diagnostic})
+    assert error.is_lock_contention is expected

@@ -129,6 +129,37 @@ class RestoreRefused(Exception):
         self.detail = detail
 
 
+class ArchiveListingError(Exception):
+    """An expected Borg listing failure with bounded, secret-free diagnostics."""
+
+    def __init__(self, result: dict | None):
+        from app.utils.redaction import redact_secrets
+
+        result = result or {}
+        message = "listing archives failed"
+        if result.get("return_code") is not None:
+            message += f" (exit code {result['return_code']})"
+        reason = result.get("stderr") or result.get("error")
+        # Classify before bounding the diagnostic: Borg 2 can use 73 when
+        # another process killed our own lock, which must remain terminal.
+        self.is_lock_contention = is_lock_contention_exit_code(
+            result.get("return_code")
+        ) and "Our lock was killed by another borg" not in str(reason or "")
+        if reason:
+            # Redact before truncation: cutting a quoted secret first could
+            # leave part of its value outside the redactor's match.
+            diagnostic = redact_secrets(str(reason)).strip()
+            if len(diagnostic) > 2000:
+                # The last exception follows the frames; keeping only the
+                # start can turn a useful error into an unexplained traceback.
+                marker = "\n... [truncated] ...\n"
+                diagnostic = (
+                    diagnostic[:400] + marker + diagnostic[-(1600 - len(marker)) :]
+                )
+            message += f": {diagnostic}"
+        super().__init__(message)
+
+
 def is_repository_exists_failure(result: dict) -> bool:
     """Whether a failed repository create failed only because the repository
     was already there, the one outcome a caller may treat as success.

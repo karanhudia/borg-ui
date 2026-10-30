@@ -2626,6 +2626,219 @@ class TestBackupPlanRoutes:
         assert plan.enabled is True
         assert plan.next_run is not None
 
+    def test_toggle_disabled_availability_plan_enables_and_sets_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        plan = _create_scheduled_plan(
+            test_db,
+            [repo],
+            enabled=False,
+            schedule_mode="availability",
+            cron_expression=None,
+            availability_check_interval_minutes=30,
+            next_run=None,
+        )
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan.id}/toggle", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert response.json()["next_run"] is not None
+        test_db.refresh(plan)
+        assert plan.enabled is True
+        assert plan.next_run <= datetime.utcnow()
+
+    def test_update_with_unchanged_schedule_keeps_a_due_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        due_at = datetime.utcnow().replace(microsecond=0) - timedelta(seconds=30)
+        plan = _create_scheduled_plan(test_db, [repo], next_run=due_at)
+
+        response = test_client.put(
+            f"/api/backup-plans/{plan.id}",
+            json=_payload(
+                [repo.id],
+                name="Scheduled plan",
+                description="Edited",
+                schedule_enabled=True,
+                cron_expression="0 3 * * *",
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(plan)
+        assert plan.description == "Edited"
+        assert plan.next_run == due_at
+
+    def test_update_with_changed_cron_recomputes_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        due_at = datetime.utcnow().replace(microsecond=0) - timedelta(seconds=30)
+        plan = _create_scheduled_plan(test_db, [repo], next_run=due_at)
+
+        requested_at = datetime.utcnow()
+        response = test_client.put(
+            f"/api/backup-plans/{plan.id}",
+            json=_payload(
+                [repo.id],
+                name="Scheduled plan",
+                schedule_enabled=True,
+                cron_expression="30 4 * * *",
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(plan)
+        assert plan.next_run > requested_at
+        assert (plan.next_run.hour, plan.next_run.minute) == (4, 30)
+
+    def test_update_enabling_a_disabled_plan_recomputes_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        stale_at = datetime.utcnow().replace(microsecond=0) - timedelta(days=3)
+        plan = _create_scheduled_plan(test_db, [repo], enabled=False, next_run=stale_at)
+
+        requested_at = datetime.utcnow()
+        response = test_client.put(
+            f"/api/backup-plans/{plan.id}",
+            json=_payload(
+                [repo.id],
+                name="Scheduled plan",
+                schedule_enabled=True,
+                cron_expression="0 3 * * *",
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(plan)
+        assert plan.enabled is True
+        assert plan.next_run > requested_at
+
+    def test_update_with_unchanged_availability_schedule_keeps_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        next_check = datetime.utcnow().replace(microsecond=0) + timedelta(minutes=20)
+        plan = _create_scheduled_plan(
+            test_db,
+            [repo],
+            schedule_mode="availability",
+            cron_expression=None,
+            availability_check_interval_minutes=30,
+            next_run=next_check,
+        )
+
+        response = test_client.put(
+            f"/api/backup-plans/{plan.id}",
+            json=_payload(
+                [repo.id],
+                name="Scheduled plan",
+                schedule_enabled=True,
+                schedule_mode="availability",
+                availability_check_interval_minutes=30,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(plan)
+        assert plan.next_run == next_check
+
+    def test_update_availability_plan_timezone_only_keeps_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        next_check = datetime.utcnow().replace(microsecond=0) + timedelta(minutes=20)
+        plan = _create_scheduled_plan(
+            test_db,
+            [repo],
+            schedule_mode="availability",
+            cron_expression=None,
+            availability_check_interval_minutes=30,
+            next_run=next_check,
+        )
+
+        response = test_client.put(
+            f"/api/backup-plans/{plan.id}",
+            json=_payload(
+                [repo.id],
+                name="Scheduled plan",
+                schedule_enabled=True,
+                schedule_mode="availability",
+                availability_check_interval_minutes=30,
+                timezone="Europe/Paris",
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(plan)
+        assert plan.timezone == "Europe/Paris"
+        assert plan.next_run == next_check
+
+    def test_update_with_changed_minimum_success_interval_recomputes_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        deferred_until = datetime.utcnow().replace(microsecond=0) + timedelta(hours=20)
+        plan = _create_scheduled_plan(
+            test_db,
+            [repo],
+            schedule_mode="availability",
+            cron_expression=None,
+            availability_check_interval_minutes=1440,
+            min_success_interval_minutes=1440,
+            next_run=deferred_until,
+        )
+
+        response = test_client.put(
+            f"/api/backup-plans/{plan.id}",
+            json=_payload(
+                [repo.id],
+                name="Scheduled plan",
+                schedule_enabled=True,
+                schedule_mode="availability",
+                availability_check_interval_minutes=1440,
+                min_success_interval_minutes=60,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(plan)
+        assert plan.min_success_interval_minutes == 60
+        assert plan.next_run <= datetime.utcnow()
+
+    def test_update_scheduled_plan_without_next_run_computes_one(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        plan = _create_scheduled_plan(test_db, [repo], next_run=None)
+
+        requested_at = datetime.utcnow()
+        response = test_client.put(
+            f"/api/backup-plans/{plan.id}",
+            json=_payload(
+                [repo.id],
+                name="Scheduled plan",
+                schedule_enabled=True,
+                cron_expression="0 3 * * *",
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(plan)
+        assert plan.next_run > requested_at
+
     def test_toggle_plan_repository_disables_link_and_list_reports_it(
         self, test_client: TestClient, admin_headers, test_db
     ):

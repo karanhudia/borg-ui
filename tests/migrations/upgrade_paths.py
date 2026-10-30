@@ -66,6 +66,8 @@ REWRITTEN_VALUES = {
     # Legacy migration 110, rerun by the catch-up, maps anything but
     # 'server' or 'agent' to one of them.
     ("repositories", "executor_type"),
+    # f7a4417c5d4d turns it on for schedules whose repositories have scripts.
+    ("scheduled_jobs", "run_repository_scripts"),
 }
 
 

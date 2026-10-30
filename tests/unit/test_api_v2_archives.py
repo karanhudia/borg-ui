@@ -1195,6 +1195,105 @@ class TestV2ArchiveRoutes:
             == "backend.errors.archives.deleteAlreadyRunning"
         )
 
+    def _series_listing(self, *archive_ids):
+        """`borg2 repo-list --json` of one archive series: every archive
+        carries the plan's name, only the ids differ."""
+        archives = [
+            {"id": archive_id, "name": "series-a", "start": f"2026-10-2{n}T10:00:00"}
+            for n, archive_id in enumerate(archive_ids)
+        ]
+        return {
+            "success": True,
+            "stdout": json.dumps({"archives": archives}),
+            "stderr": "",
+        }
+
+    def test_delete_archive_of_a_series_addresses_it_by_id(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A server-side Borg 2 delete from the archive list names exactly the
+        chosen archive: `borg2 delete series-a` would match the whole series
+        ("needed to match precisely one archive, but matched 2")."""
+        from app.database.models import Operation
+
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        first, second = "a" * 64, "b" * 64
+
+        with patch(
+            "app.api.v2.archives.borg2.list_archives",
+            new=AsyncMock(return_value=self._series_listing(first, second)),
+        ) as list_archives:
+            response = test_client.delete(
+                f"/api/v2/archives/{second}?repository={repo.id}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200, response.text
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.params["archive_name"] == f"aid:{second}"
+        # the id is the selector; no name lookup runs Borg first
+        list_archives.assert_not_awaited()
+
+    def test_delete_archive_keeps_an_aid_selector(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The archive detail page already sends `aid:<id>`."""
+        from app.database.models import Operation
+
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        archive_id = "c" * 64
+
+        response = test_client.delete(
+            f"/api/v2/archives/aid:{archive_id}?repository={repo.id}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200, response.text
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.params["archive_name"] == f"aid:{archive_id}"
+
+    def test_two_archives_of_one_series_can_be_deleted_at_once(
+        self, test_client: TestClient, admin_headers, test_db, held_runner
+    ):
+        """Deletes are rejected per archive: a running delete of one archive
+        of a series does not block another archive of the same series, but
+        a second delete of the same archive is still rejected."""
+        from app.services.operations.enqueue import enqueue
+
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        first, second = "a" * 64, "b" * 64
+        enqueue(
+            test_db,
+            "delete_archive",
+            repository_id=repo.id,
+            trigger="manual",
+            params={"archive_name": f"aid:{first}"},
+        )
+
+        with patch(
+            "app.api.v2.archives.borg2.list_archives",
+            new=AsyncMock(return_value=self._series_listing(first, second)),
+        ) as list_archives:
+            other = test_client.delete(
+                f"/api/v2/archives/{second}?repository={repo.id}",
+                headers=admin_headers,
+            )
+            same = test_client.delete(
+                f"/api/v2/archives/{first}?repository={repo.id}",
+                headers=admin_headers,
+            )
+
+        assert other.status_code == 200, other.text
+        assert same.status_code == 409, same.text
+        list_archives.assert_not_awaited()
+        assert (
+            same.json()["detail"]["key"]
+            == "backend.errors.archives.deleteAlreadyRunning"
+        )
+
     def test_delete_job_status_returns_logs(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):

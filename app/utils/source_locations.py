@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from app.services.filesystem_snapshot_service import normalize_snapshot_config
+from app.utils.borg_arguments import validate_source
 
 SourceLocation = dict[str, Any]
 
@@ -12,7 +13,7 @@ def clean_source_paths(paths: Optional[list[str]]) -> list[str]:
     for path in paths or []:
         value = str(path).strip()
         if value:
-            cleaned.append(value)
+            cleaned.append(validate_source(value))
     return cleaned
 
 

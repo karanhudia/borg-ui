@@ -41,6 +41,7 @@ import { translateBackendKey } from '../utils/translateBackendKey'
 import { Repository } from '../types'
 import MultiRepositorySelector from './MultiRepositorySelector'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { testResult } from '../utils/analytics'
 import NotificationCard from './NotificationCard'
 import ResponsiveDialog from './shared/ResponsiveDialog'
 
@@ -194,7 +195,7 @@ const NotificationsTab: React.FC = () => {
         )
       }
       setTesting(null)
-      trackNotifications(EventAction.TEST, { success: !!response.data.success })
+      trackNotifications(EventAction.TEST, testResult(!!response.data.success))
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -202,6 +203,7 @@ const NotificationsTab: React.FC = () => {
         translateBackendKey(error.response?.data?.detail) || t('notifications.failedToTest')
       )
       setTesting(null)
+      trackNotifications(EventAction.TEST, testResult(false, error))
     },
   })
 

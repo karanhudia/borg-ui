@@ -16,6 +16,7 @@ import structlog
 
 from app.api.archive_download import extract_file_download
 from app.api.archives import (
+    agent_file_download,
     _content_disposition_attachment,
     _stream_agent_archive_tar,
     _tar_strip_components,
@@ -26,6 +27,7 @@ from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.operations.maintenance_start import active_delete_for_archive
 from app.core.security import (
+    require_role_dependency,
     check_repo_access,
     get_current_user,
     get_current_download_user,
@@ -53,6 +55,7 @@ from app.services.repository_executor import (
 from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
 from app.utils.borg_env import effective_repository_remote_path, repository_borg_env
 from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
+from app.utils.borg_arguments import validate_operand
 
 logger = structlog.get_logger()
 # Borg 2 support is the Pro feature, but reading an existing Borg 2 archive is
@@ -109,7 +112,7 @@ async def _agent_archive_contents_result(
     *,
     archive: str,
     path: str,
-    max_lines: int,
+    max_lines: int | None,
     timeout_seconds: int,
 ) -> dict:
     """Run `repository.list_archive_contents` on the managed agent.
@@ -117,12 +120,16 @@ async def _agent_archive_contents_result(
     The agent executes `borg2 list <archive> --json-lines [path]` on the node,
     so passing the `aid:<hex>` selector disambiguates a Borg 2 archive series
     and the returned ``stdout`` is parsed exactly like the server-side result.
+    Without `max_lines` the agent applies its own default cap.
     """
+    operation = {"archive": archive, "path": path}
+    if max_lines is not None:
+        operation["max_lines"] = max_lines
     agent_job = queue_agent_repository_operation_job(
         db,
         repo,
         job_kind="repository.list_archive_contents",
-        operation={"archive": archive, "path": path, "max_lines": max_lines},
+        operation=operation,
     )
     await dispatch_agent_job_best_effort(
         db, agent_job, repository_id=repo.id, archive_name=archive
@@ -189,53 +196,6 @@ def _get_v2_repo(repository: str, db: Session, current_user: User) -> Repository
         )
     check_repo_access(db, current_user, repo, "viewer")
     return repo
-
-
-async def _resolve_archive_name(repo: Repository, archive_ref: str, db: Session) -> str:
-    """Resolve an archive route parameter to the actual Borg archive name.
-
-    The frontend may pass either the archive name or the archive ID/hash. Borg 2
-    commands such as `list` are most reliable when given the real archive name.
-    """
-    if not archive_ref:
-        return archive_ref
-
-    # Fast path for normal archive names.
-    if not ARCHIVE_ID_RE.fullmatch(archive_ref):
-        return archive_ref
-
-    if _repo_needs_custom_env(repo):
-        with repository_borg_env(repo, db) as env:
-            result = await borg2.list_archives(
-                repo.path,
-                passphrase=repo.passphrase,
-                remote_path=effective_repository_remote_path(repo),
-                bypass_lock=repo.bypass_lock,
-                env=env,
-            )
-    else:
-        result = await borg2.list_archives(
-            repo.path,
-            passphrase=repo.passphrase,
-            remote_path=effective_repository_remote_path(repo),
-            bypass_lock=repo.bypass_lock,
-        )
-    if not result["success"]:
-        return archive_ref
-
-    try:
-        payload = json.loads(result["stdout"])
-        archives = payload.get("archives", [])
-    except Exception:
-        return archive_ref
-
-    for archive in archives:
-        if archive.get("id") == archive_ref:
-            return archive.get("name") or archive_ref
-        if archive.get("name") == archive_ref:
-            return archive_ref
-
-    return archive_ref
 
 
 def _get_archive_selector(archive_ref: str) -> str:
@@ -322,6 +282,10 @@ async def get_archive_info(
     db: Session = Depends(get_db),
 ):
     """Get detailed information about a Borg 2 archive."""
+    try:
+        validate_operand(archive_id, "archive selector")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive_id)
     if is_agent_executor(repo):
@@ -380,14 +344,28 @@ async def get_archive_info(
 
         if include_files:
             if is_agent_executor(repo):
-                list_result = await _agent_archive_contents_result(
-                    db,
-                    repo,
-                    archive=archive_selector,
-                    path="",
-                    max_lines=file_limit,
-                    timeout_seconds=_get_list_timeout(db),
-                )
+                try:
+                    list_result = await _agent_archive_contents_result(
+                        db,
+                        repo,
+                        archive=archive_selector,
+                        path="",
+                        # No line cap: the agent ends a listing at its cap
+                        # with a failure. `file_limit` cuts it below, as on
+                        # the server.
+                        max_lines=None,
+                        timeout_seconds=_get_list_timeout(db),
+                    )
+                except HTTPException as exc:
+                    # the files are best effort, as on the server: the
+                    # archive info stands without them
+                    logger.warning(
+                        "Agent file listing for archive info failed",
+                        repository_id=repo.id,
+                        archive=archive_selector,
+                        status_code=exc.status_code,
+                    )
+                    list_result = {"success": False}
             elif _repo_needs_custom_env(repo):
                 with repository_borg_env(repo, db) as env:
                     list_result = await borg2.list_archive_contents(
@@ -462,6 +440,12 @@ async def get_archive_contents(
     Returns {"items": [...]} matching the v1 /browse/ response shape so
     ArchiveContentsDialog works without version branching.
     """
+    try:
+        validate_operand(archive_id, "archive selector")
+        if path:
+            validate_operand(path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive_id)
     fast_browse = is_fast_browse_enabled(db)
@@ -584,7 +568,11 @@ async def get_archive_contents(
 async def delete_archive(
     repository: str,
     archive_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.archives.adminAccessRequired"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Delete a Borg 2 archive (non-blocking background job).
@@ -592,6 +580,10 @@ async def delete_archive(
     Space is NOT freed immediately in Borg 2 — a compact() call is required.
     The scheduled compact after prune/delete handles this automatically.
     """
+    try:
+        validate_operand(archive_id, "archive selector")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
@@ -599,7 +591,10 @@ async def delete_archive(
         )
 
     repo = _get_v2_repo(repository, db, current_user)
-    archive_name = await _resolve_archive_name(repo, archive_id, db)
+    # The archive is addressed by its id: the archives of a series share one
+    # name, so `borg2 delete <name>` matches all of them and deletes none,
+    # while `aid:` names exactly one, as the v1 route sends it.
+    archive_name = _get_archive_selector(archive_id)
 
     # Deletes are rejected per archive, not per repository (spec section 13
     # phase 5): two different archives may be removed at once, the same one
@@ -649,9 +644,18 @@ async def download_file_from_archive(
     db: Session = Depends(get_db),
 ):
     """Extract and download a specific file from a Borg 2 archive."""
+    try:
+        validate_operand(archive, "archive selector")
+        if file_path:
+            validate_operand(file_path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive)
     try:
+        if is_agent_executor(repo):
+            # extracted on the agent, as by the v1 route
+            return await agent_file_download(db, repo, archive_selector, file_path)
 
         async def extract(temp_dir: str):
             if _repo_needs_custom_env(repo):
@@ -699,6 +703,12 @@ async def download_folder_from_archive(
     db: Session = Depends(get_db),
 ):
     """Download one Borg 2 archived directory as a streaming tar file."""
+    try:
+        validate_operand(archive, "archive selector")
+        if directory_path:
+            validate_operand(directory_path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not directory_path.strip().strip("/"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

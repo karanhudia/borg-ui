@@ -1,7 +1,194 @@
 {
   "version": 1,
-  "generated_at": "2026-09-26T00:00:00Z",
+  "generated_at": "2026-10-25T00:00:00Z",
   "announcements": [
+    {
+      "id": "update-available-2.4.1",
+      "type": "update_available",
+      "priority": 200,
+      "title": "Borg UI 2.4.1 is available",
+      "title_localized": {
+        "es": "Borg UI 2.4.1 ya está disponible",
+        "de": "Borg UI 2.4.1 ist verfügbar",
+        "it": "Borg UI 2.4.1 è disponibile"
+      },
+      "message": "Update to Borg UI 2.4.1 for security fixes and a round of fixes to restore, Borg 2, hooks and agents. Updating is recommended.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.4.1 para recibir correcciones de seguridad y una serie de arreglos en la restauración, Borg 2, los hooks y los agentes. Se recomienda actualizar.",
+        "de": "Aktualisieren Sie auf Borg UI 2.4.1 für Sicherheitskorrekturen und eine Reihe von Fehlerbehebungen bei Wiederherstellung, Borg 2, Hooks und Agents. Das Update wird empfohlen.",
+        "it": "Aggiorna a Borg UI 2.4.1 per le correzioni di sicurezza e una serie di correzioni a ripristino, Borg 2, hook e agent. L'aggiornamento è consigliato."
+      },
+      "highlights": [
+        "Security fixes",
+        "Restore preview runs on the server, shows Borg's warnings and needs no destination",
+        "Borg 2: keyfile download for keyfile repositories, delete a single archive of a series",
+        "Post-backup hooks always run once the pre-backup hooks have run",
+        "Agents: restore preview and key export on the agent, an offline agent no longer holds the backup slot",
+        "OIDC sign-in and passkey autofill fixes"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Correcciones de seguridad",
+          "La vista previa de restauración se ejecuta en el servidor, muestra los avisos de Borg y no necesita destino",
+          "Borg 2: descarga del keyfile en repositorios con keyfile y borrado de un solo archivo de una serie",
+          "Los hooks posteriores a la copia siempre se ejecutan si se ejecutaron los previos",
+          "Agentes: vista previa de restauración y exportación de claves en el agente; un agente sin conexión ya no ocupa el turno de copia",
+          "Correcciones en el inicio de sesión OIDC y el autocompletado de passkeys"
+        ],
+        "de": [
+          "Sicherheitskorrekturen",
+          "Die Wiederherstellungsvorschau läuft auf dem Server, zeigt Borgs Warnungen und braucht kein Ziel",
+          "Borg 2: Keyfile-Download für Keyfile-Repositories, einzelnes Archiv einer Serie löschen",
+          "Post-Backup-Hooks laufen immer, sobald die Pre-Backup-Hooks gelaufen sind",
+          "Agents: Wiederherstellungsvorschau und Schlüsselexport auf dem Agent, ein Offline-Agent blockiert den Backup-Slot nicht mehr",
+          "Korrekturen bei OIDC-Anmeldung und Passkey-Autofill"
+        ],
+        "it": [
+          "Correzioni di sicurezza",
+          "L'anteprima del ripristino gira sul server, mostra gli avvisi di Borg e non richiede una destinazione",
+          "Borg 2: download del keyfile per i repository keyfile, eliminazione di un singolo archivio di una serie",
+          "Gli hook post-backup vengono sempre eseguiti dopo quelli pre-backup",
+          "Agent: anteprima del ripristino ed esportazione delle chiavi sull'agent, un agent offline non occupa più lo slot di backup",
+          "Correzioni all'accesso OIDC e al riempimento automatico delle passkey"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualización",
+        "de": "Details zum Upgrade",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.4.1",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-10-25T00:00:00Z",
+      "ends_at": "2027-10-25T00:00:00Z",
+      "target_plans": ["community", "pro", "enterprise"],
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.4.1-rc.999"
+    },
+    {
+      "id": "update-available-2.4.0",
+      "type": "update_available",
+      "priority": 190,
+      "title": "Borg UI 2.4.0 is available",
+      "title_localized": {
+        "es": "Borg UI 2.4.0 ya está disponible",
+        "de": "Borg UI 2.4.0 ist verfügbar",
+        "it": "Borg UI 2.4.0 è disponibile"
+      },
+      "message": "Update to Borg UI 2.4.0 for free managed agents on Community, Borg 2.0.0b25 support, and a round of agent reliability fixes.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.4.0 para tener agentes gestionados gratuitos en Community, compatibilidad con Borg 2.0.0b25 y una serie de mejoras de fiabilidad de los agentes.",
+        "de": "Aktualisieren Sie auf Borg UI 2.4.0 für kostenlose Managed Agents in Community, Unterstützung für Borg 2.0.0b25 und eine Reihe von Zuverlässigkeitsverbesserungen für Agents.",
+        "it": "Aggiorna a Borg UI 2.4.0 per avere gli agent gestiti gratuiti in Community, il supporto a Borg 2.0.0b25 e una serie di miglioramenti di affidabilità degli agent."
+      },
+      "highlights": [
+        "Managed agents are now part of Community, no plan needed",
+        "Borg 2.0.0b25: new repository wizard and archive views, upload limits behind rclone",
+        "Agents keep finished backups final and run repository hooks on the agent",
+        "Moving a legacy schedule to a backup plan no longer fails",
+        "Borg 2 repositories from earlier betas must be recreated; Borg 1 repositories are not affected"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Los agentes gestionados ahora forman parte de Community, sin necesidad de plan",
+          "Borg 2.0.0b25: nuevo asistente de repositorios y vistas de archivo, límites de subida con rclone",
+          "Los agentes mantienen finalizadas las copias terminadas y ejecutan los scripts del repositorio en el agente",
+          "Mover una programación antigua a un plan de copia ya no falla",
+          "Los repositorios Borg 2 de betas anteriores deben recrearse; los repositorios Borg 1 no se ven afectados"
+        ],
+        "de": [
+          "Managed Agents sind jetzt Teil von Community, ganz ohne Plan",
+          "Borg 2.0.0b25: neuer Repository-Assistent und Archivansichten, Upload-Limits über rclone",
+          "Agents lassen abgeschlossene Backups abgeschlossen und führen Repository-Skripte auf dem Agent aus",
+          "Das Übertragen eines alten Zeitplans in einen Backup-Plan schlägt nicht mehr fehl",
+          "Borg-2-Repositories früherer Betas müssen neu angelegt werden; Borg-1-Repositories sind nicht betroffen"
+        ],
+        "it": [
+          "Gli agent gestiti ora fanno parte di Community, senza bisogno di un piano",
+          "Borg 2.0.0b25: nuova procedura guidata dei repository e viste degli archivi, limiti di upload con rclone",
+          "Gli agent mantengono conclusi i backup terminati ed eseguono gli script del repository sull'agent",
+          "Spostare una vecchia pianificazione in un piano di backup non fallisce più",
+          "I repository Borg 2 delle beta precedenti vanno ricreati; i repository Borg 1 non sono interessati"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualización",
+        "de": "Details zum Upgrade",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.4.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-10-22T00:00:00Z",
+      "ends_at": "2027-10-22T00:00:00Z",
+      "target_plans": ["community", "pro", "enterprise"],
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.4.0-rc.999"
+    },
+    {
+      "id": "release-2.4.0-whats-new",
+      "type": "release_highlight",
+      "priority": 150,
+      "title": "What's new in 2.4.0",
+      "title_localized": {
+        "es": "Novedades de la versión 2.4.0",
+        "de": "Neu in 2.4.0",
+        "it": "Novità della versione 2.4.0"
+      },
+      "message": "Borg UI 2.4.0 brings free managed agents on Community, Borg 2.0.0b25 support, and a round of agent reliability fixes.",
+      "message_localized": {
+        "es": "Borg UI 2.4.0 trae agentes gestionados gratuitos en Community, compatibilidad con Borg 2.0.0b25 y una serie de mejoras de fiabilidad de los agentes.",
+        "de": "Borg UI 2.4.0 bringt kostenlose Managed Agents in Community, Unterstützung für Borg 2.0.0b25 und eine Reihe von Zuverlässigkeitsverbesserungen für Agents.",
+        "it": "Borg UI 2.4.0 porta gli agent gestiti gratuiti in Community, il supporto a Borg 2.0.0b25 e una serie di miglioramenti di affidabilità degli agent."
+      },
+      "highlights": [
+        "Managed agents are now part of Community, no plan needed",
+        "Borg 2.0.0b25: new repository wizard and archive views, upload limits behind rclone",
+        "Agents keep finished backups final and run repository hooks on the agent",
+        "Moving a legacy schedule to a backup plan no longer fails",
+        "Borg 2 repositories from earlier betas must be recreated; Borg 1 repositories are not affected"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Los agentes gestionados ahora forman parte de Community, sin necesidad de plan",
+          "Borg 2.0.0b25: nuevo asistente de repositorios y vistas de archivo, límites de subida con rclone",
+          "Los agentes mantienen finalizadas las copias terminadas y ejecutan los scripts del repositorio en el agente",
+          "Mover una programación antigua a un plan de copia ya no falla",
+          "Los repositorios Borg 2 de betas anteriores deben recrearse; los repositorios Borg 1 no se ven afectados"
+        ],
+        "de": [
+          "Managed Agents sind jetzt Teil von Community, ganz ohne Plan",
+          "Borg 2.0.0b25: neuer Repository-Assistent und Archivansichten, Upload-Limits über rclone",
+          "Agents lassen abgeschlossene Backups abgeschlossen und führen Repository-Skripte auf dem Agent aus",
+          "Das Übertragen eines alten Zeitplans in einen Backup-Plan schlägt nicht mehr fehl",
+          "Borg-2-Repositories früherer Betas müssen neu angelegt werden; Borg-1-Repositories sind nicht betroffen"
+        ],
+        "it": [
+          "Gli agent gestiti ora fanno parte di Community, senza bisogno di un piano",
+          "Borg 2.0.0b25: nuova procedura guidata dei repository e viste degli archivi, limiti di upload con rclone",
+          "Gli agent mantengono conclusi i backup terminati ed eseguono gli script del repository sull'agent",
+          "Spostare una vecchia pianificazione in un piano di backup non fallisce più",
+          "I repository Borg 2 delle beta precedenti vanno ricreati; i repository Borg 1 non sono interessati"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la versión",
+        "de": "Versionshinweise ansehen",
+        "it": "Vedi le note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.4.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-10-22T00:00:00Z",
+      "ends_at": "2027-10-22T00:00:00Z",
+      "target_plans": ["community", "pro", "enterprise"],
+      "min_app_version": "2.4.0",
+      "max_app_version": "2.4.0"
+    },
     {
       "id": "borg2-b25-repository-format",
       "type": "migration_notice",
@@ -52,7 +239,7 @@
       "starts_at": "2026-09-29T00:00:00Z",
       "ends_at": "2027-09-29T00:00:00Z",
       "min_app_version": "2.0.0",
-      "max_app_version": "2.3.6",
+      "max_app_version": "2.3.999",
       "target_plans": ["community", "pro", "enterprise"]
     },
     {

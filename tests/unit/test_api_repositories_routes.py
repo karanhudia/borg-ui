@@ -694,6 +694,57 @@ class TestRepositoryHelperContracts:
         assert info_result["info"]["repository"] == {}
 
     @pytest.mark.asyncio
+    async def test_list_repository_archives_puts_borg1_options_before_operands(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        captured = {}
+
+        async def fake_run(*args, **kwargs):
+            captured["cmd"] = kwargs["cmd"]
+            return b'{"archives":[]}'
+
+        with (
+            patch.object(
+                repositories_api, "_load_repository_with_access", return_value=repo
+            ),
+            patch.object(
+                repositories_api,
+                "_resolve_bypass_lock",
+                return_value=(True, "repository"),
+            ),
+            patch.object(
+                repositories_api,
+                "effective_repository_remote_path",
+                return_value="/usr/local/bin/borg",
+            ),
+            patch.object(
+                repositories_api,
+                "get_operation_timeouts",
+                return_value={"info_timeout": 30, "list_timeout": 30},
+            ),
+            patch.object(
+                repositories_api,
+                "_run_repository_command_with_retries",
+                side_effect=fake_run,
+            ),
+        ):
+            await repositories_api.list_repository_archives(
+                repo.id, current_user=object(), db=test_db
+            )
+
+        assert captured["cmd"] == [
+            "borg",
+            "list",
+            "--json",
+            "--remote-path",
+            "/usr/local/bin/borg",
+            "--bypass-lock",
+            "--",
+            "/repos/primary",
+        ]
+
+    @pytest.mark.asyncio
     async def test_list_repository_archives_marks_manual_backup_plan_archive(
         self, test_db
     ):

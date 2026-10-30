@@ -55,7 +55,12 @@ class TestRestorePreview:
         with patch(
             "app.api.restore.BorgRouter.preview_restore", new_callable=AsyncMock
         ) as mock_preview:
-            mock_preview.return_value = {"stdout": "preview output"}
+            mock_preview.return_value = {
+                "return_code": 0,
+                "stdout": "preview output\n",
+                "stderr": "",
+                "success": True,
+            }
             response = test_client.post(
                 "/api/restore/preview",
                 json={
@@ -73,7 +78,6 @@ class TestRestorePreview:
         mock_preview.assert_awaited_once_with(
             archive="test-archive",
             paths=["/file1.txt", "/file2.txt"],
-            destination="/restore/target",
         )
 
     def test_preview_restore_missing_fields(
@@ -135,7 +139,12 @@ class TestRestorePreview:
         with patch(
             "app.api.restore.BorgRouter.preview_restore", new_callable=AsyncMock
         ) as mock_preview:
-            mock_preview.return_value = {"stdout": "preview output"}
+            mock_preview.return_value = {
+                "return_code": 0,
+                "stdout": "preview output\n",
+                "stderr": "",
+                "success": True,
+            }
 
             response = test_client.post(
                 "/api/restore/preview",
@@ -168,7 +177,12 @@ class TestRestorePreview:
         with patch(
             "app.api.restore.BorgRouter.preview_restore", new_callable=AsyncMock
         ) as mock_preview:
-            mock_preview.return_value = {"stdout": "preview output"}
+            mock_preview.return_value = {
+                "return_code": 0,
+                "stdout": "preview output\n",
+                "stderr": "",
+                "success": True,
+            }
             response = test_client.post(
                 "/api/restore/preview",
                 json={
@@ -186,7 +200,6 @@ class TestRestorePreview:
         mock_preview.assert_awaited_once_with(
             archive="test-archive",
             paths=["/file1.txt"],
-            destination="/restore/target",
         )
 
     def test_preview_restore_accepts_repository_id(
@@ -205,7 +218,12 @@ class TestRestorePreview:
         with patch(
             "app.api.restore.BorgRouter.preview_restore", new_callable=AsyncMock
         ) as mock_preview:
-            mock_preview.return_value = {"stdout": "preview output"}
+            mock_preview.return_value = {
+                "return_code": 0,
+                "stdout": "preview output\n",
+                "stderr": "",
+                "success": True,
+            }
             response = test_client.post(
                 "/api/restore/preview",
                 json={
@@ -223,7 +241,6 @@ class TestRestorePreview:
         mock_preview.assert_awaited_once_with(
             archive="test-archive",
             paths=["/file1.txt"],
-            destination="/restore/target",
         )
 
 

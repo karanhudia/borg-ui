@@ -31,6 +31,7 @@ def test_build_extract_command_uses_borg2_archive_identifier():
         "0022",
         "--strip-components",
         "1",
+        "--",
         "manual-1",
         "etc/hosts",
     ]

@@ -79,7 +79,6 @@ class BorgWebUITester:
             "/settings",
             "/repositories",
             "/ssh-keys",
-            "/health",
         ]
 
         all_passed = True
@@ -111,6 +110,7 @@ class BorgWebUITester:
     def test_api_routes_exist(self) -> bool:
         """Test that API routes exist and return proper responses"""
         api_routes = [
+            ("/health", "GET", {200}),
             ("/api", "GET", {200}),
             ("/api/docs", "GET", {200}),
             ("/api/system/info", "GET", {200}),
@@ -123,6 +123,19 @@ class BorgWebUITester:
                     response = self.session.get(f"{self.base_url}{route}", timeout=5)
                 else:
                     response = self.session.post(f"{self.base_url}{route}", timeout=5)
+
+                # /health must reach its handler, not the SPA catch-all.
+                if route == "/health" and response.status_code in expected_statuses:
+                    if not response.headers.get("content-type", "").startswith(
+                        "application/json"
+                    ):
+                        self.log_test(
+                            f"API Route {route}",
+                            False,
+                            f"Expected JSON, got {response.headers.get('content-type')}",
+                        )
+                        all_passed = False
+                        continue
 
                 if response.status_code in expected_statuses:
                     self.log_test(

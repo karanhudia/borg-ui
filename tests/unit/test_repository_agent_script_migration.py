@@ -192,4 +192,10 @@ def test_revision_chains_on_the_previous_head_and_leaves_one_head():
 
     script = ScriptDirectory.from_config(_alembic_config("sqlite://"))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    # Later revisions can extend this migration without creating another head.
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert REVISION in {
+        revision.revision
+        for revision in script.walk_revisions(base="base", head=heads[0])
+    }

@@ -1,9 +1,11 @@
 import axios from 'axios'
+import { markApiRequest } from '@/utils/apiErrorDiagnostics'
 import type { RepositoryStorage } from '../types'
 import type { SyncState } from '../types/archives'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { getBrowserTimeZone } from '@/utils/dateUtils'
+import { trackApiError } from '@/utils/analytics'
 import {
   API_BASE_URL,
   buildApiUrl,
@@ -107,6 +109,7 @@ function isPlanGatedError(error: unknown): boolean {
 
 // Request interceptor to add auth token
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  markApiRequest(config)
   const target = getActiveBackendTarget()
   const targetConfig = config as BackendTargetRequestConfig
   targetConfig.baseURL = getApiBaseUrl(target)
@@ -118,6 +121,7 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    trackApiError(error)
     // Only redirect to login for 401 errors on authenticated endpoints
     // Don't redirect if:
     // 1. We're trying to login

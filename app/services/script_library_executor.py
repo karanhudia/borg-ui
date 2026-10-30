@@ -163,7 +163,11 @@ class ScriptLibraryExecutor:
                 'scripts_executed': int,
                 'scripts_failed': int,
                 'execution_logs': List[str],
-                'executions': List[Dict]  # Execution records
+                'executions': List[Dict],  # Execution records
+                # set when a failing pre-backup script marked
+                # skip_on_failure asks to skip the backup
+                'should_skip': bool,
+                'skip_script_name': str,
             }
         """
         logger.info(
@@ -263,6 +267,26 @@ class ScriptLibraryExecutor:
             execution_logs.extend(result["logs"])
 
             if not result["success"]:
+                if hook_type == "pre-backup" and rs.skip_on_failure:
+                    # A graceful stand-down: the backup is skipped and the
+                    # scripts after this one do not run, as on an agent
+                    # repository (#1427).
+                    logger.info(
+                        "Pre-backup script asks to skip the backup",
+                        script_id=script.id,
+                        script_name=script.name,
+                        exit_code=result["exit_code"],
+                    )
+                    return {
+                        "success": False,
+                        "should_skip": True,
+                        "skip_script_name": script.name,
+                        "scripts_executed": len(executions),
+                        "scripts_failed": scripts_failed,
+                        "execution_logs": execution_logs,
+                        "executions": executions,
+                    }
+
                 # Check if we should continue despite error
                 continue_on_error = (
                     rs.continue_on_error if rs.continue_on_error is not None else True

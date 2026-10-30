@@ -5,6 +5,7 @@ import { renderWithProviders } from '../../test/test-utils'
 import RepositoryCard from '../RepositoryCard'
 import * as useMaintenanceJobsModule from '../../hooks/useMaintenanceJobs'
 import * as useAnalyticsModule from '../../hooks/useAnalytics'
+import { EventAction, EventCategory } from '../../utils/analytics'
 
 // Mock the hooks
 vi.mock('../../hooks/useMaintenanceJobs')
@@ -110,48 +111,10 @@ describe('RepositoryCard', () => {
     trackRemoteClient: vi.fn(),
     trackAnnouncement: vi.fn(),
     trackAuth: vi.fn(),
+    trackQuickStart: vi.fn(),
     buildEntityData: vi.fn(),
-    EventCategory: {
-      REPOSITORY: 'Repository',
-      BACKUP: 'Backup',
-      ARCHIVE: 'Archive',
-      MOUNT: 'Mount',
-      MAINTENANCE: 'Maintenance',
-      SSH: 'SSH Connection',
-      SCRIPT: 'Script',
-      NOTIFICATION: 'Notification',
-      SYSTEM: 'System',
-      PACKAGE: 'Package',
-      SETTINGS: 'Settings',
-      AUTH: 'Authentication',
-      NAVIGATION: 'Navigation',
-      PLAN: 'Plan',
-      ANNOUNCEMENT: 'Announcement',
-      REMOTE_CLIENT: 'Remote Client',
-    } as const,
-    EventAction: {
-      CREATE: 'Create',
-      EDIT: 'Edit',
-      DELETE: 'Delete',
-      VIEW: 'View',
-      START: 'Start',
-      STOP: 'Stop',
-      MOUNT: 'Mount',
-      UNMOUNT: 'Unmount',
-      DOWNLOAD: 'Download',
-      UPLOAD: 'Upload',
-      TEST: 'Test',
-      LOGIN: 'Login',
-      LOGOUT: 'Logout',
-      SEARCH: 'Search',
-      FILTER: 'Filter',
-      EXPORT: 'Export',
-      SWITCH: 'Switch',
-      COMPLETE: 'Complete',
-      FAIL: 'Fail',
-      FEATURE_USED: 'FeatureUsed',
-      FEATURE_BLOCKED: 'FeatureBlocked',
-    } as const,
+    EventCategory,
+    EventAction,
   }
 
   const mockMaintenanceJobs = {
@@ -175,6 +138,42 @@ describe('RepositoryCard', () => {
   })
 
   describe('Basic Rendering', () => {
+    it('shows persistent sync guidance and clears it after recovery', () => {
+      const props = {
+        isInJobsSet: false,
+        getCompressionLabel: mockGetCompressionLabel,
+        ...mockCallbacks,
+      }
+      const { rerender } = renderWithProviders(
+        <RepositoryCard
+          {...props}
+          repository={{
+            ...mockRepository,
+            archive_sync_warning: {
+              operation_id: 72,
+              last_success_at: '2024-01-20T12:30:00Z',
+              error_message: 'Saved SSH key cannot be decrypted. Re-import the original SSH key.',
+            },
+          }}
+        />
+      )
+
+      const syncIssue = screen.getByRole('button', {
+        name: 'Archive sync failed: View details',
+      })
+      expect(syncIssue).toHaveTextContent('Sync issue')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.queryByText('Archive information may be out of date.')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Last successful sync:/)).not.toBeInTheDocument()
+      fireEvent.click(syncIssue)
+      expect(screen.getByText(/Last successful sync:/)).toBeInTheDocument()
+      expect(screen.getByText(/Re-import the original SSH key/)).toBeInTheDocument()
+
+      rerender(<RepositoryCard {...props} repository={mockRepository} />)
+      expect(screen.queryByText('Sync issue')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Re-import the original SSH key/)).not.toBeInTheDocument()
+    })
+
     it('renders repository name and path', () => {
       renderWithProviders(
         <RepositoryCard

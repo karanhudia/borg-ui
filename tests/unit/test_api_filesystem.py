@@ -64,6 +64,71 @@ def _create_ssh_connection_record(
 
 
 @pytest.mark.unit
+class TestSftpBrowseFailures:
+    @pytest.mark.parametrize(
+        ("returncode", "stderr", "expected_status", "expected_key"),
+        [
+            (
+                1,
+                'remote readdir("/nextcloud/data"): Permission denied',
+                403,
+                "backend.errors.filesystem.permissionDenied",
+            ),
+            (
+                0,
+                'remote readdir("/nextcloud/data"): permission denied',
+                403,
+                "backend.errors.filesystem.permissionDenied",
+            ),
+            (1, "Connection closed by remote host", 500, None),
+            (255, "backup@example.com: Permission denied (publickey).", 500, None),
+            (
+                255,
+                "Permission denied (publickey,password,keyboard-interactive).",
+                500,
+                None,
+            ),
+            (
+                1,
+                "Couldn't canonicalize: Permission denied",
+                403,
+                "backend.errors.filesystem.permissionDenied",
+            ),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_browse_classifies_sftp_failures_and_removes_temporary_key(
+        self, test_db, monkeypatch, returncode, stderr, expected_status, expected_key
+    ):
+        secret_key = "a" * 32
+        monkeypatch.setattr(filesystem.settings, "secret_key", secret_key)
+        key = _create_ssh_key_record(test_db, secret_key)
+        key_paths = []
+
+        def sftp_result(key_path, host, username, port, commands):
+            assert Path(key_path).exists()
+            key_paths.append(key_path)
+            return SimpleNamespace(returncode=returncode, stdout="", stderr=stderr)
+
+        monkeypatch.setattr(filesystem, "_run_sftp_batch", sftp_result)
+        with pytest.raises(filesystem.HTTPException) as exc:
+            await filesystem.browse_ssh_filesystem(
+                "/nextcloud/data", key.id, "example.com", "backup", 22, test_db
+            )
+
+        assert exc.value.status_code == expected_status
+        if expected_key:
+            assert exc.value.detail == {
+                "key": expected_key,
+                "params": {"path": "/nextcloud/data"},
+            }
+        else:
+            assert stderr in exc.value.detail
+        assert key_paths
+        assert all(not Path(path).exists() for path in key_paths)
+
+
+@pytest.mark.unit
 class TestFilesystemBrowseLocal:
     def test_browse_local_filesystem_detects_borg_repo_and_mounts(
         self,

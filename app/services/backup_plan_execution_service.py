@@ -6,12 +6,14 @@ import os
 import shlex
 import time
 from dataclasses import dataclass
+from functools import partial
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
 import structlog
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, joinedload
 
@@ -21,6 +23,7 @@ from app.core.borg_router import BorgRouter
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import (
+    AgentJob,
     AgentMachine,
     BackupPlan,
     BackupPlanRepository,
@@ -47,6 +50,11 @@ from app.services.backup_route_planner import (
     plan_repository_route,
 )
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.agent_presence import (
+    AGENT_OFFLINE_SKIP_REASON,
+    agent_is_gone,
+    agent_is_offline,
+)
 from app.services.job_admission import (
     OPERATION_BACKUP,
     PLAN_BACKUP_READ_WAIT_SECONDS,
@@ -54,6 +62,8 @@ from app.services.job_admission import (
     admit_repository_with_read_work_wait,
 )
 from app.services.repository_executor import (
+    TERMINAL_AGENT_STATUSES,
+    get_agent_job_for_backup,
     is_agent_executor,
     queue_agent_script_job,
     wait_for_agent_script_job,
@@ -63,6 +73,13 @@ from app.services.notification_service import notification_service
 from app.services.restore_check_service import restore_check_service
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
+from app.utils.process_utils import (
+    POST_BACKUP_HOOK_MARKERS,
+    POST_BACKUP_HOOKS_AFTER_CANCEL,
+    POST_BACKUP_HOOKS_AFTER_RESTART,
+    PRE_BACKUP_SCRIPT_HOOK_TYPES,
+    pre_backup_scripts_started,
+)
 from app.services.operations.backup_facade import (
     create_backup_operation,
     refresh_backup_job,
@@ -101,8 +118,17 @@ TERMINAL_PLAN_RUN_REPOSITORY_STATUSES = {
     "cancelled",
 }
 SUCCESS_BACKUP_STATUSES = {"completed", "completed_with_warnings"}
+# The message on a repository a run skipped because its agent was away.
+AGENT_OFFLINE_MESSAGE = "Skipped: agent offline; the backup was not started."
 WARNING_BACKUP_STATUSES = {"completed_with_warnings", "skipped"}
 CANCELLED_MESSAGE = '{"key": "backend.errors.backup.cancelledByUser"}'
+# An agent's post-backup hook waits this long for the agent unless it sets a
+# timeout of its own: an agent that is away must not hold the run, which no
+# cancel ends while its post-backup hooks run (#1385).
+POST_BACKUP_AGENT_HOOK_TIMEOUT_SECONDS = 3600
+# How often the post-backup scripts after a restart look whether an agent
+# backup the restart left running has ended.
+AGENT_BACKUP_END_POLL_SECONDS = 5.0
 RESTORE_CHECK_CANCEL_POLL_SECONDS = 2
 
 
@@ -604,6 +630,15 @@ def _remote_script_body(script: str, env: dict[str, str]) -> str:
     return "\n".join(export_lines + ["", script])
 
 
+def _backup_agent_job(db: Session, *, operation_id: int) -> Optional[AgentJob]:
+    job = resolve_backup_job(db, operation_id)
+    return get_agent_job_for_backup(db, job) if job is not None else None
+
+
+def _agent_job(db: Session, *, agent_job_id: int) -> Optional[AgentJob]:
+    return db.get(AgentJob, agent_job_id)
+
+
 class BackupPlanExecutionService:
     def __init__(self) -> None:
         # Runs this process started and is still executing: the startup sweep
@@ -863,12 +898,14 @@ class BackupPlanExecutionService:
                 )
 
     def has_active_run(self, db: Session, plan_id: int) -> bool:
+        active = BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES)
+        if self.live_run_ids:
+            # A cancelled run is still running its post-backup hooks (#1385);
+            # a new run's pre-backup hooks must not start under them.
+            active = or_(active, BackupPlanRun.id.in_(self.live_run_ids))
         return (
             db.query(BackupPlanRun)
-            .filter(
-                BackupPlanRun.backup_plan_id == plan_id,
-                BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES),
-            )
+            .filter(BackupPlanRun.backup_plan_id == plan_id, active)
             .first()
             is not None
         )
@@ -902,6 +939,11 @@ class BackupPlanExecutionService:
         run.status = "cancelled"
         run.completed_at = now
         run.error_message = CANCELLED_MESSAGE
+        # The run's own task runs its post-backup scripts once its backups
+        # ended; until they ran, the run says so, which also lets a restart
+        # in between find them still to run (#1385).
+        if pre_backup_scripts_started(db, run_id):
+            run.error_message += "\n" + POST_BACKUP_HOOKS_AFTER_CANCEL
 
         for child in run.repositories:
             if child.status in TERMINAL_PLAN_RUN_REPOSITORY_STATUSES:
@@ -966,8 +1008,10 @@ class BackupPlanExecutionService:
         self._launch(run.id)
         return run.id
 
-    def _launch(self, run_id: int) -> None:
-        task = asyncio.create_task(self.execute_run(run_id))
+    def _launch(self, run_id: int, work: Optional[Awaitable[None]] = None) -> None:
+        task = asyncio.create_task(
+            work if work is not None else self.execute_run(run_id)
+        )
         if asyncio.isfuture(task):  # not a test's patched create_task
             self.live_run_ids.add(run_id)
             task.add_done_callback(lambda _task: self.live_run_ids.discard(run_id))
@@ -1094,9 +1138,31 @@ class BackupPlanExecutionService:
         return retry_run.id
 
     async def execute_run(self, run_id: int) -> None:
+        context: Optional[PlanRunContext] = None
+        post_hooks_ran = False
         try:
             run_warnings: list[str] = []
             context, repositories = self._prepare_run(run_id)
+            # A repository whose agent is away gets no backup, and takes no
+            # backup slot (#1331). Decided before the plan's own hooks, so a
+            # run left with nothing to back up runs none of them.
+            repositories = [
+                repository
+                for repository in repositories
+                if not await self._skip_if_agent_offline(run_id, repository)
+            ]
+            if not repositories:
+                self._finalize_run(run_id)
+                return
+            # Its pre-backup scripts do not run under the post-backup hooks
+            # a restart left to run for an earlier backup of one of its
+            # repositories (#1429).
+            from app.services.backup_service import backup_service
+
+            for repository in repositories:
+                await backup_service.wait_for_post_hooks_after_restart(
+                    repository_id=repository.repository_id
+                )
             (
                 pre_script_ok,
                 pre_script_error,
@@ -1141,32 +1207,19 @@ class BackupPlanExecutionService:
             else:
                 await self._execute_series(run_id, context, repositories)
 
-            if not self._is_run_cancelled(run_id):
-                backup_result = self._plan_backup_result(run_id)
-                source_post_ok, source_post_error = await self._execute_source_scripts(
-                    run_id,
-                    context,
-                    hook_type="source-post-backup",
-                    backup_result=backup_result,
-                )
-                if not source_post_ok:
-                    run_warnings.append(
-                        source_post_error or "Database source post-backup script failed"
-                    )
-                (
-                    post_script_ok,
-                    post_script_error,
-                    _post_script_skip,
-                ) = await self._execute_plan_script_hooks(
-                    run_id,
-                    context,
-                    hook_type="post-backup",
-                    backup_result=backup_result,
-                )
-                if not post_script_ok:
-                    run_warnings.append(
-                        post_script_error or "Plan post-backup script failed"
-                    )
+            # A cancelled run is a failure to its post-backup hooks, as a
+            # cancelled repository is in `_plan_backup_result` (#1385).
+            backup_result = (
+                "failure"
+                if self._is_run_cancelled(run_id)
+                else self._plan_backup_result(run_id)
+            )
+            post_hooks_ran = True
+            post_warnings = await self._run_post_backup_scripts(
+                run_id, context, backup_result
+            )
+            run_warnings.extend(post_warnings)
+            await self._report_cleanup_of_cancelled_run(run_id, context, post_warnings)
 
             self._finalize_run(
                 run_id,
@@ -1174,7 +1227,341 @@ class BackupPlanExecutionService:
             )
         except Exception as exc:
             logger.error("Backup plan run failed", run_id=run_id, error=str(exc))
-            self._mark_run_failed(run_id, str(exc))
+            messages = [str(exc)]
+            # Once a pre-backup script ran, the post-backup ones run on this
+            # way out too (#1385), unless they are where the error came from.
+            try:
+                if (
+                    context is not None
+                    and not post_hooks_ran
+                    and self._pre_backup_scripts_ran(run_id)
+                ):
+                    post_hooks_ran = True
+                    post_warnings = await self._run_post_backup_scripts(
+                        run_id, context, "failure"
+                    )
+                    messages.extend(post_warnings)
+                    await self._report_cleanup_of_cancelled_run(
+                        run_id, context, post_warnings
+                    )
+            except Exception as hook_exc:
+                # the run is still marked failed below
+                logger.warning(
+                    "Could not run post-backup scripts after the run failed",
+                    run_id=run_id,
+                    error=str(hook_exc),
+                )
+            self._mark_run_failed(run_id, "; ".join(messages))
+
+    async def _run_post_backup_scripts(
+        self,
+        run_id: int,
+        context: PlanRunContext,
+        backup_result: str,
+    ) -> list[str]:
+        """The source post-backup scripts, then the plan's post-backup hooks,
+        with `backup_result`. Returns the warnings they leave. An exception
+        is logged and returned as a warning, never raised in place of the
+        run's own outcome."""
+        warnings: list[str] = []
+        try:
+            source_post_ok, source_post_error = await self._execute_source_scripts(
+                run_id,
+                context,
+                hook_type="source-post-backup",
+                backup_result=backup_result,
+            )
+            if not source_post_ok:
+                warnings.append(
+                    source_post_error or "Database source post-backup script failed"
+                )
+        except Exception as exc:
+            logger.warning(
+                "Source post-backup scripts raised", run_id=run_id, error=str(exc)
+            )
+            warnings.append(f"Database source post-backup script failed: {exc}")
+        try:
+            (
+                post_script_ok,
+                post_script_error,
+                _post_script_skip,
+            ) = await self._execute_plan_script_hooks(
+                run_id,
+                context,
+                hook_type="post-backup",
+                backup_result=backup_result,
+            )
+            if not post_script_ok:
+                warnings.append(post_script_error or "Plan post-backup script failed")
+        except Exception as exc:
+            logger.warning(
+                "Backup plan post-backup scripts raised", run_id=run_id, error=str(exc)
+            )
+            warnings.append(f"Plan post-backup scripts failed: {exc}")
+        return warnings
+
+    def recover_post_hooks_after_restart(self, run_ids: list[int]) -> None:
+        """Run the post-backup scripts of the runs a restart interrupted
+        after their pre-backup scripts ran (#1385), each in a task of its
+        own. A run is live while they run, so no new run of its plan starts
+        its pre-backup scripts under them."""
+        for run_id in run_ids:
+            self._launch(run_id, self._run_post_hooks_after_restart(run_id))
+
+    async def _run_post_hooks_after_restart(self, run_id: int) -> None:
+        """The post-backup scripts of a run the restart interrupted, with the
+        failure result, once its backups ended. The run is finalized and says
+        that they have not run; that line goes when they ran without a
+        warning, and stays, with what they reported, when not."""
+        context: Optional[PlanRunContext] = None
+        try:
+            context = self._restart_context(run_id)
+            if context is None:
+                warnings = ["Backup plan no longer exists"]
+            else:
+                # The run's backup operations are over (the startup sweep
+                # cancelled the queued ones, the runner's recovery failed the
+                # running ones), but an agent backup the restart failed, or an
+                # agent's pre-backup hook, may still run on its agent.
+                from app.services.backup_service import backup_service
+
+                for operation_id in self._run_backup_operation_ids(run_id):
+                    await wait_out_backup_operation(operation_id)
+                    # and its repository's post-backup hooks first (#1429)
+                    await backup_service.wait_for_post_hooks_after_restart(
+                        operation_id=operation_id
+                    )
+                    await self._wait_for_agent_job_to_end(
+                        partial(_backup_agent_job, operation_id=operation_id)
+                    )
+                for agent_job_id in self._pre_backup_agent_job_ids(run_id):
+                    await self._wait_for_agent_job_to_end(
+                        partial(_agent_job, agent_job_id=agent_job_id)
+                    )
+                logger.info(
+                    "Running backup plan post-backup scripts after the restart",
+                    run_id=run_id,
+                )
+                warnings = await self._run_post_backup_scripts(
+                    run_id, context, "failure"
+                )
+        except Exception as exc:
+            logger.error(
+                "Backup plan post-backup scripts after the restart failed",
+                run_id=run_id,
+                error=str(exc),
+            )
+            warnings = [str(exc)]
+        await self._settle_post_hooks_after_restart(run_id, context, warnings)
+
+    def _restart_context(self, run_id: int) -> Optional[PlanRunContext]:
+        db = SessionLocal()
+        try:
+            run = db.get(BackupPlanRun, run_id)
+            plan = self._query_plan(db, run.backup_plan_id) if run else None
+            if plan is None:
+                return None
+            context, _repositories = self._run_context(
+                plan,
+                [
+                    link
+                    for link in sorted(
+                        plan.repositories, key=lambda item: item.execution_order
+                    )
+                    if link.enabled and link.repository
+                ],
+            )
+            return context
+        finally:
+            db.close()
+
+    @staticmethod
+    async def _wait_for_agent_job_to_end(
+        load: Callable[[Session], Optional[AgentJob]],
+    ) -> None:
+        """Until the agent job `load` reads, if there is one, ended. One the
+        agent has not started yet belongs to the run the restart interrupted
+        and is ended here, so it never starts later; one whose agent fell
+        silent while running it is ended by the agent job reaper."""
+        while True:
+            db = SessionLocal()
+            try:
+                agent_job = load(db)
+                if agent_job is None or agent_job.status in TERMINAL_AGENT_STATUSES:
+                    return
+                if agent_job.status == "queued":
+                    now = datetime.utcnow()
+                    # conditional: an agent claiming it meanwhile wins
+                    ended = (
+                        db.query(AgentJob)
+                        .filter(
+                            AgentJob.id == agent_job.id, AgentJob.status == "queued"
+                        )
+                        .update(
+                            {
+                                AgentJob.status: "canceled",
+                                AgentJob.error_message: "interrupted by restart",
+                                AgentJob.completed_at: now,
+                                AgentJob.updated_at: now,
+                            },
+                            synchronize_session=False,
+                        )
+                    )
+                    db.commit()
+                    if ended:
+                        return
+            finally:
+                db.close()
+            await asyncio.sleep(AGENT_BACKUP_END_POLL_SECONDS)
+
+    @staticmethod
+    def _pre_backup_agent_job_ids(run_id: int) -> list[int]:
+        db = SessionLocal()
+        try:
+            return [
+                agent_job_id
+                for (agent_job_id,) in db.query(ScriptExecution.agent_job_id).filter(
+                    ScriptExecution.backup_plan_run_id == run_id,
+                    ScriptExecution.hook_type.in_(PRE_BACKUP_SCRIPT_HOOK_TYPES),
+                    ScriptExecution.agent_job_id.isnot(None),
+                )
+            ]
+        finally:
+            db.close()
+
+    @staticmethod
+    def _run_backup_operation_ids(run_id: int) -> list[int]:
+        db = SessionLocal()
+        try:
+            return [
+                operation_id
+                for (operation_id,) in db.query(
+                    BackupPlanRunRepository.backup_operation_id
+                ).filter(
+                    BackupPlanRunRepository.backup_plan_run_id == run_id,
+                    BackupPlanRunRepository.backup_operation_id.isnot(None),
+                )
+            ]
+        finally:
+            db.close()
+
+    async def _settle_post_hooks_after_restart(
+        self,
+        run_id: int,
+        context: Optional[PlanRunContext],
+        warnings: list[str],
+    ) -> None:
+        """Record on the run how its post-backup scripts ended after the
+        restart; when they did not run cleanly, notify for each of its
+        repositories, since what the pre-backup scripts stopped may still be
+        stopped."""
+        recorded: list[tuple[Optional[int], str]] = []
+        message: Optional[str] = None
+
+        def work(db: Session) -> None:
+            nonlocal message
+            run = db.get(BackupPlanRun, run_id)
+            if run is None:
+                return
+            lines = [
+                line
+                for line in (run.error_message or "").split("\n")
+                if line and line not in POST_BACKUP_HOOK_MARKERS
+            ]
+            if warnings:
+                lines += [POST_BACKUP_HOOKS_AFTER_RESTART, *warnings]
+            run.error_message = "\n".join(lines) or None
+            message = run.error_message
+            recorded[:] = [
+                (child.backup_operation_id, child.repository.path)
+                for child in run.repositories
+                if child.repository is not None
+            ]
+
+        _write_bookkeeping(work)
+        if warnings and message is not None:
+            await self._notify_run_repositories(
+                run_id,
+                recorded,
+                "Post-backup hooks after the restart did not run cleanly: "
+                + "; ".join(warnings),
+                context.plan_name if context else None,
+            )
+
+    async def _report_cleanup_of_cancelled_run(
+        self, run_id: int, context: PlanRunContext, warnings: list[str]
+    ) -> None:
+        """A cancelled run keeps its status, which neither `_finalize_run`
+        nor `_mark_run_failed` overwrites. The line `cancel_run` left saying
+        its post-backup scripts are still to run goes when they ran without
+        a warning; when not, it stays with the warnings they left, and each
+        of its repositories is notified, since what the pre-backup scripts
+        stopped may still be stopped."""
+        recorded: list[tuple[Optional[int], str]] = []
+        message: Optional[str] = None
+
+        def work(db: Session) -> None:
+            nonlocal message
+            run = db.get(BackupPlanRun, run_id)
+            if run is None or run.status != "cancelled":
+                return
+            lines = [
+                line
+                for line in (run.error_message or "").split("\n")
+                if line and line != POST_BACKUP_HOOKS_AFTER_CANCEL
+            ]
+            if warnings:
+                lines += [POST_BACKUP_HOOKS_AFTER_CANCEL, *warnings]
+            run.error_message = "\n".join(lines) or None
+            if warnings:
+                message = run.error_message
+                recorded[:] = [
+                    (child.backup_operation_id, child.repository.path)
+                    for child in run.repositories
+                    if child.repository is not None
+                ]
+
+        _write_bookkeeping(work)
+        if message is not None:
+            await self._notify_run_repositories(
+                run_id,
+                recorded,
+                "Post-backup hooks after the cancel did not run cleanly: "
+                + "; ".join(warnings),
+                context.plan_name,
+            )
+
+    @staticmethod
+    async def _notify_run_repositories(
+        run_id: int,
+        recorded: list[tuple[Optional[int], str]],
+        message: str,
+        plan_name: Optional[str],
+    ) -> None:
+        db = SessionLocal()
+        try:
+            for operation_id, repository_path in recorded:
+                try:
+                    await notification_service.send_backup_failure(
+                        db, repository_path, message, operation_id, plan_name
+                    )
+                except Exception as exc:
+                    db.rollback()
+                    logger.warning(
+                        "Failed to send backup failure notification",
+                        run_id=run_id,
+                        error=str(exc),
+                    )
+        finally:
+            db.close()
+
+    @staticmethod
+    def _pre_backup_scripts_ran(run_id: int) -> bool:
+        db = SessionLocal()
+        try:
+            return pre_backup_scripts_started(db, run_id)
+        finally:
+            db.close()
 
     def _prepare_run(
         self, run_id: int
@@ -1194,21 +1581,7 @@ class BackupPlanExecutionService:
                 else None
             )
 
-            plan = (
-                db.query(BackupPlan)
-                .options(
-                    joinedload(BackupPlan.repositories).joinedload(
-                        BackupPlanRepository.repository
-                    ),
-                    joinedload(BackupPlan.script_hooks).joinedload(
-                        BackupPlanScript.script
-                    ),
-                    joinedload(BackupPlan.pre_backup_script),
-                    joinedload(BackupPlan.post_backup_script),
-                )
-                .filter(BackupPlan.id == run.backup_plan_id)
-                .first()
-            )
+            plan = self._query_plan(db, run.backup_plan_id)
             if not plan:
                 raise ValueError("Backup plan no longer exists")
             if not plan.enabled:
@@ -1230,95 +1603,7 @@ class BackupPlanExecutionService:
             if not enabled_links:
                 raise ValueError("Backup plan has no enabled repositories")
 
-            now = datetime.now()
-            upload_policy_now = datetime.now(timezone.utc)
-            context = PlanRunContext(
-                plan_id=plan.id,
-                plan_name=plan.name,
-                source_type=plan.source_type,
-                source_ssh_connection_id=plan.source_ssh_connection_id,
-                source_directories=_json_list(plan.source_directories),
-                source_locations=decode_source_locations(
-                    plan.source_locations,
-                    source_type=plan.source_type,
-                    source_ssh_connection_id=plan.source_ssh_connection_id,
-                    source_directories=_json_list(plan.source_directories),
-                ),
-                exclude_patterns=_json_list(plan.exclude_patterns),
-                archive_name_template=plan.archive_name_template,
-                compression=plan.compression,
-                custom_flags=plan.custom_flags,
-                upload_ratelimit_kib=plan.upload_ratelimit_kib,
-                upload_ratelimit_schedule_policies=_json_dict_list(
-                    plan.upload_ratelimit_schedule_policies
-                ),
-                repository_run_mode=plan.repository_run_mode,
-                max_parallel_repositories=max(1, plan.max_parallel_repositories or 1),
-                failure_behavior=plan.failure_behavior,
-                pre_backup_script_id=plan.pre_backup_script_id,
-                post_backup_script_id=plan.post_backup_script_id,
-                pre_backup_script_parameters=plan.pre_backup_script_parameters or {},
-                post_backup_script_parameters=plan.post_backup_script_parameters or {},
-                script_hooks=_plan_script_hooks(plan),
-                run_repository_scripts=bool(plan.run_repository_scripts),
-                run_prune_after=bool(plan.run_prune_after),
-                run_compact_after=bool(plan.run_compact_after),
-                run_check_after=bool(plan.run_check_after),
-                run_restore_check_after=bool(plan.run_restore_check_after),
-                check_max_duration=plan.check_max_duration,
-                check_extra_flags=plan.check_extra_flags,
-                prune_keep_hourly=plan.prune_keep_hourly,
-                prune_keep_daily=plan.prune_keep_daily,
-                prune_keep_weekly=plan.prune_keep_weekly,
-                prune_keep_monthly=plan.prune_keep_monthly,
-                prune_keep_quarterly=plan.prune_keep_quarterly,
-                prune_keep_yearly=plan.prune_keep_yearly,
-                prune_keep_within=plan.prune_keep_within,
-                repository_count=len(enabled_links),
-                timestamp=now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3],
-                date=now.strftime("%Y-%m-%d"),
-                time_str=now.strftime("%H:%M:%S"),
-                unix_timestamp=str(int(now.timestamp() * 1000)),
-            )
-            repositories = []
-            for link in enabled_links:
-                base_upload_ratelimit_kib = (
-                    link.upload_ratelimit_kib_override
-                    if link.upload_ratelimit_kib_override is not None
-                    else context.upload_ratelimit_kib
-                    if context.upload_ratelimit_kib is not None
-                    else link.repository.upload_ratelimit_kib
-                )
-                repositories.append(
-                    RepositoryRunContext(
-                        repository_id=link.repository_id,
-                        repository_name=link.repository.name,
-                        execution_order=link.execution_order,
-                        compression=(
-                            link.repository.compression or context.compression
-                            if link.compression_source == "repository"
-                            else link.compression_override
-                            if link.compression_source == "custom"
-                            and link.compression_override
-                            else context.compression
-                        ),
-                        custom_flags=(
-                            link.custom_flags_override
-                            if link.custom_flags_override is not None
-                            else context.custom_flags
-                        ),
-                        upload_ratelimit_kib=resolve_scheduled_upload_ratelimit(
-                            base_upload_ratelimit_kib=base_upload_ratelimit_kib,
-                            policies=context.upload_ratelimit_schedule_policies,
-                            run_at=upload_policy_now,
-                            timezone_name=plan.timezone,
-                        ),
-                        failure_behavior=(
-                            link.failure_behavior_override or context.failure_behavior
-                        ),
-                    )
-                )
-
+            context, repositories = self._run_context(plan, enabled_links)
             run.status = "running"
             run.started_at = datetime.utcnow()
             plan.last_run = run.started_at
@@ -1326,6 +1611,118 @@ class BackupPlanExecutionService:
             return context, repositories
         finally:
             db.close()
+
+    @staticmethod
+    def _query_plan(db: Session, plan_id: int) -> Optional[BackupPlan]:
+        return (
+            db.query(BackupPlan)
+            .options(
+                joinedload(BackupPlan.repositories).joinedload(
+                    BackupPlanRepository.repository
+                ),
+                joinedload(BackupPlan.script_hooks).joinedload(BackupPlanScript.script),
+                joinedload(BackupPlan.pre_backup_script),
+                joinedload(BackupPlan.post_backup_script),
+            )
+            .filter(BackupPlan.id == plan_id)
+            .first()
+        )
+
+    @staticmethod
+    def _run_context(
+        plan: BackupPlan, enabled_links: list[BackupPlanRepository]
+    ) -> tuple[PlanRunContext, list[RepositoryRunContext]]:
+        """The context a run of `plan` over `enabled_links` executes in."""
+        now = datetime.now()
+        upload_policy_now = datetime.now(timezone.utc)
+        context = PlanRunContext(
+            plan_id=plan.id,
+            plan_name=plan.name,
+            source_type=plan.source_type,
+            source_ssh_connection_id=plan.source_ssh_connection_id,
+            source_directories=_json_list(plan.source_directories),
+            source_locations=decode_source_locations(
+                plan.source_locations,
+                source_type=plan.source_type,
+                source_ssh_connection_id=plan.source_ssh_connection_id,
+                source_directories=_json_list(plan.source_directories),
+            ),
+            exclude_patterns=_json_list(plan.exclude_patterns),
+            archive_name_template=plan.archive_name_template,
+            compression=plan.compression,
+            custom_flags=plan.custom_flags,
+            upload_ratelimit_kib=plan.upload_ratelimit_kib,
+            upload_ratelimit_schedule_policies=_json_dict_list(
+                plan.upload_ratelimit_schedule_policies
+            ),
+            repository_run_mode=plan.repository_run_mode,
+            max_parallel_repositories=max(1, plan.max_parallel_repositories or 1),
+            failure_behavior=plan.failure_behavior,
+            pre_backup_script_id=plan.pre_backup_script_id,
+            post_backup_script_id=plan.post_backup_script_id,
+            pre_backup_script_parameters=plan.pre_backup_script_parameters or {},
+            post_backup_script_parameters=plan.post_backup_script_parameters or {},
+            script_hooks=_plan_script_hooks(plan),
+            run_repository_scripts=bool(plan.run_repository_scripts),
+            run_prune_after=bool(plan.run_prune_after),
+            run_compact_after=bool(plan.run_compact_after),
+            run_check_after=bool(plan.run_check_after),
+            run_restore_check_after=bool(plan.run_restore_check_after),
+            check_max_duration=plan.check_max_duration,
+            check_extra_flags=plan.check_extra_flags,
+            prune_keep_hourly=plan.prune_keep_hourly,
+            prune_keep_daily=plan.prune_keep_daily,
+            prune_keep_weekly=plan.prune_keep_weekly,
+            prune_keep_monthly=plan.prune_keep_monthly,
+            prune_keep_quarterly=plan.prune_keep_quarterly,
+            prune_keep_yearly=plan.prune_keep_yearly,
+            prune_keep_within=plan.prune_keep_within,
+            repository_count=len(enabled_links),
+            timestamp=now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3],
+            date=now.strftime("%Y-%m-%d"),
+            time_str=now.strftime("%H:%M:%S"),
+            unix_timestamp=str(int(now.timestamp() * 1000)),
+        )
+        repositories = []
+        for link in enabled_links:
+            base_upload_ratelimit_kib = (
+                link.upload_ratelimit_kib_override
+                if link.upload_ratelimit_kib_override is not None
+                else context.upload_ratelimit_kib
+                if context.upload_ratelimit_kib is not None
+                else link.repository.upload_ratelimit_kib
+            )
+            repositories.append(
+                RepositoryRunContext(
+                    repository_id=link.repository_id,
+                    repository_name=link.repository.name,
+                    execution_order=link.execution_order,
+                    compression=(
+                        link.repository.compression or context.compression
+                        if link.compression_source == "repository"
+                        else link.compression_override
+                        if link.compression_source == "custom"
+                        and link.compression_override
+                        else context.compression
+                    ),
+                    custom_flags=(
+                        link.custom_flags_override
+                        if link.custom_flags_override is not None
+                        else context.custom_flags
+                    ),
+                    upload_ratelimit_kib=resolve_scheduled_upload_ratelimit(
+                        base_upload_ratelimit_kib=base_upload_ratelimit_kib,
+                        policies=context.upload_ratelimit_schedule_policies,
+                        run_at=upload_policy_now,
+                        timezone_name=plan.timezone,
+                    ),
+                    failure_behavior=(
+                        link.failure_behavior_override or context.failure_behavior
+                    ),
+                )
+            )
+
+        return context, repositories
 
     async def _execute_series(
         self,
@@ -1385,21 +1782,44 @@ class BackupPlanExecutionService:
         hook_type: str,
         backup_result: Optional[str] = None,
     ) -> tuple[bool, Optional[str]]:
+        """The source scripts of `hook_type` in order. A failing pre-backup
+        script stops the ones after it: the backup does not start. Every
+        post-backup script runs, since each undoes what its own source's
+        pre-backup script did; the ones that fail are reported together, as
+        the plan's post-backup hooks are (#1428)."""
+        post = hook_type == "source-post-backup"
+        errors: list[str] = []
         for assignment in _source_script_assignments(
             context.source_locations, hook_type
         ):
-            ok, error = await self._execute_plan_script(
-                run_id,
-                context,
-                hook_type=hook_type,
-                backup_result=backup_result,
-                script_id=assignment["script_id"],
-                script_parameters=assignment["parameters"],
-                source_location=assignment["location"],
-                source_index=assignment["execution_order"],
-            )
-            if not ok:
+            try:
+                ok, error = await self._execute_plan_script(
+                    run_id,
+                    context,
+                    hook_type=hook_type,
+                    backup_result=backup_result,
+                    script_id=assignment["script_id"],
+                    script_parameters=assignment["parameters"],
+                    source_location=assignment["location"],
+                    source_index=assignment["execution_order"],
+                )
+            except Exception as exc:
+                if not post:
+                    raise
+                logger.warning(
+                    "Source post-backup script raised",
+                    run_id=run_id,
+                    script_id=assignment["script_id"],
+                    error=str(exc),
+                )
+                ok, error = False, f"Database source post-backup script failed: {exc}"
+            if ok:
+                continue
+            if not post:
                 return False, error
+            errors.append(error or "Database source post-backup script failed")
+        if errors:
+            return False, "; ".join(errors)
         return True, None
 
     async def _execute_plan_script_hooks(
@@ -1616,11 +2036,23 @@ class BackupPlanExecutionService:
 
             await dispatch_agent_job_best_effort(db, agent_job)
 
-            timeout_seconds = float(custom_timeout) if custom_timeout else None
+            timeout_seconds = (
+                float(custom_timeout)
+                if custom_timeout
+                else POST_BACKUP_AGENT_HOOK_TIMEOUT_SECONDS
+                if hook_type == "post-backup"
+                else None
+            )
+            # A post-backup hook undoes what the pre-backup hooks did, so the
+            # run's cancel, which it may be running for, does not stop it.
             outcome = await wait_for_agent_script_job(
                 db,
                 agent_job.id,
-                is_cancelled=lambda: self._is_run_cancelled(run_id),
+                is_cancelled=(
+                    (lambda: False)
+                    if hook_type == "post-backup"
+                    else (lambda: self._is_run_cancelled(run_id))
+                ),
                 timeout_seconds=timeout_seconds,
             )
             result = outcome.get("result") or {}
@@ -2038,6 +2470,8 @@ class BackupPlanExecutionService:
             )
             if not child or not repo:
                 return "failed"
+            if await self._skip_if_agent_offline(run_id, repository_context):
+                return "skipped"
 
             route = plan_repository_route(repo, context.source_locations)
             if not route.supported:
@@ -2496,6 +2930,110 @@ class BackupPlanExecutionService:
 
         _write_bookkeeping(work)
 
+    async def _skip_if_agent_offline(
+        self, run_id: int, repository_context: RepositoryRunContext
+    ) -> bool:
+        """Skip the repository when it is an agent's and its agent is away:
+        no backup is queued for it and no slot taken (#1331). The skip gets a
+        skipped backup operation, as `_fail_repositories` gives a failure
+        one, since the dashboard and the repository status read operations
+        and never the plan run. It sends no notification: an agent away on
+        purpose (a laptop) misses runs as a matter of course, and a
+        repository left without a backup for long is what the stale-backup
+        monitoring reports."""
+        recorded: list[int] = []
+
+        def work(db: Session) -> None:
+            """Record the skip in a fresh retryable session."""
+            recorded.clear()
+            repo = db.get(Repository, repository_context.repository_id)
+            if repo is None or not is_agent_executor(repo):
+                return
+            agent = (
+                db.get(AgentMachine, repo.agent_machine_id)
+                if repo.agent_machine_id is not None
+                else None
+            )
+            if agent_is_gone(agent) or not agent_is_offline(agent):
+                # An agent that is gone, rather than away, is a configuration
+                # error: the normal path refuses its backup and reports it.
+                return
+            now = datetime.utcnow()
+            backup_job = create_backup_operation(
+                db,
+                repo,
+                trigger="plan",
+                executor="agent",
+                backup_plan_run_id=run_id,
+                commit=False,
+            )
+            backup_job.status = "skipped"
+            backup_job.operation.skip_reason = AGENT_OFFLINE_SKIP_REASON
+            backup_job.error_message = AGENT_OFFLINE_MESSAGE
+            backup_job.started_at = now
+            backup_job.completed_at = now
+            # The same conditional claim as `_update_children`: a child
+            # someone cancelled since keeps its status, and the rollback takes
+            # the uncommitted operation with it.
+            claimed = (
+                db.query(BackupPlanRunRepository)
+                .filter(
+                    BackupPlanRunRepository.backup_plan_run_id == run_id,
+                    BackupPlanRunRepository.repository_id == repo.id,
+                    BackupPlanRunRepository.status == "pending",
+                )
+                .update(
+                    {
+                        BackupPlanRunRepository.status: "skipped",
+                        BackupPlanRunRepository.backup_operation_id: backup_job.id,
+                        BackupPlanRunRepository.started_at: now,
+                        BackupPlanRunRepository.completed_at: now,
+                        BackupPlanRunRepository.error_message: AGENT_OFFLINE_MESSAGE,
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if not claimed:
+                db.rollback()
+                return
+            recorded.append(backup_job.id)
+
+        try:
+            _write_bookkeeping(work)
+        except Exception as exc:
+            # The check must not cost the run: a repository it could not
+            # decide on takes the normal path, as it did before (#1331).
+            logger.warning(
+                "Could not check the repository's agent before its backup",
+                run_id=run_id,
+                repository_id=repository_context.repository_id,
+                error=str(exc),
+            )
+            return False
+        if not recorded:
+            return False
+        logger.info(
+            "Backup plan repository skipped: agent offline",
+            run_id=run_id,
+            repository_id=repository_context.repository_id,
+        )
+        db = SessionLocal()
+        try:
+            operation = db.get(Operation, recorded[0])
+            if operation is not None:
+                await broadcast_operation_updated(operation, db)
+        except Exception as exc:
+            # a courtesy to open pages; the skip is recorded
+            logger.warning(
+                "Failed to broadcast agent offline skip",
+                run_id=run_id,
+                operation_id=recorded[0],
+                error=str(exc),
+            )
+        finally:
+            db.close()
+        return True
+
     def _mark_repository_cancelled(self, run_id: int, repository_id: int) -> None:
         """Mark a pending repository child as cancelled."""
 
@@ -2748,6 +3286,17 @@ class BackupPlanExecutionService:
             if run.status == "cancelled":
                 return
             statuses = [child.status for child in run.repositories]
+            if self._all_skipped_for_offline_agents(db, run):
+                # Nothing was backed up: a skipped run, which an availability
+                # plan's minimum interval does not count as a success.
+                run.status = "skipped"
+                run.skip_reason = AGENT_OFFLINE_SKIP_REASON
+                run.error_message = "; ".join(
+                    filter(None, (AGENT_OFFLINE_MESSAGE, warning_message))
+                )
+                run.completed_at = datetime.utcnow()
+                db.commit()
+                return
             has_success = any(_is_success(status) for status in statuses)
             has_failure = any(_is_failure(status) for status in statuses)
             has_cancelled = any(status == "cancelled" for status in statuses)
@@ -2773,6 +3322,25 @@ class BackupPlanExecutionService:
             db.commit()
         finally:
             db.close()
+
+    @staticmethod
+    def _all_skipped_for_offline_agents(db: Session, run: BackupPlanRun) -> bool:
+        """Whether every repository of the run was skipped because its agent
+        was away, before the backup started or by the reaper after it was
+        queued (#1331)."""
+        children = list(run.repositories)
+        if not children or any(
+            child.status != "skipped" or child.backup_operation_id is None
+            for child in children
+        ):
+            return False
+        reasons = {
+            reason
+            for (reason,) in db.query(Operation.skip_reason).filter(
+                Operation.id.in_([child.backup_operation_id for child in children])
+            )
+        }
+        return reasons == {AGENT_OFFLINE_SKIP_REASON}
 
     @staticmethod
     def _run_status(db: Session, run_id: int) -> Optional[str]:

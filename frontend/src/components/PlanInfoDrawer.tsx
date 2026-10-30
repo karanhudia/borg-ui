@@ -18,7 +18,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import type { EntitlementInfo } from '../hooks/useSystemInfo'
 import { usePlanContent } from '../hooks/usePlanContent'
 import { compareVersions } from '../utils/announcements'
-import { buildBuyUrl } from '../utils/externalLinks'
+import { buildBuyUrl, refreshBuyLink } from '../utils/externalLinks'
 import { getPlanDrawerColors } from './planDrawerColors'
 import PlanUpcomingFeatures from './PlanUpcomingFeatures'
 import { parseBackendDate } from '../utils/dateUtils'
@@ -290,6 +290,9 @@ export default function PlanInfoDrawer({
         fullWidth
         component="a"
         href={buildBuyUrl({ plan: 'pro', src: 'app-expired', offer: 'expired' })}
+        onClickCapture={refreshBuyLink}
+        onAuxClickCapture={refreshBuyLink}
+        onContextMenuCapture={refreshBuyLink}
         target="_blank"
         rel="noreferrer"
         onClick={() =>
@@ -896,6 +899,9 @@ export default function PlanInfoDrawer({
             <Button
               component="a"
               href={buildBuyUrl({ plan: buyPlan, src: buySource, offer: buyOffer })}
+              onClickCapture={refreshBuyLink}
+              onAuxClickCapture={refreshBuyLink}
+              onContextMenuCapture={refreshBuyLink}
               target="_blank"
               rel="noreferrer"
               variant="contained"

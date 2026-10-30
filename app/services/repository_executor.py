@@ -37,6 +37,7 @@ from app.services.operations.backup_facade import (
     backup_job_link_columns,
     resolve_backup_job,
 )
+from app.utils.borg_arguments import validate_operand, validate_source
 from app.utils.borg_flags import parse_borg_flags
 from app.utils.redaction import redact_secrets
 
@@ -55,11 +56,14 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.archive_info",
     "repository.list_archives",
     "repository.delete_archive",
+    "repository.delete_archives",
     "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
     "repository.export_archive_tar",
     "repository.restore",
+    "repository.restore_dry_run",
+    "repository.key_export",
     "repository.check",
     "repository.prune",
     "repository.compact",
@@ -118,6 +122,12 @@ def is_agent_executor(repository: Repository) -> bool:
 # The agent job that produces an archive's change listing for the history
 # index (agents from 0.1.6).
 AGENT_DIFF_JOB_KIND = "repository.diff"
+# The restore preview's extract dry run, the repository key's export and the
+# delete of a wipe's archives in one job (#1425). Agents from before them
+# get the refusals and the per-archive wipe of #1393.
+AGENT_RESTORE_DRY_RUN_JOB_KIND = "repository.restore_dry_run"
+AGENT_KEY_EXPORT_JOB_KIND = "repository.key_export"
+AGENT_DELETE_ARCHIVES_JOB_KIND = "repository.delete_archives"
 
 
 def agent_advertises_job(agent: Any, job_kind: str) -> bool:
@@ -251,6 +261,9 @@ def build_agent_backup_payload(
         source_locations=source_locations,
         repository=repository,
     )
+    validate_operand(archive_name, "archive name")
+    for source in source_paths:
+        validate_source(source)
     repository_payload = {
         "id": repository.id,
         "path": repository.path,
@@ -648,13 +661,15 @@ def agent_failure_result(
     *,
     stderr_tail: Optional[str] = None,
     failure_kind: Optional[str] = None,
+    deleted_archives: Optional[int] = None,
 ) -> dict[str, Any]:
     """The `result` a failed agent job keeps: the return code as before,
     and the report's fields when the agent sent them. The tail is bounded
     here too, and a kind this server does not know reads as `other`. Borg
     names the repository in its messages, so a location with credentials
     is redacted before the tail is kept: it reaches the operation's
-    message and the failure notifications from here."""
+    message and the failure notifications from here. `deleted_archives`
+    (a `repository.delete_archives` job) is kept when it is a count."""
     result: dict[str, Any] = {}
     if return_code is not None:
         result["return_code"] = return_code
@@ -670,6 +685,8 @@ def agent_failure_result(
             if failure_kind == FAILURE_KIND_LOCK_CONTENTION
             else FAILURE_KIND_OTHER
         )
+    if isinstance(deleted_archives, int) and deleted_archives >= 0:
+        result["deleted_archives"] = deleted_archives
     return result
 
 
@@ -980,9 +997,14 @@ def queue_agent_backup_job(
         ignore=admission_ignore_for(backup_job),
     )
 
-    archive_name = archive_name or (
-        f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
-    )
+    if not archive_name:
+        # As on the server: Borg 2's unnamed manual backup is one series, so
+        # the prune rules apply to it; Borg 1 names must be unique.
+        archive_name = (
+            "manual-backup"
+            if is_borg2(repository)
+            else f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+        )
     backup_job.execution_mode = EXECUTOR_AGENT
     backup_job.archive_name = archive_name
 
@@ -1154,6 +1176,9 @@ async def wait_for_agent_script_job(
                 "error_message": "agent script timed out",
             }
 
+        # As in `wait_for_agent_backup_job`: a repository hook of a backup for
+        # an agent that is away holds no backup slot either (#1331).
+        db.rollback()
         await asyncio.sleep(poll_interval_seconds)
 
 
@@ -1347,4 +1372,8 @@ async def wait_for_agent_backup_job(
                 "cancelled" if agent_job.status == "canceled" else agent_job.status
             )
 
+        # End the read before sleeping, so the wait does not hold a pooled
+        # connection: a backup for an agent that is away holds no backup slot
+        # (#1331), so any number of them can wait at once.
+        db.rollback()
         await asyncio.sleep(poll_interval_seconds)

@@ -24,7 +24,7 @@ def _normalize_path(path: str) -> str:
 def _strip_root_path(path: str, root_path: str) -> str:
     """Drop the mount prefix so matching is done on the app-relative path.
 
-    Under a non-empty ``BASE_PATH`` (``FastAPI(root_path=...)``), the ASGI
+    Under a non-empty ``BASE_PATH`` (``BasePathMiddleware`` in app/main.py), the ASGI
     server can leave ``request.url.path`` carrying the mount prefix while
     ``scope["root_path"]`` holds it separately. Stripping it on a path-segment
     boundary keeps the policy lookup working — otherwise the prefixed path
@@ -53,6 +53,15 @@ def _template_to_regex(path: str) -> Pattern[str]:
 
 
 ENDPOINT_POLICIES: Dict[Tuple[str, str], EndpointPolicy] = {
+    ("POST", "/api/repositories/{repo_id}/permanent-delete"): EndpointPolicy(
+        ("admin",), "backend.errors.repo.adminAccessRequired"
+    ),
+    ("POST", "/api/settings/backup-monitoring/run"): EndpointPolicy(
+        ("admin",), "backend.errors.settings.adminAccessRequired"
+    ),
+    ("POST", "/api/settings/backup-reports/send"): EndpointPolicy(
+        ("admin",), "backend.errors.settings.adminAccessRequired"
+    ),
     ("PUT", "/api/settings/system"): EndpointPolicy(
         ("admin",), "backend.errors.settings.adminAccessRequired"
     ),

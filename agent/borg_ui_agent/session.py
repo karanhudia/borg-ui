@@ -292,6 +292,7 @@ class SessionCommandClient:
         return_code: Optional[int] = None,
         stderr_tail: Optional[str] = None,
         failure_kind: Optional[str] = None,
+        deleted_archives: Optional[int] = None,
     ) -> dict[str, Any]:
         self._ensure_started(job_id)
         self.finished = True
@@ -302,16 +303,21 @@ class SessionCommandClient:
             error["stderr_tail"] = stderr_tail
         if failure_kind is not None:
             error["failure_kind"] = failure_kind
+        report: dict[str, Any] = {
+            "error_message": error_message,
+            "return_code": return_code,
+            "stderr_tail": stderr_tail,
+            "failure_kind": failure_kind,
+        }
+        if deleted_archives is not None:
+            # only for the job that counts them
+            error["deleted_archives"] = deleted_archives
+            report["deleted_archives"] = deleted_archives
         self._deliver_terminal(
             {"type": "command_error", "job_id": job_id, "error": error},
             job_id,
             "fail",
-            {
-                "error_message": error_message,
-                "return_code": return_code,
-                "stderr_tail": stderr_tail,
-                "failure_kind": failure_kind,
-            },
+            report,
         )
         return {"id": job_id, "status": "failed"}
 

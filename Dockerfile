@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.5-borg2-2.0.0b25-r1
+ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.5-borg2-2.0.0b25-r2
 # The Python the builder stages use — kept in step with runtime-base.env by a
 # guard test; the site-packages COPY paths derive from it.
 ARG PYTHON_VERSION=3.12
@@ -16,7 +16,11 @@ WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN npm run build
+# Vite embeds the same canonical version used by the backend.
+COPY VERSION /VERSION
+# Source maps ship as a release asset, never in the image (deleted here so no
+# layer of the final image ever holds them).
+RUN npm run build && find build -name '*.map' -delete
 
 # --- managed agent wheelhouse: built in-image, served to enrolling nodes ---
 # A node installs the agent belonging to the server it enrols against instead of

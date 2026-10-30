@@ -217,7 +217,7 @@ class MetricsResponse(BaseModel):
 
 class ScheduleResponse(BaseModel):
     jobs: List[ScheduledJobInfo]
-    next_execution: str = None
+    next_execution: Optional[str] = None
 
 
 def promote_repository_health(
@@ -638,17 +638,28 @@ def get_system_metrics() -> SystemMetrics:
         )
 
 
-def get_scheduled_jobs(db: Session) -> List[ScheduledJobInfo]:
+def get_scheduled_jobs(
+    db: Session, current_user: Optional[User] = None
+) -> List[ScheduledJobInfo]:
     """Get scheduled jobs information"""
     # TODO: Implement when ScheduledJob model is added back
     return []
 
 
-def get_recent_jobs(db: Session, limit: int = 10) -> List[Dict[str, Any]]:
+def get_recent_jobs(
+    db: Session, limit: int = 10, current_user: Optional[User] = None
+) -> List[Dict[str, Any]]:
     """Get recent backup jobs"""
     try:
         log_save_policy = get_log_save_policy(db)
-        jobs = recent_backup_jobs(db, limit)
+        from app.api.operations import accessible_repository_ids
+
+        accessible = (
+            accessible_repository_ids(db, current_user)
+            if current_user is not None
+            else None
+        )
+        jobs = recent_backup_jobs(db, limit, accessible=accessible)
         job_list = []
 
         for job in jobs:
@@ -681,7 +692,9 @@ def get_recent_jobs(db: Session, limit: int = 10) -> List[Dict[str, Any]]:
         return []
 
 
-def get_alerts(db: Session, hours: int = 24) -> List[Dict[str, Any]]:
+def get_alerts(
+    db: Session, hours: int = 24, current_user: Optional[User] = None
+) -> List[Dict[str, Any]]:
     """Get recent system alerts"""
     # TODO: Implement when SystemLog model is added back
     return []
@@ -697,13 +710,13 @@ def get_dashboard_status(
         system_metrics = get_system_metrics()
 
         # Get scheduled jobs
-        scheduled_jobs = get_scheduled_jobs(db)
+        scheduled_jobs = get_scheduled_jobs(db, current_user=current_user)
 
         # Get recent jobs
-        recent_jobs = get_recent_jobs(db)
+        recent_jobs = get_recent_jobs(db, current_user=current_user)
 
         # Get alerts
-        alerts = get_alerts(db)
+        alerts = get_alerts(db, current_user=current_user)
 
         return DashboardStatus(
             system_metrics=system_metrics,
@@ -765,7 +778,7 @@ def get_dashboard_schedule(
 ):
     """Get scheduled jobs information"""
     try:
-        jobs = get_scheduled_jobs(db)
+        jobs = get_scheduled_jobs(db, current_user=current_user)
 
         # Find next execution time
         next_execution = None
@@ -842,7 +855,9 @@ def _repository_name(
     return path.rstrip("/").split("/")[-1] if path else "Unknown"
 
 
-def backup_run_counts(db: Session, now: datetime) -> list:
+def backup_run_counts(
+    db: Session, now: datetime, accessible: Optional[set] = None
+) -> list:
     """`(week, status, count)` over the backups started in the last 30 days,
     grouped in SQL. `week` is the trend bucket, 0 the oldest and 3 the last
     seven days; None for a run older than the four weeks but inside the 30
@@ -859,6 +874,12 @@ def backup_run_counts(db: Session, now: datetime) -> list:
     return (
         db.query(week, Operation.status, func.count(Operation.id))
         .filter(
+            or_(
+                Operation.repository_id.is_(None),
+                Operation.repository_id.in_(accessible),
+            )
+            if accessible is not None
+            else True,
             Operation.kind == "backup",
             Operation.started_at >= now - timedelta(days=30),
         )
@@ -867,7 +888,9 @@ def backup_run_counts(db: Session, now: datetime) -> list:
     )
 
 
-def activity_rows(db: Session, since: datetime, until: datetime) -> list:
+def activity_rows(
+    db: Session, since: datetime, until: datetime, accessible: Optional[set] = None
+) -> list:
     """One row per operation of a feed kind started between `since` and
     `until`, the columns the timeline and the failure list read and nothing
     else; the error text only where a failure shows it. A run dated after
@@ -885,6 +908,12 @@ def activity_rows(db: Session, since: datetime, until: datetime) -> list:
             ).label("error_message"),
         )
         .filter(
+            or_(
+                Operation.repository_id.is_(None),
+                Operation.repository_id.in_(accessible),
+            )
+            if accessible is not None
+            else True,
             Operation.kind.in_(ACTIVITY_KINDS),
             Operation.started_at >= since,
             Operation.started_at <= until,
@@ -893,7 +922,9 @@ def activity_rows(db: Session, since: datetime, until: datetime) -> list:
     )
 
 
-def orphan_params(db: Session, since: datetime, until: datetime) -> dict:
+def orphan_params(
+    db: Session, since: datetime, until: datetime, accessible: Optional[set] = None
+) -> dict:
     """`operations.params` by id for the window's rows whose repository the
     repository table does not know (no id, or a repository since deleted),
     limited to the statuses the failure list compares. One statement
@@ -906,6 +937,12 @@ def orphan_params(db: Session, since: datetime, until: datetime) -> dict:
     rows = (
         db.query(Operation.id, Operation.params)
         .filter(
+            or_(
+                Operation.repository_id.is_(None),
+                Operation.repository_id.in_(accessible),
+            )
+            if accessible is not None
+            else True,
             Operation.kind.in_(ACTIVITY_KINDS),
             Operation.started_at >= since,
             Operation.started_at <= until,
@@ -1012,13 +1049,19 @@ def current_failures(
     return entries
 
 
-def unresolved_dispatch_failures(db: Session, since: datetime, until: datetime) -> list:
+def unresolved_dispatch_failures(
+    db: Session,
+    since: datetime,
+    until: datetime,
+    visible_plan_ids: Optional[set[int]] = None,
+) -> list:
     """Failed plan runs in the window that never produced a failed operation.
 
     A scheduled plan refused before its backups exist has no Operation for
     `current_failures` to see. A later completed run of the same plan settles
     it, the same way `RESOLVING_STATUSES` settles an operation. A newer failed
-    dispatch does not.
+    dispatch does not. `None` leaves plan visibility unrestricted; an empty
+    visible-plan set excludes all dispatch failures.
     """
     later_run = aliased(BackupPlanRun)
     has_failed_operation = exists().where(
@@ -1040,6 +1083,9 @@ def unresolved_dispatch_failures(db: Session, since: datetime, until: datetime) 
         db.query(BackupPlanRun, BackupPlan.name)
         .join(BackupPlan, BackupPlan.id == BackupPlanRun.backup_plan_id)
         .filter(
+            BackupPlanRun.backup_plan_id.in_(visible_plan_ids)
+            if visible_plan_ids is not None
+            else True,
             BackupPlanRun.status == "failed",
             BackupPlanRun.started_at.isnot(None),
             BackupPlanRun.started_at >= since,
@@ -1081,7 +1127,15 @@ def get_dashboard_overview(
         health_thresholds = DashboardHealthThresholds.from_settings(settings)
 
         # Get all repositories
-        repositories = db.query(Repository).all()
+        from app.api.operations import accessible_repository_ids
+
+        accessible = accessible_repository_ids(db, current_user)
+        repositories_query = db.query(Repository)
+        if accessible is not None:
+            repositories_query = repositories_query.filter(
+                Repository.id.in_(accessible)
+            )
+        repositories = repositories_query.all()
         # Lookup maps for naming feed entries and schedules (paths stored
         # with and without a trailing slash)
         repo_name_map = {}
@@ -1099,16 +1153,13 @@ def get_dashboard_overview(
 
         # Get all schedules
         schedules = db.query(ScheduledJob).all()
-        active_schedules = [s for s in schedules if s.enabled]
 
         # Get all backup plans so the dashboard can report the plan-native
         # automation counts separately from legacy schedules.
         backup_plans = db.query(BackupPlan).all()
-        active_backup_plans = [p for p in backup_plans if p.enabled]
         backup_plan_links = (
             db.query(BackupPlanRepository, BackupPlan)
             .join(BackupPlan, BackupPlan.id == BackupPlanRepository.backup_plan_id)
-            .filter(BackupPlanRepository.enabled.is_(True))
             .order_by(
                 BackupPlanRepository.repository_id.asc(),
                 BackupPlanRepository.execution_order.asc(),
@@ -1117,8 +1168,20 @@ def get_dashboard_overview(
             .all()
         )
         backup_plans_by_repo: dict[int, list[BackupPlan]] = {}
+        plan_repository_ids: dict[int, set[int]] = {}
         for link, plan in backup_plan_links:
-            backup_plans_by_repo.setdefault(link.repository_id, []).append(plan)
+            plan_repository_ids.setdefault(plan.id, set()).add(link.repository_id)
+        if accessible is not None:
+            backup_plans = [
+                plan
+                for plan in backup_plans
+                if plan_repository_ids.get(plan.id, set()) <= accessible
+            ]
+        visible_plan_ids = {plan.id for plan in backup_plans}
+        for link, plan in backup_plan_links:
+            if link.enabled and plan.id in visible_plan_ids:
+                backup_plans_by_repo.setdefault(link.repository_id, []).append(plan)
+        active_backup_plans = [plan for plan in backup_plans if plan.enabled]
 
         # Get SSH connections
         ssh_connections = db.query(SSHConnection).all()
@@ -1132,6 +1195,22 @@ def get_dashboard_overview(
             schedule_repository_ids.setdefault(scheduled_job_id, []).append(
                 repository_id
             )
+
+        if accessible is not None:
+            schedules = [
+                schedule
+                for schedule in schedules
+                if (
+                    set(schedule_repository_ids.get(schedule.id, ()))
+                    | (
+                        {schedule.repository_id}
+                        if schedule.repository_id is not None
+                        else set()
+                    )
+                )
+                <= accessible
+            ]
+        active_schedules = [schedule for schedule in schedules if schedule.enabled]
 
         repository_ids = [repo.id for repo in repositories]
         latest_restore_checks = latest_maintenance_jobs_by_repository(
@@ -1276,7 +1355,7 @@ def get_dashboard_overview(
         }
         successful_jobs = 0
         failed_jobs = 0
-        for week, job_status, count in backup_run_counts(db, now):
+        for week, job_status, count in backup_run_counts(db, now, accessible):
             if job_status == "completed":
                 successful_jobs += count
             elif job_status == "failed":
@@ -1404,16 +1483,23 @@ def get_dashboard_overview(
         # Activity of the last 14 days: the timeline counts per day and kind,
         # and the failures nothing has resolved since. The rows stay here.
         fourteen_days_ago = now - timedelta(days=TIMELINE_DAYS)
-        recent_rows = activity_rows(db, fourteen_days_ago, now)
+        recent_rows = activity_rows(db, fourteen_days_ago, now, accessible)
         timeline = activity_timeline(recent_rows, now, zone)
         failures = current_failures(
             recent_rows,
-            orphan_params(db, fourteen_days_ago, now),
+            orphan_params(db, fourteen_days_ago, now, accessible),
             repo_id_map,
             repo_name_map,
             repo_path_map,
         )
-        failures.extend(unresolved_dispatch_failures(db, fourteen_days_ago, now))
+        failures.extend(
+            unresolved_dispatch_failures(
+                db,
+                fourteen_days_ago,
+                now,
+                visible_plan_ids=visible_plan_ids if accessible is not None else None,
+            )
+        )
         failures.sort(
             key=lambda entry: (entry["timestamp"] or "", entry["id"]),
             reverse=True,

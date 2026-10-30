@@ -10,6 +10,47 @@ from app.database.models import Repository
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "cron_expression,schedule_enabled,has_checks",
+    [
+        (None, True, False),
+        ("", True, False),
+        ("0 3 * * 0", True, True),
+        ("0 3 * * 0", False, True),
+    ],
+)
+def test_export_repository_listing_reports_configured_checks(
+    test_client, admin_headers, test_db, cron_expression, schedule_enabled, has_checks
+):
+    repo = Repository(
+        name="Export Repo",
+        path="/test/export-repo",
+        repository_type="local",
+        encryption="none",
+        check_cron_expression=cron_expression,
+        check_schedule_enabled=schedule_enabled,
+    )
+    test_db.add(repo)
+    test_db.commit()
+
+    response = test_client.get("/api/config/export/repositories", headers=admin_headers)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "repositories": [
+            {
+                "id": repo.id,
+                "name": "Export Repo",
+                "path": "/test/export-repo",
+                "repository_type": "local",
+                "has_schedule": False,
+                "has_checks": has_checks,
+            }
+        ]
+    }
+
+
+@pytest.mark.unit
 class TestConfigExportTimestamps:
     """Test that exported filenames include timestamps"""
 

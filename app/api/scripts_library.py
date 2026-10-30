@@ -29,6 +29,7 @@ from app.database.models import (
     User,
 )
 from app.core.security import (
+    require_role_dependency,
     get_current_user,
     get_current_admin_user,
     check_repo_access,
@@ -1471,7 +1472,12 @@ async def remove_script_from_repository(
 
 @router.post("/scripts/cleanup-orphans")
 async def cleanup_orphaned_script_associations(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.scripts.adminAccessRequired"
+        )
+    ),
 ):
     """Clean up orphaned script associations (admin only)
 

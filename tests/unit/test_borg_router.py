@@ -1,4 +1,5 @@
 import asyncio
+import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
@@ -710,12 +711,13 @@ def test_build_mount_command_uses_v1_shape():
         "mount",
         "--remote-path",
         "/usr/bin/borg",
-        "/repo/path::archive-1",
-        "/mnt/repo",
         "-o",
         "allow_other",
         "-f",
         "--bypass-lock",
+        "--",
+        "/repo/path::archive-1",
+        "/mnt/repo",
     ]
 
 
@@ -739,11 +741,26 @@ def test_build_mount_command_uses_v2_shape():
         "mount",
         "-a",
         "archive-1",
-        "/mnt/repo",
         "-o",
         "allow_other",
         "-f",
+        "--",
+        "/mnt/repo",
     ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("major", [1, 2])
+def test_build_mount_command_rejects_option_like_archive(major):
+    repo = SimpleNamespace(borg_version=major)
+
+    with patch("app.core.borg2.borg2.borg_cmd", "borg2"):
+        with pytest.raises(ValueError):
+            BorgRouter(repo).build_mount_command(
+                repository_path="/repo/path",
+                archive_name="--sentinel",
+                mount_point="/mnt/repo",
+            )
 
 
 @pytest.mark.unit
@@ -795,6 +812,7 @@ def test_build_backup_create_command_uses_v1_shape():
         "--exclude",
         "*.cache",
         "--read-special",
+        "--",
         "/repos/v1::manual-1",
     ]
 
@@ -856,6 +874,7 @@ def test_build_restore_extract_command_adds_strip_components_for_v1():
         "--bypass-lock",
         "--strip-components",
         "3",
+        "--",
         "/repos/v1::manual-1",
         "home/user/folder",
     ]
@@ -894,20 +913,65 @@ def test_build_restore_extract_command_delegates_strip_components_for_v2():
 @pytest.mark.asyncio
 async def test_preview_restore_delegates_to_v2_restore_service():
     repo = SimpleNamespace(borg_version=2)
+    workdirs = []
+
+    async def preview(**kwargs):
+        workdirs.append((kwargs["destination"], os.path.isdir(kwargs["destination"])))
+        return {"success": True, "stdout": "preview"}
 
     with patch(
         "app.services.v2.restore_service.restore_v2_service.preview_restore",
-        new=AsyncMock(return_value={"success": True, "stdout": "preview"}),
+        new=AsyncMock(side_effect=preview),
     ) as mock_preview:
-        result = await BorgRouter(repo).preview_restore("a1", ["etc/hosts"], "/restore")
+        result = await BorgRouter(repo).preview_restore("a1", ["etc/hosts"])
 
     assert result == {"success": True, "stdout": "preview"}
+    ((workdir, existed),) = workdirs
     mock_preview.assert_awaited_once_with(
         repo=repo,
         archive="a1",
         paths=["etc/hosts"],
-        destination="/restore",
+        destination=workdir,
     )
+    # the dry run's own temporary directory, gone once it is over
+    assert existed
+    assert not os.path.exists(workdir)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_preview_restore_runs_borg1_in_a_temporary_directory():
+    repo = SimpleNamespace(
+        borg_version=1,
+        path="/repo",
+        passphrase="secret",
+        bypass_lock=False,
+        remote_path=None,
+    )
+    workdirs = []
+
+    async def extract(repository, archive, paths, destination, **kwargs):
+        workdirs.append((destination, os.path.isdir(destination)))
+        return {"success": True, "stdout": ""}
+
+    with patch(
+        "app.core.borg.borg.extract_archive", new=AsyncMock(side_effect=extract)
+    ) as mock_extract:
+        await BorgRouter(repo).preview_restore("a1", ["etc/hosts"])
+
+    ((workdir, existed),) = workdirs
+    mock_extract.assert_awaited_once_with(
+        "/repo",
+        "a1",
+        ["etc/hosts"],
+        workdir,
+        dry_run=True,
+        remote_path=None,
+        passphrase="secret",
+        bypass_lock=False,
+    )
+    assert existed
+    assert not os.path.exists(workdir)
 
 
 @pytest.mark.unit

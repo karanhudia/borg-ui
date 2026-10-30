@@ -145,3 +145,57 @@ docker compose up -d
 ```
 
 Keep `/data` and Borg repository backups before major upgrades.
+
+### Operator Path Restriction Upgrades
+
+New non-admin server backup sources and `R`/`r` roots in `--pattern` flags are
+checked when selected: they must be absolute, contain no `..`, resolve inside
+`LOCAL_MOUNT_POINTS`, and neither contain nor be inside `/app` or `DATA_DIR`.
+New dump, export, and btrfs staging metadata must also avoid those reserved
+directories, but may live outside the mount points. New agent sources and
+pattern roots, and restores from agent repositories, require an administrator.
+See [Access Control](access-control#operator-path-restrictions) and
+[Configuration](configuration#volumes) for the complete role and path rules.
+
+**Existing plans are not migrated or revalidated at runtime.** Their stored
+paths, metadata, and pattern roots remain usable in manual and scheduled runs,
+including paths outside the newly allowed area. Operators can retain or remove
+those paths while editing other fields. Removing a path and adding it again
+makes it a new selection. Plans with no remaining repositories cannot retain
+unchecked paths. Copying sources from an administrator-configured repository
+remains permitted.
+
+An administrator should review existing plans after upgrading. Use
+`GET /api/backup-plans/` with an administrator account to inspect every plan and
+its repository links, then edit plans that exceed the intended access:
+
+- Review both `source_directories` and structured `source_locations`, including
+  existing agent paths and the associated agent machine.
+- Review `R`/`r` roots in plan `custom_flags` and link `custom_flags_override`,
+  including disabled links that could later resume.
+- Review database `dump_path`, container `export_path`, and btrfs snapshot
+  `staging_path` metadata for reserved-directory access.
+- Remove or narrow sources and roots outside the intended mount points or
+  covering the application or data directory. Review existing agent paths with
+  the administrator responsible for that host.
+
+These are selection-time checks, not complete filesystem confinement. A path
+that is safe when selected can later be replaced by a symlink; execution does
+not repeat the check. The contents of `--patterns-from` and `--exclude-from`
+files are not validated by these new checks (their file paths retain the
+existing mount-point validation). ZFS `dataset`/`mountpoint` and database
+`backup_paths` retain their existing behavior. Metadata path strings, including
+remote SSH locations' database `dump_path` and container `export_path`, are
+checked against the server's reserved-path policy. With
+`script_execution_target=source`, those metadata scripts still execute on the
+SSH host; these checks do not confine its filesystem or symlinks. Managed agents
+have no allowed-root configuration, which is why new operator agent paths and
+agent restores are refused.
+
+Non-admin Borg mount targets, including automatically suffixed occupied targets,
+must resolve strictly below `DATA_DIR/mounts` before directory creation. SSHFS
+staging paths are bounded for everyone: `..` is normalized and a symlink escape
+is refused before creating the target or mounting it. An administrator backup
+that previously followed such an escape now fails instead of reading the
+symlink's target on the server; ordinary administrator path selection is
+unchanged.

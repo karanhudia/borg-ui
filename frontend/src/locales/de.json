@@ -70,6 +70,11 @@
       "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
     }
   },
+  "errorBoundary": {
+    "title": "Etwas ist schiefgelaufen",
+    "message": "Borg UI ist auf einen unerwarteten Fehler gestoßen. Ein Neuladen behebt das Problem meist.",
+    "reload": "Neu laden"
+  },
   "login": {
     "title": "Borg UI",
     "subtitle": "Zugangsdaten eingeben, um fortzufahren",
@@ -3122,7 +3127,15 @@
     "rcloneScheduledNoNextRun": "Geplante Spiegelung hat noch keinen nächsten Lauf ({{timezone}})",
     "rcloneNextSyncBadge": "Spiegel: {{when}}",
     "rcloneNextSyncWithSchedule": "Nächste Spiegel-Synchronisierung {{when}}. Zeitplan: {{cron}} ({{timezone}})",
-    "rcloneScheduleUnknown": "unbekannter Zeitplan"
+    "rcloneScheduleUnknown": "unbekannter Zeitplan",
+    "archiveSyncWarning": {
+      "title": "Archivabgleich fehlgeschlagen",
+      "description": "Die Archivinformationen sind möglicherweise veraltet.",
+      "lastSuccess": "Letzter erfolgreicher Abgleich: {{when}}",
+      "neverSynced": "Noch kein erfolgreicher Archivabgleich.",
+      "viewDetails": "Details anzeigen",
+      "label": "Sync-Fehler"
+    }
   },
   "dialogs": {
     "deleteJob": {
@@ -4090,8 +4103,8 @@
     "save": "Einstellungen speichern",
     "saving": "Speichert...",
     "updatedSuccessfully": "Einstellungen erfolgreich aktualisiert",
-    "analyticsTitle": "Anonyme Nutzungsanalyse",
-    "analyticsDescription": "Hilf uns, Borg UI zu verbessern, indem du anonyme Nutzungsdaten teilst. Wir erfassen Seitenaufrufe, Funktionsklicks und Browser-Typ – ohne IP-Adressen, Hostnamen, Cookies oder persönlich identifizierbare Informationen zu verfolgen.",
+    "analyticsTitle": "Nutzungsanalyse",
+    "analyticsDescription": "Hilf uns, Borg UI zu verbessern, indem du Nutzungsdaten und Fehlerberichte teilst. Fehlerberichte können Pfade, Hostnamen und Repository-Namen enthalten; Passwörter, Passphrasen, Tokens und private Schlüssel werden vorher entfernt. Wir erfassen nie Backup-Inhalte, Passwörter oder IP-Adressen.",
     "enableAnalytics": "Analysen aktivieren",
     "languageTitle": "Sprache",
     "languageDescription": "Wähle die Sprache der Benutzeroberfläche",
@@ -4409,11 +4422,11 @@
   },
   "analyticsConsent": {
     "title": "Hilf uns, Borg UI zu verbessern",
-    "message": "Wir erfassen anonyme Nutzungsdaten, um zu verstehen, wie Borg UI verwendet wird, und es zu verbessern. Es werden keine persönlichen Informationen, IP-Adressen, Hostnamen oder Sicherungsdaten erfasst.",
+    "message": "Wir erfassen Nutzungsdaten und Fehlerberichte, um zu verstehen, wie Borg UI verwendet wird, und um Probleme zu beheben. Backup-Inhalte, Passwörter und IP-Adressen werden nie erfasst.",
     "accept": "Akzeptieren",
     "decline": "Ablehnen",
     "learnMore": "Mehr erfahren",
-    "enableToggle": "Anonyme Analysen aktivieren",
+    "enableToggle": "Analysen aktivieren",
     "continue": "Weiter",
     "saving": "Speichert...",
     "changeAnytime": "Du kannst dies jederzeit in Einstellungen → Einstellungen ändern"
@@ -5969,6 +5982,7 @@
         "failedToImportRepository": "Repository konnte nicht importiert werden",
         "failedToUploadKeyfile": "Schlüsseldatei konnte nicht hochgeladen werden",
         "failedToExportKeyfile": "Schlüsseldatei konnte nicht exportiert werden",
+        "agentKeyfileExportUnsupported": "Dieses Repository wird von einem Agenten ausgeführt, dessen Version den Schlüssel nicht exportieren kann. Aktualisiere den Agenten oder exportiere den Schlüssel mit Borg auf dem Rechner des Agenten.",
         "failedToRetrieveRepository": "Repository konnte nicht abgerufen werden",
         "failedToUpdateRepository": "Repository konnte nicht aktualisiert werden",
         "failedToDeleteRepository": "Repository konnte nicht gelöscht werden",
@@ -6085,6 +6099,8 @@
         "failedGetRestoreJobs": "Wiederherstellungsaufträge konnten nicht abgerufen werden",
         "failedGetRestoreStatus": "Wiederherstellungsstatus konnte nicht abgerufen werden",
         "failedPreviewRestore": "Vorschau der Wiederherstellung fehlgeschlagen",
+        "failedPreviewRestoreWithReason": "Vorschau der Wiederherstellung fehlgeschlagen: {{reason}}",
+        "agentPreviewUnsupported": "Dieses Repository wird von einem Agenten ausgeführt, dessen Version keine Vorschau einer Wiederherstellung erstellen kann. Aktualisiere den Agenten oder starte stattdessen die Wiederherstellung.",
         "repositoryNotFound": "Repository nicht gefunden",
         "restoreJobNotFound": "Wiederherstellungsauftrag nicht gefunden",
         "sshToSshNotSupported": "Die Wiederherstellung von einem SSH-Repository auf ein SSH-Ziel wird nicht unterstützt",
@@ -6304,6 +6320,9 @@
         "backupCompletedWithWarning": "Sicherung mit Warnung abgeschlossen (Exitcode {{exitCode}})",
         "backupWarningPostHooksFailed": "Sicherung mit Warnung abgeschlossen, aber Post-Sicherungs-Hooks fehlgeschlagen: {{failed}}/{{total}} Skripte fehlgeschlagen",
         "containerRestartedDuringBackup": "Container wurde während der Sicherungsoperation neu gestartet",
+        "postBackupHooksAfterCancel": "Dieser Lauf wurde abgebrochen, nachdem seine Pre-Backup-Hooks gelaufen sind. Seine Post-Backup-Hooks laufen, sobald seine Sicherungen beendet sind. Bleibt diese Meldung stehen, konnten sie nicht laufen oder sind fehlgeschlagen. Prüfe, was die Pre-Backup-Hooks angehalten haben.",
+        "backupPostHooksAfterRestart": "Ein Neustart hat dieses Backup unterbrochen, nachdem seine Pre-Backup-Hooks gelaufen sind. Bleibt diese Meldung stehen, konnten seine Post-Backup-Hooks nach dem Neustart nicht laufen oder sind fehlgeschlagen. Prüfe, was die Pre-Backup-Hooks angehalten haben.",
+        "postBackupHooksAfterRestart": "Ein Neustart hat diesen Lauf unterbrochen, nachdem seine Pre-Backup-Hooks gelaufen sind. Bleibt diese Meldung stehen, konnten seine Post-Backup-Hooks nach dem Neustart nicht laufen oder sind fehlgeschlagen. Prüfe, was die Pre-Backup-Hooks angehalten haben.",
         "containerRestartedDuringOperation": "Container wurde während des Vorgangs neu gestartet",
         "containerRestartedDuringRestore": "Container wurde während der Wiederherstellungsoperation neu gestartet",
         "failedCreateDestinationDir": "Zielverzeichnis konnte nicht erstellt werden: {{error}}",

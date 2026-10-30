@@ -59,6 +59,7 @@ import PlanGate from '../components/shared/PlanGate'
 import RcloneProviderIcon, { RcloneProviderGlyph } from '../components/shared/RcloneProviderIcon'
 import { joinBrowserPath, normalizeBrowserPath } from '../utils/storageBrowserPaths'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { testResult } from '../utils/analytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { usePlan } from '../hooks/usePlan'
 
@@ -1373,12 +1374,18 @@ export default function CloudStorage() {
       setTestingRemoteId(remote.id)
     },
     onSuccess: (response, remote) => {
-      toast.success(t('cloudStorage.remoteTestSucceeded'))
+      if (response.data?.status === 'connected') {
+        toast.success(t('cloudStorage.remoteTestSucceeded'))
+      } else {
+        toast.error(t('cloudStorage.remoteTestFailed'))
+      }
       trackSystem(EventAction.TEST, {
         section: CLOUD_STORAGE_ANALYTICS_SECTION,
         operation: 'test_remote_complete',
         provider: remote.provider,
         status: response.data?.status || 'unknown',
+        // The route answers 200 with status 'failed' when the remote is unreachable.
+        ...testResult(response.data?.status === 'connected'),
       })
       trackRcloneFeatureUsed('test_remote', {
         provider: remote.provider,
@@ -1386,8 +1393,14 @@ export default function CloudStorage() {
       })
       queryClient.invalidateQueries({ queryKey: ['rclone-remotes'] })
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown, remote) => {
       toast.error(getApiMessage(error, t('cloudStorage.remoteTestFailed')))
+      trackSystem(EventAction.TEST, {
+        section: CLOUD_STORAGE_ANALYTICS_SECTION,
+        operation: 'test_remote_complete',
+        provider: remote.provider,
+        ...testResult(false, error),
+      })
     },
     onSettled: () => {
       setTestingRemoteId(null)

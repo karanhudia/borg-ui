@@ -9,17 +9,25 @@ from croniter import croniter
 
 from app.database.database import get_db
 from app.database.models import User, Repository, SystemSettings
-from app.services import backup_monitoring_service
+from app.services import backup_monitoring_service, error_reporter
 from app.core.authorization import authorize_request
 from app.core.security import (
     BcryptPassword,
     encrypt_secret,
     get_current_user,
+    get_current_admin_user,
+    require_any_role,
     get_password_hash,
     verify_password,
 )
 from app.core.user_deletion import detach_user_delete_references
-from app.core.features import get_current_plan, require_feature_access, USER_LIMITS
+from app.core.features import (
+    FEATURES,
+    Plan,
+    get_current_plan,
+    require_feature_access,
+    USER_LIMITS,
+)
 from app.core.permissions import (
     GLOBAL_ROLE_RANK,
     REPOSITORY_ROLE_RANK,
@@ -1305,7 +1313,9 @@ async def run_backup_monitoring_now(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Manually run backup freshness monitoring."""
-    del current_user
+    require_any_role(
+        current_user, "admin", detail_key="backend.errors.settings.adminAccessRequired"
+    )
     require_feature_access(db, "alerting_monitoring")
     try:
         return await backup_monitoring_service.run_backup_monitoring(
@@ -1327,7 +1337,9 @@ async def send_backup_report_now(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Manually send a backup health report."""
-    del current_user
+    require_any_role(
+        current_user, "admin", detail_key="backend.errors.settings.adminAccessRequired"
+    )
     require_feature_access(db, "backup_reports")
     try:
         return await backup_monitoring_service.send_backup_report_now(
@@ -1345,7 +1357,9 @@ async def send_backup_report_now(
 
 
 @router.get("/users")
-def get_users(db: Session = Depends(get_db)):
+def get_users(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_admin_user)
+):
     """Get all users (admin only)"""
     try:
         users = db.query(User).all()
@@ -1396,6 +1410,15 @@ async def create_user(
                 status_code=403,
                 detail={
                     "key": "backend.errors.plan.userLimitReached",
+                    # The paywall behind the limit, so the app counts it like
+                    # any other blocked feature.
+                    "feature": "extra_users",
+                    # Pro lifts the Community limit; past Pro's, only Enterprise does.
+                    "required": (
+                        FEATURES["extra_users"].value
+                        if current_plan == Plan.COMMUNITY
+                        else Plan.ENTERPRISE.value
+                    ),
                     "current": current_plan.value,
                     "limit": limit,
                 },
@@ -1836,6 +1859,8 @@ async def update_preferences(
 
         current_user.updated_at = datetime.utcnow()
         db.commit()
+        if preferences.analytics_enabled is not None:
+            error_reporter.invalidate_consent_cache()
 
         logger.info(
             "User preferences updated",

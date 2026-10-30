@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import binascii
 import json
@@ -24,7 +25,10 @@ from app.core.security import (
 from app.database.database import get_db
 from app.database.models import AgentMachine, Repository, User
 from app.services.agent_artifact_relay import agent_artifact_relay
-from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.agent_job_dispatcher import (
+    dispatch_agent_cancel_if_connected,
+    dispatch_agent_job_best_effort,
+)
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import resolve_maintenance_job
@@ -32,6 +36,8 @@ from app.services.operations.maintenance_start import active_delete_for_archive
 from app.services.repository_executor import (
     abandon_agent_repository_operation_job,
     agent_operation_failed_detail,
+    agent_timezone_for_repository,
+    cancel_unclaimed_agent_repository_job,
     is_agent_executor,
     queue_agent_repository_operation_job,
     wait_for_agent_repository_operation_job,
@@ -48,6 +54,7 @@ from app.utils.ssh_utils import (
     resolve_repository_ssh_connection,
 )  # Backward-compatible patch target for tests
 from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
+from app.utils.borg_arguments import validate_operand
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -113,6 +120,12 @@ ARTIFACT_UPLOAD_CAPABILITY = "artifact.upload"
 AGENT_ARTIFACT_FIRST_BYTE_TIMEOUT = 60.0
 # Max gap between chunks before a stalled stream is abandoned.
 AGENT_ARTIFACT_IDLE_TIMEOUT = 60.0
+# How long taking a streamed download's job back waits for its cancel to be
+# sent to the agent; the send itself goes on.
+AGENT_CANCEL_SEND_TIMEOUT = 5.0
+# Strong references: the loop only holds weak ones, and a cancel send that
+# outlives its download must still reach the agent.
+_CANCEL_SEND_TASKS: set[asyncio.Task] = set()
 
 
 def _content_disposition_attachment(filename: str) -> str:
@@ -156,6 +169,91 @@ def _archive_extract_selector(archive: str, repo: Repository) -> str:
     return f"aid:{archive}" if _ARCHIVE_ID_RE.fullmatch(archive) else archive
 
 
+async def agent_file_download(
+    db: Session, repo: Repository, archive: str, file_path: str
+):
+    """Download one file of an agent repository's archive, extracted on the
+    agent. `archive` is the exact selector (`aid:<hex>` for Borg 2).
+
+    New agents stream the file straight through; older agents return it
+    base64-encoded in their job result."""
+    agent = _repo_bound_agent(repo, db)
+    if agent and ARTIFACT_UPLOAD_CAPABILITY in (agent.capabilities or []):
+        return await _stream_agent_archive_file(db, repo, archive, file_path)
+
+    async def extract(temp_dir: str):
+        agent_job = queue_agent_repository_operation_job(
+            db,
+            repo,
+            job_kind="repository.extract_archive_file",
+            operation={"archive": archive, "file_path": file_path},
+        )
+        await dispatch_agent_job_best_effort(
+            db,
+            agent_job,
+            repository_id=repo.id,
+            archive=archive,
+            file_path=file_path,
+        )
+        try:
+            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
+                # nobody waits for the file any more: take the job back
+                abandoned = abandon_agent_repository_operation_job(db, agent_job.id)
+                if abandoned is not None and abandoned.status == "cancel_requested":
+                    await dispatch_agent_cancel_if_connected(abandoned)
+            raise
+        return _write_agent_extracted_file(
+            result,
+            temp_dir=temp_dir,
+            file_path=file_path,
+        )
+
+    return await extract_file_download(
+        file_path,
+        extract,
+        temp_dir_factory=tempfile.mkdtemp,
+        path_exists=os.path.exists,
+        file_response_factory=FileResponse,
+    )
+
+
+class _AgentDownloadResponse(StreamingResponse):
+    """A streamed agent download that closes its body when the response
+    ends: Starlette leaves a body it stopped reading (a client that went
+    away) suspended, and the body's cleanup takes the agent job back."""
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            await self.body_iterator.aclose()
+
+
+async def _take_back_streamed_agent_job(db: Session, agent_job_id: int) -> None:
+    """End a streamed download's agent job that nobody reads any more: an
+    unclaimed job is cancelled, a running one is asked to stop."""
+    abandoned = abandon_agent_repository_operation_job(db, agent_job_id)
+    agent_artifact_relay.unregister(agent_job_id)
+    if abandoned is not None and abandoned.status == "cancel_requested":
+        # Shielded: a download ended by its client's disconnect is being
+        # cancelled itself, and the agent must still hear of it. Bounded: a
+        # send queued behind a stalled one goes on without holding the answer.
+        send = asyncio.ensure_future(dispatch_agent_cancel_if_connected(abandoned))
+        _CANCEL_SEND_TASKS.add(send)
+        send.add_done_callback(_CANCEL_SEND_TASKS.discard)
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(send), timeout=AGENT_CANCEL_SEND_TIMEOUT
+            )
+        except TimeoutError:
+            logger.warning(
+                "Cancel of a streamed download's agent job still sending",
+                agent_job_id=agent_job_id,
+            )
+
+
 async def _stream_agent_archive_file(
     db: Session, repo: Repository, archive: str, file_path: str
 ) -> StreamingResponse:
@@ -179,6 +277,10 @@ async def _stream_agent_archive_file(
             archive=archive,
             file_path=file_path,
         )
+    except asyncio.CancelledError:
+        # the request ended while the job was being handed over
+        await _take_back_streamed_agent_job(db, agent_job.id)
+        raise
     except Exception:
         agent_artifact_relay.unregister(agent_job.id)
         raise
@@ -194,25 +296,39 @@ async def _stream_agent_archive_file(
         first_chunk = await stream.__anext__()
     except StopAsyncIteration:
         first_chunk = None  # empty file
+    except asyncio.CancelledError:
+        # the request itself ended (a shutdown, a dropped connection)
+        await _take_back_streamed_agent_job(db, agent_job.id)
+        raise
     except TimeoutError as exc:
+        await _take_back_streamed_agent_job(db, agent_job.id)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
         ) from exc
     except RuntimeError as exc:
+        await _take_back_streamed_agent_job(db, agent_job.id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=agent_operation_failed_detail(str(exc)),
         ) from exc
 
     async def body():
-        if first_chunk is not None:
-            yield first_chunk
-        async for chunk in stream:
-            yield chunk
+        delivered = False
+        try:
+            if first_chunk is not None:
+                yield first_chunk
+            async for chunk in stream:
+                yield chunk
+            delivered = True
+        finally:
+            # After the end of the stream the agent reports its completion;
+            # a cancel then would turn a delivered download into a failure.
+            if not delivered:
+                await _take_back_streamed_agent_job(db, agent_job.id)
 
     filename = os.path.basename(file_path) or "download"
-    return StreamingResponse(
+    return _AgentDownloadResponse(
         body(),
         media_type="application/octet-stream",
         headers={"Content-Disposition": _content_disposition_attachment(filename)},
@@ -248,6 +364,10 @@ async def _stream_agent_archive_tar(
             archive=archive,
             directory_path=directory_path,
         )
+    except asyncio.CancelledError:
+        # the request ended while the job was being handed over
+        await _take_back_streamed_agent_job(db, agent_job.id)
+        raise
     except Exception:
         agent_artifact_relay.unregister(agent_job.id)
         raise
@@ -261,33 +381,39 @@ async def _stream_agent_archive_tar(
         first_chunk = await stream.__anext__()
     except StopAsyncIteration:
         first_chunk = None
+    except asyncio.CancelledError:
+        # the request itself ended (a shutdown, a dropped connection)
+        await _take_back_streamed_agent_job(db, agent_job.id)
+        raise
     except TimeoutError as exc:
-        abandon_agent_repository_operation_job(db, agent_job.id)
-        agent_artifact_relay.unregister(agent_job.id)
+        await _take_back_streamed_agent_job(db, agent_job.id)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
         ) from exc
     except RuntimeError as exc:
-        abandon_agent_repository_operation_job(db, agent_job.id)
-        agent_artifact_relay.unregister(agent_job.id)
+        await _take_back_streamed_agent_job(db, agent_job.id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=agent_operation_failed_detail(str(exc)),
         ) from exc
 
     async def body():
+        delivered = False
         try:
             if first_chunk is not None:
                 yield first_chunk
             async for chunk in stream:
                 yield chunk
+            delivered = True
         finally:
-            abandon_agent_repository_operation_job(db, agent_job.id)
-            agent_artifact_relay.unregister(agent_job.id)
+            # After the end of the stream the agent reports its completion;
+            # a cancel then would turn a delivered download into a failure.
+            if not delivered:
+                await _take_back_streamed_agent_job(db, agent_job.id)
 
     filename = f"{os.path.basename(directory_path.rstrip('/')) or 'archive'}.tar"
-    return StreamingResponse(
+    return _AgentDownloadResponse(
         body(),
         media_type="application/x-tar",
         headers={"Content-Disposition": _content_disposition_attachment(filename)},
@@ -342,6 +468,43 @@ async def _stream_server_archive_tar(
     )
 
 
+async def _agent_read_result(
+    db: Session,
+    repo: Repository,
+    job_kind: str,
+    *,
+    operation: dict | None = None,
+    timeout_key: str,
+) -> dict:
+    """Run a read job of an agent repository on its agent and return the
+    result: the deprecated routes' agent path (#1393)."""
+    from app.api.repositories import get_operation_timeouts
+
+    agent_job = queue_agent_repository_operation_job(
+        db, repo, job_kind=job_kind, operation=operation
+    )
+    await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo.id)
+    try:
+        return await wait_for_agent_repository_operation_job(
+            db, agent_job.id, timeout_seconds=get_operation_timeouts(db)[timeout_key]
+        )
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
+            # Left queued (the agent was not connected to take it), the job
+            # would count as the repository's active work until the agent
+            # comes back; one the agent claimed runs to its end.
+            cancel_unclaimed_agent_repository_job(db, agent_job.id)
+        raise
+
+
+def _read_succeeded(result: dict) -> bool:
+    """A server result says `success`; an agent result carries Borg's
+    return code."""
+    return (
+        result.get("success", True) is not False and result.get("return_code", 0) == 0
+    )
+
+
 @router.get("/list")
 async def list_archives(
     repository: str,
@@ -353,28 +516,33 @@ async def list_archives(
     try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
-        env, temp_key_file = _build_repo_env(repo, db)
-        try:
-            result = await borg.list_archives(
-                repo.path,
-                remote_path=effective_repository_remote_path(repo),
-                passphrase=repo.passphrase,
-                bypass_lock=repo.bypass_lock,
-                env=env,
+        if is_agent_executor(repo):
+            result = await _agent_read_result(
+                db, repo, "repository.list_archives", timeout_key="list_timeout"
             )
-        finally:
-            cleanup_temp_key_file(temp_key_file)
-        if not result["success"]:
+        else:
+            env, temp_key_file = _build_repo_env(repo, db)
+            try:
+                result = await borg.list_archives(
+                    repo.path,
+                    remote_path=effective_repository_remote_path(repo),
+                    passphrase=repo.passphrase,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
+            finally:
+                cleanup_temp_key_file(temp_key_file)
+        if not _read_succeeded(result):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list archives: {result['stderr']}",
+                detail=f"Failed to list archives: {result.get('stderr', '')}",
             )
 
         response.headers["Deprecation"] = "true"
         response.headers["Link"] = (
             f'</api/repositories/{repo.id}/archives>; rel="successor-version"'
         )
-        return {"archives": result["stdout"]}
+        return {"archives": result.get("stdout", "")}
     except HTTPException:
         raise
     except Exception as e:
@@ -396,29 +564,47 @@ async def get_archive_info(
 ):
     """Get detailed information about a specific archive including command line, metadata, and optionally file listing"""
     try:
+        validate_operand(archive_id, "archive selector")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
-        env, temp_key_file = _build_repo_env(repo, db)
-        try:
-            result = await borg.info_archive(
-                repo.path,
-                archive_id,
-                remote_path=effective_repository_remote_path(repo),
-                passphrase=repo.passphrase,
-                bypass_lock=repo.bypass_lock,
-                env=env,
+        agent = is_agent_executor(repo)
+        if agent:
+            archive_id = _archive_extract_selector(archive_id, repo)
+            result = await _agent_read_result(
+                db,
+                repo,
+                "repository.archive_info",
+                operation={"archive": archive_id},
+                timeout_key="info_timeout",
             )
-        finally:
-            cleanup_temp_key_file(temp_key_file)
-        if not result["success"]:
+        else:
+            env, temp_key_file = _build_repo_env(repo, db)
+            try:
+                result = await borg.info_archive(
+                    repo.path,
+                    archive_id,
+                    remote_path=effective_repository_remote_path(repo),
+                    passphrase=repo.passphrase,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
+            finally:
+                cleanup_temp_key_file(temp_key_file)
+        # An agent renders Borg's times in its own zone; the server's
+        # wrapper runs under TZ=UTC.
+        time_zone = agent_timezone_for_repository(db, repo) if agent else "UTC"
+        if not _read_succeeded(result):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get archive info: {result['stderr']}",
+                detail=f"Failed to get archive info: {result.get('stderr', '')}",
             )
 
         # Parse JSON output from Borg
         try:
-            archive_data = json.loads(result["stdout"])
+            archive_data = json.loads(result.get("stdout") or "")
 
             # Extract archive information
             if "archives" in archive_data and len(archive_data["archives"]) > 0:
@@ -430,13 +616,13 @@ async def get_archive_info(
             enhanced_info = {
                 "name": archive_info.get("name"),
                 "id": archive_info.get("id"),
-                # info_archive runs under TZ=UTC; re-render with an explicit
-                # offset so the frontend does not read the value as local time.
+                # Re-rendered with an explicit offset so the frontend does
+                # not read the value as local time.
                 "start": serialize_borg_archive_time(
-                    archive_info.get("start"), timezone_name="UTC"
+                    archive_info.get("start"), timezone_name=time_zone
                 ),
                 "end": serialize_borg_archive_time(
-                    archive_info.get("end"), timezone_name="UTC"
+                    archive_info.get("end"), timezone_name=time_zone
                 ),
                 "duration": archive_info.get("duration"),
                 "stats": archive_info.get("stats", {}),
@@ -458,23 +644,48 @@ async def get_archive_info(
 
             # Optionally fetch file listing
             if include_files:
-                env, temp_key_file = _build_repo_env(repo, db)
-                try:
-                    list_result = await borg.list_archive_contents(
-                        repo.path,
-                        archive_id,
-                        remote_path=effective_repository_remote_path(repo),
-                        passphrase=repo.passphrase,
-                        bypass_lock=repo.bypass_lock,
-                        env=env,
-                    )
-                finally:
-                    cleanup_temp_key_file(temp_key_file)
-                if list_result["success"]:
+                if agent:
+                    try:
+                        list_result = await _agent_read_result(
+                            db,
+                            repo,
+                            "repository.list_archive_contents",
+                            # No line cap: the agent ends a listing at its
+                            # cap with a failure. `file_limit` cuts it below,
+                            # as on the server.
+                            operation={"archive": archive_id, "path": ""},
+                            timeout_key="list_timeout",
+                        )
+                    except HTTPException as exc:
+                        # the files are best effort, as on the server: the
+                        # archive info stands without them
+                        logger.warning(
+                            "Agent file listing for archive info failed",
+                            repository_id=repo.id,
+                            archive=archive_id,
+                            status_code=exc.status_code,
+                        )
+                        list_result = {"success": False}
+                else:
+                    env, temp_key_file = _build_repo_env(repo, db)
+                    try:
+                        list_result = await borg.list_archive_contents(
+                            repo.path,
+                            archive_id,
+                            remote_path=effective_repository_remote_path(repo),
+                            passphrase=repo.passphrase,
+                            bypass_lock=repo.bypass_lock,
+                            env=env,
+                        )
+                    finally:
+                        cleanup_temp_key_file(temp_key_file)
+                if _read_succeeded(list_result):
                     try:
                         # Parse JSON-lines output
                         files = []
-                        for line in list_result["stdout"].strip().split("\n"):
+                        for line in (
+                            (list_result.get("stdout") or "").strip().split("\n")
+                        ):
                             if line and len(files) < file_limit:
                                 try:
                                     file_obj = json.loads(line)
@@ -486,12 +697,11 @@ async def get_archive_info(
                                             "user": file_obj.get("user"),
                                             "group": file_obj.get("group"),
                                             "size": file_obj.get("size"),
-                                            # Contents listing ran under
-                                            # TZ=UTC (server wrapper); re-render
-                                            # the mtime with an explicit offset.
+                                            # Re-rendered with an explicit
+                                            # offset, as the times above.
                                             "mtime": serialize_borg_archive_time(
                                                 file_obj.get("mtime"),
-                                                timezone_name="UTC",
+                                                timezone_name=time_zone,
                                             ),
                                             "healthy": file_obj.get("healthy", True),
                                         }
@@ -513,7 +723,7 @@ async def get_archive_info(
         except json.JSONDecodeError:
             # Fallback to raw output if not JSON
             logger.warning("Archive info is not JSON, returning raw output")
-            return {"info": result["stdout"]}
+            return {"info": result.get("stdout", "")}
 
     except HTTPException:
         raise
@@ -535,28 +745,46 @@ async def get_archive_contents(
 ):
     """Get contents of an archive"""
     try:
+        validate_operand(archive_id, "archive selector")
+        if path:
+            validate_operand(path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
-        env, temp_key_file = _build_repo_env(repo, db)
-        try:
-            result = await borg.list_archive_contents(
-                repo.path,
-                archive_id,
-                path,
-                remote_path=effective_repository_remote_path(repo),
-                passphrase=repo.passphrase,
-                bypass_lock=repo.bypass_lock,
-                env=env,
+        if is_agent_executor(repo):
+            result = await _agent_read_result(
+                db,
+                repo,
+                "repository.list_archive_contents",
+                operation={
+                    "archive": _archive_extract_selector(archive_id, repo),
+                    "path": path,
+                },
+                timeout_key="list_timeout",
             )
-        finally:
-            cleanup_temp_key_file(temp_key_file)
-        if not result["success"]:
+        else:
+            env, temp_key_file = _build_repo_env(repo, db)
+            try:
+                result = await borg.list_archive_contents(
+                    repo.path,
+                    archive_id,
+                    path,
+                    remote_path=effective_repository_remote_path(repo),
+                    passphrase=repo.passphrase,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
+            finally:
+                cleanup_temp_key_file(temp_key_file)
+        if not _read_succeeded(result):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get archive contents: {result['stderr']}",
+                detail=f"Failed to get archive contents: {result.get('stderr', '')}",
             )
 
-        return {"contents": result["stdout"]}
+        return {"contents": result.get("stdout", "")}
     except HTTPException:
         raise
     except Exception as e:
@@ -575,6 +803,10 @@ async def delete_archive(
     db: Session = Depends(get_db),
 ):
     """Delete an archive in the background (non-blocking)"""
+    try:
+        validate_operand(archive_id, "archive selector")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         # Validate repository exists first
         repo = require_repository_access_by_path(
@@ -640,6 +872,12 @@ async def download_file_from_archive(
 ):
     """Extract and download a specific file from an archive"""
     try:
+        validate_operand(archive, "archive selector")
+        if file_path:
+            validate_operand(file_path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
         repo = require_repository_access_by_path(
             db,
             current_user,
@@ -652,35 +890,10 @@ async def download_file_from_archive(
         # archive in a series; a bare id would be read as a name → 0-byte file.
         archive = _archive_extract_selector(archive, repo)
 
-        # New agents stream the file straight through; older agents (and
-        # server-side repos) fall through to the base64/local path below.
         if is_agent_executor(repo):
-            agent = _repo_bound_agent(repo, db)
-            if agent and ARTIFACT_UPLOAD_CAPABILITY in (agent.capabilities or []):
-                return await _stream_agent_archive_file(db, repo, archive, file_path)
+            return await agent_file_download(db, repo, archive, file_path)
 
         async def extract(temp_dir: str):
-            if is_agent_executor(repo):
-                agent_job = queue_agent_repository_operation_job(
-                    db,
-                    repo,
-                    job_kind="repository.extract_archive_file",
-                    operation={"archive": archive, "file_path": file_path},
-                )
-                await dispatch_agent_job_best_effort(
-                    db,
-                    agent_job,
-                    repository_id=repo.id,
-                    archive=archive,
-                    file_path=file_path,
-                )
-                result = await wait_for_agent_repository_operation_job(db, agent_job.id)
-                return _write_agent_extracted_file(
-                    result,
-                    temp_dir=temp_dir,
-                    file_path=file_path,
-                )
-
             env, temp_key_file = _build_repo_env(repo, db)
             try:
                 return await borg.extract_archive(
@@ -730,6 +943,12 @@ async def download_folder_from_archive(
     db: Session = Depends(get_db),
 ):
     """Download one archived directory as a streaming tar file."""
+    try:
+        validate_operand(archive, "archive selector")
+        if directory_path:
+            validate_operand(directory_path, "archive path", archive_path=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not directory_path.strip().strip("/"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

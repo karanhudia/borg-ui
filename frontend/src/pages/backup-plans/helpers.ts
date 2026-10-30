@@ -1,6 +1,8 @@
 import type { TFunction } from 'i18next'
 
-import type { BackupPlan } from '../../types'
+import type { BackupPlan, BackupPlanRun } from '../../types'
+import { EventAction } from '../../utils/analytics'
+import { getJobDurationSeconds } from '../../utils/analyticsProperties'
 
 export interface ProcessedBackupPlans {
   groups: Array<{ name: string | null; plans: BackupPlan[] }>
@@ -110,4 +112,27 @@ export function processBackupPlans({
   }
 
   return { groups: groups.length > 0 ? groups : [{ name: null, plans: sorted }] }
+}
+
+/** The analytics event for a finished plan run: counts and status, never messages. */
+export function backupPlanRunAnalytics(
+  run: Pick<
+    BackupPlanRun,
+    'trigger' | 'status' | 'started_at' | 'completed_at' | 'skip_reason' | 'repositories'
+  >
+): [string, Record<string, unknown>] {
+  const completed = run.status === 'completed' || run.status === 'completed_with_warnings'
+  const duration = getJobDurationSeconds(run.started_at, run.completed_at)
+  return [
+    completed ? EventAction.COMPLETE : EventAction.FAIL,
+    {
+      entity: 'backup_plan',
+      trigger: run.trigger,
+      status: run.status,
+      ...(duration !== undefined ? { duration_seconds: duration } : {}),
+      repository_count: run.repositories.length,
+      failed_repository_count: run.repositories.filter((repo) => repo.status === 'failed').length,
+      ...(run.skip_reason ? { skip_reason: run.skip_reason } : {}),
+    },
+  ]
 }

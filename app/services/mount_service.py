@@ -9,6 +9,7 @@ Provides unified mount management for:
 import asyncio
 import functools
 import os
+import posixpath
 import subprocess
 import tempfile
 import uuid
@@ -234,6 +235,31 @@ class MountInfo:
     process_pid: Optional[int] = (
         None  # PID of borg mount process (for foreground mounts)
     )
+
+
+class MountPointNotAllowed(ValueError):
+    """A mount point outside the area the caller may mount into."""
+
+
+def _local_mirror(remote_path: str) -> str:
+    """``remote_path`` as a path relative to an SSHFS staging root. A path with
+    a ".." segment is normalised, so the directory built from it cannot leave
+    the root; any other path keeps its spelling, "/./" included, which Borg
+    reads as the start of the archived path."""
+    relative = (remote_path or "").lstrip("/").rstrip("/")
+    if ".." in relative.split("/"):
+        relative = posixpath.normpath("/" + relative).lstrip("/")
+    return relative
+
+
+def _staging_dir(temp_root: str, relative: str) -> str:
+    if not relative:
+        return temp_root
+    target = os.path.normpath(os.path.join(temp_root, relative))
+    root = os.path.realpath(temp_root)
+    if os.path.commonpath([root, os.path.realpath(target)]) != root:
+        raise ValueError("SSHFS mount directory would leave its staging root")
+    return target
 
 
 class MountService:
@@ -554,9 +580,9 @@ class MountService:
             temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
 
             # Strip leading slash from remote_path to create relative path under temp_root
-            relative_remote_path = remote_path.lstrip("/")
+            relative_remote_path = _local_mirror(remote_path)
             if relative_remote_path:
-                mount_dir = os.path.join(temp_root, relative_remote_path)
+                mount_dir = _staging_dir(temp_root, relative_remote_path)
                 os.makedirs(mount_dir, exist_ok=True)
             else:
                 # Backing up root directory - mount directly to temp_root
@@ -743,30 +769,30 @@ class MountService:
                         parent_dir = os.path.dirname(remote_path)
                         mount_remote_path = parent_dir if parent_dir else "/"
 
-                        relative_parent = parent_dir.lstrip("/")
+                        relative_parent = _local_mirror(parent_dir)
                         if relative_parent:
-                            mount_dir = os.path.join(temp_root, relative_parent)
+                            mount_dir = _staging_dir(temp_root, relative_parent)
                             os.makedirs(mount_dir, exist_ok=True)
                         else:
                             # File in root directory
                             mount_dir = temp_root
 
                         # Relative path for backup is the full file path
-                        relative_path = remote_path.lstrip("/").rstrip("/")
+                        relative_path = _local_mirror(remote_path)
                     else:
                         # For directories: mount the directory itself
                         mount_remote_path = remote_path
 
-                        relative_remote_path = remote_path.lstrip("/")
+                        relative_remote_path = _local_mirror(remote_path)
                         if relative_remote_path:
-                            mount_dir = os.path.join(temp_root, relative_remote_path)
+                            mount_dir = _staging_dir(temp_root, relative_remote_path)
                             os.makedirs(mount_dir, exist_ok=True)
                         else:
                             # Backing up root directory - mount directly to temp_root
                             mount_dir = temp_root
 
                         # Compute relative path for backup command
-                        relative_path = remote_path.lstrip("/").rstrip("/")
+                        relative_path = relative_remote_path
                         if not relative_path:
                             relative_path = "."
 
@@ -986,6 +1012,7 @@ class MountService:
         archive_name: Optional[str] = None,
         mount_point: Optional[str] = None,
         archive_id: Optional[str] = None,
+        confine_to_mount_base: bool = False,
     ) -> Tuple[str, str]:
         """
         Mount a Borg repository or specific archive for browsing
@@ -994,6 +1021,9 @@ class MountService:
             repository_id: Repository ID to mount
             archive_name: Optional specific archive name (None = mount entire repo)
             mount_point: Optional custom mount point (must be validated)
+            confine_to_mount_base: Keep the mount point, absolute or
+                relative, inside the managed mount directory (non-admin
+                callers)
             archive_id: Borg 2 archive id for series disambiguation - archives
                 in a series share one name and only the id addresses exactly
                 one of them
@@ -1027,10 +1057,15 @@ class MountService:
                 # If mount_point doesn't start with /, it's just a name - prepend /data/mounts/
                 if not mount_point.startswith("/"):
                     mount_point = str(self.mount_base_dir / mount_point)
+                    if confine_to_mount_base:
+                        self._require_below_mount_base(mount_point)
                 else:
                     mount_point = os.path.normpath(mount_point)
-                    # Absolute path provided - validate it
-                    self._validate_mount_point(mount_point)
+                    if confine_to_mount_base:
+                        self._require_below_mount_base(mount_point)
+                    else:
+                        # Absolute path provided - validate it
+                        self._validate_mount_point(mount_point)
 
                 # Reuse empty directories, but never displace an existing mount (or
                 # obscure user data) at an explicit target. Match the auto-path
@@ -1045,6 +1080,8 @@ class MountService:
                         pass
                     else:
                         mount_point = f"{mount_point}_{uuid.uuid4().hex[:8]}"
+                        if confine_to_mount_base:
+                            self._require_below_mount_base(mount_point)
                         os.makedirs(mount_point, exist_ok=True)
                 else:
                     os.makedirs(mount_point, exist_ok=True)
@@ -1059,6 +1096,7 @@ class MountService:
                 # If path exists, append unique suffix
                 if os.path.exists(mount_point):
                     mount_point = f"{mount_point}_{uuid.uuid4().hex[:8]}"
+                self._require_below_mount_base(mount_point)
                 os.makedirs(mount_point, exist_ok=True)
 
             mount_id = str(uuid.uuid4())
@@ -2042,6 +2080,20 @@ class MountService:
                     key_file=temp_key_file,
                     error=str(e),
                 )
+
+    def _require_below_mount_base(self, path: str) -> None:
+        """Refuse a mount point that is not strictly below the managed mount
+        directory, also through symlinks. Strictly below, because an occupied
+        target is replaced by a sibling, which must stay inside as well."""
+        base = os.path.realpath(str(self.mount_base_dir))
+        try:
+            resolved = os.path.realpath(path)
+        except ValueError as exc:  # an embedded NUL byte
+            raise MountPointNotAllowed("Mount point is not a valid path") from exc
+        if resolved == base or not resolved.startswith(base.rstrip("/") + "/"):
+            raise MountPointNotAllowed(
+                "Mount point must be inside the managed mount directory"
+            )
 
     def _validate_mount_point(self, path: str):
         """

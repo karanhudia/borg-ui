@@ -14,7 +14,12 @@ from app.database.database import get_db
 from app.database.models import User, Repository
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access
-from app.services.mount_service import mount_service, MountType, MountUnavailableError
+from app.services.mount_service import (
+    MountPointNotAllowed,
+    MountType,
+    MountUnavailableError,
+    mount_service,
+)
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -160,6 +165,7 @@ async def mount_borg_archive(
             archive_name=request.archive_name,
             mount_point=request.mount_point,
             archive_id=request.archive_id,
+            confine_to_mount_base=current_user.role != "admin",
         )
 
         # Get mount info
@@ -184,6 +190,14 @@ async def mount_borg_archive(
             source=mount_info.source,
         )
 
+    except MountPointNotAllowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "key": "backend.errors.filesystem.permissionDenied",
+                "params": {"path": request.mount_point},
+            },
+        )
     except MountUnavailableError as e:
         logger.error(
             "Archive mounting unavailable",

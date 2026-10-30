@@ -23,7 +23,7 @@ import { licensingAPI } from '../services/api'
 import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
-import { buildBuyUrl } from '../utils/externalLinks'
+import { buildBuyUrl, refreshBuyLink } from '../utils/externalLinks'
 import { PLAN_LABEL, nextPlanAbove } from '../core/features'
 import PlanInfoDrawer from './PlanInfoDrawer'
 import LicenseSeatsCard from './LicenseSeatsCard'
@@ -444,6 +444,9 @@ export default function LicensingTab() {
             {upgradePlan && (
               <Link
                 href={buildBuyUrl({ plan: upgradePlan, src: 'app-licensing' })}
+                onClickCapture={refreshBuyLink}
+                onAuxClickCapture={refreshBuyLink}
+                onContextMenuCapture={refreshBuyLink}
                 target="_blank"
                 rel="noreferrer"
                 underline="hover"

@@ -22,6 +22,7 @@ import {
   isPasskeyPromptSnoozed,
   snoozePasskeyPrompt,
 } from '../utils/passkeyPrompt'
+import { isWebAuthnSupported } from '../utils/webauthn'
 import { Box, Container, Toolbar } from '@mui/material'
 
 const drawerWidth = 240
@@ -88,6 +89,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
 
     const shouldPrompt =
+      isWebAuthnSupported() &&
       !proxyAuthEnabled &&
       (user.passkey_count ?? 0) === 0 &&
       hasRecentPasswordLogin() &&

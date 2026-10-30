@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { readFileSync } from 'node:fs'
 
 const devBackendPort = process.env.DEV_PORT || '8083'
 const proxyTarget = process.env.VITE_PROXY_TARGET || `http://localhost:${devBackendPort}`
@@ -17,6 +18,12 @@ const allowedHosts = (process.env.VITE_ALLOWED_HOSTS || '')
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Releases stamp VERSION before building; package.json can lag the released app.
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(
+      readFileSync(new URL('../VERSION', import.meta.url), 'utf8').trim()
+    ),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -48,6 +55,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'build',
-    sourcemap: true,
+    // 'hidden': maps are still emitted (CI packages them as a release asset)
+    // but bundles carry no sourceMappingURL.
+    sourcemap: 'hidden',
   },
 })

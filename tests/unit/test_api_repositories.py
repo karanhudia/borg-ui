@@ -4122,6 +4122,73 @@ class TestRepositoriesUpdate:
         assert response.content == b"KEYDATA"
         mock_export.assert_awaited_once()
 
+    @pytest.mark.parametrize(
+        ("borg_version", "encryption", "offers_download"),
+        [
+            (2, "keyfile-aes-ocb", True),
+            (2, "keyfile-chacha20-poly1305", True),
+            (2, "repokey-aes-ocb", False),
+            (2, "authenticated", False),
+            (1, "keyfile", False),
+        ],
+    )
+    def test_existing_server_repository_without_has_keyfile_by_encryption_mode(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        borg_version,
+        encryption,
+        offers_download,
+    ):
+        """A Borg 2 keyfile repository the server created before its create
+        route set `has_keyfile` still has it false; its encryption mode says
+        the key is a keyfile, so the listing and the keyfile route offer it.
+        Repokey and authenticated modes, and Borg 1 rows, stay as they are."""
+        repo = Repository(
+            name="Existing Server Repo",
+            path="/tmp/existing-server-repo",
+            encryption=encryption,
+            compression="lz4",
+            repository_type="local",
+            borg_version=borg_version,
+            has_keyfile=False,
+            passphrase="secret",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        listing = test_client.get("/api/repositories/", headers=admin_headers)
+        assert listing.status_code == 200
+        (listed,) = [r for r in listing.json()["repositories"] if r["id"] == repo.id]
+        assert listed["has_keyfile"] is offers_download
+
+        async def fake_export_keyfile(output_path):
+            with open(output_path, "wb") as handle:
+                handle.write(b"KEYDATA")
+            return {"success": True}
+
+        with patch(
+            "app.api.repositories.BorgRouter.export_keyfile",
+            new=AsyncMock(side_effect=fake_export_keyfile),
+        ) as mock_export:
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/keyfile", headers=admin_headers
+            )
+
+        if offers_download:
+            assert response.status_code == 200
+            assert response.content == b"KEYDATA"
+            mock_export.assert_awaited_once()
+        else:
+            assert response.status_code == 404
+            assert (
+                response.json()["detail"]["key"]
+                == "backend.errors.repo.repoHasNoKeyfile"
+            )
+            mock_export.assert_not_awaited()
+
     @staticmethod
     def _agent_path_repo(test_db, *, borg_version=2, executor_type="agent"):
         agent = _agent_machine_with_capabilities("repository.info", "repository.init")
@@ -6404,3 +6471,66 @@ async def test_wait_for_agent_job_failure_surfaces_borg_stderr(test_db):
         "repository.info exited with code 2: "
         "Failed to create/acquire the lock /repo/lock.exclusive (Permission denied)."
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("permanent", [False, True])
+async def test_authorization_delete_handler_requires_admin(
+    test_db, operator_user, tmp_path, permanent
+):
+    from app.api.repositories import (
+        delete_repository,
+        permanently_delete_repository,
+        RepositoryPermanentDeleteRequest,
+    )
+
+    operator_user.all_repositories_role = "operator"
+    root = tmp_path / "private-repository"
+    root.mkdir()
+    repo = Repository(
+        name="private-repository", path=str(root), repository_type="local"
+    )
+    test_db.add(repo)
+    test_db.commit()
+    with pytest.raises(HTTPException) as exc:
+        if permanent:
+            await permanently_delete_repository(
+                repo.id,
+                RepositoryPermanentDeleteRequest(
+                    understood=True, confirmation_phrase=repo.name
+                ),
+                operator_user,
+                test_db,
+            )
+        else:
+            await delete_repository(repo.id, operator_user, test_db)
+    assert exc.value.status_code == 403
+    assert root.is_dir()
+    assert test_db.get(Repository, repo.id) is not None
+
+
+@pytest.mark.parametrize("permanent", [False, True])
+def test_authorization_delete_http_requires_admin(
+    test_client, test_db, operator_user, operator_headers, tmp_path, permanent
+):
+    operator_user.all_repositories_role = "operator"
+    root = tmp_path / "http-private-repository"
+    root.mkdir()
+    repo = Repository(
+        name="http-private-repository", path=str(root), repository_type="local"
+    )
+    test_db.add(repo)
+    test_db.commit()
+    if permanent:
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/permanent-delete",
+            headers=operator_headers,
+            json={"understood": True, "confirmation_phrase": repo.name},
+        )
+    else:
+        response = test_client.delete(
+            f"/api/repositories/{repo.id}", headers=operator_headers
+        )
+    assert response.status_code == 403
+    assert root.is_dir()
+    assert test_db.get(Repository, repo.id) is not None

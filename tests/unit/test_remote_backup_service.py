@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -8,6 +9,7 @@ import shlex
 from app.database.models import Operation, Repository, SSHConnection, SSHKey
 from app.services.operations.backup_facade import resolve_backup_job
 from app.services.operations.details import backup_details
+from app.services.restore_check_canary import remote_restore_canary_staging
 from tests.utils.operations import seed_job_operation
 from app.services.remote_backup_service import (
     RemoteBackupService,
@@ -1196,3 +1198,370 @@ async def test_build_remote_command_quotes_allowed_custom_flags(test_db, monkeyp
 
     assert "--one-file-system '--comment=nightly $(id)'" in command
     assert shlex.split(command).count("--comment=nightly $(id)") == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "pre_exit,continue_on_failure,skip_on_failure,borg_exit,post_exit,want_status,want_lines",
+    [
+        (0, False, False, 0, 0, "completed", ["pre", "borg", "success"]),
+        (0, False, False, 1, 0, "completed_with_warnings", ["pre", "borg", "warning"]),
+        (0, False, False, 2, 0, "failed", ["pre", "borg", "failure"]),
+        (2, False, False, 0, 0, "failed", ["pre", "failure"]),
+        (2, True, False, 0, 0, "completed", ["pre", "borg", "success"]),
+        (2, False, True, 0, 0, "skipped", ["pre", "skipped"]),
+        (0, False, False, 0, 2, "failed", ["pre", "borg", "success"]),
+    ],
+)
+async def test_remote_backup_hooks_surround_borg_and_control_outcome(
+    test_db,
+    monkeypatch,
+    tmp_path,
+    pre_exit,
+    continue_on_failure,
+    skip_on_failure,
+    borg_exit,
+    post_exit,
+    want_status,
+    want_lines,
+):
+    """Omitting hooks, running Borg early, or ignoring hook policies breaks this."""
+    connection, repository, job = _remote_entities(test_db)
+    job_id, connection_id, repository_id = job.id, connection.id, repository.id
+    marker = tmp_path / "hook-order"
+    quoted = shlex.quote(str(marker))
+    repository.pre_backup_script = f"echo pre >> {quoted}; exit {pre_exit}"
+    repository.post_backup_script = (
+        f'echo "$BORG_UI_BACKUP_STATUS" >> {quoted}; exit {post_exit}'
+    )
+    repository.continue_on_hook_failure = continue_on_failure
+    repository.skip_on_hook_failure = skip_on_failure
+    test_db.commit()
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    async def borg(**kwargs):
+        with marker.open("a") as output:
+            output.write("borg\n")
+        return {
+            "success": borg_exit == 0,
+            "returncode": borg_exit,
+            "stdout": json.dumps({"archive": {"name": "test-archive"}})
+            if borg_exit < 2
+            else "",
+            "stderr": "borg output",
+            "error": "borg failed" if borg_exit else None,
+        }
+
+    notifications = []
+
+    async def notify(**kwargs):
+        notifications.append((kwargs["job"].status, marker.read_text().splitlines()))
+
+    monkeypatch.setattr(service, "_execute_ssh_command", borg)
+    monkeypatch.setattr(service, "_send_completion_notification", notify)
+    await service.execute_remote_backup(job_id, connection_id, repository_id, ["/data"])
+    saved = resolve_backup_job(test_db, job_id)
+    assert saved.status == want_status
+    assert marker.read_text().splitlines() == want_lines
+    assert notifications == (
+        [] if want_status == "skipped" else [(want_status, want_lines)]
+    )
+    assert saved.completed_at is not None
+    if borg_exit < 2 and "borg" in want_lines:
+        assert saved.archive_name == "test-archive"
+    log_text = (
+        Path(saved.log_file_path).read_text() if saved.log_file_path else saved.logs
+    )
+    assert "INLINE PRE-BACKUP SCRIPT" in log_text
+    assert "INLINE POST-BACKUP SCRIPT" in log_text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("skip_hooks", [False, True])
+async def test_remote_backup_respects_explicit_skip_hooks(
+    test_db, monkeypatch, tmp_path, skip_hooks
+):
+    from app.services.backup_service import backup_service
+
+    connection, repository, job = _remote_entities(test_db)
+    job_id, repository_path = job.id, repository.path
+    marker = tmp_path / "hooks"
+    repository.pre_backup_script = f"echo pre >> {shlex.quote(str(marker))}"
+    repository.post_backup_script = f"echo post >> {shlex.quote(str(marker))}"
+    test_db.commit()
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr("app.services.backup_service.SessionLocal", lambda: test_db)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.remote_backup_service", service
+    )
+    monkeypatch.setattr(service, "_send_completion_notification", AsyncMock())
+    monkeypatch.setattr(
+        service,
+        "_execute_ssh_command",
+        AsyncMock(
+            return_value={
+                "success": True,
+                "returncode": 0,
+                "stdout": json.dumps({"archive": {"name": "archive"}}),
+                "stderr": "",
+            }
+        ),
+    )
+    await backup_service.execute_backup(job_id, repository_path, skip_hooks=skip_hooks)
+    assert resolve_backup_job(test_db, job_id).status == "completed"
+    assert (marker.read_text().splitlines() if marker.exists() else []) == (
+        [] if skip_hooks else ["pre", "post"]
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "continue_on_error,skip_on_failure,want_status,want_lines",
+    [
+        (True, False, "completed", ["pre", "borg", "success"]),
+        (False, False, "failed", ["pre", "failure"]),
+        (False, True, "skipped", ["pre", "skipped"]),
+    ],
+)
+async def test_remote_library_hooks_honor_assignment_policy(
+    test_db,
+    monkeypatch,
+    tmp_path,
+    continue_on_error,
+    skip_on_failure,
+    want_status,
+    want_lines,
+):
+    from app.config import settings
+    from app.database.models import Script, RepositoryScript, ScriptExecution
+
+    connection, repository, job = _remote_entities(test_db)
+    job_id, connection_id, repository_id = job.id, connection.id, repository.id
+    marker = tmp_path / "library-hooks"
+    quoted = shlex.quote(str(marker))
+    for name, hook_type, content in [
+        ("pre", "pre-backup", f"echo pre >> {quoted}; exit 2"),
+        ("post", "post-backup", f'echo "$BORG_UI_BACKUP_STATUS" >> {quoted}'),
+    ]:
+        script = Script(name=name, file_path=f"remote-{name}.sh", category="custom")
+        test_db.add(script)
+        test_db.flush()
+        script_path = Path(settings.data_dir) / "scripts" / script.file_path
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        script_path.write_text(content)
+        test_db.add(
+            RepositoryScript(
+                repository_id=repository_id,
+                script_id=script.id,
+                hook_type=hook_type,
+                enabled=True,
+                continue_on_error=continue_on_error,
+                skip_on_failure=skip_on_failure if name == "pre" else False,
+                custom_run_on="always",
+            )
+        )
+    test_db.commit()
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_send_completion_notification", AsyncMock())
+
+    async def borg(**kwargs):
+        with marker.open("a") as output:
+            output.write("borg\n")
+        return {"success": True, "returncode": 0, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(service, "_execute_ssh_command", borg)
+    await service.execute_remote_backup(job_id, connection_id, repository_id, ["/data"])
+    assert resolve_backup_job(test_db, job_id).status == want_status
+    assert marker.read_text().splitlines() == want_lines
+    assert (
+        test_db.query(ScriptExecution)
+        .filter(ScriptExecution.operation_id == job_id)
+        .count()
+        == 2
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_point", ["build", "ssh", "cancel"])
+async def test_remote_failure_after_pre_hooks_runs_cleanup_once(
+    test_db, monkeypatch, tmp_path, failure_point
+):
+    import asyncio
+
+    connection, repository, job = _remote_entities(test_db)
+    job_id, connection_id, repository_id = job.id, connection.id, repository.id
+    marker = tmp_path / "cleanup"
+    quoted = shlex.quote(str(marker))
+    repository.pre_backup_script = f"echo pre >> {quoted}"
+    repository.post_backup_script = f'echo "$BORG_UI_BACKUP_STATUS" >> {quoted}'
+    test_db.commit()
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    error = (
+        asyncio.CancelledError()
+        if failure_point == "cancel"
+        else RuntimeError("remote broke")
+    )
+    monkeypatch.setattr(
+        service,
+        "_build_remote_command" if failure_point == "build" else "_execute_ssh_command",
+        AsyncMock(side_effect=error),
+    )
+    with pytest.raises(type(error)):
+        await service.execute_remote_backup(
+            job_id, connection_id, repository_id, ["/data"]
+        )
+    assert marker.read_text().splitlines() == ["pre", "failure"]
+    assert resolve_backup_job(test_db, job_id).status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_build_remote_command_stages_restore_canary_on_the_remote_host(
+    test_db, monkeypatch
+):
+    connection, repository, _job = _remote_entities(test_db)
+    repository.restore_check_canary_enabled = True
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    canary_staging = remote_restore_canary_staging(repository)
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        source_ssh_connection=connection,
+        archive_name="{hostname}-{now}",
+        source_paths=["/srv/data"],
+        exclude_patterns=[],
+        borg_binary_path=connection.borg_binary_path,
+        use_sudo=False,
+        canary_staging=canary_staging,
+    )
+
+    archive_root = f".borg-ui/restore-canaries/repository-{repository.id}"
+    canary_dir = f"{archive_root}/.borgui-canary"
+    assert command.startswith(f'mkdir -p "$HOME/{archive_root}/.borgui-canary"')
+    assert " | base64 -d > " in command
+    assert f'cd "$HOME" && ' in command
+    # The canary is handed to borg relative to $HOME, so it archives under the
+    # hidden namespace the restore check extracts.
+    sources = command.split(" -- ", 1)[1]
+    assert archive_root in sources
+    assert ".borgui-canary" in sources
+    assert "/srv/data" in sources
+
+
+@pytest.mark.asyncio
+async def test_build_remote_command_stages_canary_before_sudo(test_db, monkeypatch):
+    connection, repository, _job = _remote_entities(test_db)
+    repository.restore_check_canary_enabled = True
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    canary_staging = remote_restore_canary_staging(repository)
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        source_ssh_connection=connection,
+        archive_name="{hostname}-{now}",
+        source_paths=["/srv/data"],
+        exclude_patterns=[],
+        borg_binary_path="borg",
+        use_sudo=True,
+        canary_staging=canary_staging,
+    )
+
+    # Staging and the cd run as the SSH user, ahead of the sudo chain.
+    assert command.index("base64 -d") < command.index("sudo -n -H")
+    assert command.index("&& cd ") < command.index("sudo -n -H")
+    assert "sudo -n -H" in command
+
+
+@pytest.mark.asyncio
+async def test_build_remote_command_without_canary_has_no_staging(test_db, monkeypatch):
+    connection, repository, _job = _remote_entities(test_db)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        source_ssh_connection=connection,
+        archive_name="{hostname}-{now}",
+        source_paths=["/srv/data"],
+        exclude_patterns=[],
+        borg_binary_path=connection.borg_binary_path,
+        use_sudo=False,
+        canary_staging=None,
+    )
+
+    assert "base64" not in command
+    assert "&& cd " not in command
+    assert ".borg-ui/restore-canaries" not in command
+
+
+@pytest.mark.asyncio
+async def test_execute_remote_backup_includes_canary_when_canary_mode_enabled(
+    test_db, monkeypatch
+):
+    connection, repository, job = _remote_entities(test_db)
+    repository.restore_check_canary_enabled = True
+    test_db.commit()
+    service = RemoteBackupService()
+    commands = []
+
+    async def fake_execute_ssh_command(ssh_connection, command, job_id, db):
+        commands.append(command)
+        return {
+            "success": True,
+            "returncode": 0,
+            "stdout": json.dumps(
+                {"archive": {"name": "docker-host.example-2026-10-28T09:00:00"}}
+            ),
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_execute_ssh_command", fake_execute_ssh_command)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.notification_service.send_backup_success",
+        AsyncMock(),
+    )
+
+    result = await service.execute_remote_backup(
+        job_id=job.id,
+        source_ssh_connection_id=connection.id,
+        repository_id=repository.id,
+        source_paths=["/var/lib/docker/volumes/app"],
+        exclude_patterns=[],
+        compression="lz4",
+    )
+
+    assert result["success"] is True
+    assert commands
+    full_canary_path = (
+        f".borg-ui/restore-canaries/repository-{repository.id}/.borgui-canary"
+    )
+    assert f'cd "$HOME" && ' in commands[0]
+    assert " | base64 -d > " in commands[0]
+    # Assert the full canary path including the repository-specific directory
+    assert full_canary_path in commands[0].split(" -- ", 1)[1]
+    # Verify the archive_root segment precedes .borgui-canary
+    assert (
+        f".borg-ui/restore-canaries/repository-{repository.id}/.borgui-canary"
+        in commands[0].split(" -- ", 1)[1]
+    )

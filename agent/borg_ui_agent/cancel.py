@@ -14,9 +14,7 @@ from typing import Any, Optional
 CANCEL_CAPABILITY = "jobs.cancel"
 
 # The kinds that end their process on cancel and report `canceled`
-# themselves; the session leaves their cancel report to them. The streamed
-# artifact kinds (extract, tar export, diff) have polled their cancel since
-# they exist.
+# themselves; the session leaves their cancel report to them.
 SELF_CANCELLING_JOB_KINDS = frozenset(
     {
         "backup.create",
@@ -24,7 +22,14 @@ SELF_CANCELLING_JOB_KINDS = frozenset(
         "repository.prune",
         "repository.compact",
         "repository.restore",
+        "repository.restore_dry_run",
+        # artifact streams that report their own cancel once Borg ended
+        "repository.key_export",
+        "repository.extract_archive_file",
+        "repository.export_archive_tar",
+        "repository.diff",
         "repository.delete_archive",
+        "repository.delete_archives",
         # also run by the streaming path, which reports its own cancel
         "repository.init",
         "repository.rclone_sync",

@@ -116,16 +116,32 @@ export default function PlanGate({
           }}
         >
           <Box sx={{ width: 'min(100%, 460px)' }}>
-            <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} />
+            <UpgradePrompt
+              requiredPlan={FEATURES[feature]}
+              message={message}
+              feature={feature}
+              surface={surface}
+              reportShown={false}
+              offerTrial={false}
+            />
           </Box>
         </Box>
       </Box>
     )
   }
-  // No `feature`, so no trial offer here. The long standing Pro locks were
+  // No trial offer here (the feature only keys the buy link and analytics). The long standing Pro locks were
   // already part of the full access trial every install gets; offering them
   // again as a second free ride would read as a second helping of the same
   // thing. The trial belongs to the teasers this release added, which hand it
   // to the prompt themselves (spec 2026-09-21, section 3.1).
-  return <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} />
+  return (
+    <UpgradePrompt
+      requiredPlan={FEATURES[feature]}
+      message={message}
+      feature={feature}
+      surface={surface}
+      reportShown={false}
+      offerTrial={false}
+    />
+  )
 }

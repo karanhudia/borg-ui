@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 
 import WizardDialog, { type WizardStep } from '../shared/WizardDialog'
+import { useAnalytics } from '../../hooks/useAnalytics'
+import { useWizardFunnel } from '../../hooks/useWizardFunnel'
 import { usePlan } from '../../hooks/usePlan'
 import { backupPlansAPI } from '../../services/api'
 import { getApiErrorDetail } from '../../utils/apiErrors'
@@ -19,6 +21,7 @@ import {
   visibleSteps,
   type QuickStartAnswers,
   type QuickStartSettingsChange,
+  type QuickStartSourceKind,
 } from './quickStartState'
 import QuickStartAppStep from './steps/QuickStartAppStep'
 import QuickStartConnectStep from './steps/QuickStartConnectStep'
@@ -30,8 +33,18 @@ import QuickStartScheduleStep from './steps/QuickStartScheduleStep'
 import QuickStartWhatStep from './steps/QuickStartWhatStep'
 import { useQuickStartRunner } from './useQuickStartRunner'
 
+export type QuickStartTrigger = 'auto' | 'manual'
+
+const ANALYTICS_PATH: Record<QuickStartSourceKind, string> = {
+  server: 'local',
+  ssh: 'ssh',
+  agent: 'agent',
+}
+
 interface QuickStartDialogProps {
   open: boolean
+  /** How the dialog was opened, sent with the open event. */
+  trigger: QuickStartTrigger
   onClose: () => void
   initialAnswers?: QuickStartAnswers
   canAddMachine?: boolean
@@ -39,6 +52,7 @@ interface QuickStartDialogProps {
 
 export default function QuickStartDialog({
   open,
+  trigger,
   onClose,
   initialAnswers,
   canAddMachine = false,
@@ -47,6 +61,7 @@ export default function QuickStartDialog({
   const navigate = useNavigate()
   const { can } = usePlan()
   const runner = useQuickStartRunner()
+  const { trackQuickStart, trackBackup, EventAction, EventCategory } = useAnalytics()
   const [answers, setAnswers] = useState<QuickStartAnswers>(
     () => initialAnswers ?? createInitialQuickStartAnswers()
   )
@@ -58,6 +73,17 @@ export default function QuickStartDialog({
   const showProgress = runner.actions.length > 0
   const finished = showProgress && !runner.running && !runner.error
   const firstInvalid = steps.find((key) => !isStepValid(key, answers))
+
+  // The source kind is only a choice once the user is past the step that asks for it.
+  const path = ANALYTICS_PATH[answers.sourceKind]
+  const pathChosen = steps.indexOf(step) > steps.indexOf('what')
+  const funnel = useWizardFunnel({
+    category: EventCategory.QUICK_START,
+    open,
+    step: showProgress ? 'progress' : step,
+    props: pathChosen || showProgress ? { path } : {},
+    startProps: { trigger },
+  })
 
   const wizardSteps: WizardStep[] = steps.map((key) => {
     const { colorKey, icon: Icon } = STEP_META[key]
@@ -78,6 +104,7 @@ export default function QuickStartDialog({
 
   const close = () => {
     if (runner.running || busy) return
+    if (!finished) funnel.cancel()
     runner.reset()
     setAnswers(initialAnswers ?? createInitialQuickStartAnswers())
     setStepIndex(0)
@@ -98,7 +125,13 @@ export default function QuickStartDialog({
   }
 
   const create = () => {
-    void runner.run(answers)
+    void runner.run(answers).then((ok) =>
+      trackQuickStart(ok ? EventAction.COMPLETE : EventAction.FAIL, {
+        path,
+        app_choice: answers.appChoice,
+        ...(answers.app ? { app: answers.app.id } : {}),
+      })
+    )
   }
 
   const runFirstBackup = async () => {
@@ -106,6 +139,7 @@ export default function QuickStartDialog({
     setStartingBackup(true)
     try {
       await backupPlansAPI.run(runner.results.planId)
+      trackBackup(EventAction.START, 'quick_start')
       toast.success(t('quickStart.progress.backupStarted'))
       close()
       navigate('/backup-plans')

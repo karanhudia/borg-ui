@@ -27,12 +27,14 @@ from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.operations.backup_facade import resolve_backup_job
 from app.services.notification_service import notification_service
+from app.services.restore_check_canary import remote_restore_canary_staging
 from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import (
     resolve_repository_ssh_connection,
     ssh_key_auth_args,
     write_ssh_key_to_tempfile,
 )
+from app.utils.borg_arguments import validate_operand, validate_source
 
 logger = structlog.get_logger()
 
@@ -112,6 +114,7 @@ class RemoteBackupService:
         compression: str = "lz4",
         custom_flags: str = None,
         upload_ratelimit_kib: int = None,
+        skip_hooks: bool = False,
     ) -> dict:
         """
         Main method to execute backup on remote host
@@ -123,7 +126,25 @@ class RemoteBackupService:
         4. Stream output and parse progress
         5. Update job status
         """
+        # Reuse the same library/inline executor and cleanup policy as local backups.
+        from app.services.backup_service import backup_service
+
         db = SessionLocal()
+        repository = None
+        pre_hooks_started = False
+        post_hooks_ran = False
+        pre_hook_logs = []
+        post_hook_logs = []
+
+        async def finish_hooks(outcome):
+            nonlocal post_hooks_ran
+            if skip_hooks or post_hooks_ran:
+                return ""
+            post_hooks_ran = True
+            return await backup_service._run_post_hooks_after_early_exit(
+                db, repository, job_id, post_hook_logs, backup_result=outcome
+            )
+
         try:
             # Update job status
             job = resolve_backup_job(db, job_id)
@@ -173,34 +194,74 @@ class RemoteBackupService:
             job.remote_hostname = ssh_connection.host
             db.commit()
 
-            # Build borg command
+            result = None
+            borg_command = ""
+            if not skip_hooks:
+                pre_hooks_started = True
+                hooks = await backup_service._execute_hooks(
+                    db, repository, "pre-backup", job_id=job_id
+                )
+                pre_hooks_started = hooks["scripts_executed"] > 0
+                pre_hook_logs.extend(hooks.get("execution_logs") or [])
+                if not hooks["success"]:
+                    should_skip = hooks.get("should_skip") or (
+                        not hooks.get("using_library")
+                        and repository.skip_on_hook_failure
+                    )
+                    if should_skip or not repository.continue_on_hook_failure:
+                        result = {
+                            "success": False,
+                            "skipped": bool(should_skip),
+                            "error": (
+                                "Skipped by pre-backup script"
+                                if should_skip
+                                else json.dumps(
+                                    {
+                                        "key": "backend.errors.service.preBackupHooksFailed",
+                                        "params": {
+                                            "failed": hooks["scripts_failed"],
+                                            "total": hooks["scripts_executed"],
+                                        },
+                                    }
+                                )
+                            ),
+                        }
+
             archive_name = f"{{hostname}}-{{now}}"
-            borg_command = await self._build_remote_command(
-                repository=repository,
-                source_ssh_connection=ssh_connection,
-                archive_name=archive_name,
-                source_paths=source_paths or [],
-                exclude_patterns=exclude_patterns or [],
-                compression=compression,
-                custom_flags=custom_flags,
-                upload_ratelimit_kib=upload_ratelimit_kib,
-                borg_binary_path=ssh_connection.borg_binary_path or "borg",
-                use_sudo=ssh_connection.use_sudo,
-            )
+            if result is None:
+                # Stage the managed restore canary on the remote host too:
+                # Borg runs there, so it can only archive the canary if the
+                # payload exists under a remote path (#1490).
+                canary_staging = remote_restore_canary_staging(repository)
 
-            logger.info(
-                "Built borg command for remote execution",
-                job_id=job_id,
-                command=_redact_command(borg_command),
-            )
+                # Build borg command
+                borg_command = await self._build_remote_command(
+                    repository=repository,
+                    source_ssh_connection=ssh_connection,
+                    archive_name=archive_name,
+                    source_paths=source_paths or [],
+                    exclude_patterns=exclude_patterns or [],
+                    compression=compression,
+                    custom_flags=custom_flags,
+                    upload_ratelimit_kib=upload_ratelimit_kib,
+                    borg_binary_path=ssh_connection.borg_binary_path or "borg",
+                    use_sudo=ssh_connection.use_sudo,
+                    canary_staging=canary_staging,
+                )
 
-            # Execute command on remote host
-            result = await self._execute_ssh_command(
-                ssh_connection=ssh_connection,
-                command=borg_command,
-                job_id=job_id,
-                db=db,
-            )
+                logger.info(
+                    "Built borg command for remote execution",
+                    job_id=job_id,
+                    command=_redact_command(borg_command),
+                )
+
+                # Execute command on remote host
+                result = await self._execute_ssh_command(
+                    ssh_connection=ssh_connection,
+                    command=borg_command,
+                    job_id=job_id,
+                    db=db,
+                )
 
             # borg expanded the {hostname}-{now} placeholders on the remote
             # host and reports the resolved name in its --json result document.
@@ -218,11 +279,34 @@ class RemoteBackupService:
             if warning:
                 result = {**result, "success": True, "warning": True, "error": None}
 
-            # Update final job status
+            outcome = (
+                "skipped"
+                if result.get("skipped")
+                else "warning"
+                if warning
+                else "success"
+                if result["success"]
+                else "failure"
+            )
+            post_error = await finish_hooks(outcome)
+            if post_error:
+                result = {
+                    **result,
+                    "success": False,
+                    "skipped": False,
+                    "error": (result.get("error") or "") + post_error,
+                }
+
+            # Update final job status, only after hooks settle.
             job = resolve_backup_job(db, job_id)
-            if result["success"]:
-                if resolved_name:
-                    archive_name = resolved_name
+            # Preserve the created archive even when its post-hook fails.
+            if resolved_name:
+                archive_name = resolved_name
+                job.archive_name = resolved_name
+            if result.get("skipped"):
+                job.status = "skipped"
+                job.error_message = result["error"]
+            elif result["success"]:
                 job.archive_name = archive_name
                 job.progress = 100
                 job.progress_percent = 100.0
@@ -252,19 +336,25 @@ class RemoteBackupService:
                 )
 
             job.completed_at = datetime.utcnow()
-            self._store_job_logs(db, job, borg_command, result)
+            self._store_job_logs(
+                db, job, borg_command, result, pre_hook_logs, post_hook_logs
+            )
             db.commit()
 
-            await self._send_completion_notification(
-                db=db,
-                job=job,
-                repository=repository,
-                archive_name=archive_name,
-            )
+            if job.status != "skipped":
+                await self._send_completion_notification(
+                    db=db,
+                    job=job,
+                    repository=repository,
+                    archive_name=archive_name,
+                )
 
             return result
 
-        except Exception as e:
+        except (Exception, asyncio.CancelledError) as e:
+            post_error = ""
+            if pre_hooks_started:
+                post_error = await finish_hooks("failure")
             logger.error(
                 "Remote backup execution failed",
                 job_id=job_id,
@@ -276,15 +366,25 @@ class RemoteBackupService:
             job = resolve_backup_job(db, job_id)
             if job:
                 job.status = "failed"
-                job.error_message = str(e)
+                job.error_message = (str(e) or "Backup cancelled") + post_error
                 job.completed_at = datetime.utcnow()
+                if pre_hook_logs or post_hook_logs:
+                    self._store_job_logs(db, job, "", {}, pre_hook_logs, post_hook_logs)
                 db.commit()
 
             raise
         finally:
             db.close()
 
-    def _store_job_logs(self, db: Session, job, command: str, result: dict) -> None:
+    def _store_job_logs(
+        self,
+        db: Session,
+        job,
+        command: str,
+        result: dict,
+        pre_hook_logs: list[str] = None,
+        post_hook_logs: list[str] = None,
+    ) -> None:
         """Keep the remote borg output the way the local path keeps its own.
 
         The transcript is the redacted command, borg's stderr and its --json
@@ -292,11 +392,12 @@ class RemoteBackupService:
         Activity view can stream it) or, when the policy says not to keep a
         file, into the job row like local backups do.
         """
-        parts = [f"$ {command}"]
+        parts = [*(pre_hook_logs or []), f"$ {command}"]
         for stream in ("stderr", "stdout"):
             text = (result.get(stream) or "").strip()
             if text:
                 parts.append(text)
+        parts.extend(post_hook_logs or [])
         transcript = _redact_command("\n".join(parts))
 
         try:
@@ -387,6 +488,7 @@ class RemoteBackupService:
         borg_binary_path: str = "/usr/bin/borg",
         use_sudo: bool = False,
         source_ssh_connection: SSHConnection | None = None,
+        canary_staging: tuple[str, str, str] | None = None,
     ) -> str:
         """
         Build the borg create command for remote execution
@@ -401,7 +503,23 @@ class RemoteBackupService:
         With use_sudo, the sudoers ``env_keep`` allowlist preserves the Borg
         variables required by the command without granting arbitrary environment
         control through ``SETENV``.
+
+        With canary_staging, the command first writes the managed restore
+        canary on the remote host and then runs borg from the staging root, so
+        the canary archives under the same hidden .borg-ui/restore-canaries
+        namespace a local backup produces and the restore check can extract
+        it (#1490). Staging runs as the SSH user ahead of any sudo: the
+        generated payload is world-readable, so root can archive it, and every
+        other source is absolute, so the changed cwd only shapes the canary.
         """
+        validate_operand(archive_name, "archive name")
+        canary_root = None
+        if canary_staging is not None:
+            staging_script, canary_root, archive_source_path = canary_staging
+            source_paths = [*source_paths, archive_source_path]
+        for source in source_paths:
+            validate_source(source)
+
         # Get DB session for connection lookup
         db = SessionLocal()
         try:
@@ -491,13 +609,16 @@ class RemoteBackupService:
 
         # Repository and archive name
         archive_path = f"{repo_url}::{archive_name}"
-        cmd_parts.append(shlex.quote(archive_path))
+        cmd_parts.extend(["--", shlex.quote(archive_path)])
 
         # Source paths
         for path in source_paths:
             cmd_parts.append(shlex.quote(path))
 
-        return " ".join(cmd_parts)
+        command = " ".join(cmd_parts)
+        if canary_staging is not None:
+            command = f'{staging_script} && cd "{canary_root}" && {command}'
+        return command
 
     def _extract_remote_repository_path(self, repository_path: str) -> str:
         """Return the path part of a repository location as seen from the SSH host."""

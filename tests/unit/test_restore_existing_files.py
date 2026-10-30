@@ -61,6 +61,7 @@ def test_a_restore_into_existing_files_is_built_with_continue(monkeypatch, tmp_p
         "--continue",
         "--strip-components",
         "1",
+        "--",
         "aid:1",
         "etc",
     ]

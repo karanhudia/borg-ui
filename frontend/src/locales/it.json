@@ -70,6 +70,11 @@
       "copyFailed": "Impossibile copiare negli appunti"
     }
   },
+  "errorBoundary": {
+    "title": "Qualcosa è andato storto",
+    "message": "Borg UI ha riscontrato un errore imprevisto. Ricaricare la pagina di solito lo risolve.",
+    "reload": "Ricarica"
+  },
   "login": {
     "title": "Borg UI",
     "subtitle": "Inserisci le credenziali per continuare",
@@ -3122,7 +3127,15 @@
     "rcloneScheduledNoNextRun": "Il mirror pianificato non ha ancora una prossima esecuzione ({{timezone}})",
     "rcloneNextSyncBadge": "Mirror: {{when}}",
     "rcloneNextSyncWithSchedule": "Prossima sincronizzazione mirror {{when}}. Pianificazione: {{cron}} ({{timezone}})",
-    "rcloneScheduleUnknown": "pianificazione sconosciuta"
+    "rcloneScheduleUnknown": "pianificazione sconosciuta",
+    "archiveSyncWarning": {
+      "title": "Sincronizzazione archivi non riuscita",
+      "description": "Le informazioni sugli archivi potrebbero non essere aggiornate.",
+      "lastSuccess": "Ultima sincronizzazione riuscita: {{when}}",
+      "neverSynced": "Nessuna sincronizzazione degli archivi riuscita finora.",
+      "viewDetails": "Visualizza dettagli",
+      "label": "Errore di sincronizzazione"
+    }
   },
   "dialogs": {
     "deleteJob": {
@@ -4090,8 +4103,8 @@
     "save": "Salva Preferenze",
     "saving": "Salvataggio in corso...",
     "updatedSuccessfully": "Preferenze aggiornate con successo",
-    "analyticsTitle": "Analisi di Utilizzo Anonime",
-    "analyticsDescription": "Aiutaci a migliorare Borg UI condividendo dati di utilizzo anonimi. Raccogliamo visualizzazioni di pagina, clic su funzionalità e tipo di browser, senza tracciare indirizzi IP, hostname, cookie o informazioni personali identificabili.",
+    "analyticsTitle": "Analisi di Utilizzo",
+    "analyticsDescription": "Aiutaci a migliorare Borg UI condividendo dati di utilizzo e segnalazioni di errore. Le segnalazioni possono includere percorsi, hostname e nomi di repository; password, passphrase, token e chiavi private vengono rimossi prima. Non raccogliamo mai il contenuto dei backup, password o indirizzi IP.",
     "enableAnalytics": "Abilita analisi",
     "languageTitle": "Lingua",
     "languageDescription": "Scegli la lingua dell'interfaccia",
@@ -4409,11 +4422,11 @@
   },
   "analyticsConsent": {
     "title": "Aiuta a Migliorare Borg UI",
-    "message": "Raccogliamo dati di utilizzo anonimi per capire come viene usata Borg UI e migliorarla. Non vengono mai raccolte informazioni personali, indirizzi IP, hostname o dati di backup.",
+    "message": "Raccogliamo dati di utilizzo e segnalazioni di errore per capire come viene usata Borg UI e correggere i problemi. Non raccogliamo mai il contenuto dei backup, password o indirizzi IP.",
     "accept": "Accetta",
     "decline": "Rifiuta",
     "learnMore": "Scopri di più",
-    "enableToggle": "Abilita analisi anonime",
+    "enableToggle": "Abilita analisi",
     "continue": "Continua",
     "saving": "Salvataggio in corso...",
     "changeAnytime": "Puoi modificare questa impostazione in qualsiasi momento in Impostazioni → Preferenze"
@@ -5969,6 +5982,7 @@
         "failedToImportRepository": "Impossibile importare il repository",
         "failedToUploadKeyfile": "Impossibile caricare il file chiave",
         "failedToExportKeyfile": "Impossibile esportare il file chiave",
+        "agentKeyfileExportUnsupported": "Questo repository è eseguito da un agente la cui versione non può esportare la chiave. Aggiorna l'agente oppure esporta la chiave con Borg sulla macchina dell'agente.",
         "failedToRetrieveRepository": "Impossibile recuperare il repository",
         "failedToUpdateRepository": "Impossibile aggiornare il repository",
         "failedToDeleteRepository": "Impossibile eliminare il repository",
@@ -6085,6 +6099,8 @@
         "failedGetRestoreJobs": "Impossibile ottenere i job di ripristino",
         "failedGetRestoreStatus": "Impossibile ottenere lo stato del ripristino",
         "failedPreviewRestore": "Impossibile visualizzare l'anteprima del ripristino",
+        "failedPreviewRestoreWithReason": "Impossibile visualizzare l'anteprima del ripristino: {{reason}}",
+        "agentPreviewUnsupported": "Questo repository è eseguito da un agente la cui versione non può mostrare l'anteprima di un ripristino. Aggiorna l'agente oppure avvia invece il ripristino.",
         "repositoryNotFound": "Repository non trovato",
         "restoreJobNotFound": "Job di ripristino non trovato",
         "sshToSshNotSupported": "Il ripristino da repository SSH a destinazione SSH non è supportato",
@@ -6304,6 +6320,9 @@
         "backupCompletedWithWarning": "Backup completato con avviso (codice uscita {{exitCode}})",
         "backupWarningPostHooksFailed": "Backup riuscito con avviso ma gli hook post-backup sono falliti: {{failed}}/{{total}} script falliti",
         "containerRestartedDuringBackup": "Container riavviato durante l'operazione di backup",
+        "postBackupHooksAfterCancel": "Questa esecuzione è stata annullata dopo l'esecuzione dei suoi hook pre-backup. I suoi hook post-backup vengono eseguiti al termine dei suoi backup; se questo messaggio resta, non sono riusciti a essere eseguiti o sono falliti. Controlla cosa hanno fermato gli hook pre-backup.",
+        "backupPostHooksAfterRestart": "Un riavvio ha interrotto questo backup dopo l'esecuzione dei suoi hook pre-backup. Se questo messaggio resta, i suoi hook post-backup non sono riusciti a essere eseguiti dopo il riavvio o sono falliti. Controlla cosa hanno fermato gli hook pre-backup.",
+        "postBackupHooksAfterRestart": "Un riavvio ha interrotto questa esecuzione dopo l'esecuzione dei suoi hook pre-backup. Se questo messaggio resta, i suoi hook post-backup non sono riusciti a essere eseguiti dopo il riavvio o sono falliti. Controlla cosa hanno fermato gli hook pre-backup.",
         "containerRestartedDuringOperation": "Container riavviato durante l'operazione",
         "containerRestartedDuringRestore": "Container riavviato durante l'operazione di ripristino",
         "failedCreateDestinationDir": "Impossibile creare la directory di destinazione: {{error}}",

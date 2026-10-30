@@ -117,3 +117,7 @@ beforeAll(() => {
 afterAll(() => {
   console.error = originalError
 })
+
+// happy-dom reports itself as automated (navigator.webdriver), which error
+// reporting treats as CI; tests run as a real browser would.
+Object.defineProperty(window.navigator, 'webdriver', { configurable: true, get: () => false })

@@ -28,3 +28,17 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Open: Story = {}
+
+export const Closed: Story = {
+  args: {
+    open: false,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The closed prompt state used by Layout when WebAuthn is unsupported or enrollment is otherwise ineligible. This story sets open to false; it does not simulate browser capability detection.',
+      },
+    },
+  },
+}

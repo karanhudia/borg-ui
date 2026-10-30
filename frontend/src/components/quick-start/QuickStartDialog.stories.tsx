@@ -6,7 +6,7 @@ const meta = {
   title: 'Quick Start/Dialog',
   component: QuickStartDialog,
   parameters: { layout: 'fullscreen' },
-  args: { open: true, onClose: () => {} },
+  args: { open: true, trigger: 'manual', onClose: () => {} },
 } satisfies Meta<typeof QuickStartDialog>
 
 export default meta

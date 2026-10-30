@@ -52,9 +52,16 @@ from app.services.log_policy import (
     job_has_logs_by_policy,
 )
 from app.services.operations.backup_facade import BackupJobFacade
-from app.services.repository_executor import repository_executor_type
+from app.services.repository_executor import (
+    is_agent_executor,
+    repository_executor_type,
+)
 from app.utils.borg_flags import borg_flags_validator, parse_borg_flags
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.local_paths import (
+    is_operator_metadata_path_allowed,
+    is_operator_source_allowed,
+)
 from app.utils.schedule_time import (
     InvalidScheduleTimezone,
     calculate_next_cron_run,
@@ -1172,8 +1179,186 @@ def _validate_flags_for_repository(
         ) from exc
 
 
+def _kept_source_locations(user: User, plan: BackupPlan) -> list[dict[str, Any]]:
+    """The stored sources a non-admin may keep in an update without a check.
+    Nothing is kept when the plan has no repository left, because any operator
+    may edit such a plan, or when the stored sources no longer decode: every
+    path is then checked."""
+    if user.role == "admin" or not any(link.repository for link in plan.repositories):
+        return []
+    try:
+        return decode_source_locations(
+            plan.source_locations,
+            source_type=plan.source_type,
+            source_ssh_connection_id=plan.source_ssh_connection_id,
+            source_directories=_decode_json_list(plan.source_directories),
+        )
+    except ValueError:
+        return []
+
+
+def _source_paths(locations, source_type: str) -> set[tuple[Any, str]]:
+    return {
+        (location.get("agent_machine_id"), path)
+        for location in locations or []
+        if location.get("source_type") == source_type
+        for path in location.get("paths") or []
+    }
+
+
+def _metadata_paths(locations) -> set[tuple[Any, str]]:
+    """Dump, export and btrfs staging path strings from all source locations.
+
+    New strings are checked against server-side reserved-path policy, which
+    does not confine the remote host's filesystem or symlinks. Key them like
+    source paths so stored ones are not re-checked.
+    """
+    paths: set[tuple[Any, str]] = set()
+    for location in locations or []:
+        machine = location.get("agent_machine_id")
+        database = location.get("database") or {}
+        if database.get("dump_path"):
+            paths.add((machine, database["dump_path"]))
+        container = location.get("container") or {}
+        if container.get("export_path"):
+            paths.add((machine, container["export_path"]))
+        snapshot = location.get("snapshot") or {}
+        if snapshot.get("provider") == "btrfs" and snapshot.get("staging_path"):
+            paths.add((machine, snapshot["staging_path"]))
+    return paths
+
+
+def _require_source_paths_allowed(
+    user: User, source_locations, previous_source_locations
+) -> None:
+    """Paths a non-admin adds to a plan: server-local sources must lie inside a
+    mount point and outside the application and its data directory; a
+    location's dump, export or btrfs staging directory must stay outside those
+    reserved directories; agent sources are left to administrators. Paths
+    already in the plan are not re-checked, so other settings of a plan an
+    administrator set up stay editable."""
+    if user.role == "admin":
+        return
+    added_local = _source_paths(source_locations, "local") - _source_paths(
+        previous_source_locations, "local"
+    )
+    for _, path in sorted(added_local, key=lambda item: item[1]):
+        if not is_operator_source_allowed(path):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "key": "backend.errors.filesystem.permissionDenied",
+                    "params": {"path": path},
+                },
+            )
+    added_metadata = _metadata_paths(source_locations) - _metadata_paths(
+        previous_source_locations
+    )
+    for _, path in sorted(added_metadata, key=lambda item: item[1]):
+        if not is_operator_metadata_path_allowed(path):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "key": "backend.errors.filesystem.permissionDenied",
+                    "params": {"path": path},
+                },
+            )
+    added_agent = _source_paths(source_locations, "agent") - _source_paths(
+        previous_source_locations, "agent"
+    )
+    if added_agent:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "key": "backend.errors.filesystem.permissionDenied",
+                "params": {"path": sorted(added_agent, key=lambda item: item[1])[0][1]},
+            },
+        )
+
+
+def _pattern_roots(flags: Optional[str]) -> set[str]:
+    """Backup roots that ``--pattern`` values in these create flags add. A Borg
+    pattern whose first character is ``R`` (or ``r``) is a root command and the
+    rest of the value, after optional whitespace, is a backup root (borg
+    patterns.py, parse_inclexcl_command). Tokenised exactly as parse_borg_flags
+    does, so both ``--pattern VALUE`` and ``--pattern=VALUE`` are covered.
+    Flags that do not parse add nothing, as they are rejected elsewhere."""
+    try:
+        tokens = parse_borg_flags(flags, "create", local_paths=False)
+    except ValueError:
+        return set()
+    roots: set[str] = set()
+    for token in tokens:
+        if not token.startswith("--pattern="):
+            continue
+        value = token[len("--pattern=") :]
+        if value[:1] in ("R", "r"):
+            root = value[1:].lstrip()
+            if root:
+                roots.add(root)
+    return roots
+
+
+def _kept_pattern_roots(
+    user: User, plan: BackupPlan
+) -> tuple[set[str], dict[int, set[str]]]:
+    """The backup roots a non-admin may keep in an update without a check:
+    those the stored plan's flags already add. Mirrors _kept_source_locations:
+    nothing is kept when the plan has no repository left (any operator may edit
+    it) or when the stored flags no longer parse (every root is then checked)."""
+    if user.role == "admin" or not any(link.repository for link in plan.repositories):
+        return set(), {}
+    return _pattern_roots(plan.custom_flags), {
+        link.repository_id: _pattern_roots(link.custom_flags_override)
+        for link in plan.repositories
+    }
+
+
+def _require_pattern_roots_allowed(
+    user: User,
+    payload: BackupPlanPayload,
+    repositories: list[Repository],
+    previous_pattern_roots: tuple[set[str], dict[int, set[str]]],
+) -> None:
+    """Backup roots a non-admin adds through plan or link ``--pattern`` flags
+    are confined like source paths: plan-level flags apply to every link, a new
+    root on a server repository must pass is_operator_source_allowed and a new
+    root on an agent repository is refused. Disabled links count too, because
+    resuming one does not save the flags again. Roots already in the stored
+    plan's flags are not re-checked."""
+    if user.role == "admin":
+        return
+    old_plan_roots, old_link_roots = previous_pattern_roots
+    plan_roots = _pattern_roots(payload.custom_flags) - old_plan_roots
+    refused: set[str] = set()
+    for link, repo in zip(payload.repositories, repositories):
+        if repo is None:
+            continue
+        new_roots = plan_roots | (
+            _pattern_roots(link.custom_flags_override)
+            - old_link_roots.get(link.repository_id, set())
+        )
+        for root in new_roots:
+            if is_agent_executor(repo) or not is_operator_source_allowed(root):
+                refused.add(root)
+    if refused:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "key": "backend.errors.filesystem.permissionDenied",
+                "params": {"path": sorted(refused)[0]},
+            },
+        )
+
+
 def _validate_payload(
-    db: Session, user: User, payload: BackupPlanPayload
+    db: Session,
+    user: User,
+    payload: BackupPlanPayload,
+    *,
+    previous_source_locations=None,
+    previous_pattern_roots: Optional[tuple[set[str], dict[int, set[str]]]] = None,
+    check_source_paths: bool = True,
 ) -> list[Repository]:
     if not payload.name.strip():
         raise HTTPException(
@@ -1204,6 +1389,8 @@ def _validate_payload(
         payload.source_ssh_connection_id,
         payload.source_directories,
     ) = legacy_source_fields(source_locations)
+    if check_source_paths:
+        _require_source_paths_allowed(user, source_locations, previous_source_locations)
 
     if not payload.source_directories:
         raise HTTPException(
@@ -1370,6 +1557,11 @@ def _validate_payload(
                     },
                 )
 
+    if check_source_paths:
+        _require_pattern_roots_allowed(
+            user, payload, repos, previous_pattern_roots or (set(), {})
+        )
+
     clear_ids = set(payload.clear_legacy_source_repository_ids)
     if clear_ids - seen_ids:
         raise HTTPException(
@@ -1407,7 +1599,19 @@ def _clear_legacy_source_settings(
         repository.updated_at = datetime.utcnow()
 
 
+def _schedule_state(plan: BackupPlan) -> tuple:
+    if plan.schedule_mode == "availability":
+        timing = (
+            plan.availability_check_interval_minutes,
+            plan.min_success_interval_minutes,
+        )
+    else:
+        timing = (plan.cron_expression, plan.timezone)
+    return (plan.enabled, plan.schedule_enabled, plan.schedule_mode, timing)
+
+
 def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
+    previous_schedule = _schedule_state(plan)
     plan.name = payload.name.strip()
     plan.description = payload.description.strip() if payload.description else None
     plan.enabled = payload.enabled
@@ -1443,16 +1647,19 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
         else None
     )
     plan.timezone = payload.timezone
-    if not payload.schedule_enabled:
-        plan.next_run = None
-    elif payload.schedule_mode == "availability":
-        plan.next_run = datetime.utcnow()
-    elif plan.cron_expression:
-        plan.next_run = calculate_next_cron_run(
-            plan.cron_expression, schedule_timezone=payload.timezone
-        )
-    else:
-        plan.next_run = None
+    # An unchanged schedule keeps its next_run: recomputing it from now would
+    # skip a slot that is already due but not yet dispatched.
+    if plan.next_run is None or _schedule_state(plan) != previous_schedule:
+        if not payload.schedule_enabled:
+            plan.next_run = None
+        elif payload.schedule_mode == "availability":
+            plan.next_run = datetime.utcnow()
+        elif plan.cron_expression:
+            plan.next_run = calculate_next_cron_run(
+                plan.cron_expression, schedule_timezone=payload.timezone
+            )
+        else:
+            plan.next_run = None
     plan.pre_backup_script_id = payload.pre_backup_script_id
     plan.post_backup_script_id = payload.post_backup_script_id
     plan.pre_backup_script_parameters = payload.pre_backup_script_parameters
@@ -1711,7 +1918,8 @@ async def create_backup_plan_from_repository(
         copy_schedule=payload.copy_schedule,
     )
     try:
-        _validate_payload(db, current_user, plan_payload)
+        # The sources are the repository's, which only administrators set.
+        _validate_payload(db, current_user, plan_payload, check_source_paths=False)
     except InvalidScheduleTimezone as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1895,7 +2103,9 @@ def toggle_backup_plan(
                 detail={"key": "backend.errors.backupPlans.repositoriesRequired"},
             )
         raise_backup_plan_feature_error(evaluate_backup_plan_access(db, plan))
-        if plan.schedule_enabled and plan.cron_expression:
+        if plan.schedule_enabled and plan.schedule_mode == "availability":
+            next_run = datetime.utcnow()
+        elif plan.schedule_enabled and plan.cron_expression:
             try:
                 next_run = calculate_next_cron_run(
                     plan.cron_expression,
@@ -2034,7 +2244,13 @@ def update_backup_plan(
     plan = _load_plan_or_404(db, plan_id)
     _require_plan_operator_access(db, current_user, plan)
     try:
-        repositories = _validate_payload(db, current_user, payload)
+        repositories = _validate_payload(
+            db,
+            current_user,
+            payload,
+            previous_source_locations=_kept_source_locations(current_user, plan),
+            previous_pattern_roots=_kept_pattern_roots(current_user, plan),
+        )
     except InvalidScheduleTimezone as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

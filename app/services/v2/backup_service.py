@@ -17,6 +17,7 @@ from app.core.borg2 import (
 from app.database.models import Repository
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.borg_flags import parse_borg_flags
+from app.utils.borg_arguments import validate_operand
 
 
 class BackupV2Service:
@@ -70,6 +71,7 @@ class BackupV2Service:
         limit does not reach the command (behind rclone it goes through
         backup_environment instead); the Borg 1 options among the custom
         flags are refused (ValueError) before Borg runs."""
+        validate_operand(archive_name, "archive name")
         ensure_borg2_repository_url(repository_path)
         cmd = [
             borg2.borg_cmd,
@@ -90,13 +92,22 @@ class BackupV2Service:
         for pattern in exclude_patterns:
             cmd.extend(["--exclude", pattern])
         cmd.extend(parse_borg_flags(custom_flags, "create", 2))
-        cmd.append(archive_name)
+        cmd.extend(["--", archive_name])
         return cmd
 
     def build_archive_info_command(
         self, repository_path: str, archive_name: str
     ) -> List[str]:
-        return [borg2.borg_cmd, "-r", repository_path, "info", "--json", archive_name]
+        validate_operand(archive_name, "archive selector")
+        return [
+            borg2.borg_cmd,
+            "-r",
+            repository_path,
+            "info",
+            "--json",
+            "--",
+            archive_name,
+        ]
 
     def build_repo_list_command(self, repository_path: str) -> List[str]:
         return [borg2.borg_cmd, "-r", repository_path, "repo-list", "--json"]

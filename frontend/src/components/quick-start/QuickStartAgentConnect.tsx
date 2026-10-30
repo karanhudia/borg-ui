@@ -9,6 +9,7 @@ import ManagedAgentSelect from '../shared/ManagedAgentSelect'
 import AddAgentDialog from '../../pages/managed-agents/AddAgentDialog'
 import { resolveAgentServerUrl } from '../../pages/managed-agents/agentServerUrl'
 import { managedAgentsAPI } from '../../services/api'
+import { copyText } from '../../utils/clipboard'
 import { useEnrolledAgentId, useManagedAgents } from './quickStartAgent'
 
 interface QuickStartAgentConnectProps {
@@ -93,7 +94,10 @@ export default function QuickStartAgentConnect({
         }}
         creatingToken={createToken.isPending}
         onCopy={async (text) => {
-          await navigator.clipboard.writeText(text)
+          if (!(await copyText(text))) {
+            toast.error(t('common.errors.copyFailed'))
+            return
+          }
           toast.success(t('managedAgents.page.toasts.copied'))
         }}
       />

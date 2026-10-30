@@ -15,6 +15,7 @@ from app.core.borg2 import (
 from app.core.borg_errors import RestoreRefused
 from app.database.models import Repository
 from app.utils.borg_env import effective_repository_remote_path
+from app.utils.borg_arguments import validate_operand
 
 
 class RestoreV2Service:
@@ -34,6 +35,9 @@ class RestoreV2Service:
         `borg2_restore_target_refusal`) unless `existing_files` is
         "continue", which writes into what is there. A caller that extracts
         into a directory of its own making leaves both out."""
+        validate_operand(archive_name, "archive selector")
+        for path in paths or []:
+            validate_operand(path, "restore path", archive_path=True)
         ensure_borg2_repository_url(repository_path)
         refusal = borg2_restore_target_refusal(destination, existing_files)
         if refusal:
@@ -50,7 +54,7 @@ class RestoreV2Service:
         cmd.extend(borg2_extract_existing_files_flags(existing_files))
         if strip_components:
             cmd.extend(["--strip-components", str(strip_components)])
-        cmd.append(archive_name)
+        cmd.extend(["--", archive_name])
         if paths:
             cmd.extend(paths)
         return cmd

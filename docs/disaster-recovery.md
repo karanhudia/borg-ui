@@ -40,6 +40,14 @@ Keep repository passphrases outside Borg UI too. If the only copy of a passphras
 
 The generated `/data/.secret_key` is part of app state. If it changes, existing sessions are invalidated and stored encrypted app secrets, such as SSH private keys and script secrets, may no longer decrypt.
 
+If an operation reports that a saved SSH private key cannot be decrypted,
+restore the original `SECRET_KEY` value or `/data/.secret_key` from the same
+app-state backup. If the original app secret is unavailable, re-import the
+original SSH private key and select it for the affected connection or repository.
+Borg UI cannot recover a saved private key without the app secret that encrypted
+it. Archive sync leaves existing archive records and backup metadata intact
+while the key is unreadable; its failed operation records the recovery guidance.
+
 ## Automated Configuration Export
 
 Back up `/data` for full Borg UI recovery. In addition, keep an automated

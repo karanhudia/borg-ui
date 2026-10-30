@@ -16,6 +16,7 @@ import os
 import structlog
 import tempfile
 
+from app.core.security import require_role_dependency
 from app.database.database import get_db
 from app.database.models import (
     AgentJob,
@@ -1971,7 +1972,11 @@ def _delete_failed_plan_run(db: Session, run_id: int) -> None:
 async def delete_job(
     job_type: str,
     job_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_role_dependency(
+            "admin", detail_key="backend.errors.activity.adminOnlyDelete"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """

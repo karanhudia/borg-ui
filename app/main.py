@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import structlog
 import os
 from dotenv import load_dotenv
@@ -46,6 +48,7 @@ from app.api import (
 from app.api.v2 import router as v2_router
 from app.routers import config
 from app.config import get_runtime_app_version, settings
+from app.services.error_reporter import flush, report_exception
 from app.core.proxy_auth import inspect_proxy_auth_config
 from app.core.security import create_first_user
 from app.services.licensing_service import sync_licensing_state
@@ -95,7 +98,13 @@ _cached_index_html = _prepare_index_html()
 
 
 class BasePathMiddleware:
-    """Make scope["path"] always carry BASE_PATH so Starlette route matching is consistent.
+    """Serve the app below BASE_PATH: set ``root_path`` and make scope["path"] carry it.
+
+    The root path is set here, not by the server: ``FastAPI(root_path=...)`` is
+    deprecated, and uvicorn's ``--root-path`` prepends the prefix to every path,
+    so a request that already carries it would be doubled. Setting it here
+    works the same under gunicorn, a bare ``uvicorn app.main:app`` or a test
+    client.
 
     Reverse proxies strip the prefix before forwarding, so requests arrive as
     ``/assets/x.css`` while ``root_path`` says ``/borg-ui``. Starlette mounts
@@ -110,6 +119,7 @@ class BasePathMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope["type"] in ("http", "websocket"):
+            scope["root_path"] = self.base_path
             path = scope["path"]
             if path != self.base_path and not path.startswith(self.base_path + "/"):
                 scope["path"] = self.base_path + path
@@ -196,7 +206,6 @@ app = FastAPI(
     version=get_runtime_app_version(),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
-    root_path=BASE_PATH if BASE_PATH else None,
 )
 
 
@@ -213,6 +222,35 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
             ]
         },
     )
+
+
+def _request_component(request: Request) -> str:
+    route = request.scope.get("route")
+    return f"{request.method} {route.path if route else 'unmatched'}"
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    report_exception(
+        exc, kind="request", component=_request_component(request), status=500
+    )
+    return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
+    # Routes turn most failures into HTTPException(500) inside `except`; report
+    # the cause they wrap, then answer exactly as FastAPI's default handler does.
+    if exc.status_code >= 500:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        report_exception(
+            exc.__cause__ or exc.__context__ or exc,
+            kind="request",
+            component=_request_component(request),
+            status=exc.status_code,
+            error_key=detail.get("key"),
+        )
+    return await http_exception_handler(request, exc)
 
 
 if BASE_PATH:
@@ -311,8 +349,21 @@ async def startup_event():
     # against an empty database and fails every request that reads from it.
     from app.database.db_upgrade import ensure_schema
 
-    ensure_schema()
+    try:
+        ensure_schema()
+    except Exception as exc:
+        report_exception(exc, kind="migration", component="ensure_schema")
+        flush()  # the process exits next and the sender thread with it
+        raise
+    try:
+        await _startup_after_schema()
+    except Exception as exc:
+        report_exception(exc, kind="startup", component="startup_event")
+        flush()  # the process exits next and the sender thread with it
+        raise
 
+
+async def _startup_after_schema() -> None:
     from app.database.database import SessionLocal
 
     app_version = get_runtime_app_version()
@@ -564,17 +615,40 @@ def _recover_interrupted_work() -> None:
     from app.services.backup_plan_execution_service import (
         backup_plan_execution_service,
     )
-    from app.utils.process_utils import cleanup_orphaned_jobs
+    from app.services.backup_service import backup_service
+    from app.utils.process_utils import (
+        backup_post_hooks_after_restart,
+        cleanup_orphaned_jobs,
+    )
+
+    # Before the runner's recovery fails the backups the restart
+    # interrupted: the ones whose post-backup hooks are still to run (#1429).
+    # A plan run's waits for them, so they are launched first.
+    try:
+        db = SessionLocal()
+        try:
+            backup_post_hooks = backup_post_hooks_after_restart(db)
+        finally:
+            db.close()
+        backup_service.recover_post_hooks_after_restart(backup_post_hooks)
+    except Exception as e:
+        logger.error("Failed to recover backup post-backup hooks", error=str(e))
 
     try:
         db = SessionLocal()
         try:
             # A plan run started by hand while the runner waited for the
             # lease is this process's own, not one the restart interrupted.
-            cleanup_orphaned_jobs(db, backup_plan_execution_service.live_run_ids)
+            pending_post_hooks = cleanup_orphaned_jobs(
+                db, backup_plan_execution_service.live_run_ids
+            )
         finally:
             db.close()
         logger.info("Orphaned job cleanup completed")
+        # Before the scheduler resumes: the runs are live while these run.
+        backup_plan_execution_service.recover_post_hooks_after_restart(
+            pending_post_hooks
+        )
     except Exception as e:
         logger.error("Failed to cleanup orphaned jobs", error=str(e))
 
@@ -645,6 +719,25 @@ async def shutdown_event():
             logger.warning("Error disconnecting MQTT service", error=str(e))
 
 
+# Registered before the SPA catch-all below, which would otherwise answer
+# these paths with index.html.
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for container orchestration and startup scripts"""
+    return {"status": "healthy", "service": "borg-web-ui"}
+
+
+@app.get("/api")
+async def api_info():
+    """API information endpoint"""
+    return {
+        "name": "Borg UI API",
+        "version": get_runtime_app_version(),
+        "docs": f"{BASE_PATH}/api/docs",
+        "status": "running",
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the main application"""
@@ -679,23 +772,6 @@ async def catch_all(full_path: str):
     return HTMLResponse(
         content="<h1>Borg UI</h1><p>Frontend not built yet. Please run the build process.</p>"
     )
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for container orchestration and startup scripts"""
-    return {"status": "healthy", "service": "borg-web-ui"}
-
-
-@app.get("/api")
-async def api_info():
-    """API information endpoint"""
-    return {
-        "name": "Borg UI API",
-        "version": get_runtime_app_version(),
-        "docs": "/api/docs",
-        "status": "running",
-    }
 
 
 @app.middleware("http")

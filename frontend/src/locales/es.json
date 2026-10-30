@@ -70,6 +70,11 @@
       "copyFailed": "No se pudo copiar al portapapeles"
     }
   },
+  "errorBoundary": {
+    "title": "Algo salió mal",
+    "message": "Borg UI encontró un error inesperado. Recargar la página suele solucionarlo.",
+    "reload": "Recargar"
+  },
   "login": {
     "title": "Borg UI",
     "subtitle": "Introduce tus credenciales para continuar",
@@ -3122,7 +3127,15 @@
     "rcloneScheduledNoNextRun": "La réplica programada aún no tiene próxima ejecución ({{timezone}})",
     "rcloneNextSyncBadge": "Réplica: {{when}}",
     "rcloneNextSyncWithSchedule": "Próxima sincronización de réplica {{when}}. Programa: {{cron}} ({{timezone}})",
-    "rcloneScheduleUnknown": "programa desconocido"
+    "rcloneScheduleUnknown": "programa desconocido",
+    "archiveSyncWarning": {
+      "title": "Error al sincronizar los archivos",
+      "description": "La información de los archivos puede estar desactualizada.",
+      "lastSuccess": "Última sincronización correcta: {{when}}",
+      "neverSynced": "Aún no se han sincronizado los archivos correctamente.",
+      "viewDetails": "Ver detalles",
+      "label": "Error de sincronización"
+    }
   },
   "dialogs": {
     "deleteJob": {
@@ -4090,8 +4103,8 @@
     "save": "Guardar preferencias",
     "saving": "Guardando...",
     "updatedSuccessfully": "Preferencias actualizadas correctamente",
-    "analyticsTitle": "Análisis de uso anónimo",
-    "analyticsDescription": "Ayúdanos a mejorar Borg UI compartiendo datos de uso anónimos. Recopilamos vistas de página, clics en funciones y tipo de navegador, sin rastrear direcciones IP, nombres de host, cookies ni información de identificación personal.",
+    "analyticsTitle": "Análisis de uso",
+    "analyticsDescription": "Ayúdanos a mejorar Borg UI compartiendo datos de uso e informes de errores. Los informes de errores pueden incluir rutas, nombres de host y nombres de repositorios; las contraseñas, frases de contraseña, tokens y claves privadas se eliminan antes. Nunca recopilamos el contenido de las copias de seguridad, contraseñas ni direcciones IP.",
     "enableAnalytics": "Habilitar análisis",
     "languageTitle": "Idioma",
     "languageDescription": "Elige el idioma de la interfaz",
@@ -4409,11 +4422,11 @@
   },
   "analyticsConsent": {
     "title": "Ayuda a mejorar Borg UI",
-    "message": "Recopilamos datos de uso anónimos para entender cómo se usa Borg UI y mejorarlo. No se recopila información personal, direcciones IP, nombres de host ni datos de copia de seguridad.",
+    "message": "Recopilamos datos de uso e informes de errores para entender cómo se usa Borg UI y corregir problemas. Nunca recopilamos el contenido de las copias de seguridad, contraseñas ni direcciones IP.",
     "accept": "Aceptar",
     "decline": "Rechazar",
     "learnMore": "Más información",
-    "enableToggle": "Habilitar análisis anónimos",
+    "enableToggle": "Habilitar análisis",
     "continue": "Continuar",
     "saving": "Guardando...",
     "changeAnytime": "Puedes cambiar esto en cualquier momento en Configuración → Preferencias"
@@ -5969,6 +5982,7 @@
         "failedToImportRepository": "Error al importar el repositorio",
         "failedToUploadKeyfile": "Error al subir el archivo de clave",
         "failedToExportKeyfile": "Error al exportar el archivo de clave",
+        "agentKeyfileExportUnsupported": "Este repositorio lo ejecuta un agente cuya versión no puede exportar la clave. Actualiza el agente o exporta la clave con Borg en la máquina del agente.",
         "failedToRetrieveRepository": "Error al recuperar el repositorio",
         "failedToUpdateRepository": "Error al actualizar el repositorio",
         "failedToDeleteRepository": "Error al eliminar el repositorio",
@@ -6085,6 +6099,8 @@
         "failedGetRestoreJobs": "Error al obtener trabajos de restauración",
         "failedGetRestoreStatus": "Error al obtener el estado de restauración",
         "failedPreviewRestore": "Error al previsualizar la restauración",
+        "failedPreviewRestoreWithReason": "Error al previsualizar la restauración: {{reason}}",
+        "agentPreviewUnsupported": "Este repositorio lo ejecuta un agente cuya versión no puede previsualizar una restauración. Actualiza el agente o inicia la restauración en su lugar.",
         "repositoryNotFound": "Repositorio no encontrado",
         "restoreJobNotFound": "Trabajo de restauración no encontrado",
         "sshToSshNotSupported": "No se admite la restauración desde un repositorio SSH a un destino SSH",
@@ -6304,6 +6320,9 @@
         "backupCompletedWithWarning": "Copia de seguridad completada con advertencia (código de salida {{exitCode}})",
         "backupWarningPostHooksFailed": "La copia de seguridad se completó con advertencia pero los hooks post-copia fallaron: {{failed}}/{{total}} scripts fallaron",
         "containerRestartedDuringBackup": "El contenedor se reinició durante la operación de copia de seguridad",
+        "postBackupHooksAfterCancel": "Esta ejecución se canceló después de que se ejecutaran sus hooks pre-copia. Sus hooks post-copia de seguridad se ejecutan cuando terminan sus copias de seguridad; si este mensaje permanece, no pudieron ejecutarse o fallaron. Comprueba qué detuvieron los hooks pre-copia.",
+        "backupPostHooksAfterRestart": "Un reinicio interrumpió esta copia de seguridad después de que se ejecutaran sus hooks pre-copia. Si este mensaje permanece, sus hooks post-copia de seguridad no pudieron ejecutarse tras el reinicio o fallaron. Comprueba qué detuvieron los hooks pre-copia.",
+        "postBackupHooksAfterRestart": "Un reinicio interrumpió esta ejecución después de que se ejecutaran sus hooks pre-copia. Si este mensaje permanece, sus hooks post-copia de seguridad no pudieron ejecutarse tras el reinicio o fallaron. Comprueba qué detuvieron los hooks pre-copia.",
         "containerRestartedDuringOperation": "El contenedor se reinició durante la operación",
         "containerRestartedDuringRestore": "El contenedor se reinició durante la operación de restauración",
         "failedCreateDestinationDir": "Error al crear el directorio de destino: {{error}}",

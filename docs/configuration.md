@@ -22,7 +22,7 @@ Most configuration is available in the UI under Settings. Use environment variab
 | `SECRET_KEY` | generated | JWT/session signing key. Auto-generated into `/data/.secret_key` if omitted |
 | `INITIAL_ADMIN_PASSWORD` | `admin123` | Password for the first `admin` user, used on first start only. Empty or whitespace-only counts as unset; surrounding whitespace is dropped |
 | `LOG_LEVEL` | `INFO` | Backend log level |
-| `LOCAL_MOUNT_POINTS` | `/local` | Comma-separated container paths shown as local mounts in the file browser. Operators can only browse and restore inside these paths; admins are not limited |
+| `LOCAL_MOUNT_POINTS` | `/local` | Comma-separated container paths shown as local mounts in the file browser. Limits non-admin local browsing, server restore destinations, and newly selected server backup sources and pattern roots; admins are not limited |
 | `BASE_PATH` | empty | Sub-path deployment, for example `/borg-ui` |
 
 `PUID` and `PGID` set the Borg UI process's primary identity. If a source is
@@ -52,6 +52,22 @@ Borg UI may update ownership for app-managed paths such as `/data`, `/backups`,
 before starting backups.
 
 If you mount a different container path, update `LOCAL_MOUNT_POINTS`.
+
+New non-admin backup sources and `--pattern` roots must be absolute, have no
+`..` segment, and resolve inside one of these container paths. They must neither
+contain nor be inside `/app` or `DATA_DIR`, even if a mount point includes those
+directories. Select narrower subdirectories when necessary. New dump, export,
+and btrfs staging metadata paths must avoid the same reserved directories but
+do not need to be inside a mount point.
+
+This setting does not define allowed roots on managed agents. New agent source
+paths, agent pattern roots, and restores from agent repositories require an
+administrator. Non-admin Borg archive mount targets must resolve strictly below
+`DATA_DIR/mounts`.
+
+Existing backup plans are preserved without automatic migration or runtime
+revalidation. After upgrading, follow the
+[administrator audit guidance](security#operator-path-restriction-upgrades).
 
 Example:
 
