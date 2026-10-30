@@ -3,7 +3,7 @@ import { planDetail } from './analytics'
 
 /** What the one upgrade dialog in the app shell shows. It opens only when the
  *  user did something: clicked a lock, or ran an action the plan refused.
- *  Nothing opens it on render (research/reddit-lessons.md: never nag). */
+ *  Nothing opens it on render: a lock never nags. */
 export interface UpgradeRequest {
   feature: Feature
   /** Analytics surface for the buy click inside the card. */
