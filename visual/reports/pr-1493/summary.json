@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-10-30T09:30:27.700Z",
+  "generatedAt": "2026-10-30T09:51:45.427Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1493 visual report",
-    "commitSha": "a9db0c7047f7",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/41033794863"
+    "commitSha": "1a5aa588a510",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/41036330285"
   },
   "totals": {
     "baseline": 1234,
     "actual": 1250,
     "compared": 1234,
-    "changed": 10,
+    "changed": 7,
     "added": 16,
     "removed": 0,
-    "unchanged": 1224
+    "unchanged": 1227
   },
   "changed": [
     {
@@ -39,9 +39,9 @@
       "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-error--mobile.png",
       "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-error--mobile.png",
       "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-error--mobile.png",
-      "diffPixels": 885,
+      "diffPixels": 362,
       "totalPixels": 329160,
-      "diffRatio": 0.0026886620488516225,
+      "diffRatio": 0.0010997691092477823,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -57,9 +57,9 @@
       "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
       "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
       "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "diffPixels": 629,
+      "diffPixels": 362,
       "totalPixels": 329160,
-      "diffRatio": 0.0019109247782233565,
+      "diffRatio": 0.0010997691092477823,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -68,42 +68,6 @@
       "actual": {
         "width": 390,
         "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPixels": 2018,
-      "totalPixels": 329160,
-      "diffRatio": 0.0061307570786243775,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
-      "diffPixels": 1912,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0018671875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
       }
     },
     {
@@ -111,9 +75,9 @@
       "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--add-guided-remote--mobile.png",
       "diffPath": "images/diff/pages-cloudstorage--add-guided-remote--mobile.png",
-      "diffPixels": 779,
+      "diffPixels": 523,
       "totalPixels": 329160,
-      "diffRatio": 0.002366630210232106,
+      "diffRatio": 0.00158889293960384,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -176,24 +140,6 @@
       "actual": {
         "width": 1280,
         "height": 800
-      }
-    },
-    {
-      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 408,
-      "totalPixels": 329160,
-      "diffRatio": 0.0012395187750637987,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
       }
     }
   ],
@@ -2813,6 +2759,12 @@
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
     },
     {
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
+    },
+    {
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png"
     },
     {
@@ -3597,6 +3549,9 @@
     },
     {
       "fileName": "pages-repositories-groups--empty-without-quick-start.png"
+    },
+    {
+      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png"
     },
     {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api.png"
