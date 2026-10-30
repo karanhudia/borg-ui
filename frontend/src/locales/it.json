@@ -6925,7 +6925,7 @@
   "paywallOffer": {
     "line": "Offerta una tantum per questa installazione: 5% su Lite o Pro, annuale o a vita, valida 7 giorni dall'attivazione.",
     "claim": "Ottieni il 5% di sconto",
-    "claimed": "La sua offerta del {{percent}}% è su ogni link di acquisto fino al {{date}}.",
+    "claimed": "La tua offerta del {{percent}}% è su ogni link di acquisto fino al {{date}}.",
     "unavailable": "Questa offerta non è disponibile per questa installazione."
   }
 }

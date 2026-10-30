@@ -506,6 +506,16 @@ async def test_a_refused_paywall_offer_comes_back_as_a_result(db_session):
             db_session, trigger="expired", intent_days=0
         )
     assert result == {"result": "denied", "reason": "offer_already_used"}
+    # An "issued" answer missing the id or end date is unusable on a buy link.
+    with patch.object(
+        licensing_service,
+        "_post_activation",
+        AsyncMock(return_value={"result": "issued", "percent": 5}),
+    ):
+        result = await licensing_service.request_paywall_offer(
+            db_session, trigger="repeat", intent_days=3
+        )
+    assert result == {"result": "denied", "reason": "denied"}
     with pytest.raises(RuntimeError, match="Unknown offer trigger"):
         await licensing_service.request_paywall_offer(
             db_session, trigger="always", intent_days=0

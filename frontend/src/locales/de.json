@@ -6925,7 +6925,7 @@
   "paywallOffer": {
     "line": "Einmaliges Angebot für diese Installation: 5 % auf Lite oder Pro, jährlich oder dauerhaft, gültig 7 Tage ab dem Einlösen.",
     "claim": "5 % Rabatt sichern",
-    "claimed": "Ihr Angebot über {{percent}} % gilt bis {{date}} auf jedem Kauflink.",
+    "claimed": "Dein Angebot über {{percent}} % gilt bis {{date}} auf jedem Kauflink.",
     "unavailable": "Dieses Angebot ist für diese Installation nicht verfügbar."
   }
 }
