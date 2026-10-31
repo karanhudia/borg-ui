@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.borg_major import is_borg2
 from app.core.features import FEATURES, Plan, get_current_plan, has_feature
 from app.utils.source_locations import decode_source_locations
 
@@ -18,6 +19,23 @@ BACKUP_PLAN_ADVANCED_FEATURE = "backup_plan_multi_repository"
 BACKUP_PLAN_MIXED_SOURCES_FEATURE = "backup_plan_mixed_sources"
 CONTAINER_BACKUPS_FEATURE = "container_backups"
 DATABASE_DISCOVERY_FEATURE = "database_discovery"
+BORG2_FEATURE = "borg_v2"
+
+# A scheduled run skipped because the plan no longer includes what it needs.
+PLAN_REQUIRED_SKIP_REASON = "plan_required"
+
+
+def plan_required_message(feature: str, required: Plan) -> str:
+    what = (
+        "Borg 2 repositories need"
+        if feature == BORG2_FEATURE
+        else "This schedule needs"
+    )
+    return (
+        f"Scheduled backups are paused: {what} the {required.value.title()} plan, "
+        "which this install no longer has. Existing archives are untouched and "
+        "can still be browsed and downloaded. Backups resume once the plan is active."
+    )
 
 
 @dataclass(frozen=True)
@@ -94,7 +112,7 @@ def evaluate_backup_plan_feature_access(
 def evaluate_backup_plan_access(
     db: Session, plan: BackupPlan
 ) -> BackupPlanFeatureDecision:
-    return evaluate_backup_plan_feature_access(
+    decision = evaluate_backup_plan_feature_access(
         db,
         enabled_repository_count=sum(1 for link in plan.repositories if link.enabled),
         repository_run_mode=plan.repository_run_mode,
@@ -105,6 +123,18 @@ def evaluate_backup_plan_access(
             source_directories=_decode_plan_source_directories(plan),
         ),
     )
+    if decision.reason is None and any(
+        link.enabled and link.repository is not None and is_borg2(link.repository)
+        for link in plan.repositories
+    ):
+        return BackupPlanFeatureDecision(
+            allowed=has_feature(db, BORG2_FEATURE),
+            current=decision.current,
+            required=FEATURES[BORG2_FEATURE],
+            feature=BORG2_FEATURE,
+            reason="borg2_repository",
+        )
+    return decision
 
 
 def raise_backup_plan_feature_error(

@@ -19,7 +19,9 @@ from app.database.models import (
     BackupPlanRepository,
 )
 from app.core.authorization import authorize_request
+from app.core.borg_major import is_borg2
 from app.core.borg_router import BorgRouter
+from app.core.features import FEATURES, has_feature
 from app.core.security import get_current_user, check_repo_access
 from app.config import settings
 from app.services.operations.maintenance_start import (
@@ -28,6 +30,11 @@ from app.services.operations.maintenance_start import (
     start_inline_maintenance,
 )
 from app.services.notification_service import notification_service
+from app.services.backup_plan_policy import (
+    BORG2_FEATURE,
+    PLAN_REQUIRED_SKIP_REASON,
+    plan_required_message,
+)
 from app.services.check_scheduler import run_due_scheduled_checks
 from app.services.restore_check_scheduler import run_due_scheduled_restore_checks
 from app.services.rclone_mirror_scheduler import dispatch_due_scheduled_rclone_mirrors
@@ -2783,6 +2790,41 @@ async def _send_schedule_failure(
         db.close()
 
 
+def _skip_if_plan_required(db: Session, job: ScheduledJob, now: datetime) -> bool:
+    """Skip, visibly, a due job whose Borg 2 repository the plan no longer covers.
+
+    The run is recorded in Activity every time and announced once, on the
+    first skip since the job last ran: a backup that stops must not stop
+    silently.
+    """
+    repositories = _get_schedule_repositories(db, job)
+    if not any(is_borg2(repo) for repo in repositories) or has_feature(
+        db, BORG2_FEATURE
+    ):
+        return False
+
+    previous = db.query(AvailabilityScheduleSkip.id).filter(
+        AvailabilityScheduleSkip.scheduled_job_id == job.id,
+        AvailabilityScheduleSkip.reason == PLAN_REQUIRED_SKIP_REASON,
+    )
+    if job.last_run is not None:
+        previous = previous.filter(AvailabilityScheduleSkip.occurred_at > job.last_run)
+    first_refusal = previous.first() is None
+
+    message = plan_required_message(BORG2_FEATURE, FEATURES[BORG2_FEATURE])
+    job.next_run = _next_scheduled_job_run(job, now)
+    _record_availability_skip(
+        db, job, now, reason=PLAN_REQUIRED_SKIP_REASON, detail=message
+    )
+    db.commit()
+    logger.info("Scheduled job skipped: plan does not include Borg 2", job_id=job.id)
+    if first_refusal:
+        asyncio.create_task(
+            _send_schedule_failure(job.name, repositories[0].path, message)
+        )
+    return True
+
+
 async def dispatch_due_scheduled_backups(
     db: Session, now: Optional[datetime] = None
 ) -> None:
@@ -2823,6 +2865,9 @@ async def dispatch_due_scheduled_backups(
         if dispatched >= available_slots:
             break
         try:
+            if _skip_if_plan_required(db, job, now):
+                skipped += 1
+                continue
             if job.schedule_mode == "availability":
                 last_success = (
                     db.query(Operation.completed_at)

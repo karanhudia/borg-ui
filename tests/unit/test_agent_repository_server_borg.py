@@ -174,6 +174,7 @@ class TestBackupExecutor:
     def test_schedule_run_now_queues_an_agent_backup(
         self, test_client, admin_headers, test_db
     ):
+        _enable_borg_v2(test_db)
         repo = _repo(test_db, _agent(test_db))
         schedule = ScheduledJob(
             name="nightly",
@@ -201,6 +202,7 @@ class TestBackupExecutor:
         assert operation.execution_mode == "agent"
 
     def test_due_schedule_queues_an_agent_backup(self, test_db):
+        _enable_borg_v2(test_db)
         from datetime import datetime
 
         from app.api.schedule import _dispatch_due_scheduled_job
@@ -232,6 +234,7 @@ class TestBackupExecutor:
     async def test_multi_repository_schedule_leaves_the_hooks_to_the_agent(
         self, test_db
     ):
+        _enable_borg_v2(test_db)
         from app.api.schedule import execute_multi_repo_schedule
 
         repo = _repo(test_db, _agent(test_db))
@@ -288,6 +291,7 @@ class TestBackupExecutor:
     async def test_a_backup_queued_for_the_server_runs_on_the_agent_it_moved_to(
         self, test_db
     ):
+        _enable_borg_v2(test_db)
         from app.services.operations.backup_facade import create_backup_operation
         from app.services.operations.executors import backup as backup_executor
 
@@ -347,6 +351,7 @@ class TestBackupExecutor:
 
     @pytest.mark.asyncio
     async def test_a_plan_backup_whose_agent_sources_no_longer_fit_fails(self, test_db):
+        _enable_borg_v2(test_db)
         from app.services.operations.backup_facade import create_backup_operation
         from app.services.operations.executors import backup as backup_executor
 

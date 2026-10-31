@@ -3304,18 +3304,27 @@ class TestBackupPlanRoutes:
             next_run=now - timedelta(minutes=1),
         )
 
-        with patch(
-            "app.services.backup_plan_execution_service.asyncio.create_task"
-        ) as mock_create_task:
+        with (
+            patch(
+                "app.services.backup_plan_execution_service._send_plan_required_notice",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.asyncio.create_task",
+                side_effect=lambda coro: coro.close(),
+            ) as mock_create_task,
+        ):
             dispatched = await backup_plan_execution_service.dispatch_due_runs(
                 test_db, now
             )
 
         assert dispatched == 0
-        mock_create_task.assert_not_called()
-        assert (
-            test_db.query(BackupPlanRun).filter_by(backup_plan_id=plan.id).count() == 0
-        )
+        # no run starts: the only task is the one-time notice about the pause
+        mock_create_task.assert_called_once()
+        runs = test_db.query(BackupPlanRun).filter_by(backup_plan_id=plan.id).all()
+        assert [(run.status, run.skip_reason) for run in runs] == [
+            ("skipped", "plan_required")
+        ]
         test_db.refresh(plan)
         assert plan.last_run is None
         assert plan.next_run > now
@@ -3824,6 +3833,7 @@ class TestBackupPlanRoutes:
     async def test_execute_plan_run_uses_stable_archive_name_for_borg2_repo(
         self, test_db
     ):
+        _set_plan(test_db, "pro")
         repo = _create_repo(
             test_db,
             "Primary Repo",
