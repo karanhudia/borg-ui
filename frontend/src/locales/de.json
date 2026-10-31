@@ -6926,6 +6926,7 @@
     "line": "Einmaliges Angebot für diese Installation: 5 % auf Lite oder Pro, jährlich oder dauerhaft, gültig 7 Tage ab dem Einlösen.",
     "claim": "5 % Rabatt sichern",
     "claimed": "Dein Angebot über {{percent}} % gilt bis {{date}} auf jedem Kauflink.",
-    "unavailable": "Dieses Angebot ist für diese Installation nicht verfügbar."
+    "unavailable": "Dieses Angebot ist für diese Installation nicht verfügbar.",
+    "failed": "Das Angebot konnte gerade nicht eingelöst werden. Versuche es gleich noch einmal."
   }
 }

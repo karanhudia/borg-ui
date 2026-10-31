@@ -50,7 +50,15 @@ export default function PaywallOffer({ surface }: { surface: string }) {
         ...(res.data.reason ? { reason: res.data.reason } : {}),
       })
     },
-    onError: () => setRefused(true),
+    // The request failed, which is not a refusal: nothing is stored and the
+    // button stays, so the user can try again right here.
+    onError: () =>
+      trackPlan(EventAction.FAIL, {
+        surface,
+        operation: 'claim_paywall_offer',
+        trigger: trigger ?? 'none',
+        reason: 'request_failed',
+      }),
   })
 
   if (!onCommunity) return null
@@ -89,6 +97,11 @@ export default function PaywallOffer({ surface }: { surface: string }) {
       >
         {t('paywallOffer.claim')}
       </Button>
+      {claim.isError && (
+        <Typography variant="caption" role="alert" sx={{ color: 'error.main' }}>
+          {t('paywallOffer.failed')}
+        </Typography>
+      )}
     </Stack>
   )
 }

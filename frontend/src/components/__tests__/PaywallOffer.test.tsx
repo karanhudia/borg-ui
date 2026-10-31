@@ -72,16 +72,20 @@ describe('PaywallOffer', () => {
     renderWithProviders(<PaywallOffer surface="test" />)
     expect(screen.queryByRole('button', { name: /claim/i })).not.toBeInTheDocument()
   })
-  it('lets the user try again after a failed claim', async () => {
+  it('keeps the claim button after a failed request and succeeds on retry', async () => {
     threeDays()
-    vi.mocked(licensingAPI.paywallOffer).mockRejectedValue(new Error('502'))
-    const { unmount } = renderWithProviders(<PaywallOffer surface="test" />)
-    fireEvent.click(screen.getByRole('button', { name: /claim 5% off/i }))
-    await waitFor(() =>
-      expect(screen.getByText(/isn't available for this install/i)).toBeInTheDocument()
-    )
-    unmount()
+    const expires = new Date(Date.now() + 7 * DAY).toISOString()
+    vi.mocked(licensingAPI.paywallOffer)
+      .mockRejectedValueOnce(new Error('400'))
+      .mockResolvedValueOnce({
+        data: { result: 'issued', offer_id: 'ofr_2', percent: 5, expires_at: expires },
+      } as never)
     renderWithProviders(<PaywallOffer surface="test" />)
-    expect(screen.getByRole('button', { name: /claim 5% off/i })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /claim 5% off/i }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/try again/i))
+    expect(screen.queryByText(/isn't available for this install/i)).not.toBeInTheDocument()
+    expect(localStorage.getItem('borgui.paywallOffer')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /claim 5% off/i }))
+    await waitFor(() => expect(liveOfferId()).toBe('ofr_2'))
   })
 })
