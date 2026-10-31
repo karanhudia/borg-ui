@@ -119,6 +119,9 @@ export const getSkipReasonLabel = (job: Job, t: (key: string) => string): string
   if (job.skip_reason === 'source_unavailable') {
     return t('availabilitySchedule.skipReasons.sourceUnavailable')
   }
+  if (job.skip_reason === 'plan_required') {
+    return t('availabilitySchedule.skipReasons.planRequired')
+  }
   return job.error_message || null
 }
 

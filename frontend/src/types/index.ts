@@ -481,7 +481,7 @@ export interface BackupPlanRun {
   started_at?: string | null
   completed_at?: string | null
   error_message?: string | null
-  skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
+  skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | 'plan_required' | null
   created_at?: string | null
   retry_attempt?: number | null
   retry_original_run_id?: number | null

@@ -44,7 +44,11 @@ from app.services.operations.maintenance_start import (
     finish_inline_maintenance,
     start_inline_maintenance,
 )
-from app.services.backup_plan_policy import evaluate_backup_plan_access
+from app.services.backup_plan_policy import (
+    PLAN_REQUIRED_SKIP_REASON,
+    evaluate_backup_plan_access,
+    plan_required_message,
+)
 from app.services.backup_route_planner import (
     execution_mode_for_route,
     plan_repository_route,
@@ -639,6 +643,28 @@ def _agent_job(db: Session, *, agent_job_id: int) -> Optional[AgentJob]:
     return db.get(AgentJob, agent_job_id)
 
 
+def _first_enabled_repository_path(plan: BackupPlan) -> str:
+    for link in plan.repositories:
+        if link.enabled and link.repository is not None:
+            return link.repository.path
+    return ""
+
+
+async def _send_plan_required_notice(
+    plan_name: str, repository_path: str, message: str
+) -> None:
+    """Its own session: the dispatcher's closes first."""
+    db = SessionLocal()
+    try:
+        await notification_service.send_schedule_failure(
+            db, plan_name, repository_path, message
+        )
+    except Exception as exc:
+        logger.warning("Failed to send plan-required notice", error=str(exc))
+    finally:
+        db.close()
+
+
 class BackupPlanExecutionService:
     def __init__(self) -> None:
         # Runs this process started and is still executing: the startup sweep
@@ -751,8 +777,29 @@ class BackupPlanExecutionService:
                     current=access_decision.current.value,
                     reason=access_decision.reason,
                 )
+                # Shown in the run history, and announced once: a backup that
+                # stops must not stop silently.
+                first_refusal = not self._refused_since_last_run(db, plan)
                 plan.next_run = self._next_plan_run(plan, now)
+                self._record_availability_skip(
+                    db,
+                    plan,
+                    now,
+                    reason=PLAN_REQUIRED_SKIP_REASON,
+                    detail="",
+                    trigger="schedule",
+                )
                 db.commit()
+                if first_refusal:
+                    asyncio.create_task(
+                        _send_plan_required_notice(
+                            plan.name,
+                            _first_enabled_repository_path(plan),
+                            plan_required_message(
+                                access_decision.feature, access_decision.required
+                            ),
+                        )
+                    )
                 continue
             prior_run_id = self._latest_run_id(db, plan.id)
             try:
@@ -868,6 +915,7 @@ class BackupPlanExecutionService:
         *,
         reason: str,
         detail: str,
+        trigger: str = "availability",
     ) -> None:
         """Persist a neutral availability decision for the plan run history.
 
@@ -876,7 +924,7 @@ class BackupPlanExecutionService:
         """
         run = BackupPlanRun(
             backup_plan_id=plan.id,
-            trigger="availability",
+            trigger=trigger,
             status="skipped",
             started_at=now,
             completed_at=now,
@@ -896,6 +944,16 @@ class BackupPlanExecutionService:
                         completed_at=now,
                     )
                 )
+
+    @staticmethod
+    def _refused_since_last_run(db: Session, plan: BackupPlan) -> bool:
+        query = db.query(BackupPlanRun.id).filter(
+            BackupPlanRun.backup_plan_id == plan.id,
+            BackupPlanRun.skip_reason == PLAN_REQUIRED_SKIP_REASON,
+        )
+        if plan.last_run is not None:
+            query = query.filter(BackupPlanRun.created_at > plan.last_run)
+        return query.first() is not None
 
     def has_active_run(self, db: Session, plan_id: int) -> bool:
         active = BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES)
