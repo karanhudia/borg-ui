@@ -600,13 +600,11 @@ async def request_paywall_offer(
             "intent_days": max(0, int(intent_days)),
         },
     )
-    # An answer without an id or an end date cannot go on a buy link; treat it
-    # as a refusal rather than storing an offer the app can never use.
-    if (
-        data.get("result") == "issued"
-        and data.get("offer_id")
-        and data.get("expires_at")
-    ):
+    if data.get("result") == "issued":
+        # Without an id or an end date it cannot go on a buy link. An error,
+        # not a refusal: the app remembers refusals, and this one may pass.
+        if not data.get("offer_id") or not data.get("expires_at"):
+            raise RuntimeError("Offer service answered without an offer id or end date")
         return {
             "result": "issued",
             "offer_id": data.get("offer_id"),

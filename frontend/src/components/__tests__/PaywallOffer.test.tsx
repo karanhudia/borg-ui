@@ -72,4 +72,16 @@ describe('PaywallOffer', () => {
     renderWithProviders(<PaywallOffer surface="test" />)
     expect(screen.queryByRole('button', { name: /claim/i })).not.toBeInTheDocument()
   })
+  it('lets the user try again after a failed claim', async () => {
+    threeDays()
+    vi.mocked(licensingAPI.paywallOffer).mockRejectedValue(new Error('502'))
+    const { unmount } = renderWithProviders(<PaywallOffer surface="test" />)
+    fireEvent.click(screen.getByRole('button', { name: /claim 5% off/i }))
+    await waitFor(() =>
+      expect(screen.getByText(/isn't available for this install/i)).toBeInTheDocument()
+    )
+    unmount()
+    renderWithProviders(<PaywallOffer surface="test" />)
+    expect(screen.getByRole('button', { name: /claim 5% off/i })).toBeInTheDocument()
+  })
 })
