@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.database.models import (
     AvailabilityScheduleSkip,
+    LicensingState,
     Operation,
     Repository,
     ScheduledJob,
@@ -607,6 +608,9 @@ async def test_shared_scheduler_counts_active_scheduled_backup_jobs_from_db(
 
 @pytest.mark.unit
 def test_dispatch_due_scheduled_borg2_job_uses_stable_archive_name(db_session):
+    db_session.add(
+        LicensingState(instance_id="borg2-schedule", plan="pro", status="active")
+    )
     repo = Repository(
         name="Primary Repo",
         path="/tmp/borg2-repo",
