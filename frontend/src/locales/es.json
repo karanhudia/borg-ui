@@ -6921,5 +6921,12 @@
       "folderCount_other": "{{count}} carpetas",
       "remove": "Quitar {{app}}"
     }
+  },
+  "paywallOffer": {
+    "line": "Oferta única para esta instalación: 5 % en Lite o Pro, anual o vitalicio, válida 7 días desde que la actives.",
+    "claim": "Obtener 5 % de descuento",
+    "claimed": "Tu oferta del {{percent}} % está en cada enlace de compra hasta el {{date}}.",
+    "unavailable": "Esta oferta no está disponible para esta instalación.",
+    "failed": "No se pudo obtener la oferta ahora mismo. Inténtalo de nuevo en un momento."
   }
 }

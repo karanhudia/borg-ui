@@ -6921,5 +6921,12 @@
       "folderCount_other": "{{count}} folders",
       "remove": "Remove {{app}}"
     }
+  },
+  "paywallOffer": {
+    "line": "One-time offer for this install: 5% off Lite or Pro, yearly or lifetime, valid 7 days after you claim it.",
+    "claim": "Claim 5% off",
+    "claimed": "Your {{percent}}% offer is on every buy link until {{date}}.",
+    "unavailable": "This offer isn't available for this install.",
+    "failed": "The offer could not be claimed just now. Try again in a moment."
   }
 }
