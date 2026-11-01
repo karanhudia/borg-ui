@@ -13,6 +13,7 @@ on:
       - "frontend/.storybook/**"
       - "frontend/scripts/**"
       - "frontend/src/**"
+      - "frontend/public/**"
       - "frontend/package.json"
       - "frontend/package-lock.json"
       - ".github/workflows/visual-regression.yml"
@@ -115,7 +116,7 @@ jobs:
         run: npm ci
 
       - name: Install Playwright Chromium
-        if: ${{ steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline' }}
+        if: ${{ (steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline') && github.event_name != 'workflow_run' }}
         working-directory: source/frontend
         run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
 

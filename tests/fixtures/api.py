@@ -196,11 +196,11 @@ def held_runner(test_client, test_db, monkeypatch):
 
 
 @pytest.fixture
-def test_user(test_db):
+def test_user(test_db, fixture_password_hashes):
     """Create a test user in the database"""
     user = User(
         username="testuser",
-        password_hash=get_password_hash("testpass123"),
+        password_hash=fixture_password_hashes["testpass123"],
         is_active=True,
         role="viewer",
     )
@@ -211,11 +211,11 @@ def test_user(test_db):
 
 
 @pytest.fixture
-def admin_user(test_db):
+def admin_user(test_db, fixture_password_hashes):
     """Create an admin user in the database"""
     user = User(
         username="admin",
-        password_hash=get_password_hash("admin123"),
+        password_hash=fixture_password_hashes["admin123"],
         is_active=True,
         role="admin",
     )
