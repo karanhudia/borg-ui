@@ -58,6 +58,11 @@ cd frontend
 npm run snapshots
 ```
 
+Capture uses two isolated browser workers by default and still covers every
+story at desktop and mobile sizes. Set `STORYBOOK_SNAPSHOT_WORKERS=1` for a
+serial diagnostic run, or an integer up to 16 to tune available CPU/memory.
+Keep readiness checks enabled when changing capture scheduling.
+
 Do not commit generated PNGs from `frontend/visual-screenshots/` or
 `frontend/storybook-snapshots/`.
 
@@ -68,6 +73,45 @@ ruff check app tests
 ruff format --check app tests
 pytest
 ```
+
+### PR CI selection and timing
+
+`Tests` always starts and always reports `CI / Summary`. Only a PR whose complete
+git diff contains exclusively `frontend/src/`, `frontend/.storybook/`,
+`frontend/scripts/`, or `frontend/public/` changes may skip backend-only lanes.
+Renames, dependency manifests, frontend/root configuration, CI, docs, backend,
+and unrecognized paths select the full suite. Missing diff metadata also selects
+the full suite. Push, nightly, and manual runs always run the full suite.
+
+Frontend quality, unit coverage, builds, and the Python contract guards remain
+required on every PR. The contract guards cover frontend/backend Borg routing
+and security allowlist applicability; include new Python checks that read
+frontend sources in `Frontend / Python Contract Guards`. All three smoke suites
+keep both Borg variants on every PR. An unexpected skip, cancellation, failure,
+or missing job fails the summary. Security checks retain their existing scope.
+
+Backend unit tests use four deterministic file shards balanced by historical
+runtime. All shards download the same per-run timing baseline. Missing, invalid,
+or stale history falls back to collected test counts, with no tests excluded.
+JUnit reports include setup, call, and teardown; `--durations=50` identifies slow
+fixtures and tests. Only a fully successful `main` push saves shared history, so
+the first run after introducing this feature uses count balancing. Subsequent
+PRs can use the resulting measurements.
+
+Unit, integration, and migration JUnit reports are available as workflow
+artifacts. To profile locally:
+
+```bash
+pytest tests/unit --durations=50 --junitxml=test-results/unit.xml -o junit_family=xunit1
+python scripts/ci/pytest_durations.py test-results/unit.xml --output test-results/durations.json
+```
+
+The shared fixed test-user credentials reuse two real bcrypt hashes per session;
+users and databases are still recreated per test. Password-security tests call
+the production hashing code directly and retain the actual work factor.
+
+New pushes cancel obsolete PR test, security, and screenshot-capture runs. The
+trusted visual publisher keeps its separate serialization and permissions.
 
 ## Smoke Tests
 

@@ -8,6 +8,7 @@ import { waitForStoryRoot, waitForStoryToSettle } from './snapshot-capture-confi
 import { writeSnapshotIfChanged } from './snapshot-file-writer.mjs'
 import { resolveSnapshotOutputDir } from './snapshot-output-config.mjs'
 import { snapshotFileName, snapshotViewports } from './snapshot-viewport-config.mjs'
+import { resolveSnapshotWorkers, runSnapshotWorkers } from './snapshot-workers.mjs'
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0'
 
@@ -182,7 +183,8 @@ async function withFixedDate(page) {
   }, fixedNowIso)
 }
 
-async function captureStorySnapshotsForViewport(stories, baseUrl, browser, viewport) {
+async function captureStorySnapshot(story, baseUrl, browser, viewport) {
+  // Each concurrent capture owns its storage, page and viewport state.
   const context = await browser.newContext({
     deviceScaleFactor: 1,
     locale: 'en-US',
@@ -191,64 +193,62 @@ async function captureStorySnapshotsForViewport(stories, baseUrl, browser, viewp
   })
 
   try {
-    for (const story of stories) {
-      const outputPath = path.join(snapshotsDir, snapshotFileName(story.id, viewport))
-      let lastError
+    const outputPath = path.join(snapshotsDir, snapshotFileName(story.id, viewport))
+    let lastError
 
-      for (let attempt = 1; attempt <= 5; attempt += 1) {
-        const page = await context.newPage()
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const page = await context.newPage()
 
-        try {
-          await withFixedDate(page)
-          await page.goto(
-            `${baseUrl}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`,
-            {
-              waitUntil: 'domcontentloaded',
-            }
-          )
-          await waitForStoryRoot(page)
-          await page.addStyleTag({
-            content: `
-              *, *::before, *::after {
-                animation: none !important;
-                caret-color: transparent !important;
-                transition-duration: 0s !important;
-                transition-property: none !important;
-              }
-            `,
-          })
-          await waitForStoryToSettle(page)
-          const snapshotBuffer = await page.screenshot({ fullPage: false })
-          const result = await writeSnapshotIfChanged(outputPath, snapshotBuffer)
-          console.log(
-            `${result.changed ? 'Wrote' : 'Kept'} ${path.relative(frontendRoot, outputPath)} (${
-              viewport.id
-            } ${viewport.width}x${viewport.height})`
-          )
-          lastError = undefined
-          break
-        } catch (error) {
-          lastError = error
-          if (attempt < 5) {
-            console.warn(
-              `Retrying ${story.id} ${viewport.id} snapshot after load failure (${attempt}/5)`
-            )
+      try {
+        await withFixedDate(page)
+        await page.goto(
+          `${baseUrl}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`,
+          {
+            waitUntil: 'domcontentloaded',
           }
-        } finally {
-          await page.close().catch(() => {})
+        )
+        await waitForStoryRoot(page)
+        await page.addStyleTag({
+          content: `
+            *, *::before, *::after {
+              animation: none !important;
+              caret-color: transparent !important;
+              transition-duration: 0s !important;
+              transition-property: none !important;
+            }
+          `,
+        })
+        await waitForStoryToSettle(page)
+        const snapshotBuffer = await page.screenshot({ fullPage: false })
+        const result = await writeSnapshotIfChanged(outputPath, snapshotBuffer)
+        console.log(
+          `${result.changed ? 'Wrote' : 'Kept'} ${path.relative(frontendRoot, outputPath)} (${
+            viewport.id
+          } ${viewport.width}x${viewport.height})`
+        )
+        lastError = undefined
+        break
+      } catch (error) {
+        lastError = error
+        if (attempt < 5) {
+          console.warn(
+            `Retrying ${story.id} ${viewport.id} snapshot after load failure (${attempt}/5)`
+          )
         }
+      } finally {
+        await page.close().catch(() => {})
       }
+    }
 
-      if (lastError) {
-        throw lastError
-      }
+    if (lastError) {
+      throw lastError
     }
   } finally {
     await context.close().catch(() => {})
   }
 }
 
-async function captureStorySnapshots(stories, baseUrl) {
+async function captureStorySnapshots(stories, baseUrl, workers) {
   let chromium
 
   try {
@@ -265,15 +265,21 @@ async function captureStorySnapshots(stories, baseUrl) {
   const browser = await chromium.launch({ channel: 'chromium' })
 
   try {
-    for (const viewport of snapshotViewports) {
-      await captureStorySnapshotsForViewport(stories, baseUrl, browser, viewport)
-    }
+    const jobs = snapshotViewports.flatMap((viewport) =>
+      stories.map((story) => ({ story, viewport }))
+    )
+    await runSnapshotWorkers(
+      jobs,
+      ({ story, viewport }) => captureStorySnapshot(story, baseUrl, browser, viewport),
+      { workers }
+    )
   } finally {
     await browser.close().catch(() => {})
   }
 }
 
 async function main() {
+  const workers = resolveSnapshotWorkers()
   prependLocalHostLibraries()
 
   const stories = await readStoryEntries()
@@ -287,7 +293,7 @@ async function main() {
   const { server, baseUrl } = await startStaticServer(staticDir)
 
   try {
-    await captureStorySnapshots(stories, baseUrl)
+    await captureStorySnapshots(stories, baseUrl, workers)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
