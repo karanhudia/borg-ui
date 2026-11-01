@@ -870,3 +870,50 @@ class TestScriptDeleteScheduleReference:
             .count()
             == 0
         )
+
+
+@pytest.mark.unit
+class TestGeneratedScriptNameReuse:
+    """Saving a plan again sends its generated (template) scripts again under the
+    same names; that must not fail with 'already exists'."""
+
+    def _create(self, client, headers, **overrides):
+        payload = {
+            "name": "Export Docker container: web",
+            "description": "Export a Docker container",
+            "content": "#!/usr/bin/env bash\ndocker export web\n",
+            "timeout": 900,
+            "run_on": "always",
+            "category": "template",
+            **overrides,
+        }
+        return client.post("/api/scripts", json=payload, headers=headers)
+
+    def test_identical_generated_script_is_reused(self, test_client, admin_headers):
+        first = self._create(test_client, admin_headers)
+        second = self._create(test_client, admin_headers)
+
+        assert first.status_code == 201
+        assert second.status_code == 201
+        assert second.json()["id"] == first.json()["id"]
+
+    def test_edited_generated_script_gets_next_free_name(
+        self, test_client, admin_headers
+    ):
+        first = self._create(test_client, admin_headers)
+        edited = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        again = self._create(test_client, admin_headers, content="#!/bin/sh\necho 3\n")
+
+        assert edited.status_code == 201
+        assert edited.json()["id"] != first.json()["id"]
+        assert edited.json()["name"] == "Export Docker container: web (2)"
+        assert again.json()["name"] == "Export Docker container: web (3)"
+
+    def test_custom_script_name_clash_still_refused(self, test_client, admin_headers):
+        assert (
+            self._create(test_client, admin_headers, category="custom").status_code
+            == 201
+        )
+        clash = self._create(test_client, admin_headers, category="custom")
+
+        assert clash.status_code == 400

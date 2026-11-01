@@ -406,7 +406,16 @@ async def create_script(
     """Create a new script"""
     # Check if name already exists
     existing = db.query(Script).filter(Script.name == script_data.name).first()
-    if existing:
+    if existing and script_data.category == "template":
+        # Generated source scripts are sent again every time a plan with that source
+        # is saved, and they outlive deleted plans. Reuse an identical one; give an
+        # edited one the next free name instead of refusing the save.
+        if _same_generated_script(existing, script_data):
+            return _script_create_response(existing)
+        script_data = script_data.model_copy(
+            update={"name": _next_free_script_name(db, script_data.name)}
+        )
+    elif existing:
         raise HTTPException(
             status_code=400,
             detail=f"Script with name '{script_data.name}' already exists",
@@ -483,6 +492,30 @@ async def create_script(
         stored_params=script.parameters,
     )
 
+    return _script_create_response(script)
+
+
+def _same_generated_script(existing: Script, script_data: ScriptCreate) -> bool:
+    if (
+        existing.category != "template"
+        or existing.timeout != script_data.timeout
+        or existing.run_on != script_data.run_on
+    ):
+        return False
+    try:
+        return read_script_file(existing.file_path) == script_data.content
+    except HTTPException:
+        return False
+
+
+def _next_free_script_name(db: Session, name: str) -> str:
+    n = 2
+    while db.query(Script).filter(Script.name == f"{name} ({n})").first():
+        n += 1
+    return f"{name} ({n})"
+
+
+def _script_create_response(script: Script) -> ScriptResponse:
     # Parse from database to ensure consistency and filter system variables
     response_parameters = (
         filter_system_variables_from_params(

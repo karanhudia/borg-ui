@@ -82,13 +82,24 @@ const DEFAULT_SCAN_IGNORE_PATTERNS = [
 
 function classifyScanError(err: unknown): ScanErrorState {
   if (err && typeof err === 'object' && 'response' in err) {
-    const response = (err as { response?: { status?: number; data?: { detail?: string } } })
-      .response
+    const response = (
+      err as {
+        response?: {
+          status?: number
+          data?: { detail?: string; warnings?: { message?: string }[] }
+        }
+      }
+    ).response
     if (response?.status === 404 || response?.status === 405) {
       return { kind: 'ENDPOINT_MISSING', detail: null }
     }
     if (response?.data?.detail) {
       return { kind: 'OTHER', detail: String(response.data.detail) }
+    }
+    // Failed scans (502 unreachable, 504 timeout) explain themselves in warnings.
+    const warning = response?.data?.warnings?.[0]?.message
+    if (warning) {
+      return { kind: 'OTHER', detail: warning }
     }
   }
   return { kind: 'OTHER', detail: null }

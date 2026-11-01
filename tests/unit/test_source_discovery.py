@@ -1156,6 +1156,60 @@ class TestSourceDiscovery:
             "sqlite",
         }
 
+    def test_database_scan_remote_probe_failure_is_not_a_connection_failure(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        ssh_key = SSHKey(
+            name="source-probe-failed-key",
+            public_key="ssh-ed25519 AAAATEST source-probe-failed-key",
+            private_key=encrypt_secret("fake private key"),
+            key_type="ed25519",
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+        connection = SSHConnection(
+            ssh_key_id=ssh_key.id,
+            host="example.test",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        def fake_remote_probe(**kwargs):
+            # ssh connected; the remote shell failed after printing one result.
+            return SimpleNamespace(
+                returncode=1,
+                stdout="EXIST\t/srv/postgresql\t1\n",
+                stderr="sh: 3: find: not found",
+            )
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_remote_database_probe",
+            fake_remote_probe,
+            raising=False,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "remote",
+                "source_ssh_connection_id": connection.id,
+                "paths": ["/srv/postgresql"],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        warning = response.json()["warnings"][0]
+        assert warning["code"] == "SCAN_FAILED"
+        assert "find: not found" in warning["message"]
+        assert "Could not connect" not in warning["message"]
+
     def test_database_scan_walks_recursively_to_find_nested_db(
         self, test_client, admin_headers, tmp_path, monkeypatch
     ):

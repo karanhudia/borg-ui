@@ -1878,8 +1878,10 @@ async def _scan_remote_database_paths(
         if os.path.exists(key_file_path):
             os.unlink(key_file_path)
 
-    if result.returncode != 0:
-        stderr = (result.stderr or "").strip()
+    stderr = (result.stderr or "").strip()
+    # Like the container scan: only ssh's own exit (255) means no connection. Any
+    # other non-zero exit came from the probe on a host we did reach.
+    if result.returncode == 255 or "ssh:" in stderr.lower():
         return _failure_response(
             status_code=502,
             scan_target=scan_target,
@@ -1891,6 +1893,18 @@ async def _scan_remote_database_paths(
             ),
         )
 
+    warnings = []
+    if result.returncode != 0:
+        warnings.append(
+            ScanWarning(
+                code="SCAN_FAILED",
+                message=(
+                    f"The scan on {scan_target.label} exited with code "
+                    f"{result.returncode}: {stderr or 'no error output'}"
+                ),
+                path=None,
+            )
+        )
     probes, command_available = _parse_remote_probe_output(result.stdout or "", paths)
     detections = _detect_templates_from_probes(templates, probes, command_available)
     return DatabaseScanResponse(
@@ -1898,7 +1912,7 @@ async def _scan_remote_database_paths(
         scanned_paths=paths,
         detections=detections,
         templates=templates,
-        warnings=[],
+        warnings=warnings,
     )
 
 
