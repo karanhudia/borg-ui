@@ -79,6 +79,7 @@ async def test_mount_borg_archive_success(mount_service_fixture, mock_db_session
 
     # Mock subprocess creation for 'borg mount'
     mock_process = AsyncMock()
+    mock_process.stderr.read.return_value = b""
     mock_process.pid = 12345
     mock_process.returncode = None  # Running
     mock_process.kill = MagicMock()  # Sync method
@@ -148,6 +149,7 @@ async def test_mount_borg_archive_uses_unique_path_when_explicit_target_is_occup
     (occupied_mount_point / "existing-mount-content").write_text("mounted")
 
     mock_process = AsyncMock()
+    mock_process.stderr.read.return_value = b""
     mock_process.pid = 12345
     mock_process.returncode = None
     mock_process.kill = MagicMock()
@@ -207,6 +209,7 @@ async def test_mount_borg_archive_uses_unique_path_for_empty_occupied_target(
         )
 
     mock_process = AsyncMock()
+    mock_process.stderr.read.return_value = b""
     mock_process.pid = 12345
     mock_process.returncode = None
     mock_process.kill = MagicMock()
@@ -261,6 +264,7 @@ async def test_mount_borg_archive_uses_borg2_binary_for_v2_repo(
 
     mock_db_session.query.side_effect = query_side_effect
     mock_process = AsyncMock()
+    mock_process.stderr.read.return_value = b""
     mock_process.pid = 12345
     mock_process.returncode = None
     mock_process.kill = MagicMock()
@@ -320,6 +324,7 @@ async def test_mount_borg_archive_uses_archive_filter_for_v2_repo(
 
     mock_db_session.query.side_effect = query_side_effect
     mock_process = AsyncMock()
+    mock_process.stderr.read.return_value = b""
     mock_process.pid = 12345
     mock_process.returncode = None
     mock_process.kill = MagicMock()
@@ -376,6 +381,7 @@ async def test_unmount_success(mount_service_fixture):
     # Mock process killing and unmount command
     # _unmount_borg uses asyncio.create_subprocess_exec
     mock_process = AsyncMock()
+    mock_process.stderr.read.return_value = b""
     mock_process.returncode = 0
     mock_process.communicate.return_value = (b"", b"")
 
@@ -409,6 +415,7 @@ async def test_unmount_v2_uses_borg2_binary(mount_service_fixture):
     )
 
     mock_process = AsyncMock()
+    mock_process.stderr.read.return_value = b""
     mock_process.returncode = 0
     mock_process.communicate.return_value = (b"", b"")
 
@@ -446,6 +453,7 @@ async def test_unmount_removes_empty_managed_borg_mount_dir(mount_service_fixtur
     )
 
     mock_process = AsyncMock()
+    mock_process.stderr.read.return_value = b""
     mock_process.returncode = 0
     mock_process.communicate.return_value = (b"", b"")
 
