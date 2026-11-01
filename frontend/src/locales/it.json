@@ -2314,7 +2314,8 @@
   "availabilitySchedule": {
     "skipReasons": {
       "minimumIntervalNotElapsed": "Intervallo minimo non ancora trascorso",
-      "sourceUnavailable": "Origine non disponibile"
+      "sourceUnavailable": "Origine non disponibile",
+      "planRequired": "In pausa: richiede Pro"
     }
   },
   "cloudStorageJobs": {
@@ -5809,6 +5810,10 @@
   },
   "backend": {
     "errors": {
+      "storage": {
+        "full": "Lo spazio di archiviazione è pieno o la quota è esaurita. Liberare spazio e controllare la quota dei volumi del database di Borg UI e dell’archiviazione interessata, quindi riprovare. Borg UI non elimina dati per risolvere questo errore.",
+        "io": "L’archiviazione ha segnalato un errore di input/output. Controllare disco, filesystem e montaggi prima di riprovare. Verificare lo stato dell’operazione prima di inviarla nuovamente."
+      },
       "auth": {
         "cannotDeleteSelf": "Non puoi eliminare te stesso",
         "currentPasswordIncorrect": "La password attuale non è corretta",
@@ -5934,7 +5939,7 @@
         "listFailed": "Impossibile elencare gli archivi del repository: {{error}}",
         "remoteBorg2Incompatible": "Il server remoto non esegue un server Borg 2 compatibile. Installa Borg 2 sull'host remoto e imposta il percorso Borg remoto sul binario borg2, oppure usa Borg 1 per questo repository.",
         "failedToCreateRepository": "Impossibile creare il repository",
-        "failedToVerifyRepository": "Impossibile verificare il repository",
+        "failedToVerifyRepository": "Impossibile verificare il repository: {{error}}",
         "failedToImportRepository": "Impossibile importare il repository",
         "failedToUploadKeyfile": "Impossibile caricare il file chiave",
         "failedToExportKeyfile": "Impossibile esportare il file chiave",
@@ -6921,5 +6926,12 @@
       "folderCount_other": "{{count}} cartelle",
       "remove": "Rimuovi {{app}}"
     }
+  },
+  "paywallOffer": {
+    "line": "Offerta una tantum per questa installazione: 5% su Lite o Pro, annuale o a vita, valida 7 giorni dall'attivazione.",
+    "claim": "Ottieni il 5% di sconto",
+    "claimed": "La tua offerta del {{percent}}% è su ogni link di acquisto fino al {{date}}.",
+    "unavailable": "Questa offerta non è disponibile per questa installazione.",
+    "failed": "Non è stato possibile ottenere l'offerta in questo momento. Riprova tra poco."
   }
 }

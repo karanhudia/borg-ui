@@ -647,6 +647,17 @@ async def browse_ssh_filesystem(
                 if result.stdout
                 else "Unknown error"
             )
+            if "subsystem request failed" in error_msg.lower() or (
+                "sftp-server" in error_msg.lower()
+                and any(
+                    marker in error_msg.lower()
+                    for marker in ("not found", "no such file")
+                )
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="SFTP browsing is unavailable on this SSH server. Enable its SFTP subsystem or configure an SFTP-capable connection.",
+                )
             if any(
                 line.startswith(("remote readdir(", "couldn't canonicalize:"))
                 and line.endswith(": permission denied")

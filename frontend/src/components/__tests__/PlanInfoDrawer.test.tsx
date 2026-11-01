@@ -421,10 +421,7 @@ describe('PlanInfoDrawer', () => {
     )
 
     const cta = screen.getByRole('link', { name: /restore pro features/i })
-    expect(cta).toHaveAttribute(
-      'href',
-      buildBuyUrl({ plan: 'pro', src: 'app-expired', offer: 'expired' })
-    )
+    expect(cta).toHaveAttribute('href', buildBuyUrl({ plan: 'pro', src: 'app-expired' }))
   })
 
   it('sells Enterprise, not Pro, to an instance already on Pro', async () => {

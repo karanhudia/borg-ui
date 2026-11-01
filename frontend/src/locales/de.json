@@ -2314,7 +2314,8 @@
   "availabilitySchedule": {
     "skipReasons": {
       "minimumIntervalNotElapsed": "Mindestintervall noch nicht erreicht",
-      "sourceUnavailable": "Quelle nicht verfügbar"
+      "sourceUnavailable": "Quelle nicht verfügbar",
+      "planRequired": "Pausiert: erfordert Pro"
     }
   },
   "cloudStorageJobs": {
@@ -5809,6 +5810,10 @@
   },
   "backend": {
     "errors": {
+      "storage": {
+        "full": "Der Speicher ist voll oder das Kontingent ist ausgeschöpft. Schaffen Sie freien Speicher und prüfen Sie das Kontingent des Borg-UI-Datenbankvolumes und der betroffenen Speicher. Versuchen Sie es danach erneut. Borg UI löscht keine Daten, um diesen Fehler zu beheben.",
+        "io": "Der Speicher hat einen Ein-/Ausgabefehler gemeldet. Prüfen Sie Datenträger, Dateisystem und Einbindungen vor einem erneuten Versuch. Prüfen Sie den Vorgangsstatus, bevor Sie ihn erneut starten."
+      },
       "auth": {
         "cannotDeleteSelf": "Sie können sich nicht selbst löschen",
         "currentPasswordIncorrect": "Das aktuelle Passwort ist falsch",
@@ -5934,7 +5939,7 @@
         "listFailed": "Repository-Archive konnten nicht aufgelistet werden: {{error}}",
         "remoteBorg2Incompatible": "Auf dem Remote-Server läuft kein kompatibler Borg-2-Server. Installiere Borg 2 auf dem Remote-Host und setze den Remote-Borg-Pfad auf dessen borg2-Binary, oder verwende Borg 1 für dieses Repository.",
         "failedToCreateRepository": "Repository konnte nicht erstellt werden",
-        "failedToVerifyRepository": "Repository konnte nicht verifiziert werden",
+        "failedToVerifyRepository": "Repository konnte nicht verifiziert werden: {{error}}",
         "failedToImportRepository": "Repository konnte nicht importiert werden",
         "failedToUploadKeyfile": "Schlüsseldatei konnte nicht hochgeladen werden",
         "failedToExportKeyfile": "Schlüsseldatei konnte nicht exportiert werden",
@@ -6921,5 +6926,12 @@
       "folderCount_other": "{{count}} Ordner",
       "remove": "{{app}} entfernen"
     }
+  },
+  "paywallOffer": {
+    "line": "Einmaliges Angebot für diese Installation: 5 % auf Lite oder Pro, jährlich oder dauerhaft, gültig 7 Tage ab dem Einlösen.",
+    "claim": "5 % Rabatt sichern",
+    "claimed": "Dein Angebot über {{percent}} % gilt bis {{date}} auf jedem Kauflink.",
+    "unavailable": "Dieses Angebot ist für diese Installation nicht verfügbar.",
+    "failed": "Das Angebot konnte gerade nicht eingelöst werden. Versuche es gleich noch einmal."
   }
 }
