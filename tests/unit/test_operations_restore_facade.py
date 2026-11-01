@@ -213,13 +213,22 @@ def test_list_restore_jobs_limits_each_source_by_created_at_not_id(db, repositor
     assert [j.archive for j in jobs] == ["fresh"]
 
 
+@pytest.mark.parametrize(
+    "diagnostic, secret",
+    [
+        ("password=private-secret", "private-secret"),
+        ("Authorization: Bearer bearer-secret", "bearer-secret"),
+        ("Authorization: Basic dXNlcjpwYXNz", "dXNlcjpwYXNz"),
+    ],
+)
 def test_persisted_restore_logs_redact_secrets_for_every_execution_path(
-    db, repository, log_dir
+    db, repository, log_dir, diagnostic, secret
 ):
     op = _restore_operation(db, repository)
     job = RestoreJobFacade(db, op)
-    job.logs = "STDERR:\npermission denied password=private-secret\n"
+    job.logs = f"STDERR:\npermission denied {diagnostic}\n"
     stored = (log_dir / f"operation_{op.id}.log").read_text()
-    assert "private-secret" not in stored
+    assert secret not in stored
     assert "permission denied" in stored
-    assert "private-secret" not in job.logs
+    assert secret not in job.logs
+    assert "***" in stored

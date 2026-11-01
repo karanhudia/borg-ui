@@ -23,3 +23,9 @@
 - [x] Verify all affected restore, notification, operation, API, v2 and agent suites: 193 tests passed. All 36 frontend translation/formatter tests passed; all four locales retain key parity. Ruff lint/format and diff whitespace checks passed. Existing dependency deprecations and an existing async-mock warning remain.
 
 No real notifications were sent; tests mock transport. Existing failure verdicts, warnings with extracted files, unknown agent file counts and SSH mount cleanup remain covered. No components, translations, protocol or version changed in this follow-up.
+
+## Review follow-up: authorization credentials
+
+- [x] Reproduce Bearer and Basic credentials leaking through the shared redactor and into restore operation log files: eight regressions failed before the fix.
+- [x] Mask Authorization credentials in the shared redactor, including case-insensitive headers and JSON/Python dict diagnostics. Preserve the scheme, surrounding diagnostics, line boundaries and repeated-redaction behavior.
+- [x] Verify both `job.logs` and its stored file exclude the credentials. All 200 redaction, restore-facade, restore-service, agent-delegation, restore-error and notification tests pass. Ruff lint/format and diff whitespace checks pass; existing dependency deprecations and the async-mock warning remain.
