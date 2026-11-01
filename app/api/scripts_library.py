@@ -15,6 +15,7 @@ from collections import Counter
 from pathlib import Path
 import os
 import hashlib
+import re
 import secrets
 
 from app.database.database import get_db
@@ -413,14 +414,23 @@ async def create_script(
         # is saved, and they outlive deleted plans. Reuse an identical one, under its
         # own name or a numbered copy; give an edited one the next free name instead
         # of refusing the save.
-        name, n = script_data.name, 1
-        while existing:
-            if _same_generated_script(existing, script_data):
-                return _script_create_response(existing)
+        # Copies can have gaps (a deleted "(2)" next to a "(3)"), so look at all of them.
+        base = script_data.name
+        copy_name = re.compile(rf"{re.escape(base)} \(\d+\)")
+        copies = {
+            script.name: script
+            for script in db.query(Script)
+            .filter(Script.name.startswith(base, autoescape=True))
+            .all()
+            if script.name == base or copy_name.fullmatch(script.name)
+        }
+        for script in copies.values():
+            if _same_generated_script(script, script_data):
+                return _script_create_response(script)
+        n = 2
+        while f"{base} ({n})" in copies:
             n += 1
-            name = f"{script_data.name} ({n})"
-            existing = db.query(Script).filter(Script.name == name).first()
-        script_data = script_data.model_copy(update={"name": name})
+        script_data = script_data.model_copy(update={"name": f"{base} ({n})"})
     elif existing:
         raise HTTPException(
             status_code=400,

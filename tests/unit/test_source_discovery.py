@@ -1160,9 +1160,15 @@ class TestSourceDiscovery:
         ("returncode", "stderr", "warning_code"),
         [
             # ssh connected; the remote shell failed after printing one result.
-            (1, "sh: 3: find: not found", "SCAN_FAILED"),
+            (1, "BORG_UI_PROBE_STARTED\nsh: 3: find: not found", "SCAN_FAILED"),
             # A successful run can still print an ssh banner on stderr.
-            (0, "ssh: Authorized users only", None),
+            (0, "ssh: Authorized users only\nBORG_UI_PROBE_STARTED", None),
+            # A banner and a probe failure together are still a probe failure.
+            (
+                127,
+                "ssh: Authorized users only\nBORG_UI_PROBE_STARTED\nfind: not found",
+                "SCAN_FAILED",
+            ),
         ],
     )
     def test_database_scan_remote_probe_failure_is_not_a_connection_failure(
@@ -1223,7 +1229,8 @@ class TestSourceDiscovery:
         warnings = response.json()["warnings"]
         assert [w["code"] for w in warnings] == ([warning_code] if warning_code else [])
         if warning_code:
-            assert stderr in warnings[0]["message"]
+            assert "not found" in warnings[0]["message"]
+            assert "BORG_UI_PROBE_STARTED" not in warnings[0]["message"]
 
     def test_remote_probe_script_fails_loudly_without_find(self, tmp_path):
         script = source_discovery._build_remote_probe_script(

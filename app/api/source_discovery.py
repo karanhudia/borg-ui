@@ -1560,6 +1560,9 @@ def _detect_template(
     return detections[0] if detections else None
 
 
+PROBE_STARTED_MARKER = "BORG_UI_PROBE_STARTED"
+
+
 def _build_remote_probe_script(
     paths: list[str],
     commands: set[str],
@@ -1574,6 +1577,7 @@ def _build_remote_probe_script(
     # find would look like a scan that found nothing. Fail loudly instead.
     lines = [
         "set +e",
+        f"echo {PROBE_STARTED_MARKER} >&2",
         "command -v find >/dev/null 2>&1 || { echo 'find: not found' >&2; exit 127; }",
     ]
 
@@ -1883,13 +1887,11 @@ async def _scan_remote_database_paths(
         if os.path.exists(key_file_path):
             os.unlink(key_file_path)
 
-    stderr = (result.stderr or "").strip()
-    # Like the container scan: only ssh's own exit (255) means no connection. Any
-    # other non-zero exit came from the probe on a host we did reach. A successful
-    # run can still print an ssh banner on stderr, so only a failed one is checked.
-    if result.returncode != 0 and (
-        result.returncode == 255 or "ssh:" in stderr.lower()
-    ):
+    # The probe writes a marker to stderr first, so a failed run without it never
+    # reached the host. Banners ssh prints don't decide anything.
+    probe_ran = PROBE_STARTED_MARKER in (result.stderr or "")
+    stderr = (result.stderr or "").replace(PROBE_STARTED_MARKER, "").strip()
+    if result.returncode != 0 and not probe_ran:
         return _failure_response(
             status_code=502,
             scan_target=scan_target,

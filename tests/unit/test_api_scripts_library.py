@@ -919,6 +919,23 @@ class TestGeneratedScriptNameReuse:
         assert again.json()["id"] == edited.json()["id"]
         assert again.json()["name"] == "Export Docker container: web (2)"
 
+    def test_identical_copy_after_a_deleted_copy_is_still_reused(
+        self, test_client, admin_headers, test_db
+    ):
+        self._create(test_client, admin_headers)
+        self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        third = self._create(test_client, admin_headers, content="#!/bin/sh\necho 3\n")
+        test_db.query(Script).filter(
+            Script.name == "Export Docker container: web (2)"
+        ).delete()
+        test_db.commit()
+
+        again = self._create(test_client, admin_headers, content="#!/bin/sh\necho 3\n")
+        other = self._create(test_client, admin_headers, content="#!/bin/sh\necho 4\n")
+
+        assert again.json()["id"] == third.json()["id"]
+        assert other.json()["name"] == "Export Docker container: web (2)"
+
     def test_long_names_cut_to_the_same_prefix_keep_separate_files(
         self, test_client, admin_headers
     ):
