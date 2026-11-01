@@ -1336,11 +1336,14 @@ def storage_payload(summary: Optional[StorageSummary]) -> Optional[dict]:
     }
 
 
-def _borg_result_error(result: Dict[str, Any]) -> Optional[str]:
+def _borg_result_error(
+    result: Dict[str, Any], *, for_display: bool = True
+) -> Optional[str]:
+    """Keep raw reasons for classification; bound/redact only displayed text."""
     for key in ("error", "stderr", "stdout"):
         value = result.get(key)
         if isinstance(value, str) and value.strip():
-            return bounded_operation_diagnostic(value)
+            return bounded_operation_diagnostic(value) if for_display else value.strip()
 
     return_code = result.get("return_code")
     if return_code is not None:
@@ -3271,11 +3274,14 @@ async def _import_rclone_repository_record(
             storage.last_sync_error = (
                 verify_result.get("error") or "Borg verification failed"
             )
-            error_msg = _borg_result_error(verify_result) or "Unknown error"
+            raw_error_msg = (
+                _borg_result_error(verify_result, for_display=False) or "Unknown error"
+            )
+            error_msg = bounded_operation_diagnostic(raw_error_msg)
             # Mounted-cache rclone imports are Borg 1 only; invalid paths and
             # passphrase refusals stay user-correctable, like direct imports.
             user_refusal = any(
-                marker in error_msg.lower()
+                marker in raw_error_msg.lower()
                 for marker in ("passphrase", "encrypted", "not a valid repository")
             )
             raise HTTPException(
@@ -3375,14 +3381,20 @@ async def _import_direct_rclone_repository_record(
                 keyfile_path=keyfile_path,
             )
 
-        error_msg = _borg_result_error(verify_result) or "Unknown error"
-        if "passphrase" in error_msg.lower() or "encrypted" in error_msg.lower():
+        raw_error_msg = (
+            _borg_result_error(verify_result, for_display=False) or "Unknown error"
+        )
+        error_msg = bounded_operation_diagnostic(raw_error_msg)
+        if (
+            "passphrase" in raw_error_msg.lower()
+            or "encrypted" in raw_error_msg.lower()
+        ):
             raise HTTPException(
                 status_code=400,
                 detail={"key": "backend.errors.repo.encryptedPassphraseIncorrect"},
             )
         # Borg 2 only: not a repository, or one another beta wrote
-        if unreadable := borg2_unreadable_repository_detail(error_msg):
+        if unreadable := borg2_unreadable_repository_detail(raw_error_msg):
             raise HTTPException(status_code=400, detail=unreadable)
         raise HTTPException(
             status_code=repository_failure_status(verify_result),
@@ -4306,15 +4318,21 @@ async def import_repository(
                     keyfile_path=keyfile_path,
                 )
 
-            error_msg = _borg_result_error(verify_result) or "Unknown error"
+            raw_error_msg = (
+                _borg_result_error(verify_result, for_display=False) or "Unknown error"
+            )
+            error_msg = bounded_operation_diagnostic(raw_error_msg)
 
-            # Provide helpful error messages
-            if "passphrase" in error_msg.lower() or "encrypted" in error_msg.lower():
+            # Classify from the full reason, before redaction or display truncation.
+            if (
+                "passphrase" in raw_error_msg.lower()
+                or "encrypted" in raw_error_msg.lower()
+            ):
                 raise HTTPException(
                     status_code=400,
                     detail={"key": "backend.errors.repo.encryptedPassphraseIncorrect"},
                 )
-            elif "not a valid repository" in error_msg.lower():
+            elif "not a valid repository" in raw_error_msg.lower():
                 raise HTTPException(
                     status_code=400,
                     detail={

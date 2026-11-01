@@ -177,3 +177,177 @@ def test_update_unverified_path_preserves_reason_and_original_path(
     initialize.assert_not_awaited()
     test_db.refresh(repo)
     assert repo.path == "/tmp/original-recovery"
+
+
+@pytest.mark.parametrize("route", ["import", "update"])
+@pytest.mark.parametrize("return_code,status", [(21, 403), (19, 409), (2, 500)])
+def test_borg1_exit_code_reaches_real_verification_consumer(
+    test_client, test_db, admin_headers, tmp_path, route, return_code, status
+):
+    from app.database.models import Repository
+
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "config").write_text("[repository]\n")
+    repo = Repository(
+        name="numeric-probe",
+        path="/tmp/original-numeric",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+    )
+    if route == "update":
+        test_db.add(repo)
+        test_db.commit()
+    with (
+        patch(
+            "app.services.repository_service.borg._execute_command",
+            new=AsyncMock(
+                return_value={
+                    "success": False,
+                    "return_code": return_code,
+                    "stderr": "Fehler ohne englische Kennung",
+                }
+            ),
+        ) as execute,
+        patch(
+            "app.api.repositories.BorgRouter.initialize_repository", new=AsyncMock()
+        ) as initialize,
+    ):
+        if route == "import":
+            response = test_client.post(
+                "/api/repositories/import",
+                json={
+                    "name": "numeric-probe",
+                    "path": str(repo_path),
+                    "encryption": "none",
+                },
+                headers=admin_headers,
+            )
+        else:
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": str(repo_path)},
+                headers=admin_headers,
+            )
+    assert response.status_code == status, response.text
+    execute.assert_awaited_once()
+    assert (
+        response.json()["detail"]["params"]["error"] == "Fehler ohne englische Kennung"
+    )
+    initialize.assert_not_awaited()
+    if route == "update":
+        test_db.refresh(repo)
+        assert repo.path == "/tmp/original-numeric"
+    else:
+        assert test_db.query(Repository).filter_by(name="numeric-probe").first() is None
+
+
+@pytest.mark.parametrize("route", ["import", "cached", "direct", "update"])
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "passphrase supplied in BORG_PASSPHRASE is incorrect.",
+        "is not a valid repository",
+    ],
+)
+def test_middle_of_long_failure_remains_available_for_classification(
+    test_client, test_db, admin_headers, tmp_path, route, marker
+):
+    from app.database.models import Repository, RepositoryStorage, RcloneRemote
+    from tests.unit.test_api_rclone import _enable_borg_v2
+
+    reason = "prefix\n" * 600 + marker + "\npassword=private-value\n" + "suffix\n" * 600
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "config").write_text("[repository]\n")
+    payload = {"name": "long-probe", "path": str(repo_path), "encryption": "none"}
+    if route == "direct":
+        _enable_borg_v2(test_db)
+        payload.update(
+            path="rclone:remote:long-probe",
+            borg_version=2,
+            storage_backend="rclone_direct",
+        )
+    elif route == "cached":
+        _enable_borg_v2(test_db)
+        remote = RcloneRemote(
+            name="long-remote", provider="s3", config_source="managed"
+        )
+        test_db.add(remote)
+        test_db.commit()
+        payload.update(
+            storage_backend="rclone",
+            rclone_remote_id=remote.id,
+            rclone_remote_path="long-probe",
+            rclone_sync_policy="manual",
+        )
+    elif route == "update":
+        repo = Repository(
+            name="long-probe",
+            path="/tmp/original-long",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+    with (
+        patch(
+            "app.api.repositories.verify_existing_repository",
+            new=AsyncMock(return_value={"success": False, "stderr": reason}),
+        ),
+        patch(
+            "app.api.repositories.BorgRouter.verify_repository",
+            new=AsyncMock(return_value={"success": False, "stderr": reason}),
+        ),
+        patch(
+            "app.api.repositories.rclone_repository_service.cache_root",
+            str(tmp_path / "cache"),
+        ),
+        patch(
+            "app.api.repositories.rclone_repository_service.hydrate_repository",
+            new=AsyncMock(return_value={"sync_status": "current"}),
+        ),
+        patch(
+            "app.api.repositories.BorgRouter.initialize_repository",
+            new=AsyncMock(
+                return_value={"success": False, "stderr": "probe initialization denied"}
+            ),
+        ) as initialize,
+    ):
+        if route == "update":
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": str(repo_path)},
+                headers=admin_headers,
+            )
+        else:
+            response = test_client.post(
+                "/api/repositories/import", json=payload, headers=admin_headers
+            )
+    if route == "update" and "valid repository" in marker:
+        # Existing path-switch semantics initialize a confirmed empty/non-repository target.
+        initialize.assert_awaited_once()
+        assert response.status_code == 500
+    else:
+        assert response.status_code == 400, response.text
+        initialize.assert_not_awaited()
+        if route != "cached":
+            expected = (
+                "encryptedPassphraseIncorrect"
+                if "passphrase" in marker
+                else "borg2RepositoryNotReadable"
+                if route == "direct"
+                else "notValidBorgRepository"
+            )
+            assert response.json()["detail"]["key"] == f"backend.errors.repo.{expected}"
+    assert "private-value" not in response.text
+    if route == "cached":
+        assert len(response.json()["detail"]["params"]["error"]) <= 2000
+        assert test_db.query(RepositoryStorage).count() == 0
+    if route == "update":
+        test_db.refresh(repo)
+        assert repo.path == "/tmp/original-long"
+    else:
+        assert test_db.query(Repository).filter_by(name="long-probe").first() is None
