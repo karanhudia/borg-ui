@@ -22,3 +22,11 @@ Code review identified that the backup failure epilogue preserves keyed JSON exc
 - [x] Verify complete affected suites, lint/format and locale parity, then commit.
 
 **Follow-up verification:** Full backup suite: 82 passed, 6 existing skips. Four end-to-end scenarios cover inferred missing connection, explicitly selected missing connection, SSHFS permission failure and an oversized diagnostic with a quoted secret and a final causal hint. Original mount exceptions remain chained. Eight frontend tests pass across all four languages, including historical-error compatibility. Locale parity, targeted Python/frontend lint and formatting, and whitespace checks pass. Existing dependency and async-mock warnings remain.
+
+## Authorization credential redaction review fix
+
+- [x] Reproduce credential persistence in four end-to-end mount-error scenarios: Bearer, Basic, key-value authorization and JSON-escaped authorization fields.
+- [x] Reuse the shared authorization redactor and its regression cases from PR #1506, retaining the existing diagnostic bounds and failure handling.
+- [x] Verify backup/redaction coverage: 166 passed, 6 existing skips. Mount and path-confinement coverage: 115 passed, 2 existing skips. Ruff lint/format and whitespace checks pass. Existing dependency warnings remain.
+
+No mount behavior, retry policy, translation or version changed.

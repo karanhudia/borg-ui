@@ -3422,6 +3422,10 @@ class TestSourcePreparationFailures:
         "missing_selected_connection",
         "mount_failure",
         "long_mount_failure",
+        "bearer_mount_failure",
+        "basic_mount_failure",
+        "key_value_mount_failure",
+        "escaped_mount_failure",
     ],
 )
 async def test_execute_backup_records_source_preparation_cause(
@@ -3462,6 +3466,14 @@ async def test_execute_backup_records_source_preparation_cause(
         send_backup_failure=AsyncMock(),
     )
     mount_error = "SFTP permission denied password=mount-secret"
+    authorization_errors = {
+        "bearer_mount_failure": "Authorization: Bearer mount-secret",
+        "basic_mount_failure": "Authorization: Basic bW91bnQtc2VjcmV0",
+        "key_value_mount_failure": "authorization='Bearer mount-secret'",
+        "escaped_mount_failure": r'{"message":"{\"Authorization\": \"Bearer mount-secret\"}"}',
+    }
+    if scenario in authorization_errors:
+        mount_error = f"SFTP permission denied {authorization_errors[scenario]}"
     if scenario == "long_mount_failure":
         mount_error = (
             "SFTP permission denied password='"
@@ -3526,6 +3538,7 @@ async def test_execute_backup_records_source_preparation_cause(
     )
     assert reason in detail["params"]["error"]
     assert "mount-secret" not in failed.error_message
+    assert "bW91bnQtc2VjcmV0" not in failed.error_message
     assert len(detail["params"]["error"]) <= 1000
     if scenario == "long_mount_failure":
         assert "final mount cause" in detail["params"]["error"]
