@@ -3,12 +3,26 @@ Database fixtures for testing
 """
 
 import pytest
+from types import MappingProxyType
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
 from app.database.database import Base
 from app.database.models import Repository, User  # noqa: F401 — ensures all models register with Base.metadata
+
+
+@pytest.fixture(scope="session")
+def fixture_password_hashes():
+    """Reuse immutable fixed credentials hashed at the real production cost."""
+    from app.core.security import get_password_hash
+
+    return MappingProxyType(
+        {
+            "testpass123": get_password_hash("testpass123"),
+            "admin123": get_password_hash("admin123"),
+        }
+    )
 
 
 @pytest.fixture(scope="function")
@@ -57,13 +71,11 @@ def db_session_commit(db_engine):
 
 
 @pytest.fixture
-def sample_user(db_session: Session):
+def sample_user(db_session: Session, fixture_password_hashes):
     """Create a sample user for testing"""
-    from app.core.security import get_password_hash
-
     user = User(
         username="testuser",
-        password_hash=get_password_hash("testpass123"),
+        password_hash=fixture_password_hashes["testpass123"],
         is_active=True,
     )
     db_session.add(user)
