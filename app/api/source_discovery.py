@@ -1570,7 +1570,12 @@ def _build_remote_probe_script(
     and emits one MATCH line per discovered DB signature, plus EXIST lines for
     each root and COMMAND lines for each client CLI. Output is tab-separated;
     see _parse_remote_probe_output for the format."""
-    lines = ["set +e"]
+    # find's stderr is muted and a pipeline hides its exit, so a host without
+    # find would look like a scan that found nothing. Fail loudly instead.
+    lines = [
+        "set +e",
+        "command -v find >/dev/null 2>&1 || { echo 'find: not found' >&2; exit 127; }",
+    ]
 
     # Build the `-name X -o -name Y ...` prune clause once. ignore_patterns
     # are pre-validated to allowed chars only, so they are safe to inline.
@@ -1880,8 +1885,11 @@ async def _scan_remote_database_paths(
 
     stderr = (result.stderr or "").strip()
     # Like the container scan: only ssh's own exit (255) means no connection. Any
-    # other non-zero exit came from the probe on a host we did reach.
-    if result.returncode == 255 or "ssh:" in stderr.lower():
+    # other non-zero exit came from the probe on a host we did reach. A successful
+    # run can still print an ssh banner on stderr, so only a failed one is checked.
+    if result.returncode != 0 and (
+        result.returncode == 255 or "ssh:" in stderr.lower()
+    ):
         return _failure_response(
             status_code=502,
             scan_target=scan_target,

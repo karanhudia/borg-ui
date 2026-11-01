@@ -15,6 +15,7 @@ from collections import Counter
 from pathlib import Path
 import os
 import hashlib
+import secrets
 
 from app.database.database import get_db
 from app.database.models import (
@@ -153,9 +154,10 @@ def generate_script_filename(name: str, script_id: Optional[int] = None) -> str:
         name_hash = hashlib.md5(f"{script_id}_{name}".encode()).hexdigest()[:8]
         return f"{safe_name}_{name_hash}.sh"
     else:
-        # For new scripts, add timestamp
+        # For new scripts, add timestamp, plus a random part: names that differ
+        # only after the 50-character cut can be created in the same second.
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return f"{safe_name}_{timestamp}.sh"
+        return f"{safe_name}_{timestamp}_{secrets.token_hex(4)}.sh"
 
 
 def write_script_file(file_path: Path, content: str) -> None:
@@ -408,13 +410,17 @@ async def create_script(
     existing = db.query(Script).filter(Script.name == script_data.name).first()
     if existing and script_data.category == "template":
         # Generated source scripts are sent again every time a plan with that source
-        # is saved, and they outlive deleted plans. Reuse an identical one; give an
-        # edited one the next free name instead of refusing the save.
-        if _same_generated_script(existing, script_data):
-            return _script_create_response(existing)
-        script_data = script_data.model_copy(
-            update={"name": _next_free_script_name(db, script_data.name)}
-        )
+        # is saved, and they outlive deleted plans. Reuse an identical one, under its
+        # own name or a numbered copy; give an edited one the next free name instead
+        # of refusing the save.
+        name, n = script_data.name, 1
+        while existing:
+            if _same_generated_script(existing, script_data):
+                return _script_create_response(existing)
+            n += 1
+            name = f"{script_data.name} ({n})"
+            existing = db.query(Script).filter(Script.name == name).first()
+        script_data = script_data.model_copy(update={"name": name})
     elif existing:
         raise HTTPException(
             status_code=400,
@@ -506,13 +512,6 @@ def _same_generated_script(existing: Script, script_data: ScriptCreate) -> bool:
         return read_script_file(existing.file_path) == script_data.content
     except HTTPException:
         return False
-
-
-def _next_free_script_name(db: Session, name: str) -> str:
-    n = 2
-    while db.query(Script).filter(Script.name == f"{name} ({n})").first():
-        n += 1
-    return f"{name} ({n})"
 
 
 def _script_create_response(script: Script) -> ScriptResponse:

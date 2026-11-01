@@ -909,6 +909,27 @@ class TestGeneratedScriptNameReuse:
         assert edited.json()["name"] == "Export Docker container: web (2)"
         assert again.json()["name"] == "Export Docker container: web (3)"
 
+    def test_saving_an_edited_generated_script_again_reuses_its_copy(
+        self, test_client, admin_headers
+    ):
+        self._create(test_client, admin_headers)
+        edited = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        again = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+
+        assert again.json()["id"] == edited.json()["id"]
+        assert again.json()["name"] == "Export Docker container: web (2)"
+
+    def test_long_names_cut_to_the_same_prefix_keep_separate_files(
+        self, test_client, admin_headers
+    ):
+        long_name = "Export Docker container: " + "x" * 60
+        first = self._create(test_client, admin_headers, name=long_name)
+        edited = self._create(
+            test_client, admin_headers, name=long_name, content="#!/bin/sh\necho 2\n"
+        )
+
+        assert first.json()["file_path"] != edited.json()["file_path"]
+
     def test_custom_script_name_clash_still_refused(self, test_client, admin_headers):
         assert (
             self._create(test_client, admin_headers, category="custom").status_code

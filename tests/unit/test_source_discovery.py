@@ -1156,8 +1156,24 @@ class TestSourceDiscovery:
             "sqlite",
         }
 
+    @pytest.mark.parametrize(
+        ("returncode", "stderr", "warning_code"),
+        [
+            # ssh connected; the remote shell failed after printing one result.
+            (1, "sh: 3: find: not found", "SCAN_FAILED"),
+            # A successful run can still print an ssh banner on stderr.
+            (0, "ssh: Authorized users only", None),
+        ],
+    )
     def test_database_scan_remote_probe_failure_is_not_a_connection_failure(
-        self, test_client, admin_headers, test_db, monkeypatch
+        self,
+        test_client,
+        admin_headers,
+        test_db,
+        monkeypatch,
+        returncode,
+        stderr,
+        warning_code,
     ):
         ssh_key = SSHKey(
             name="source-probe-failed-key",
@@ -1180,11 +1196,10 @@ class TestSourceDiscovery:
         test_db.refresh(connection)
 
         def fake_remote_probe(**kwargs):
-            # ssh connected; the remote shell failed after printing one result.
             return SimpleNamespace(
-                returncode=1,
+                returncode=returncode,
                 stdout="EXIST\t/srv/postgresql\t1\n",
-                stderr="sh: 3: find: not found",
+                stderr=stderr,
             )
 
         monkeypatch.setattr(
@@ -1205,10 +1220,25 @@ class TestSourceDiscovery:
         )
 
         assert response.status_code == 200
-        warning = response.json()["warnings"][0]
-        assert warning["code"] == "SCAN_FAILED"
-        assert "find: not found" in warning["message"]
-        assert "Could not connect" not in warning["message"]
+        warnings = response.json()["warnings"]
+        assert [w["code"] for w in warnings] == ([warning_code] if warning_code else [])
+        if warning_code:
+            assert stderr in warnings[0]["message"]
+
+    def test_remote_probe_script_fails_loudly_without_find(self, tmp_path):
+        script = source_discovery._build_remote_probe_script(
+            ["/srv"], set(), max_depth=2, ignore_patterns=[]
+        )
+
+        result = subprocess.run(
+            ["/bin/sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": str(tmp_path)},
+        )
+
+        assert result.returncode == 127
+        assert "find: not found" in result.stderr
 
     def test_database_scan_walks_recursively_to_find_nested_db(
         self, test_client, admin_headers, tmp_path, monkeypatch
