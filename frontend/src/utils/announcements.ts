@@ -22,8 +22,10 @@ interface ParsedVersion {
 }
 
 function parseVersion(version: string): ParsedVersion {
-  const trimmed = version.trim().replace(/^v/i, '')
-  const [corePart = '0.0.0', prereleasePart] = trimmed.split('-', 2)
+  const trimmed = version.trim().replace(/^v/i, '').split('+', 1)[0]
+  const separator = trimmed.indexOf('-')
+  const corePart = separator === -1 ? trimmed : trimmed.slice(0, separator)
+  const prereleasePart = separator === -1 ? undefined : trimmed.slice(separator + 1)
   const core = corePart
     .split('.')
     .map((part) => Number.parseInt(part, 10))

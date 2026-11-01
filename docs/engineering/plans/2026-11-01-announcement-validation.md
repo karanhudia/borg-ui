@@ -11,3 +11,5 @@ Evidence: production 2.4.5 reports `parseVersion` calling `.trim()` on undefined
 The feed is owned by `docs/announcements.json` and deployed by `updates-worker`; local fallback lives at `frontend/src/data/announcements.json`. Both remain unchanged unless an actual malformed content item is found.
 
 Verification reproduced the exact undefined `.trim()` crash both in the login announcement hook and the sidebar update hook. Both now guard runtime versions and cached entries. The production feed was fetched and checked against the repaired runtime validator: all 17 entries passed, so there is no malformed published item to repair.
+
+Review follow-up: prerelease versions accepted with build metadata compared differently from their equivalent bound, and hyphenated prerelease identifiers were truncated. Both regressions failed first; parsing now excludes build metadata and preserves the complete prerelease identifier. All six focused suites pass 49 tests, with TypeScript and changed-file formatting checks passing. Independent review found no issues.

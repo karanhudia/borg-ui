@@ -43,6 +43,20 @@ describe('announcements utils', () => {
     expect(compareVersions('2.0.0', '2.0.0-beta.4')).toBe(1)
   })
 
+  it('ignores build metadata when checking prerelease version bounds', () => {
+    expect(compareVersions('2.4.1-rc.1+build.2', '2.4.1-rc.1')).toBe(0)
+    expect(
+      isAnnouncementEligible(
+        { ...baseAnnouncement, min_app_version: '2.4.1-rc.1', max_app_version: '2.4.1-rc.1' },
+        { appVersion: '2.4.1-rc.1+build.2', plan: 'community', now: new Date() }
+      )
+    ).toBe(true)
+  })
+
+  it('preserves hyphens within prerelease identifiers', () => {
+    expect(compareVersions('2.4.1-rc-1', '2.4.1-rc-2')).toBeLessThan(0)
+  })
+
   it.each([undefined, null, 245, '', 'unknown', '   '])(
     'does not target a versioned announcement when the app version is %s',
     (appVersion) => {
