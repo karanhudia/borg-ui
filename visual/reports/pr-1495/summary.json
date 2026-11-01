@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-10-31T11:49:29.531Z",
+  "generatedAt": "2026-11-01T04:36:36.290Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1495 visual report",
-    "commitSha": "9db0d422b9c1",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/41198380965"
+    "commitSha": "ab9cdf1d93a5",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/41273288566"
   },
   "totals": {
     "baseline": 1250,
@@ -71,10 +71,10 @@
       }
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "fileName": "pages-cloudstorage--editing-remote--mobile.png",
+      "baselinePath": "images/baseline/pages-cloudstorage--editing-remote--mobile.png",
+      "actualPath": "images/actual/pages-cloudstorage--editing-remote--mobile.png",
+      "diffPath": "images/diff/pages-cloudstorage--editing-remote--mobile.png",
       "diffPixels": 362,
       "totalPixels": 329160,
       "diffRatio": 0.0010997691092477823,
@@ -93,9 +93,9 @@
       "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 532,
+      "diffPixels": 516,
       "totalPixels": 329160,
-      "diffRatio": 0.001616235265524365,
+      "diffRatio": 0.0015676266861100983,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -2700,6 +2700,9 @@
       "fileName": "components-wizard-rclone-remote-dialog--create-error.png"
     },
     {
+      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png"
+    },
+    {
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
     },
     {
@@ -3229,9 +3232,6 @@
     },
     {
       "fileName": "pages-cloudstorage--delete-confirmation.png"
-    },
-    {
-      "fileName": "pages-cloudstorage--editing-remote--mobile.png"
     },
     {
       "fileName": "pages-cloudstorage--editing-remote.png"
