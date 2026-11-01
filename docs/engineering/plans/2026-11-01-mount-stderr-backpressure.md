@@ -24,3 +24,7 @@ No timeout increase, version bump, host-key setting change, or missing-FUSE clas
 ## Review follow-up: real-child fixture timing
 
 Two new cases delay the real child by 0.3 seconds; success and timeout-diagnostic checks both failed with the original two 0.05-second fixture sleeps. Simulated five-second mount polls now wait up to two real seconds for the child's readiness signal and drained diagnostic, rather than depending on process scheduling speed. Other patched sleeps retain short ordinary yields so cancellation and unmount coverage stay meaningful. All 13 backpressure cases pass, with Ruff lint/format and whitespace checks passing. Independent review found no issues.
+
+## CI follow-up: path-confinement fixture
+
+The first backend CI shard exposed six failures in a path-confinement fixture that creates an uninitialized service and an inert subprocess. Reproduced all six locally before changing the fixture. Mock the process owner in those path-allocation tests; their confinement assertions remain active and the dedicated real-child suite still exercises process ownership, stderr drainage and cleanup. Both suites pass 44 tests; all six mount unit suites pass 138 tests with two existing planned-feature skips. Ruff lint/format and whitespace checks pass. Independent review found no issues.
