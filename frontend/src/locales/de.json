@@ -5811,7 +5811,7 @@
   "backend": {
     "errors": {
       "storage": {
-        "full": "Der Speicher ist voll oder das Kontingent ist ausgeschöpft. Schaffen Sie freien Speicher und prüfen Sie das Kontingent des Borg-UI-Datenbankvolumes und der betroffenen Speicher. Versuchen Sie es danach erneut. Es wurden keine Daten automatisch gelöscht.",
+        "full": "Der Speicher ist voll oder das Kontingent ist ausgeschöpft. Schaffen Sie freien Speicher und prüfen Sie das Kontingent des Borg-UI-Datenbankvolumes und der betroffenen Speicher. Versuchen Sie es danach erneut. Borg UI löscht keine Daten, um diesen Fehler zu beheben.",
         "io": "Der Speicher hat einen Ein-/Ausgabefehler gemeldet. Prüfen Sie Datenträger, Dateisystem und Einbindungen vor einem erneuten Versuch. Prüfen Sie den Vorgangsstatus, bevor Sie ihn erneut starten."
       },
       "auth": {

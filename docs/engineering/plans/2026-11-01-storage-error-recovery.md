@@ -24,3 +24,11 @@ Storage remediation on private user hosts requires their operators. No claim of 
 The 13 API/telemetry regressions and five cooldown regressions failed before implementation. The affected main, reporter, reconcile, runner and index suites pass 308 tests. Ruff lint/format, locale key and placeholder parity, and whitespace checks pass. Independent review exercised extended SQLite I/O codes and cyclic causes and found no issues. Existing deprecation/resource warnings remain.
 
 Follow-up validation: a short refresh interval regression proved four stored failures were insufficient to reach the six-hour cap. Inspect ten bounded verdicts instead; the five-minute interval now reaches the cap and intervals longer than six hours remain preserved. The reconcile/runner/index suites pass 230 tests, and independent reconcile verification passes 38 tests.
+
+## Review follow-up
+
+SQLAlchemy renders the failed statement and bound values in its wrapper text. Ten regressions reproduced false storage classification from query data, the resulting incorrect HTTP status, and a misleading telemetry key. The classifier now inspects original and causal exceptions without scanning copied wrapper text; exception reporting classifies the exception object before converting it to text. String-only handled Borg diagnostics retain their storage classification.
+
+The storage-full copy in all four locales now says Borg UI does not delete data to recover from the error; it makes no assertion about earlier prune/deletion work. Reporter, main and Borg-error suites pass 143 tests. Ruff lint/format, JSON formatting, locale parity, personal-path scan and whitespace checks pass.
+
+Independent review also reproduced copied SQL text inside outer HTTPException/RuntimeError messages. Four added regressions cover both wrappers with misleading full/I/O phrases; authoritative cause/context traversal prevents those false matches while genuine wrapped FULL/EIO failures still classify correctly. Final independent review found no remaining issues.

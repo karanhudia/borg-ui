@@ -12,6 +12,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
+from app.core.storage_errors import storage_failure
 from app.database.models import LicensingState, Operation, User
 from app.services import error_reporter
 from app.services.error_reporter import (
@@ -531,6 +532,77 @@ def test_handled_storage_failure_remains_actionable(sent, message):
     report_failure(kind="job", type_="archive_sync_failed", message=message)
     flush()
     assert sent[0]["props"]["handled"] is False
+
+
+@pytest.mark.parametrize("location", ["statement", "parameters"])
+@pytest.mark.parametrize(
+    "storage_text", ["database or disk is full", "[Errno 5] Input/output error"]
+)
+def test_sqlalchemy_query_data_does_not_classify_as_storage_failure(
+    location, storage_text
+):
+    statement = (
+        "SELECT :value" if location == "parameters" else f"SELECT '{storage_text}'"
+    )
+    params = {"value": storage_text} if location == "parameters" else {}
+    failure = OperationalError(
+        statement, params, sqlite3.OperationalError("no such table")
+    )
+    assert storage_text in str(failure)
+    assert storage_failure(failure) is None
+
+
+def test_sqlalchemy_query_data_does_not_set_storage_telemetry_key(sent):
+    failure = OperationalError(
+        "SELECT 'database or disk is full'",
+        {},
+        sqlite3.OperationalError("no such table"),
+    )
+    report_exception(failure, kind="request", status=500)
+    flush()
+    assert sent[0]["props"]["status"] == 500
+    assert "error_key" not in sent[0]["props"]
+
+
+@pytest.mark.parametrize("wrapper", ["http", "runtime"])
+@pytest.mark.parametrize(
+    "storage_text", ["database or disk is full", "[Errno 5] Input/output error"]
+)
+def test_copied_sqlalchemy_text_does_not_override_its_cause(
+    sent, wrapper, storage_text
+):
+    try:
+        try:
+            raise OperationalError(
+                f"SELECT '{storage_text}'",
+                {},
+                sqlite3.OperationalError("no such table"),
+            )
+        except OperationalError as cause:
+            if wrapper == "http":
+                raise HTTPException(500, detail=f"Failed request: {cause}") from cause
+            raise RuntimeError(f"Failed request: {cause}") from cause
+    except Exception as failure:
+        assert storage_failure(failure) is None
+        report_exception(failure, kind="request", status=500)
+    flush()
+    assert "error_key" not in sent[0]["props"]
+
+
+def test_sqlalchemy_query_data_keeps_unrelated_http_failure(test_db, sent):
+    def boom():
+        raise OperationalError(
+            "SELECT 'database or disk is full'",
+            {},
+            sqlite3.OperationalError("no such table"),
+        )
+
+    with _test_route("/api/__query_data", boom) as client:
+        response = client.get("/api/__query_data")
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal Server Error"}
+    flush()
+    assert "error_key" not in sent[0]["props"]
 
 
 def test_http_500_reports_its_cause_and_keeps_the_response(test_db, sent):

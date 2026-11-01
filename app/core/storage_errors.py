@@ -40,18 +40,23 @@ def storage_failure(error: BaseException | str) -> StorageFailure | None:
                 return "full"
             if code & 0xFF == sqlite3.SQLITE_IOERR:
                 return "io"
-        text = str(current)
-        text = text[:8192] + text[-8192:]
-        if _FULL.search(text):
-            return "full"
-        if _IO.search(text):
-            return "io"
+        original = getattr(current, "orig", None)
+        cause = None
         if isinstance(current, BaseException):
             cause = current.__cause__
             if cause is None and not current.__suppress_context__:
                 cause = current.__context__
-            original = getattr(current, "orig", None)
-            pending.extend(e for e in (cause, original) if isinstance(e, BaseException))
+        if not any(isinstance(e, BaseException) for e in (cause, original)):
+            # SQLAlchemy wrapper text includes SQL and bound values, which
+            # can be copied into outer exceptions too. Only inspect text
+            # when no authoritative underlying exception is available.
+            text = str(current)
+            text = text[:8192] + text[-8192:]
+            if _FULL.search(text):
+                return "full"
+            if _IO.search(text):
+                return "io"
+        pending.extend(e for e in (cause, original) if isinstance(e, BaseException))
     return None
 
 

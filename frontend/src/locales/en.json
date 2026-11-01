@@ -5811,7 +5811,7 @@
   "backend": {
     "errors": {
       "storage": {
-        "full": "Storage is full or its quota is exhausted. Free space and check the quota on the Borg UI database and affected storage volumes, then retry. No data was deleted automatically.",
+        "full": "Storage is full or its quota is exhausted. Free space and check the quota on the Borg UI database and affected storage volumes, then retry. Borg UI does not delete data to recover from this error.",
         "io": "Storage reported an input/output error. Check the affected disk, filesystem and mounts before retrying. Verify the operation state before submitting it again."
       },
       "auth": {
