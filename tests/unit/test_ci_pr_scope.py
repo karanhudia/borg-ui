@@ -1,6 +1,7 @@
 """CI routing must never turn incomplete evidence into permission to skip."""
 
 import importlib.util
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,66 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def render_concurrency_group(template, github):
+    """Resolve context references and || fallbacks in the workflow group."""
+
+    def expression(match):
+        for reference in match.group(1).split(" || "):
+            value = {"github": github}
+            for key in reference.strip().split("."):
+                value = value.get(key, "") if isinstance(value, dict) else ""
+            if value:
+                return str(value)
+        return ""
+
+    return re.sub(r"\$\{\{\s*(.*?)\s*\}\}", expression, template)
+
+
+@pytest.mark.parametrize("event", ["push", "schedule", "workflow_dispatch"])
+def test_security_non_pr_runs_never_share_a_pending_slot(event):
+    config = yaml.safe_load((ROOT / ".github/workflows/security.yml").read_text())
+    context = {
+        "workflow": "Security Scan",
+        "event_name": event,
+        "ref": "refs/heads/main",
+        "event": {},
+    }
+    groups = [
+        render_concurrency_group(
+            config["concurrency"]["group"], {**context, "run_id": run_id}
+        )
+        for run_id in (100, 101, 102)
+    ]
+    assert len(set(groups)) == 3
+
+
+def test_security_repeated_pr_runs_share_the_same_group():
+    config = yaml.safe_load((ROOT / ".github/workflows/security.yml").read_text())
+    context = {
+        "workflow": "Security Scan",
+        "event_name": "pull_request",
+        "ref": "refs/pull/42/merge",
+        "event": {"pull_request": {"number": 42}},
+    }
+    first = render_concurrency_group(
+        config["concurrency"]["group"], {**context, "run_id": 100}
+    )
+    second = render_concurrency_group(
+        config["concurrency"]["group"], {**context, "run_id": 101}
+    )
+    other = render_concurrency_group(
+        config["concurrency"]["group"],
+        {
+            **context,
+            "ref": "refs/pull/43/merge",
+            "event": {"pull_request": {"number": 43}},
+            "run_id": 102,
+        },
+    )
+    assert first == second
+    assert first != other
 
 
 def load(name):

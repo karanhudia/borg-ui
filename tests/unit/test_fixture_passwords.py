@@ -14,8 +14,12 @@ def test_fixed_password_hashes_cannot_be_mutated(fixture_password_hashes):
         fixture_password_hashes["testpass123"] = "changed"
 
 
-def test_user_fixtures_hash_fixed_passwords_once_without_weakening_bcrypt(tmp_path):
+def test_user_fixtures_hash_fixed_passwords_once_without_weakening_bcrypt(
+    tmp_path, monkeypatch
+):
     """Repeated users keep fresh database state while reusing two real hashes."""
+    # Parent selection must not deselect the independent child probe's tests.
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-k fixture_passwords")
     root = Path(__file__).resolve().parents[2]
     (tmp_path / "conftest.py").write_text("""
 import json
@@ -76,6 +80,7 @@ def test_real_user(request, db_session, iteration, fixture_name, password, usern
     db_session.commit()
 """)
     env = os.environ.copy()
+    env.pop("PYTEST_ADDOPTS", None)
     env["PYTHONPATH"] = str(root)
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "--confcutdir", str(tmp_path)],
