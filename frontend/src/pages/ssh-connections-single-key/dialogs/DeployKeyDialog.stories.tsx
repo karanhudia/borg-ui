@@ -83,6 +83,19 @@ export const WithKeyPicker: Story = {
   },
 }
 
+/** Custom setup keeps an extra key selected after resetting preset defaults. */
+export const CustomWithExtraKey: Story = {
+  args: {
+    initialForm: {
+      ...createConnectionForm(),
+      host: 'backup.example',
+      username: 'borg',
+      ssh_key_id: extraKey.id,
+    },
+    sshKeys: [systemKey, extraKey],
+  },
+}
+
 export const HetznerDefaults: Story = {
   args: {
     initialForm: {

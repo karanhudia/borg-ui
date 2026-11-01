@@ -147,6 +147,7 @@ export function DeployKeyDialog({
         host: current.host,
         username: current.username,
         password: current.password,
+        ssh_key_id: current.ssh_key_id,
       }
     })
     setHostError(undefined)
