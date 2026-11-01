@@ -1,30 +1,16 @@
 # Mount stderr backpressure recovery plan
 
-**Goal:** Prevent foreground Borg mount stderr from filling an unread pipe before mount readiness, without increasing its timeout.
+**Goal:** Prevent foreground Borg mount stderr from blocking readiness without increasing the mount timeout.
 
-**Evidence:** A child writing 2 MB of stderr cannot publish a readiness file until the pipe is drained. The mount readiness loop currently starts stderr=PIPE and reads only after process exit; waiting for exit can also block while unread bytes remain.
+**Evidence:** A child writing 2 MB to an unread stderr pipe blocks before publishing readiness. Pipe drainage required lifetime tasks, process groups and cancellation handling. The requested revision replaces that machinery with a regular temporary file.
 
-**Design:** Start a managed stderr drain immediately after spawning the foreground process. Retain bounded, redacted complete-line tail diagnostics and discard oversized lines rather than truncate a secret before redaction. Keep the managed process/drain referenced for its mounted lifetime. Stop and reap it on failure/cancellation/unmount; remove finished registrations. Preserve existing timeout, mount verification, FUSE classification, SSH host-key settings, and state format.
+**Design:** Create a private `borg_mount_` temporary directory per mount and pass its stderr file directly to the child. Close the parent's file handle after spawn. Record the directory in the existing `MountInfo.temp_root` field so normal unmount and startup orphan cleanup remove it. On early exit or readiness timeout, read at most the last 8 KB, discard an initial partial line, and apply the shared `redact_secrets` function. Unmount retains the existing PID termination path. Failed or cancelled startup kills and reaps its direct child and removes temporary resources.
 
-- [x] Write failing real-child regressions for readiness after large stderr, bounded/redacted exit diagnostics, cancellation cleanup, and active-mount unmount cleanup.
-- [x] Confirm the failures, implement the narrow process owner and wire it into spawn/readiness/failure/unmount boundaries.
-- [x] Update existing process fakes to emit actual EOF where needed, run mount/API suites and ruff, inspect lifecycle and commit without pushing.
+The file can grow while the mount lives; Borg is normally quiet after readiness. No truncation policy, private-key filter, reader task, process registry, new session or process-group signalling is introduced. Preserve readiness timing, FUSE classification, mount-path confinement, host-key settings and versions.
 
-## Verification and review repairs
+- [x] Replace the pipe-specific lifecycle tests with a compact real-child regression covering readiness, early exit and timeout after 2 MB of stderr; verify regular-file output, redaction and temporary-resource cleanup.
+- [x] Run the new regression against the pipe design and confirm all three cases fail because stderr is a pipe.
+- [x] Replace process ownership with the temporary file and bounded diagnostic reader; remove obsolete test-fixture accommodations.
+- [x] Run all mount unit suites, lint/format, whitespace and personal-path checks; independently review the final diff.
 
-- A real Python child writes 2 MB to stderr before publishing readiness; immediate drainage allows readiness and successful unmount/reaping. The original implementation failed the regression.
-- Diagnostics retain at most 8,192 redacted characters. Oversized raw lines are omitted as a whole before bounding; private-key PEM blocks are suppressed across lines/chunks. Regression checks include a 20 KB secret line and split-chunk PEM body.
-- Real-child tests cover mount cancellation, timeout diagnostics, shutdown cancellation with a child ignoring SIGTERM, natural exit, and read failure. Representative never-EOF tests require cancellation/await of the drainer even after shutdown deadlines.
-- Independent review reproduced inherited stderr remaining open after the direct child exited. Fresh foreground mounts now own a new session; shutdown terminates that group even after its leader exits. Persisted mount PID fallback is unchanged. Exit diagnostics wait is bounded and original mount failures survive cleanup errors.
-- Existing AsyncMock process fakes now emit EOF instead of returning an infinite stream of mock objects.
-- Final focused/nearest gate: **83 passed, 2 existing planned-feature skips** across backpressure, mount service, mount process mocks, and mount API tests. Ruff and diff whitespace checks pass. Existing dependency deprecation warnings remain.
-
-No timeout increase, version bump, host-key setting change, or missing-FUSE classification duplication.
-
-## Review follow-up: real-child fixture timing
-
-Two new cases delay the real child by 0.3 seconds; success and timeout-diagnostic checks both failed with the original two 0.05-second fixture sleeps. Simulated five-second mount polls now wait up to two real seconds for the child's readiness signal and drained diagnostic, rather than depending on process scheduling speed. Other patched sleeps retain short ordinary yields so cancellation and unmount coverage stay meaningful. All 13 backpressure cases pass, with Ruff lint/format and whitespace checks passing. Independent review found no issues.
-
-## CI follow-up: path-confinement fixture
-
-The first backend CI shard exposed six failures in a path-confinement fixture that creates an uninitialized service and an inert subprocess. Reproduced all six locally before changing the fixture. Mock the process owner in those path-allocation tests; their confinement assertions remain active and the dedicated real-child suite still exercises process ownership, stderr drainage and cleanup. Both suites pass 44 tests; all six mount unit suites pass 138 tests with two existing planned-feature skips. Ruff lint/format and whitespace checks pass. Independent review found no issues.
+**Verification:** All six affected mount unit suites pass 128 tests, with two existing planned-feature skips. Ruff lint/format, personal-path and whitespace checks pass. Independent review found no issues. Existing dependency warnings remain.

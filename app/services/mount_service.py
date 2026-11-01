@@ -17,7 +17,6 @@ import platform
 import re
 import json
 import shlex
-import signal
 from datetime import datetime, timezone
 from enum import Enum
 from dataclasses import dataclass, asdict
@@ -263,108 +262,18 @@ def _staging_dir(temp_root: str, relative: str) -> str:
     return target
 
 
-class _BorgMountProcess:
-    """Own a foreground mount and continuously drain its bounded diagnostics."""
+def _read_borg_mount_stderr(path: str) -> str:
+    """Read a bounded diagnostic without waiting for Borg or its helpers."""
+    from app.utils.redaction import redact_secrets
 
-    limit = 8192
-    stop_timeout = 2
-
-    def __init__(self, process, *, process_group=False):
-        self.process = process
-        self.process_group = process_group
-        self.diagnostic = ""
-        self._private_key_block = False
-        self.task = asyncio.create_task(self._drain())
-
-    def _record(self, line: bytes):
-        from app.utils.redaction import redact_secrets
-
-        # PEM bodies must stay suppressed across both lines and read chunks.
-        decoded = line.decode(errors="replace")
-        upper = decoded.upper()
-        if re.search(r"-----BEGIN [^-\r\n]*PRIVATE KEY-----", upper):
-            self._private_key_block = True
-            self.diagnostic = (self.diagnostic + "[private key omitted]\n")[
-                -self.limit :
-            ]
-        if self._private_key_block:
-            if re.search(r"-----END [^-\r\n]*PRIVATE KEY-----", upper):
-                self._private_key_block = False
-            return
-        # Whole bounded lines are redacted before bounding the retained tail.
-        text = redact_secrets(decoded)
-        self.diagnostic = (self.diagnostic + text + "\n")[-self.limit :]
-
-    async def _drain(self):
-        pending = b""
-        oversized = False
-        while chunk := await self.process.stderr.read(4096):
-            pieces = chunk.split(b"\n")
-            for index, piece in enumerate(pieces):
-                if not oversized:
-                    pending += piece
-                    if len(pending) > self.limit:
-                        if re.search(
-                            rb"-----BEGIN [^-\r\n]*PRIVATE KEY-----", pending.upper()
-                        ):
-                            self._private_key_block = True
-                        pending = b""
-                        oversized = True
-                if index < len(pieces) - 1:
-                    if oversized:
-                        self._record(b"[oversized stderr line omitted]")
-                    else:
-                        self._record(pending)
-                    pending = b""
-                    oversized = False
-        if oversized:
-            self._record(b"[oversized stderr line omitted]")
-        elif pending:
-            self._record(pending)
-        await self.process.wait()
-
-    def _signal(self, sig):
-        try:
-            if self.process_group:
-                # The owned session can still contain helpers after Borg exits.
-                os.killpg(self.process.pid, sig)
-            elif self.process.returncode is None:
-                self.process.send_signal(sig)
-        except ProcessLookupError:
-            pass
-
-    async def stop(self):
-        if self.task.done():
-            if self.task.cancelled() or self.task.exception() is not None:
-                self._signal(signal.SIGKILL)
-                await asyncio.wait_for(self.process.wait(), self.stop_timeout)
-            await asyncio.gather(self.task, return_exceptions=True)
-            return
-        try:
-            self._signal(signal.SIGTERM)
-            try:
-                await asyncio.wait_for(asyncio.shield(self.task), self.stop_timeout)
-            except asyncio.TimeoutError:
-                self._signal(signal.SIGKILL)
-                await asyncio.wait_for(asyncio.shield(self.task), self.stop_timeout)
-            except asyncio.CancelledError:
-                self._signal(signal.SIGKILL)
-                try:
-                    await asyncio.wait_for(asyncio.shield(self.task), self.stop_timeout)
-                except asyncio.TimeoutError:
-                    pass
-                raise
-        finally:
-            if not self.task.done():
-                self.task.cancel()
-            await asyncio.gather(self.task, return_exceptions=True)
-
-    async def finish_diagnostics(self):
-        try:
-            await asyncio.wait_for(asyncio.shield(self.task), 1)
-        except asyncio.TimeoutError:
-            # A helper may have inherited stderr after Borg itself exited.
-            await self.stop()
+    with open(path, "rb") as stderr_file:
+        size = stderr_file.seek(0, os.SEEK_END)
+        stderr_file.seek(max(0, size - 8192))
+        tail = stderr_file.read(8192)
+    if size > 8192:
+        # The first line may begin inside a secret value. Keep complete lines.
+        tail = tail.partition(b"\n")[2]
+    return redact_secrets(tail.decode(errors="replace")).strip()[-8192:]
 
 
 class MountService:
@@ -372,7 +281,6 @@ class MountService:
 
     def __init__(self):
         self.active_mounts: Dict[str, MountInfo] = {}
-        self._borg_processes: dict[str, _BorgMountProcess] = {}
         self.mount_base_dir = Path(settings.data_dir) / "mounts"
         self.mount_base_dir.mkdir(parents=True, exist_ok=True)
         self.state_file = Path(settings.data_dir) / "mount_state.json"
@@ -388,22 +296,6 @@ class MountService:
 
         # Clean up orphaned temp directories (from crashed processes)
         self._cleanup_orphaned_temp_dirs()
-
-    def _track_borg_process(
-        self, mount_id: str, process, *, process_group=False
-    ) -> _BorgMountProcess:
-        owner = _BorgMountProcess(process, process_group=process_group)
-        self._borg_processes[mount_id] = owner
-
-        def finished(task):
-            self._borg_processes.pop(mount_id, None)
-            if task.cancelled() or task.exception() is not None:
-                # A failed reader cannot leave a foreground child filling its pipe.
-                owner._signal(signal.SIGKILL)
-                logger.warning("Borg mount stderr drain stopped", mount_id=mount_id)
-
-        owner.task.add_done_callback(finished)
-        return owner
 
     def _load_state(self):
         """Load mount state from disk"""
@@ -465,6 +357,7 @@ class MountService:
                 dict.fromkeys(
                     [
                         *glob.glob("/tmp/sshfs_mount_*"),
+                        *glob.glob(os.path.join(tempfile.gettempdir(), "borg_mount_*")),
                         *[
                             path
                             for parent in stable_cache_parents
@@ -1223,7 +1116,8 @@ class MountService:
 
             mount_id = str(uuid.uuid4())
             temp_key_file = None
-            process_owner = None
+            process = None
+            temp_root = None
 
             logger.info(
                 "Mounting Borg archive",
@@ -1305,20 +1199,18 @@ class MountService:
                     has_borg_rsh="BORG_RSH" in env,
                 )
 
-                # Execute mount in foreground mode
-                # We'll start it and let it run in the background
-                process = await asyncio.create_subprocess_exec(
-                    *with_lock_wait(cmd, env),
-                    env=env,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.PIPE,
-                    stdin=asyncio.subprocess.DEVNULL,
-                    start_new_session=True,
-                )
+                # A file cannot exert pipe backpressure while the mount lives.
+                temp_root = tempfile.mkdtemp(prefix="borg_mount_")
+                stderr_path = os.path.join(temp_root, f"borg-mount-{mount_id}.stderr")
+                with open(stderr_path, "wb") as stderr_file:
+                    process = await asyncio.create_subprocess_exec(
+                        *with_lock_wait(cmd, env),
+                        env=env,
+                        stdout=asyncio.subprocess.DEVNULL,
+                        stderr=stderr_file,
+                        stdin=asyncio.subprocess.DEVNULL,
+                    )
 
-                process_owner = self._track_borg_process(
-                    mount_id, process, process_group=True
-                )
                 logger.info("Process created", mount_id=mount_id, pid=process.pid)
 
                 # Wait for the mount to initialize with retries
@@ -1338,14 +1230,9 @@ class MountService:
                     # Check if process is still running (it should be for successful mount)
                     if process.returncode is not None:
                         # Process exited - this means mount failed
-                        try:
-                            await process_owner.finish_diagnostics()
-                        except Exception:
-                            logger.warning(
-                                "Mount stderr did not close after exit",
-                                mount_id=mount_id,
-                            )
-                        error_msg = process_owner.diagnostic.strip() or "Unknown error"
+                        error_msg = (
+                            _read_borg_mount_stderr(stderr_path) or "Unknown error"
+                        )
 
                         logger.error(
                             "Borg mount process exited unexpectedly",
@@ -1398,14 +1285,7 @@ class MountService:
                         mount_point=mount_point,
                         waited_seconds=total_waited,
                     )
-                    try:
-                        await process_owner.stop()
-                    except Exception:
-                        logger.warning(
-                            "Mount process did not stop before deadline",
-                            mount_id=mount_id,
-                        )
-                    diagnostic = process_owner.diagnostic.strip()
+                    diagnostic = _read_borg_mount_stderr(stderr_path)
                     raise Exception(
                         f"Mount timeout: mount point not ready after {max_wait_seconds} seconds. Large repositories may need more time."
                         + (f"\n{diagnostic}" if diagnostic else "")
@@ -1421,6 +1301,7 @@ class MountService:
                     temp_key_file=temp_key_file,
                     repository_id=repository_id,
                     borg_version=borg_major(repository),
+                    temp_root=temp_root,
                     process_pid=process.pid,  # Store PID for cleanup
                 )
 
@@ -1438,14 +1319,12 @@ class MountService:
                 return mount_point, mount_id
 
             except BaseException as e:
-                # CancelledError also owns a live foreground child and pipe.
-                if process_owner is not None:
+                if process is not None and process.returncode is None:
                     try:
-                        await process_owner.stop()
-                    except Exception:
-                        logger.warning(
-                            "Failed to stop foreground mount", mount_id=mount_id
-                        )
+                        process.kill()
+                        await process.wait()
+                    except ProcessLookupError:
+                        pass
                 logger.error(
                     "Failed to mount Borg archive",
                     mount_id=mount_id,
@@ -1453,8 +1332,7 @@ class MountService:
                     repository_id=repository_id,
                 )
                 # Cleanup on failure
-                if temp_key_file and os.path.exists(temp_key_file):
-                    os.unlink(temp_key_file)
+                self._cleanup_temp_files(temp_root, temp_key_file)
                 if os.path.exists(mount_point) and not os.listdir(mount_point):
                     os.rmdir(mount_point)
                 raise
@@ -1520,11 +1398,7 @@ class MountService:
                 and mount_info.process_pid
             ):
                 try:
-                    owner = self._borg_processes.get(mount_id)
-                    if owner is not None:
-                        await owner.stop()
-                    else:
-                        await self._stop_persisted_borg_process(mount_info, mount_id)
+                    await self._stop_persisted_borg_process(mount_info, mount_id)
                 except Exception as e:
                     logger.warning(
                         "Failed to kill borg mount process",

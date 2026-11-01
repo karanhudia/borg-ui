@@ -52,13 +52,6 @@ def mount_service(tmp_path, monkeypatch):
     service._check_remote_is_file = AsyncMock(return_value=False)
     service._execute_sshfs_mount = AsyncMock()
     service._verify_mount_readable = AsyncMock()
-    # Path-allocation tests use an inert child; real pipe ownership is covered
-    # by test_mount_stderr_backpressure.py.
-    service._track_borg_process = Mock(
-        return_value=SimpleNamespace(
-            diagnostic="", stop=AsyncMock(), finish_diagnostics=AsyncMock()
-        )
-    )
     process = SimpleNamespace(pid=123, returncode=None)
     spawn = AsyncMock(return_value=process)
     monkeypatch.setattr(ms.asyncio, "create_subprocess_exec", spawn)
