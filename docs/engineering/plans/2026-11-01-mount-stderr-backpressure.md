@@ -20,3 +20,7 @@
 - Final focused/nearest gate: **83 passed, 2 existing planned-feature skips** across backpressure, mount service, mount process mocks, and mount API tests. Ruff and diff whitespace checks pass. Existing dependency deprecation warnings remain.
 
 No timeout increase, version bump, host-key setting change, or missing-FUSE classification duplication.
+
+## Review follow-up: real-child fixture timing
+
+Two new cases delay the real child by 0.3 seconds; success and timeout-diagnostic checks both failed with the original two 0.05-second fixture sleeps. Simulated five-second mount polls now wait up to two real seconds for the child's readiness signal and drained diagnostic, rather than depending on process scheduling speed. Other patched sleeps retain short ordinary yields so cancellation and unmount coverage stay meaningful. All 13 backpressure cases pass, with Ruff lint/format and whitespace checks passing. Independent review found no issues.

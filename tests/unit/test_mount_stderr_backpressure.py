@@ -72,11 +72,12 @@ async def test_exit_diagnostic_is_bounded_redacted_and_registration_removed():
 
 
 @pytest.fixture
-def real_child_mount(tmp_path):
+def real_child_mount(tmp_path, request):
     ready = tmp_path / "ready"
     spawned = []
     original_spawn = asyncio.create_subprocess_exec
     original_sleep = asyncio.sleep
+    startup_delay = getattr(request, "param", 0)
     repo = Repository(id=1, name="repo", path="/repository", repository_type="local")
     db = MagicMock()
 
@@ -95,7 +96,8 @@ def real_child_mount(tmp_path):
         child = await original_spawn(
             sys.executable,
             "-c",
-            "import sys,time,pathlib; sys.stderr.write('x'*2000000+'\\n'); sys.stderr.flush(); "
+            f"import sys,time,pathlib; time.sleep({startup_delay}); "
+            "sys.stderr.write('x'*2000000+'\\n'); sys.stderr.flush(); "
             "sys.stderr.write('password=hidden\\nmount still initializing\\n'); sys.stderr.flush(); "
             f"pathlib.Path({str(ready)!r}).touch(); time.sleep(60)",
             stderr=asyncio.subprocess.PIPE,
@@ -104,8 +106,22 @@ def real_child_mount(tmp_path):
         spawned.append(child)
         return child
 
-    async def poll(_):
-        await original_sleep(0.05)
+    async def poll(delay):
+        if delay != 5:
+            # The patch also affects cancellation/unmount test sleeps.
+            await original_sleep(min(delay, 0.01))
+            return
+
+        async def initialized():
+            while not ready.exists() or not any(
+                "mount still initializing" in owner.diagnostic
+                for owner in service._borg_processes.values()
+            ):
+                await original_sleep(0.01)
+
+        # Advance the simulated mount clock only after the real child has
+        # started and its diagnostics have drained, with a bounded real wait.
+        await asyncio.wait_for(initialized(), 2)
 
     with (
         patch("app.services.mount_service.settings") as settings,
@@ -139,6 +155,9 @@ def real_child_mount(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "real_child_mount", [0, 0.3], indirect=True, ids=["normal", "slow_child"]
+)
 async def test_mount_success_keeps_drain_until_unmount(real_child_mount):
     service, spawned, ready = real_child_mount
     try:
@@ -207,6 +226,9 @@ async def test_cancelling_stop_kills_a_child_that_ignores_term(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "real_child_mount", [0, 0.3], indirect=True, ids=["normal", "slow_child"]
+)
 async def test_readiness_timeout_keeps_bounded_diagnostic_and_reaps_child(
     real_child_mount,
 ):
