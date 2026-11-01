@@ -6283,6 +6283,7 @@
         "containerRestartedDuringRestore": "Container riavviato durante l'operazione di ripristino",
         "failedCreateDestinationDir": "Impossibile creare la directory di destinazione: {{error}}",
         "failedPrepareSourcePaths": "Impossibile preparare i percorsi sorgente: tutti i mount SSH falliti o nessun percorso valido",
+        "failedPrepareSourcePathsDetails": "Impossibile preparare un’origine del backup. Controlla la connessione, il percorso e i permessi di accesso. {{error}}",
         "restoreCanaryInsideSshMount": "Canary di ripristino non preparato: la sorgente SSH {{remotePath}} copre il percorso del canary, quindi prepararlo scriverebbe sull'host di origine. Imposta il controllo di ripristino di questo repository sulla modalità «Percorsi di prova selezionati» o «Verifica archivio completo».",
         "restoreCanaryMountTableUnavailable": "Canary di ripristino non preparato: impossibile leggere la tabella dei mount",
         "restoreCanaryReplaceFailed": "Canary di ripristino non preparato: impossibile rimuovere la copia precedente in {{path}}",

@@ -3341,12 +3341,13 @@ class TestSourcePreparationFailures:
         monkeypatch.setattr(
             "app.services.mount_service.mount_service.mount_ssh_paths_shared", mount
         )
-        with pytest.raises(RuntimeError, match="SFTP permission denied"):
+        with pytest.raises(RuntimeError, match="SFTP permission denied") as raised:
             await backup_service._prepare_source_paths(
                 [*local_paths, "ssh://borg@remote.test:22/data"],
                 42,
                 source_connection_id=connection_id,
             )
+        assert isinstance(raised.value.__cause__, PermissionError)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -3410,3 +3411,123 @@ class TestSourcePreparationFailures:
             await backup_service._prepare_source_paths(sources, 42)
         unmount.assert_awaited_once_with("mount-first")
         assert 42 not in backup_service.ssh_mounts
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "missing_connection",
+        "missing_selected_connection",
+        "mount_failure",
+        "long_mount_failure",
+    ],
+)
+async def test_execute_backup_records_source_preparation_cause(
+    backup_service, db_session, tmp_path, scenario
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "data").mkdir()
+    (repo_path / "config").write_text("[repository]\nversion = 1\n")
+    source_path = tmp_path / "source"
+    source_path.mkdir()
+    repo = Repository(
+        name="Source failure repo",
+        path=str(repo_path),
+        encryption="none",
+        repository_type="local",
+        compression="lz4",
+        source_directories=json.dumps(
+            [str(source_path), "ssh://borg@source.test:22/data"]
+        ),
+    )
+    db_session.add(repo)
+    if "mount_failure" in scenario:
+        db_session.add(SSHConnection(host="source.test", username="borg", port=22))
+    db_session.commit()
+    job = seed_job_operation(
+        db_session, "backup", repository=repo.path, status="pending"
+    )
+    db_session.commit()
+    job_id = job.id
+    session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
+    notifications = SimpleNamespace(
+        send_backup_start=AsyncMock(),
+        send_backup_success=AsyncMock(),
+        send_backup_warning=AsyncMock(),
+        send_backup_failure=AsyncMock(),
+    )
+    mount_error = "SFTP permission denied password=mount-secret"
+    if scenario == "long_mount_failure":
+        mount_error = (
+            "SFTP permission denied password='"
+            + "mount-secret " * 300
+            + "' "
+            + "context " * 300
+            + "final mount cause"
+        )
+    with (
+        patch("app.services.backup_service.SessionLocal", session_local),
+        patch.object(
+            backup_service,
+            "_execute_hooks",
+            AsyncMock(
+                return_value={
+                    "success": True,
+                    "execution_logs": [],
+                    "scripts_executed": 0,
+                    "scripts_failed": 0,
+                    "using_library": False,
+                }
+            ),
+        ),
+        patch(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            AsyncMock(side_effect=PermissionError(mount_error)),
+        ),
+        patch.object(
+            backup_service, "_calculate_and_update_size_background", AsyncMock()
+        ),
+        patch(
+            "app.services.backup_service.resolve_repo_ssh_key_file", return_value=None
+        ),
+        patch(
+            "app.services.backup_service.asyncio.create_task",
+            side_effect=_discard_background_task,
+        ),
+        patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec", AsyncMock()
+        ) as execute,
+        patch("app.services.backup_service.notification_service", notifications),
+        patch("app.services.backup_service.mqtt_service"),
+    ):
+        overrides = (
+            {
+                "source_directories": [str(source_path)],
+                "source_ssh_connection_id": 98765,
+            }
+            if scenario == "missing_selected_connection"
+            else {}
+        )
+        await backup_service.execute_backup(
+            job_id, repo.path, db=db_session, **overrides
+        )
+    db_session.expire_all()
+    failed = resolve_backup_job(db_session, job_id)
+    assert failed.status == "failed"
+    detail = json.loads(failed.error_message)
+    assert detail["key"] == "backend.errors.service.failedPrepareSourcePathsDetails"
+    reason = (
+        "SSH connection" if scenario.startswith("missing") else "SFTP permission denied"
+    )
+    assert reason in detail["params"]["error"]
+    assert "mount-secret" not in failed.error_message
+    assert len(detail["params"]["error"]) <= 1000
+    if scenario == "long_mount_failure":
+        assert "final mount cause" in detail["params"]["error"]
+    execute.assert_not_awaited()
+    notifications.send_backup_failure.assert_awaited_once()

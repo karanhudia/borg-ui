@@ -146,6 +146,22 @@ def _uses_remote_execution(job) -> bool:
     ).strip().lower() == "remote_direct"
 
 
+def _source_preparation_error_message(reason: str) -> str:
+    """Pass an actionable cause through the backup's keyed failure handler."""
+    from app.utils.redaction import redact_secrets
+
+    diagnostic = redact_secrets(reason)
+    if len(diagnostic) > 1000:
+        marker = "\n... [truncated] ...\n"
+        diagnostic = diagnostic[:200] + marker + diagnostic[-(800 - len(marker)) :]
+    return json.dumps(
+        {
+            "key": "backend.errors.service.failedPrepareSourcePathsDetails",
+            "params": {"error": diagnostic},
+        }
+    )
+
+
 def _restore_canary_error(key: str, **params: str) -> RuntimeError:
     """Source preparation failure carrying a translatable error key."""
     return RuntimeError(
@@ -1195,7 +1211,11 @@ class BackupService:
                         logger.error(
                             "Failed to parse SSH URL", path=path, job_id=job_id
                         )
-                        raise ValueError(f"Invalid backup source SSH URL: {path}")
+                        raise ValueError(
+                            _source_preparation_error_message(
+                                f"Invalid backup source SSH URL: {path}"
+                            )
+                        )
 
                     # Use provided connection_id if available, otherwise lookup by host/user/port
                     connection = None
@@ -1213,7 +1233,9 @@ class BackupService:
                                 job_id=job_id,
                             )
                             raise ValueError(
-                                f"SSH connection {source_connection_id} for backup source {path} was not found"
+                                _source_preparation_error_message(
+                                    f"SSH connection {source_connection_id} for backup source {path} was not found"
+                                )
                             )
                     else:
                         # Fallback: Find SSHConnection matching host/user/port
@@ -1237,7 +1259,9 @@ class BackupService:
                                 job_id=job_id,
                             )
                             raise ValueError(
-                                f"SSH connection for backup source {path} was not found"
+                                _source_preparation_error_message(
+                                    f"SSH connection for backup source {path} was not found"
+                                )
                             )
 
                     ssh_paths_by_connection[connection.id].append(
@@ -1324,7 +1348,9 @@ class BackupService:
                         job_id=job_id,
                     )
                     raise RuntimeError(
-                        f"Failed to prepare backup sources for SSH connection {connection_id}: {e}"
+                        _source_preparation_error_message(
+                            f"Failed to prepare backup sources for SSH connection {connection_id}: {e}"
+                        )
                     ) from e
 
             # Add local paths at the end. Borg UI's managed restore canary is a
@@ -2010,7 +2036,9 @@ class BackupService:
                         else:
                             error_msg = f"SSH connection {effective_source_ssh_connection_id} not found for remote source"
                             logger.error(error_msg, repository=repository)
-                            raise ValueError(error_msg)
+                            raise ValueError(
+                                _source_preparation_error_message(error_msg)
+                            )
                     else:
                         # Local source paths
                         source_paths = source_dirs

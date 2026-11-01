@@ -6283,6 +6283,7 @@
         "containerRestartedDuringRestore": "Container wurde während der Wiederherstellungsoperation neu gestartet",
         "failedCreateDestinationDir": "Zielverzeichnis konnte nicht erstellt werden: {{error}}",
         "failedPrepareSourcePaths": "Quellpfade konnten nicht vorbereitet werden: Alle SSH-Mounts fehlgeschlagen oder keine gültigen Pfade",
+        "failedPrepareSourcePathsDetails": "Eine Sicherungsquelle konnte nicht vorbereitet werden. Prüfen Sie die Verbindung, den Pfad und die Zugriffsrechte. {{error}}",
         "restoreCanaryInsideSshMount": "Restore-Canary nicht bereitgestellt: Die SSH-Quelle {{remotePath}} überdeckt den Canary-Pfad, die Bereitstellung würde auf den Quell-Host schreiben. Stelle die Restore-Prüfung dieses Repositorys auf den Modus „Ausgewählte Probe-Pfade“ oder „Vollständiger Archiv-Drill“ um.",
         "restoreCanaryMountTableUnavailable": "Restore-Canary nicht bereitgestellt: Die Mount-Tabelle konnte nicht gelesen werden",
         "restoreCanaryReplaceFailed": "Restore-Canary nicht bereitgestellt: Die vorherige Kopie unter {{path}} konnte nicht entfernt werden",

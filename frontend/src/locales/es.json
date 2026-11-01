@@ -6283,6 +6283,7 @@
         "containerRestartedDuringRestore": "El contenedor se reinició durante la operación de restauración",
         "failedCreateDestinationDir": "Error al crear el directorio de destino: {{error}}",
         "failedPrepareSourcePaths": "Error al preparar las rutas de origen: todos los montajes SSH fallaron o no hay rutas válidas",
+        "failedPrepareSourcePathsDetails": "No se pudo preparar una fuente de copia de seguridad. Compruebe su conexión, ruta y permisos de acceso. {{error}}",
         "restoreCanaryInsideSshMount": "Canario de restauración no preparado: el origen SSH {{remotePath}} cubre la ruta del canario, por lo que prepararlo escribiría en el host de origen. Cambia la comprobación de restauración de este repositorio al modo «Rutas de prueba seleccionadas» o «Prueba de archivo completo».",
         "restoreCanaryMountTableUnavailable": "Canario de restauración no preparado: no se pudo leer la tabla de montajes",
         "restoreCanaryReplaceFailed": "Canario de restauración no preparado: no se pudo eliminar la copia anterior en {{path}}",

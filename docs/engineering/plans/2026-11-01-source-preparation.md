@@ -12,3 +12,13 @@
 **Limits:** No permission changes, SSH key repair, automatic retries, repository mutations or version bumps. The mount service already cleans its own partially failed connection; preparation owns successful earlier connections. Local source accessibility remains Borg's responsibility.
 
 **Verification:** All seven new regressions failed before production changes (the preparation method returned silently). After the fix, the backup/mount/restore suites passed: 158 passed, 8 existing skips. The final preparation-only run, including an added valid mixed-source preservation case, passed 17 tests. Ruff lint/format and diff whitespace checks passed. Existing dependency deprecations and async mock warnings remain in the broader suites.
+
+## Recorded source-preparation causes
+
+Code review identified that the backup failure epilogue preserves keyed JSON exceptions but replaces plaintext exceptions with its generic unknown-error key. Add end-to-end tests using the real preparation method and backup epilogue for a missing SSH connection and a permission-denied SSHFS mount. Preserve source causes through keyed JSON exceptions, redacted before bounding to 1000 characters. Add a diagnostic-specific locale key in all four locales so new errors display the cause while historical errors remain readable. Keep the generic exception handler unchanged and retain chained mount exceptions.
+
+- [x] End-to-end regressions observed the unknown-error key before the fix.
+- [x] Four frontend cause-rendering tests failed before locale support; four historical-error cases passed.
+- [x] Verify complete affected suites, lint/format and locale parity, then commit.
+
+**Follow-up verification:** Full backup suite: 82 passed, 6 existing skips. Four end-to-end scenarios cover inferred missing connection, explicitly selected missing connection, SSHFS permission failure and an oversized diagnostic with a quoted secret and a final causal hint. Original mount exceptions remain chained. Eight frontend tests pass across all four languages, including historical-error compatibility. Locale parity, targeted Python/frontend lint and formatting, and whitespace checks pass. Existing dependency and async-mock warnings remain.
