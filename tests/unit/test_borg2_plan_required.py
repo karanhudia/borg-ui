@@ -1,0 +1,347 @@
+"""A Borg 2 backup once the plan no longer includes Borg 2: refused on every
+path, and a scheduled one skipped visibly and announced once."""
+
+from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
+
+from app.api import schedule as schedule_api
+from app.database.models import (
+    AvailabilityScheduleSkip,
+    BackupPlanRun,
+    Operation,
+    ScheduledJob,
+)
+from app.services.backup_plan_execution_service import backup_plan_execution_service
+from app.services.operations.backup_facade import create_backup_operation
+from tests.unit.test_api_backup_plans import (
+    _create_repo,
+    _create_scheduled_plan,
+    _set_plan,
+)
+
+
+def _v2_repo(test_db):
+    return _create_repo(test_db, "Borg 2", "/repos/borg2", borg_version=2)
+
+
+def _close(coro):
+    coro.close()
+    return MagicMock()
+
+
+@pytest.mark.unit
+def test_borg2_backup_is_refused_where_every_backup_is_created(test_db):
+    _set_plan(test_db, "community")
+    repo = _v2_repo(test_db)
+
+    with pytest.raises(HTTPException) as refused:
+        create_backup_operation(test_db, repo, trigger="manual", executor="server")
+
+    assert refused.value.status_code == 403
+    assert refused.value.detail["feature"] == "borg_v2"
+    assert test_db.query(Operation).count() == 0
+
+    _set_plan(test_db, "pro")
+    with patch("app.services.operations.enqueue.wake_runner"):
+        create_backup_operation(test_db, repo, trigger="manual", executor="server")
+    assert test_db.query(Operation).count() == 1
+
+
+@pytest.mark.unit
+def test_borg1_backup_is_not_affected(test_db):
+    _set_plan(test_db, "community")
+    repo = _create_repo(test_db, "Borg 1", "/repos/borg1")
+
+    with patch("app.services.operations.enqueue.wake_runner"):
+        create_backup_operation(test_db, repo, trigger="manual", executor="server")
+
+    assert test_db.query(Operation).count() == 1
+
+
+@pytest.mark.unit
+def test_legacy_backup_start_refuses_borg2_on_community(
+    test_client: TestClient, admin_headers, test_db
+):
+    _set_plan(test_db, "community")
+    repo = _v2_repo(test_db)
+
+    response = test_client.post(
+        "/api/backup/start", json={"repository": repo.path}, headers=admin_headers
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["feature"] == "borg_v2"
+
+
+@pytest.mark.unit
+def test_plan_run_refuses_borg2_on_community(
+    test_client: TestClient, admin_headers, test_db
+):
+    _set_plan(test_db, "community")
+    plan = _create_scheduled_plan(test_db, [_v2_repo(test_db)])
+
+    response = test_client.post(
+        f"/api/backup-plans/{plan.id}/run", headers=admin_headers
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["feature"] == "borg_v2"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduled_plan_is_skipped_visibly_and_announced_once(test_db):
+    _set_plan(test_db, "community")
+    now = datetime(2026, 1, 1, 2, 0)
+    plan = _create_scheduled_plan(
+        test_db, [_v2_repo(test_db)], next_run=now - timedelta(minutes=1)
+    )
+
+    with (
+        patch(
+            "app.services.backup_plan_execution_service._send_plan_required_notice",
+            new_callable=AsyncMock,
+        ) as notice,
+        patch(
+            "app.services.backup_plan_execution_service.asyncio.create_task",
+            side_effect=_close,
+        ),
+    ):
+        assert await backup_plan_execution_service.dispatch_due_runs(test_db, now) == 0
+        plan.next_run = now
+        test_db.commit()
+        later = now + timedelta(days=1)
+        assert (
+            await backup_plan_execution_service.dispatch_due_runs(test_db, later) == 0
+        )
+
+    runs = test_db.query(BackupPlanRun).filter_by(backup_plan_id=plan.id).all()
+    assert [(r.status, r.skip_reason, r.trigger) for r in runs] == [
+        ("skipped", "plan_required", "schedule"),
+        ("skipped", "plan_required", "schedule"),
+    ]
+    assert notice.call_count == 1
+    assert "Borg 2 repositories need the Pro plan" in notice.call_args.args[2]
+    assert test_db.query(Operation).count() == 0
+    test_db.refresh(plan)
+    assert plan.next_run > later
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduled_job_is_skipped_visibly_and_announced_once(test_db):
+    _set_plan(test_db, "community")
+    repo = _v2_repo(test_db)
+    now = datetime(2026, 1, 1, 2, 0)
+    job = ScheduledJob(
+        name="Nightly",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=repo.id,
+        next_run=now - timedelta(minutes=1),
+    )
+    test_db.add(job)
+    test_db.commit()
+
+    with (
+        patch(
+            "app.api.schedule._send_schedule_failure", new_callable=AsyncMock
+        ) as notice,
+        patch("app.api.schedule.asyncio.create_task", side_effect=_close),
+        patch("app.api.schedule._dispatch_due_scheduled_job") as dispatch,
+    ):
+        await schedule_api.dispatch_due_scheduled_backups(test_db, now)
+        job.next_run = now
+        test_db.commit()
+        await schedule_api.dispatch_due_scheduled_backups(
+            test_db, now + timedelta(days=1)
+        )
+
+    dispatch.assert_not_called()
+    skips = test_db.query(AvailabilityScheduleSkip).filter_by(scheduled_job_id=job.id)
+    assert [s.reason for s in skips] == ["plan_required", "plan_required"]
+    assert notice.call_count == 1
+    test_db.refresh(job)
+    assert job.next_run > now + timedelta(days=1)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_scheduled_job_dispatches_borg2_on_pro(test_db):
+    _set_plan(test_db, "pro")
+    repo = _v2_repo(test_db)
+    now = datetime(2026, 1, 1, 2, 0)
+    job = ScheduledJob(
+        name="Nightly",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=repo.id,
+        next_run=now - timedelta(minutes=1),
+    )
+    test_db.add(job)
+    test_db.commit()
+
+    with patch(
+        "app.api.schedule._dispatch_due_scheduled_job", return_value="k"
+    ) as dispatch:
+        await schedule_api.dispatch_due_scheduled_backups(test_db, now)
+
+    dispatch.assert_called_once()
+    assert test_db.query(AvailabilityScheduleSkip).count() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_job_skip_follows_the_repositories_dispatch_would_use(test_db):
+    from app.database.models import ScheduledJobRepository
+
+    _set_plan(test_db, "community")
+    stale_borg2 = _v2_repo(test_db)
+    borg1 = _create_repo(test_db, "Borg 1", "/repos/borg1")
+    second_borg2 = _create_repo(test_db, "Second", "/repos/second", borg_version=2)
+    now = datetime(2026, 1, 1, 2, 0)
+    # links win over the leftover repository_id, as in dispatch
+    linked_borg1 = ScheduledJob(
+        name="Linked",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=stale_borg2.id,
+        next_run=now - timedelta(minutes=1),
+    )
+    mixed = ScheduledJob(
+        name="Mixed",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        next_run=now - timedelta(minutes=1),
+    )
+    test_db.add_all([linked_borg1, mixed])
+    test_db.flush()
+    test_db.add_all(
+        [
+            ScheduledJobRepository(
+                scheduled_job_id=linked_borg1.id,
+                repository_id=borg1.id,
+                execution_order=0,
+            ),
+            ScheduledJobRepository(
+                scheduled_job_id=mixed.id, repository_id=borg1.id, execution_order=0
+            ),
+            ScheduledJobRepository(
+                scheduled_job_id=mixed.id,
+                repository_id=second_borg2.id,
+                execution_order=1,
+            ),
+        ]
+    )
+    test_db.commit()
+
+    with (
+        patch(
+            "app.api.schedule._send_schedule_failure", new_callable=AsyncMock
+        ) as notice,
+        patch("app.api.schedule.asyncio.create_task", side_effect=_close),
+        patch(
+            "app.api.schedule._dispatch_due_scheduled_job", return_value="k"
+        ) as dispatch,
+    ):
+        await schedule_api.dispatch_due_scheduled_backups(test_db, now)
+
+    assert [c.args[1].id for c in dispatch.call_args_list] == [linked_borg1.id]
+    # the notice names the Borg 2 repository, not the first one listed
+    assert notice.call_args.args[:2] == ("Mixed", second_borg2.path)
+
+
+@pytest.mark.unit
+def test_plan_allowed_by_an_override_still_needs_borg2(test_db):
+    from app.services.backup_plan_policy import (
+        BackupPlanFeatureDecision,
+        evaluate_backup_plan_access,
+    )
+    from app.core.features import Plan
+
+    _set_plan(test_db, "community")
+    plan = _create_scheduled_plan(test_db, [_v2_repo(test_db)])
+    granted = BackupPlanFeatureDecision(
+        allowed=True,
+        current=Plan.COMMUNITY,
+        required=Plan.PRO,
+        feature="backup_plan_multi_repository",
+        reason="multi_repository",
+    )
+
+    with patch(
+        "app.services.backup_plan_policy.evaluate_backup_plan_feature_access",
+        return_value=granted,
+    ):
+        decision = evaluate_backup_plan_access(test_db, plan)
+
+    assert decision.allowed is False
+    assert decision.feature == "borg_v2"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_job_repository_id_wins_over_a_leftover_borg2_path(test_db):
+    _set_plan(test_db, "community")
+    leftover = _v2_repo(test_db)
+    borg1 = _create_repo(test_db, "Borg 1", "/repos/borg1")
+    now = datetime(2026, 1, 1, 2, 0)
+    job = ScheduledJob(
+        name="Nightly",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=borg1.id,
+        repository=leftover.path,
+        next_run=now - timedelta(minutes=1),
+    )
+    test_db.add(job)
+    test_db.commit()
+
+    with patch(
+        "app.api.schedule._dispatch_due_scheduled_job", return_value="k"
+    ) as dispatch:
+        await schedule_api.dispatch_due_scheduled_backups(test_db, now)
+
+    dispatch.assert_called_once()
+    assert test_db.query(AvailabilityScheduleSkip).count() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_real_run_on_pro_rearms_the_notice(test_db):
+    repo = _v2_repo(test_db)
+    job = ScheduledJob(
+        name="Nightly", cron_expression="0 2 * * *", enabled=True, repository_id=repo.id
+    )
+    test_db.add(job)
+    test_db.commit()
+    day = datetime(2026, 1, 1, 2, 0)
+
+    async def due(plan: str, at: datetime) -> None:
+        _set_plan(test_db, plan)
+        job.next_run = at - timedelta(minutes=1)
+        test_db.commit()
+        await schedule_api.dispatch_due_scheduled_backups(test_db, at)
+
+    with (
+        patch(
+            "app.api.schedule._send_schedule_failure", new_callable=AsyncMock
+        ) as notice,
+        patch(
+            "app.api.schedule.execute_scheduled_backup_with_maintenance",
+            new_callable=AsyncMock,
+        ),
+        patch("app.api.schedule.asyncio.create_task", side_effect=_close),
+        patch("app.api.schedule._track_scheduled_backup_task"),
+        patch("app.services.operations.enqueue.wake_runner"),
+    ):
+        await due("community", day)
+        await due("pro", day + timedelta(days=1))  # real dispatch sets last_run
+        await due("community", day + timedelta(days=2))
+
+    assert notice.call_count == 2
+    assert test_db.query(Operation).count() == 1
