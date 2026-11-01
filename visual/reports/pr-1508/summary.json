@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-11-01T15:01:59.317Z",
+  "generatedAt": "2026-11-01T15:56:40.228Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1508 visual report",
     "commitSha": "a9ad2a1c49f6",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/41319033184"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/41323480975"
   },
   "totals": {
     "baseline": 1250,
@@ -53,24 +53,6 @@
       }
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPixels": 1762,
-      "totalPixels": 329160,
-      "diffRatio": 0.0053530198079961115,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
       "fileName": "pages-cloudstorage--add-guided-remote--mobile.png",
       "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--add-guided-remote--mobile.png",
@@ -86,6 +68,24 @@
       "actual": {
         "width": 390,
         "height": 844
+      }
+    },
+    {
+      "fileName": "pages-cloudstorage--editing-remote.png",
+      "baselinePath": "images/baseline/pages-cloudstorage--editing-remote.png",
+      "actualPath": "images/actual/pages-cloudstorage--editing-remote.png",
+      "diffPath": "images/diff/pages-cloudstorage--editing-remote.png",
+      "diffPixels": 1927,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0018818359375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
       }
     }
   ],
@@ -2691,6 +2691,9 @@
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
     },
     {
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png"
+    },
+    {
       "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
     },
     {
@@ -3214,9 +3217,6 @@
     },
     {
       "fileName": "pages-cloudstorage--editing-remote--mobile.png"
-    },
-    {
-      "fileName": "pages-cloudstorage--editing-remote.png"
     },
     {
       "fileName": "pages-cloudstorage--empty--mobile.png"
