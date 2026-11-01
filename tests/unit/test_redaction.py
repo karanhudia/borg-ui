@@ -1,3 +1,4 @@
+import json
 import logging
 import subprocess
 import sys
@@ -158,6 +159,33 @@ def test_redact_secrets(text, expected):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("layers", [1, 2, 3])
+def test_json_message_strings_redact_escaped_secret_fields(layers):
+    text = 'request failed: {"password":"hunter2 with spaces", "status":403}'
+    for _ in range(layers):
+        text = json.dumps({"message": text})
+
+    redacted = redact_secrets(text)
+    assert "hunter2" not in redacted
+    assert redact_secrets(redacted) == redacted
+    for _ in range(layers):
+        redacted = json.loads(redacted)["message"]
+    assert redacted == 'request failed: {"password":"***", "status":403}'
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("credential", [r"\/abc123", r"abc\/123", r"\u002fabc123"])
+def test_json_escaped_authorization_credential_is_masked(credential):
+    text = '{"Authorization": "Bearer ' + credential + '"}'
+    text = json.dumps({"message": text})
+    redacted = redact_secrets(text)
+    assert "abc" not in redacted
+    assert "123" not in redacted
+    assert json.loads(redacted)["message"] == '{"Authorization": "Bearer ***"}'
+    assert redact_secrets(redacted) == redacted
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "text",
     [
@@ -175,6 +203,8 @@ def test_redact_secrets(text, expected):
         "?password=" * 10_000,
         'password=a"b' * 10_000,
         "password='" * 10_000,
+        r"\"" * 50_000,
+        '"' + r"\"" * 50_000,
     ],
     ids=[
         "dashed-run",
@@ -191,6 +221,8 @@ def test_redact_secrets(text, expected):
         "nested-queries",
         "secret-queries",
         "inner-quotes",
+        "escaped-quotes",
+        "unterminated-json-string",
     ],
 )
 def test_redaction_stays_linear_on_large_lines(text):

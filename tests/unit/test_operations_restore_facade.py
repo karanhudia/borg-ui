@@ -229,6 +229,14 @@ def test_list_restore_jobs_limits_each_source_by_created_at_not_id(db, repositor
             r'{"message":"{\"Authorization\": \"Basic dXNlcjpwYXNz\"}"}',
             "dXNlcjpwYXNz",
         ),
+        (
+            r'{"message":"request failed: {\"password\":\"private-secret\"}"}',
+            "private-secret",
+        ),
+        (
+            r'{"message":"{\"Authorization\": \"Bearer \\/abc123\"}"}',
+            "abc123",
+        ),
     ],
 )
 def test_persisted_restore_logs_redact_secrets_for_every_execution_path(

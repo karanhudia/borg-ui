@@ -35,3 +35,9 @@ No real notifications were sent; tests mock transport. Existing failure verdicts
 - [x] Reproduce ten failures for authorization fields using `=` and JSON-escaped quotes, including credentials written to restore log files.
 - [x] Extend the authorization matcher to accept both field delimiters and escaped quotes without decoding or rewriting the diagnostic. Preserve header schemes, quotes, line boundaries and idempotence.
 - [x] All 210 affected tests pass, including direct redaction and persisted-log regressions for Bearer and Basic credentials. Ruff lint/format and whitespace checks pass; existing warnings remain.
+
+### Review-body findings: encoded secret fields and credential characters
+
+- [x] Reproduce both review-body findings: escaped password keys inside JSON message strings and Authorization credentials beginning with or containing JSON-escaped slash/Unicode characters. Eight new regressions fail before the fix, including persisted-file checks.
+- [x] Redact decoded complete JSON string tokens and re-encode only changed strings; reuse the existing redactors through nested payloads. Match escaped credential characters without consuming escaped closing quotes.
+- [x] Verify 220 redaction, restore-facade, restore-service, agent-delegation, restore-error and notification tests. Coverage includes three JSON nesting levels, idempotence and large escaped/unterminated quote runs. Ruff lint/format and whitespace checks pass; existing warnings remain.
