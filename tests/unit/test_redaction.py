@@ -122,6 +122,24 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
             "{'Authorization': 'Basic ***', 'status': 403}",
         ),
         ("Authorization: Bearer ***", "Authorization: Bearer ***"),
+        ("authorization='Bearer abc123'", "authorization='Bearer ***'"),
+        ('authorization="Basic dXNlcjpwYXNz"', 'authorization="Basic ***"'),
+        (
+            "AUTHORIZATION = bearer abc123 status=403",
+            "AUTHORIZATION = bearer *** status=403",
+        ),
+        (
+            r'{"message":"{\"Authorization\": \"Bearer abc123\"}"}',
+            r'{"message":"{\"Authorization\": \"Bearer ***\"}"}',
+        ),
+        (
+            r"{\\\"Authorization\\\": \\\"Basic dXNlcjpwYXNz\\\"}",
+            r"{\\\"Authorization\\\": \\\"Basic ***\\\"}",
+        ),
+        (
+            r"authorization=\"Bearer abc123\" status=403",
+            r"authorization=\"Bearer ***\" status=403",
+        ),
         (
             "Authorization: Bearer\npermission denied",
             "Authorization: Bearer\npermission denied",

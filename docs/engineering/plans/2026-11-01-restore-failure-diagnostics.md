@@ -29,3 +29,9 @@ No real notifications were sent; tests mock transport. Existing failure verdicts
 - [x] Reproduce Bearer and Basic credentials leaking through the shared redactor and into restore operation log files: eight regressions failed before the fix.
 - [x] Mask Authorization credentials in the shared redactor, including case-insensitive headers and JSON/Python dict diagnostics. Preserve the scheme, surrounding diagnostics, line boundaries and repeated-redaction behavior.
 - [x] Verify both `job.logs` and its stored file exclude the credentials. All 200 redaction, restore-facade, restore-service, agent-delegation, restore-error and notification tests pass. Ruff lint/format and diff whitespace checks pass; existing dependency deprecations and the async-mock warning remain.
+
+### Key-value and escaped JSON follow-up
+
+- [x] Reproduce ten failures for authorization fields using `=` and JSON-escaped quotes, including credentials written to restore log files.
+- [x] Extend the authorization matcher to accept both field delimiters and escaped quotes without decoding or rewriting the diagnostic. Preserve header schemes, quotes, line boundaries and idempotence.
+- [x] All 210 affected tests pass, including direct redaction and persisted-log regressions for Bearer and Basic credentials. Ruff lint/format and whitespace checks pass; existing warnings remain.

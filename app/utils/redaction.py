@@ -56,10 +56,12 @@ _KEY_VALUE = re.compile(
     rf"""((?!["']?\*\*\*)(?:{_QUOTED}|(?!(?:true|false|null|none)\b)(?:[^\s"'&,;}}]|{_INNER_QUOTE})+))"""
 )
 
-# Header values also occur in JSON or Python dict diagnostics. Keep the
-# header name and scheme, but mask the credential without crossing a line.
+# Header values also occur in key=value output and JSON/Python diagnostics,
+# including JSON-escaped strings. Keep delimiters and the scheme intact,
+# but mask the credential without crossing a line.
 _AUTHORIZATION = re.compile(
-    r"""(?i)((?<![\w-])authorization["']?[ \t]*:[ \t]*["']?(?:bearer|basic)[ \t]+)"""
+    r"""(?i)((?<![\w-])authorization(?:\\*["'])?[ \t]*[:=][ \t]*"""
+    r"""(?:\\*["'])?(?:bearer|basic)[ \t]+)"""
     r"""[^\s"'\\,;}\]]+"""
 )
 

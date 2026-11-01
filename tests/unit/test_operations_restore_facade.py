@@ -219,6 +219,16 @@ def test_list_restore_jobs_limits_each_source_by_created_at_not_id(db, repositor
         ("password=private-secret", "private-secret"),
         ("Authorization: Bearer bearer-secret", "bearer-secret"),
         ("Authorization: Basic dXNlcjpwYXNz", "dXNlcjpwYXNz"),
+        ("authorization='Bearer bearer-secret'", "bearer-secret"),
+        ('authorization="Basic dXNlcjpwYXNz"', "dXNlcjpwYXNz"),
+        (
+            r'{"message":"{\"Authorization\": \"Bearer bearer-secret\"}"}',
+            "bearer-secret",
+        ),
+        (
+            r'{"message":"{\"Authorization\": \"Basic dXNlcjpwYXNz\"}"}',
+            "dXNlcjpwYXNz",
+        ),
     ],
 )
 def test_persisted_restore_logs_redact_secrets_for_every_execution_path(
