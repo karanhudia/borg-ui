@@ -596,7 +596,6 @@ class TestMountService:
                 proc.stdout = AsyncMock()
                 proc.stdout.readline = AsyncMock(return_value=b"")
                 proc.stderr = AsyncMock()
-                proc.stderr.read = AsyncMock(return_value=b"")
                 proc.wait = AsyncMock(return_value=0)
                 return proc
 
@@ -653,7 +652,6 @@ class TestMountService:
                 proc.stdout = AsyncMock()
                 proc.stdout.readline = AsyncMock(return_value=b"")
                 proc.stderr = AsyncMock()
-                proc.stderr.read = AsyncMock(return_value=b"")
                 proc.wait = AsyncMock(return_value=0)
                 return proc
 
@@ -714,7 +712,6 @@ class TestMountService:
                 proc.stdout = AsyncMock()
                 proc.stdout.readline = AsyncMock(return_value=b"")
                 proc.stderr = AsyncMock()
-                proc.stderr.read = AsyncMock(return_value=b"")
                 proc.wait = AsyncMock(return_value=0)
                 return proc
 
@@ -770,7 +767,6 @@ class TestMountService:
                 proc.stdout = AsyncMock()
                 proc.stdout.readline = AsyncMock(return_value=b"")
                 proc.stderr = AsyncMock()
-                proc.stderr.read = AsyncMock(return_value=b"")
                 proc.wait = AsyncMock(return_value=0)
                 return proc
 
@@ -829,7 +825,6 @@ class TestMountService:
                 proc.stdout = AsyncMock()
                 proc.stdout.readline = AsyncMock(return_value=b"")
                 proc.stderr = AsyncMock()
-                proc.stderr.read = AsyncMock(return_value=b"")
                 proc.wait = AsyncMock(return_value=0)
                 return proc
 
