@@ -1282,11 +1282,24 @@ async def test_a_stall_timeout_only_resends_a_cancel_already_asked_for(
 @pytest.mark.unit
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "returncode,restored_file",
-    [(2, False), (104, False), (105, False), (0, False), (105, True)],
+    "returncode,restored_file,large_output",
+    [
+        (2, False, False),
+        (104, False, False),
+        (105, False, False),
+        (0, False, False),
+        (105, True, False),
+        (0, False, True),
+    ],
 )
 async def test_ssh_destination_failure_and_partial_restore_verdicts(
-    testing_session_local, db_session, restore_job, tmp_path, returncode, restored_file
+    testing_session_local,
+    db_session,
+    restore_job,
+    tmp_path,
+    returncode,
+    restored_file,
+    large_output,
 ):
     connection = SSHConnection(host="remote.test", username="borg", port=22)
     db_session.add(connection)
@@ -1299,7 +1312,8 @@ async def test_ssh_destination_failure_and_partial_restore_verdicts(
     )
     process = FakeRestoreProcess(
         returncode=returncode,
-        stderr_chunks=[
+        stderr_chunks=([b"x" * 1024 + b"\n"] * 10000 if large_output else [])
+        + [
             progress
             + '{"type":"log_message","levelname":"WARNING","message":"Input/output error password=private-secret"}'
         ],
@@ -1322,15 +1336,30 @@ async def test_ssh_destination_failure_and_partial_restore_verdicts(
         ),
         patch("app.services.restore_service.notification_service", notifications),
     ):
-        await RestoreService()._execute_local_to_ssh(
-            restore_job.id,
-            restore_job.repository,
-            restore_job.archive,
-            "/remote/destination",
-            destination_connection_id=connection_id,
-        )
+        import tracemalloc
+
+        if large_output:
+            tracemalloc.start()
+        try:
+            await RestoreService()._execute_local_to_ssh(
+                restore_job.id,
+                restore_job.repository,
+                restore_job.archive,
+                "/remote/destination",
+                destination_connection_id=connection_id,
+            )
+        finally:
+            if large_output:
+                _, peak = tracemalloc.get_traced_memory()
+                tracemalloc.stop()
+        if large_output:
+            # Keep the captured lines and bounded tail, without allocating a
+            # second complete diagnostic string for a successful extraction.
+            assert peak < 1025 * 10000 * 1.75
     verification = testing_session_local()
     job = resolve_restore_job(verification, restore_job.id)
+    assert "private-secret" not in job.logs
+    assert "Input/output error" in job.logs
     if returncode == 0 or restored_file:
         assert job.status == (
             "completed" if returncode == 0 else "completed_with_warnings"

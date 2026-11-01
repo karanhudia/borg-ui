@@ -1684,12 +1684,12 @@ class RestoreService:
             await asyncio.gather(read_stderr(), read_stdout())
             await process.wait()
 
-            stderr_output = "\n".join(stderr_lines)
             job.logs = "\n".join(stderr_lines[-100:])
             warning = is_borg_warning_exit_code(process.returncode)
             if process.returncode != 0 and (not warning or nfiles == 0):
                 # Match local restores: a warning without extracted files must
                 # not claim the restore succeeded merely because Borg finished.
+                stderr_output = "\n".join(stderr_lines)
                 job.status = "failed"
                 job.error_message = json.dumps(
                     zero_file_restore_detail(process.returncode, stderr_output)
@@ -1745,7 +1745,6 @@ class RestoreService:
             job.progress_percent = 100.0
             job.completed_at = datetime.now(timezone.utc)
             job.current_file = "Restore completed"
-            job.logs = "\n".join(stderr_lines[-100:])
             db_session.commit()
 
             logger.info(

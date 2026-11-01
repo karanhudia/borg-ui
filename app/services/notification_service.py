@@ -5,6 +5,7 @@ Handles sending notifications for backup/restore events.
 """
 
 import apprise
+from html import escape
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import ObjectDeletedError
@@ -568,7 +569,7 @@ def _append_json_to_body(
                 <summary style="cursor: pointer; font-weight: 600; color: #667eea;">
                     JSON Data (for automation)
                 </summary>
-                <pre style="margin-top: 10px; padding: 10px; background-color: #fff; border-radius: 4px; overflow-x: auto; font-size: 11px; font-family: 'Courier New', monospace;">{json_data}</pre>
+                <pre style="margin-top: 10px; padding: 10px; background-color: #fff; border-radius: 4px; overflow-x: auto; font-size: 11px; font-family: 'Courier New', monospace;">{escape(json_data, quote=False)}</pre>
             </details>
         </div>
     </div>
@@ -1517,23 +1518,25 @@ class NotificationService:
 
         # Build content blocks
         content_blocks = [
-            {"label": "Archive", "value": archive_name},
+            {"label": "Archive", "value": escape(archive_name)},
             {
                 "label": "Repository",
-                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+                "value": escape(
+                    f"{repo.name if repo else repository_name} ({repo_type})"
+                ),
             },
         ]
 
         # Add path if repository found
         if repo:
             content_blocks.append(
-                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+                {"label": "Location", "value": escape(_sanitize_ssh_url(repo.path))}
             )
 
         error_html = f"""
         <div class="error-box">
             <strong>Error Details:</strong>
-            <pre>{error_message}</pre>
+            <pre>{escape(error_message)}</pre>
         </div>"""
         content_blocks.append({"html": error_html})
 
