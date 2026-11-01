@@ -106,6 +106,28 @@ permissions and the container's `PUID`, `PGID`, and supplementary groups as
 below. Borg 2's `Our lock was killed by another borg` is also terminal: it is
 not treated as contention that waiting can fix.
 
+## Storage failures and repeated archive-sync failures
+
+An input/output error means the operating system could not read or write the
+affected storage. Check the disk, filesystem, remote storage and mount health
+before retrying. The error alone does not identify a failed disk or prove that
+the repository is corrupt.
+
+If the database or disk is full, check free space, inodes and quotas on the
+volume containing `DATA_DIR` (normally `/data`) and the Borg repository/cache
+volumes. Restore capacity before submitting more operations. Check the actual
+run status after a failed cancellation: a failed database write does not prove
+that the backup process stopped. Borg UI does not delete data automatically to
+recover from these failures.
+
+Repeated failed background archive listings slow down from the configured
+refresh interval to twice and then four times that interval, capped at six
+hours. An interval already longer than six hours is preserved. The failed
+operation remains visible in Activity. After fixing the cause, use the
+repository's manual refresh to retry immediately. A successful listing resets
+the cooldown; backup follow-up listings and manual refreshes are not delayed by
+it. Lock contention uses the operations runner's separate bounded retry policy.
+
 ## Paths and Permissions
 
 ### Permission denied

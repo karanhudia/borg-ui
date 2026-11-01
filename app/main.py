@@ -51,6 +51,7 @@ from app.config import get_runtime_app_version, settings
 from app.services.error_reporter import flush, report_exception
 from app.core.proxy_auth import inspect_proxy_auth_config
 from app.core.security import create_first_user
+from app.core.storage_errors import storage_response
 from app.services.licensing_service import sync_licensing_state
 
 # Load environment variables
@@ -231,10 +232,16 @@ def _request_component(request: Request) -> str:
 
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception):
+    recovery = storage_response(exc)
+    status_code, detail = recovery or (500, "Internal Server Error")
     report_exception(
-        exc, kind="request", component=_request_component(request), status=500
+        exc,
+        kind="request",
+        component=_request_component(request),
+        status=status_code,
+        error_key=detail.get("key") if isinstance(detail, dict) else None,
     )
-    return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+    return JSONResponse({"detail": detail}, status_code=status_code)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -242,14 +249,21 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException):
     # Routes turn most failures into HTTPException(500) inside `except`; report
     # the cause they wrap, then answer exactly as FastAPI's default handler does.
     if exc.status_code >= 500:
+        recovery = storage_response(exc)
         detail = exc.detail if isinstance(exc.detail, dict) else {}
+        status_code = exc.status_code
+        if recovery:
+            status_code, detail = recovery
         report_exception(
-            exc.__cause__ or exc.__context__ or exc,
+            exc.__cause__
+            or (exc if exc.__suppress_context__ else exc.__context__ or exc),
             kind="request",
             component=_request_component(request),
-            status=exc.status_code,
+            status=status_code,
             error_key=detail.get("key"),
         )
+        if recovery:
+            return JSONResponse({"detail": detail}, status_code=status_code)
     return await http_exception_handler(request, exc)
 
 

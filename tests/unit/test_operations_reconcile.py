@@ -92,6 +92,79 @@ def test_enqueue_reconcile_run_can_be_forced_past_active_index_work(
     assert all(r.trigger == "reconcile" and r.status == "queued" for r in rows)
 
 
+def _sync_verdict(db, repo, completed_at, *, status="failed"):
+    op = enqueue(db, "archive_sync", repository_id=repo.id)
+    op.status = status
+    op.completed_at = completed_at
+    op.started_at = completed_at - timedelta(seconds=1)
+    op.error_message = "Repository does not exist" if status == "failed" else None
+    db.commit()
+    return op
+
+
+@pytest.mark.parametrize("failures,hours", [(1, 1), (2, 2), (3, 4), (4, 6), (8, 6)])
+def test_reconcile_backs_off_repeated_failed_archive_sync(
+    db, repos, monkeypatch, failures, hours
+):
+    monkeypatch.setattr(reconcile, "registered_kinds", lambda: {"archive_sync"})
+    repo, _ = repos
+    now = datetime(2026, 11, 1, 12)
+    for i in range(failures):
+        _sync_verdict(db, repo, now - timedelta(hours=failures - i))
+    last_failure = now - timedelta(hours=1)
+    monkeypatch.setattr(
+        reconcile, "utc_now", lambda: last_failure + timedelta(hours=hours, seconds=-1)
+    )
+    assert reconcile.enqueue_reconcile_run(db, repo.id) == []
+    monkeypatch.setattr(
+        reconcile, "utc_now", lambda: last_failure + timedelta(hours=hours)
+    )
+    assert reconcile.enqueue_reconcile_run(db, repo.id)
+
+
+@pytest.mark.parametrize("bypass", [{"manual": True}, {"force": True}])
+def test_manual_reconcile_bypasses_failure_cooldown(db, repos, monkeypatch, bypass):
+    monkeypatch.setattr(reconcile, "registered_kinds", lambda: {"archive_sync"})
+    repo, _ = repos
+    now = datetime(2026, 11, 1, 12)
+    _sync_verdict(db, repo, now - timedelta(minutes=10))
+    monkeypatch.setattr(reconcile, "utc_now", lambda: now)
+    assert reconcile.enqueue_reconcile_run(db, repo.id, **bypass)
+
+
+def test_successful_sync_resets_reconcile_failure_cooldown(db, repos, monkeypatch):
+    monkeypatch.setattr(reconcile, "registered_kinds", lambda: {"archive_sync"})
+    repo, _ = repos
+    now = datetime(2026, 11, 1, 12)
+    for i in range(4):
+        _sync_verdict(db, repo, now - timedelta(hours=4 - i))
+    _sync_verdict(db, repo, now - timedelta(minutes=1), status="completed")
+    monkeypatch.setattr(reconcile, "utc_now", lambda: now)
+    assert reconcile.enqueue_reconcile_run(db, repo.id)
+
+
+@pytest.mark.parametrize("interval,failures,minutes", [(5, 8, 360), (720, 4, 720)])
+def test_failure_cooldown_honors_operator_interval(
+    db, repos, monkeypatch, interval, failures, minutes
+):
+    monkeypatch.setattr(reconcile, "registered_kinds", lambda: {"archive_sync"})
+    repo, _ = repos
+    db.query(SystemSettings).update({"stats_refresh_interval_minutes": interval})
+    last_failure = datetime(2026, 11, 1, 12)
+    for i in range(failures):
+        _sync_verdict(db, repo, last_failure - timedelta(minutes=failures - i - 1))
+    monkeypatch.setattr(
+        reconcile,
+        "utc_now",
+        lambda: last_failure + timedelta(minutes=minutes, seconds=-1),
+    )
+    assert reconcile.enqueue_reconcile_run(db, repo.id) == []
+    monkeypatch.setattr(
+        reconcile, "utc_now", lambda: last_failure + timedelta(minutes=minutes)
+    )
+    assert reconcile.enqueue_reconcile_run(db, repo.id)
+
+
 @pytest.mark.unit
 def test_enqueue_reconcile_runs_despite_a_running_history_index(db, repos, monkeypatch):
     """A history index can run for hours. It must not block the hourly
