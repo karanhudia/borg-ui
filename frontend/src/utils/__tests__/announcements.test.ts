@@ -43,6 +43,53 @@ describe('announcements utils', () => {
     expect(compareVersions('2.0.0', '2.0.0-beta.4')).toBe(1)
   })
 
+  it.each([undefined, null, 245, '', 'unknown', '   '])(
+    'does not target a versioned announcement when the app version is %s',
+    (appVersion) => {
+      expect(
+        isAnnouncementEligible(baseAnnouncement, {
+          appVersion: appVersion as unknown as string,
+          plan: 'community',
+          now: new Date(),
+        })
+      ).toBe(false)
+      expect(
+        isAnnouncementEligible(
+          { ...baseAnnouncement, min_app_version: undefined, max_app_version: undefined },
+          {
+            appVersion: appVersion as unknown as string,
+            plan: 'community',
+            now: new Date(),
+          }
+        )
+      ).toBe(true)
+    }
+  )
+
+  it('ignores malformed entries without losing valid announcements', () => {
+    const malformed = [
+      null,
+      undefined,
+      false,
+      2,
+      'notice',
+      [],
+      {},
+      { ...baseAnnouncement, starts_at: {} },
+      { ...baseAnnouncement, starts_at: null },
+      { ...baseAnnouncement, starts_at: 0 },
+      { ...baseAnnouncement, starts_at: false },
+      { ...baseAnnouncement, ends_at: 'not-a-date' },
+      { ...baseAnnouncement, min_app_version: 245 },
+      { ...baseAnnouncement, min_app_version: 'unknown' },
+      { ...baseAnnouncement, title_localized: ['unexpected'] },
+      { ...baseAnnouncement, message: undefined },
+    ] as unknown as Announcement[]
+    const context = { appVersion: '1.60.0', plan: 'community' as const, now: new Date() }
+    for (const entry of malformed) expect(isAnnouncementEligible(entry, context)).toBe(false)
+    expect(selectAnnouncement([...malformed, baseAnnouncement], context)).toEqual(baseAnnouncement)
+  })
+
   it('filters out acknowledged announcements', () => {
     acknowledgeAnnouncement(baseAnnouncement.id)
 

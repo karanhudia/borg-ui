@@ -61,6 +61,15 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+export function isVersionString(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^v?\d+(?:\.\d+)*(?:-[0-9a-z]+(?:[.-][0-9a-z]+)*)?(?:\+[0-9a-z]+(?:[.-][0-9a-z]+)*)?$/i.test(
+      value.trim()
+    )
+  )
+}
+
 function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string'
 }
@@ -68,7 +77,10 @@ function isOptionalString(value: unknown): value is string | undefined {
 function isLocalizedStringMap(value: unknown): value is Record<string, string> | undefined {
   return (
     value === undefined ||
-    (typeof value === 'object' && value !== null && Object.values(value).every(isNonEmptyString))
+    (typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      Object.values(value).every(isNonEmptyString))
   )
 }
 
@@ -77,6 +89,7 @@ function isLocalizedHighlightsMap(value: unknown): value is Record<string, strin
     value === undefined ||
     (typeof value === 'object' &&
       value !== null &&
+      !Array.isArray(value) &&
       Object.values(value).every(
         (highlights) =>
           Array.isArray(highlights) && highlights.length > 0 && highlights.every(isNonEmptyString)
@@ -84,12 +97,15 @@ function isLocalizedHighlightsMap(value: unknown): value is Record<string, strin
   )
 }
 
-function isValidDateString(value: string | undefined) {
-  if (!value) return true
-  return !Number.isNaN(new Date(value).getTime())
+function isValidDateString(value: unknown) {
+  return (
+    value === undefined || (isNonEmptyString(value) && !Number.isNaN(new Date(value).getTime()))
+  )
 }
 
-function isValidAnnouncementShape(announcement: Announcement) {
+export function isValidAnnouncement(value: unknown): value is Announcement {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const announcement = value as Announcement
   return (
     isNonEmptyString(announcement.id) &&
     ANNOUNCEMENT_TYPES.has(announcement.type) &&
@@ -110,8 +126,8 @@ function isValidAnnouncementShape(announcement: Announcement) {
       (Number.isInteger(announcement.snooze_days) && announcement.snooze_days > 0)) &&
     isValidDateString(announcement.starts_at) &&
     isValidDateString(announcement.ends_at) &&
-    isOptionalString(announcement.min_app_version) &&
-    isOptionalString(announcement.max_app_version) &&
+    (announcement.min_app_version === undefined || isVersionString(announcement.min_app_version)) &&
+    (announcement.max_app_version === undefined || isVersionString(announcement.max_app_version)) &&
     (announcement.target_plans === undefined ||
       (Array.isArray(announcement.target_plans) &&
         announcement.target_plans.every((plan) => VALID_PLANS.has(plan))))
@@ -245,6 +261,13 @@ export function resolveAnnouncementLocale(
 }
 
 function isWithinVersionRange(announcement: Announcement, appVersion: string) {
+  // An unavailable version must not be treated as 0.0.0 and receive targeted notices.
+  if (
+    (announcement.min_app_version || announcement.max_app_version) &&
+    !isVersionString(appVersion)
+  ) {
+    return false
+  }
   if (
     announcement.min_app_version &&
     compareVersions(appVersion, announcement.min_app_version) < 0
@@ -285,11 +308,11 @@ function matchesPlan(announcement: Announcement, plan: string) {
 }
 
 export function isAnnouncementEligible(
-  announcement: Announcement,
+  announcement: unknown,
   context: AnnouncementContext
-): boolean {
+): announcement is Announcement {
   return (
-    isValidAnnouncementShape(announcement) &&
+    isValidAnnouncement(announcement) &&
     isWithinActiveWindow(announcement, context.now) &&
     isWithinVersionRange(announcement, context.appVersion) &&
     matchesPlan(announcement, context.plan) &&
@@ -309,7 +332,7 @@ function compareAnnouncements(a: Announcement, b: Announcement) {
 }
 
 export function selectAnnouncement(
-  announcements: Announcement[],
+  announcements: unknown[],
   context: AnnouncementContext
 ): Announcement | null {
   const eligibleAnnouncements = announcements
