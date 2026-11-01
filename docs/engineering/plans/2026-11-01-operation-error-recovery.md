@@ -15,7 +15,7 @@
 - [x] Classify unavailable SFTP and missing device at existing error boundaries; preserve unknown 500s and host-key enforcement. Keep existing timeout cleanup and login-relative normalization unless a failing regression proves another fix.
 - [x] Run focused tests and adjacent repository/filesystem/prune/mount gates; run ruff on changed Python files, inspect diff, and commit without pushing.
 
-**Validation command:** `PYTHONPATH=. /Users/karanhudia/Documents/Projects/borg-ui/.venv/bin/python -m pytest tests/unit/test_operation_error_recovery.py tests/unit/test_api_filesystem.py tests/unit/test_prune_preview.py tests/unit/test_mount_service.py tests/unit/test_api_repositories.py`
+**Validation command:** `PYTHONPATH=. .venv/bin/python -m pytest tests/unit/test_operation_error_recovery.py tests/unit/test_api_filesystem.py tests/unit/test_prune_preview.py tests/unit/test_mount_service.py tests/unit/test_api_repositories.py`
 
 **Excluded:** Unknown import root causes, automatic host/device changes, timeout inflation without evidence, changes to archive-sync backoff or storage/disk-full recovery owned by the coordinator.
 
