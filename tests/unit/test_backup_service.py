@@ -2933,8 +2933,9 @@ class TestBackupServicePeriodicSync:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("local_sources", [[], ["/local/important"]])
     async def test_prepare_source_paths_resolves_relative_remote_paths(
-        self, backup_service, db_session, monkeypatch
+        self, backup_service, db_session, monkeypatch, local_sources
     ):
         connection = SSHConnection(
             host="example.com",
@@ -2966,7 +2967,8 @@ class TestBackupServicePeriodicSync:
 
         processed_paths, ssh_mount_info = await backup_service._prepare_source_paths(
             [
-                f"ssh://{connection.username}@{connection.host}:{connection.port}/etc/komodo"
+                f"ssh://{connection.username}@{connection.host}:{connection.port}/etc/komodo",
+                *local_sources,
             ],
             job_id=42,
             source_connection_id=connection.id,
@@ -2976,7 +2978,7 @@ class TestBackupServicePeriodicSync:
         assert captured["remote_paths"] == ["/etc/komodo"]
         # Backup sources must mount with faithful symlink handling (issue #751).
         assert captured["preserve_symlinks"] is True
-        assert processed_paths == ["etc/komodo"]
+        assert processed_paths == ["etc/komodo", *local_sources]
         assert ssh_mount_info == [("/tmp/sshfs_mount_test", "etc/komodo")]
 
     @pytest.mark.asyncio
@@ -3105,8 +3107,8 @@ class TestBackupServicePeriodicSync:
             )
 
         assert (mounted / "remote-file").read_text(encoding="utf-8") == "remote"
-        # Registered before staging, so the job's cleanup still unmounts them.
-        assert backup_service.ssh_mounts[42] == ["mount-1"]
+        # Preparation now cleans successful mounts before propagating failure.
+        assert 42 not in backup_service.ssh_mounts
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -3190,8 +3192,8 @@ class TestBackupServicePeriodicSync:
             str(p.relative_to(mount_point)) for p in mount_point.rglob("*")
         )
         assert remote_entries == ["remote-file"]
-        # Registered before staging, so the job's cleanup still unmounts them.
-        assert backup_service.ssh_mounts[42] == ["mount-1"]
+        # Preparation now cleans successful mounts before propagating failure.
+        assert 42 not in backup_service.ssh_mounts
 
     @pytest.mark.asyncio
     async def test_prepare_source_paths_refuses_canary_staging_without_mount_table(
@@ -3319,3 +3321,92 @@ class TestApplyCreatedArchiveStats:
         job = self._job()
         _apply_created_archive_stats(job, lines)
         assert vars(job) == vars(self._job())
+
+
+@pytest.mark.unit
+class TestSourcePreparationFailures:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("local_paths", [[], ["/local/important"]])
+    async def test_failed_remote_source_never_returns_partial_backup(
+        self, backup_service, db_session, monkeypatch, local_paths
+    ):
+        connection = SSHConnection(host="remote.test", username="borg", port=22)
+        db_session.add(connection)
+        db_session.commit()
+        connection_id = connection.id
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        mount = AsyncMock(side_effect=PermissionError("SFTP permission denied"))
+        monkeypatch.setattr(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared", mount
+        )
+        with pytest.raises(RuntimeError, match="SFTP permission denied"):
+            await backup_service._prepare_source_paths(
+                [*local_paths, "ssh://borg@remote.test:22/data"],
+                42,
+                source_connection_id=connection_id,
+            )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "url,connection_id,reason",
+        [
+            ("ssh://invalid", None, "SSH URL"),
+            ("ssh://borg@missing.test:22/data", None, "SSH connection"),
+            ("ssh://borg@missing.test:22/data", 98765, "SSH connection"),
+        ],
+    )
+    async def test_unresolvable_remote_source_is_rejected(
+        self, backup_service, db_session, monkeypatch, url, connection_id, reason
+    ):
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        with pytest.raises(ValueError, match=reason):
+            await backup_service._prepare_source_paths(
+                ["/local/important", url], 42, source_connection_id=connection_id
+            )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("incomplete", [False, True])
+    async def test_failed_preparation_releases_successful_mounts(
+        self, backup_service, db_session, monkeypatch, incomplete
+    ):
+        from app.services.mount_service import mount_service
+
+        for host in ("first.test", "second.test"):
+            db_session.add(SSHConnection(host=host, username="borg", port=22))
+        db_session.commit()
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        results = [("/tmp/shared", [("mount-first", "data")])]
+        if incomplete:
+            # Mount service returned fewer sources than requested for this connection.
+            sources = [
+                "ssh://borg@first.test:22/data",
+                "ssh://borg@first.test:22/other",
+            ]
+            reason = "source"
+        else:
+            results.append(PermissionError("remote access denied"))
+            sources = [
+                "ssh://borg@first.test:22/data",
+                "ssh://borg@second.test:22/other",
+            ]
+            reason = "remote access denied"
+        monkeypatch.setattr(
+            mount_service, "mount_ssh_paths_shared", AsyncMock(side_effect=results)
+        )
+        monkeypatch.setattr(
+            mount_service,
+            "get_mount",
+            lambda mount_id: SimpleNamespace(mount_point="/tmp/shared/data"),
+        )
+        unmount = AsyncMock(return_value=True)
+        monkeypatch.setattr(mount_service, "unmount", unmount)
+        with pytest.raises(RuntimeError, match=reason):
+            await backup_service._prepare_source_paths(sources, 42)
+        unmount.assert_awaited_once_with("mount-first")
+        assert 42 not in backup_service.ssh_mounts

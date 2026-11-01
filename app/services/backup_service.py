@@ -1195,7 +1195,7 @@ class BackupService:
                         logger.error(
                             "Failed to parse SSH URL", path=path, job_id=job_id
                         )
-                        continue
+                        raise ValueError(f"Invalid backup source SSH URL: {path}")
 
                     # Use provided connection_id if available, otherwise lookup by host/user/port
                     connection = None
@@ -1212,7 +1212,9 @@ class BackupService:
                                 path=path,
                                 job_id=job_id,
                             )
-                            continue
+                            raise ValueError(
+                                f"SSH connection {source_connection_id} for backup source {path} was not found"
+                            )
                     else:
                         # Fallback: Find SSHConnection matching host/user/port
                         connection = (
@@ -1234,7 +1236,9 @@ class BackupService:
                                 path=path,
                                 job_id=job_id,
                             )
-                            continue
+                            raise ValueError(
+                                f"SSH connection for backup source {path} was not found"
+                            )
 
                     ssh_paths_by_connection[connection.id].append(
                         (path, parsed, connection)
@@ -1283,12 +1287,21 @@ class BackupService:
                     if shared_ssh_temp_root is None:
                         shared_ssh_temp_root = temp_root
 
+                    # Own successful mounts immediately, including incomplete results:
+                    # a later connection or canary staging may fail before returning.
+                    mount_ids.extend(mount_id for mount_id, _ in mount_info_list)
+                    self.ssh_mounts[job_id] = mount_ids
+                    if len(mount_info_list) != len(paths_data):
+                        raise RuntimeError(
+                            f"SSH connection {connection_id} prepared {len(mount_info_list)} "
+                            f"of {len(paths_data)} backup source paths"
+                        )
+
                     # Process mount results
                     for (mount_id, relative_path), (original_url, parsed, _) in zip(
                         mount_info_list, paths_data
                     ):
                         processed_paths.append(relative_path)
-                        mount_ids.append(mount_id)
                         ssh_mount_info.append((temp_root, relative_path))
 
                         logger.info(
@@ -1310,11 +1323,9 @@ class BackupService:
                         error_type=type(e).__name__,
                         job_id=job_id,
                     )
-                    # Skip all paths from this connection
-
-            # Store mount_ids for cleanup before staging below can fail.
-            if mount_ids:
-                self.ssh_mounts[job_id] = mount_ids
+                    raise RuntimeError(
+                        f"Failed to prepare backup sources for SSH connection {connection_id}: {e}"
+                    ) from e
 
             # Add local paths at the end. Borg UI's managed restore canary is a
             # local path, but when the backup cwd is an SSHFS root we stage that
@@ -1393,6 +1404,18 @@ class BackupService:
 
             return processed_paths, ssh_mount_info
 
+        except Exception:
+            # The mount service cleans a connection that fails mid-mount; we
+            # must also release successfully prepared earlier connections.
+            try:
+                await self._cleanup_ssh_mounts(job_id)
+            except Exception as cleanup_error:
+                logger.warning(
+                    "Failed to cleanup SSH mounts after source preparation failure",
+                    job_id=job_id,
+                    error=str(cleanup_error),
+                )
+            raise
         finally:
             db.close()
 
