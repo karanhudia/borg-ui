@@ -68,7 +68,7 @@ function isNonEmptyString(value: unknown): value is string {
 export function isVersionString(value: unknown): value is string {
   return (
     typeof value === 'string' &&
-    /^v?\d+(?:\.\d+)*(?:-[0-9a-z]+(?:[.-][0-9a-z]+)*)?(?:\+[0-9a-z]+(?:[.-][0-9a-z]+)*)?$/i.test(
+    /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i.test(
       value.trim()
     )
   )

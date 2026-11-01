@@ -6,6 +6,7 @@ import {
   getAnnouncementAckKey,
   getAnnouncementSnoozeKey,
   isAnnouncementEligible,
+  isVersionString,
   resolveAnnouncementLocale,
   selectAnnouncement,
   snoozeAnnouncement,
@@ -41,6 +42,39 @@ describe('announcements utils', () => {
     expect(compareVersions('2.0.0-alpha.1', '2.0.0-alpha.2')).toBe(-1)
     expect(compareVersions('2.0.0-beta.1', '2.0.0-alpha.9')).toBe(1)
     expect(compareVersions('2.0.0', '2.0.0-beta.4')).toBe(1)
+  })
+
+  it.each(['1.2', '1.2.3.4', '01.2.3', '1.02.3', '1.2.03', '1.2.3-01', '1.2.3-rc.01'])(
+    'rejects malformed SemVer %s before announcement selection',
+    (version) => {
+      expect(isVersionString(version)).toBe(false)
+      for (const bound of ['min_app_version', 'max_app_version'] as const) {
+        expect(
+          isAnnouncementEligible(
+            { ...baseAnnouncement, [bound]: version },
+            { appVersion: '1.2.3', plan: 'community', now: new Date() }
+          )
+        ).toBe(false)
+      }
+    }
+  )
+
+  it.each([
+    '1.2.3-alpha--one',
+    '1.2.3+build--two',
+    '1.2.3--',
+    '1.2.3+-',
+    '0.0.0',
+    '1.2.3-0+001',
+    ' v1.2.3-rc--1+build--2 ',
+  ])('accepts valid SemVer %s for announcement bounds', (version) => {
+    expect(isVersionString(version)).toBe(true)
+    expect(
+      isAnnouncementEligible(
+        { ...baseAnnouncement, min_app_version: version, max_app_version: version },
+        { appVersion: version, plan: 'community', now: new Date() }
+      )
+    ).toBe(true)
   })
 
   it('ignores build metadata when checking prerelease version bounds', () => {
