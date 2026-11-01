@@ -56,7 +56,9 @@ function comparePrereleasePart(a: string | number, b: string | number): number {
 
   if (typeof a === 'number') return -1
   if (typeof b === 'number') return 1
-  return a.localeCompare(b)
+  if (a > b) return 1
+  if (a < b) return -1
+  return 0
 }
 
 function isNonEmptyString(value: unknown): value is string {

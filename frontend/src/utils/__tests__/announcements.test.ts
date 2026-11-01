@@ -57,6 +57,23 @@ describe('announcements utils', () => {
     expect(compareVersions('2.4.1-rc-1', '2.4.1-rc-2')).toBeLessThan(0)
   })
 
+  it.each([
+    ['2.4.1-rc-Z', '2.4.1-rc-a'],
+    ['2.4.1-alpha.A', '2.4.1-alpha.a'],
+  ])('orders %s before %s by ASCII rather than locale', (earlier, later) => {
+    expect(compareVersions(earlier, later)).toBeLessThan(0)
+    expect(compareVersions(later, earlier)).toBeGreaterThan(0)
+  })
+
+  it('includes an uppercase prerelease below the lowercase maximum', () => {
+    expect(
+      isAnnouncementEligible(
+        { ...baseAnnouncement, max_app_version: '2.4.1-rc-a' },
+        { appVersion: '2.4.1-rc-Z', plan: 'community', now: new Date() }
+      )
+    ).toBe(true)
+  })
+
   it.each([undefined, null, 245, '', 'unknown', '   '])(
     'does not target a versioned announcement when the app version is %s',
     (appVersion) => {
