@@ -255,7 +255,8 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException):
         if recovery:
             status_code, detail = recovery
         report_exception(
-            exc.__cause__ or exc.__context__ or exc,
+            exc.__cause__
+            or (exc if exc.__suppress_context__ else exc.__context__ or exc),
             kind="request",
             component=_request_component(request),
             status=status_code,

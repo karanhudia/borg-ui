@@ -32,3 +32,9 @@ SQLAlchemy renders the failed statement and bound values in its wrapper text. Te
 The storage-full copy in all four locales now says Borg UI does not delete data to recover from the error; it makes no assertion about earlier prune/deletion work. Reporter, main and Borg-error suites pass 143 tests. Ruff lint/format, JSON formatting, locale parity, personal-path scan and whitespace checks pass.
 
 Independent review also reproduced copied SQL text inside outer HTTPException/RuntimeError messages. Four added regressions cover both wrappers with misleading full/I/O phrases; authoritative cause/context traversal prevents those false matches while genuine wrapped FULL/EIO failures still classify correctly. Final independent review found no remaining issues.
+
+## Tar-stream exception-context follow-up
+
+Both tar download helpers raise their HTTP error while catching normal stream exhaustion. Seven end-to-end regressions reproduced lost FULL/EIO recovery responses or telemetry reporting incidental `StopAsyncIteration` instead of Borg's diagnostic. The helpers now suppress only that incidental context, and the HTTP handler respects explicit context suppression when selecting the exception to report. Explicit causes and ordinary unsuppressed wrappers retain their existing handling.
+
+Regression coverage invokes both actual stream helpers through the HTTP handler and reporter for ENOSPC, EIO and unrelated permission errors, plus an explicitly suppressed-context case. Full reporter, download, both archive API and main suites pass 163 tests. Ruff lint/format and whitespace checks pass; existing dependency/resource warnings remain. Independent review found no remaining issues.

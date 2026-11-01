@@ -803,3 +803,82 @@ def test_only_production_outside_ci_reports():
     assert error_reporting_allowed("production", {}) is True
     assert error_reporting_allowed("development", {}) is False
     assert error_reporting_allowed("production", {"CI": "true"}) is False
+
+
+@pytest.mark.parametrize("helper", ["borg1", "borg2"])
+@pytest.mark.parametrize(
+    "diagnostic,status_code,key",
+    [
+        ("[Errno 28] No space left on device: /private/export", 507, "full"),
+        ("[Errno 5] Input/output error: /private/export", 503, "io"),
+        ("[Errno 13] Permission denied: /private/export", 500, None),
+    ],
+)
+def test_failed_tar_stream_preserves_storage_recovery_and_causal_telemetry(
+    test_db, sent, monkeypatch, helper, diagnostic, status_code, key
+):
+    from app.api import archives as borg1_archives
+    from app.api.v2 import archives as borg2_archives
+    from app.database.models import Repository
+
+    class FailedTarStream:
+        return_code = 2
+        stderr = diagnostic
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    stream = FailedTarStream()
+    repository = Repository(name="Export", path="/private/repository", borg_version=1)
+    monkeypatch.setattr(borg1_archives, "_build_repo_env", lambda repo, db: ({}, None))
+    monkeypatch.setattr(
+        borg1_archives.borg, "export_archive_tar", lambda *args, **kwargs: stream
+    )
+
+    async def download():
+        if helper == "borg1":
+            return await borg1_archives._stream_server_archive_tar(
+                repository, "archive", "documents", test_db
+            )
+        return await borg2_archives._tar_download_response(stream, "documents")
+
+    with _test_route("/api/__failed_tar_stream", download) as client:
+        response = client.get("/api/__failed_tar_stream")
+    assert response.status_code == status_code
+    if key:
+        assert response.json() == {"detail": {"key": f"backend.errors.storage.{key}"}}
+        assert "private" not in response.text
+    else:
+        assert diagnostic in response.json()["detail"]
+    flush()
+    assert len(sent) == 1
+    props = sent[0]["props"]
+    assert props["type"].endswith("HTTPException")
+    assert diagnostic in props["message"]
+    assert props["status"] == status_code
+    if key:
+        assert props["error_key"] == f"storage.{key}"
+    else:
+        assert "error_key" not in props
+
+
+def test_http_error_handler_does_not_report_explicitly_suppressed_context(
+    test_db, sent
+):
+    async def wrapped():
+        try:
+            raise ValueError("incidental iteration failure")
+        except ValueError:
+            raise HTTPException(500, detail="authoritative failure") from None
+
+    with _test_route("/api/__suppressed_context", wrapped) as client:
+        response = client.get("/api/__suppressed_context")
+    assert response.status_code == 500
+    assert response.json() == {"detail": "authoritative failure"}
+    flush()
+    assert sent[0]["props"]["type"].endswith("HTTPException")
+    assert "authoritative failure" in sent[0]["props"]["message"]
+    assert "incidental iteration failure" not in sent[0]["props"]["stack"]
