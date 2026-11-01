@@ -46,7 +46,7 @@ export interface ActivityItem {
   backup_plan_run_id?: number | null
   backup_plan_run_trigger?: string | null // how the plan run started: manual, schedule, retry
   backup_plan_name?: string | null
-  skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
+  skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | 'plan_required' | null
   has_logs?: boolean
   execution_mode?: string | null
   route_strategy?: string | null

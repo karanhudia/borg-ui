@@ -107,6 +107,8 @@ class TestManualAgentBackupName:
     def _queue(self, test_client, admin_headers, test_db, repo):
         from app.services.repository_executor import queue_agent_backup_job
 
+        _enable_borg_v2(test_db)
+
         response = test_client.post(
             "/api/backup/start",
             json={"repository": repo.path},
