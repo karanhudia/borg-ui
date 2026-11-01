@@ -5935,7 +5935,7 @@
         "listFailed": "Failed to list repository archives: {{error}}",
         "remoteBorg2Incompatible": "The remote server is not running a compatible Borg 2 server. Install Borg 2 on the remote host and set the remote Borg path to its borg2 binary, or use Borg 1 for this repository.",
         "failedToCreateRepository": "Failed to create repository",
-        "failedToVerifyRepository": "Failed to verify repository",
+        "failedToVerifyRepository": "Failed to verify repository: {{error}}",
         "failedToImportRepository": "Failed to import repository",
         "failedToUploadKeyfile": "Failed to upload keyfile",
         "failedToExportKeyfile": "Failed to export keyfile",

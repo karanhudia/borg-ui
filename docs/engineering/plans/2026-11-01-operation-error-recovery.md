@@ -1,0 +1,33 @@
+# Operation error recovery implementation plan
+
+**Goal:** Preserve actionable, bounded, redacted failure reasons and classify evidenced user-correctable refusals without guessing unknown causes.
+
+**Architecture:** Add a small diagnostic/status helper shared by repository API error boundaries and prune exceptions. Extend existing SFTP and mount capability classifications in place. Preserve unknown failures as server errors; never retry mutations, delete repositories, repair data, bypass host keys, or break locks.
+
+**Evidence:** Five-day production groups supplied by the coordinating task: generic repository verification failures (15 events, six installs), permission/occupied create-update targets, prune DryRunFailed losing diagnostic (two events), unavailable SFTP and duplicate-home browsing, missing FUSE device and mount readiness timeout. Existing main already retries login-relative SFTP paths; retain that behavior and cover current gaps only. A timeout alone does not establish a new root cause.
+
+## Tasks
+
+- [x] Add failing regression tests for redacted/bounded diagnostics, known permission/occupied statuses, import response preservation, prune exception reason, unavailable SFTP, and FUSE missing-device classification.
+- [x] Run those tests and confirm they fail for the missing behaviors.
+- [x] Implement diagnostic/status helper and wire repository import/create/update refusal paths without changing initialization or transaction semantics.
+- [x] Preserve prune failure diagnostic in exception text and API output with the same bound/redaction.
+- [x] Classify unavailable SFTP and missing device at existing error boundaries; preserve unknown 500s and host-key enforcement. Keep existing timeout cleanup and login-relative normalization unless a failing regression proves another fix.
+- [x] Run focused tests and adjacent repository/filesystem/prune/mount gates; run ruff on changed Python files, inspect diff, and commit without pushing.
+
+**Validation command:** `PYTHONPATH=. /Users/karanhudia/Documents/Projects/borg-ui/.venv/bin/python -m pytest tests/unit/test_operation_error_recovery.py tests/unit/test_api_filesystem.py tests/unit/test_prune_preview.py tests/unit/test_mount_service.py tests/unit/test_api_repositories.py`
+
+**Excluded:** Unknown import root causes, automatic host/device changes, timeout inflation without evidence, changes to archive-sync backoff or storage/disk-full recovery owned by the coordinator.
+
+## Evidence and implementation outcome
+
+- Repository errors now keep at most 2,000 characters after secret redaction, retaining both the beginning and final cause. Existing translated import/verification copy interpolates the diagnostic in all four locales.
+- Recognized permission failures return 403; occupied paths return 409 from modern code 19, FileExistsError, or Borg 1's exact `There is already something at <path>.` line. Unknown failures remain 500. Existing lock refusal behavior and rollback semantics remain covered.
+- A disposable-directory probe with installed Borg 1.4.3 reproduced the occupied-target line with exit 2 and verified the existing file was preserved.
+- Prune dry-run exceptions now carry the bounded diagnostic in exception text and their existing API log field, preserving telemetry reason and preview diagnostics.
+- SFTP servers without a subsystem/server receive an actionable 422 without a shell fallback. Existing login-relative/home normalization remains intact.
+- Missing FUSE devices use the existing unavailable-capability response. Readiness timeout configuration and cleanup are preserved: a 120-second timeout alone does not prove a different root cause or justify changing its budget.
+
+## Verification
+
+Regression tests were observed failing before their corresponding fixes. Final focused recovery gate: 19 passed. Repository plus recovery gate: 254 passed. API mount, Borg error, and archive-index boundary gate: 173 passed. Ruff and diff whitespace checks pass. Existing dependency deprecation warnings remain; mount capability tests include existing planned-feature skips.

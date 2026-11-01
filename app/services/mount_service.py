@@ -97,6 +97,8 @@ NO_FUSE_SUPPORT_MARKERS = (
     "no fuse support",
     "borg mount not available",
     "borgfs is not supported",
+    "fuse: device not found",
+    "failed to open /dev/fuse",
 )
 
 SSHFS_NO_SUCH_FILE_MARKERS = (
