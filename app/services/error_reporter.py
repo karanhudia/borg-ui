@@ -33,6 +33,7 @@ from typing import Literal, Optional
 import requests
 
 from app.config import get_runtime_app_version, settings
+from app.core.storage_errors import storage_failure
 from app.database.database import SessionLocal
 from app.database.models import LicensingState, User
 from app.utils.redaction import redact_secrets
@@ -298,6 +299,12 @@ def _report(
 ) -> None:
     if not settings.error_reporting_enabled:
         return
+    failure = storage_failure(message)
+    if failure:
+        # A caught filesystem failure is still actionable: otherwise all
+        # handled jobs are hidden as expected by the error dashboard.
+        handled = False
+        error_key = error_key or f"backend.errors.storage.{failure}"
     fingerprint = fnv1a64("|".join(fingerprint_parts))
     count = _admit(fingerprint)
     if count is None:

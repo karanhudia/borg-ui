@@ -5810,6 +5810,10 @@
   },
   "backend": {
     "errors": {
+      "storage": {
+        "full": "Lo spazio di archiviazione è pieno o la quota è esaurita. Liberare spazio e controllare la quota dei volumi del database di Borg UI e dell’archiviazione interessata, quindi riprovare. Nessun dato è stato eliminato automaticamente.",
+        "io": "L’archiviazione ha segnalato un errore di input/output. Controllare disco, filesystem e montaggi prima di riprovare. Verificare lo stato dell’operazione prima di inviarla nuovamente."
+      },
       "auth": {
         "cannotDeleteSelf": "Non puoi eliminare te stesso",
         "currentPasswordIncorrect": "La password attuale non è corretta",

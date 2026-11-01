@@ -5810,6 +5810,10 @@
   },
   "backend": {
     "errors": {
+      "storage": {
+        "full": "El almacenamiento está lleno o se ha agotado su cuota. Libere espacio y compruebe la cuota del volumen de la base de datos de Borg UI y del almacenamiento afectado antes de reintentar. No se han eliminado datos automáticamente.",
+        "io": "El almacenamiento ha informado de un error de entrada/salida. Compruebe el disco, el sistema de archivos y los montajes antes de reintentar. Verifique el estado de la operación antes de volver a enviarla."
+      },
       "auth": {
         "cannotDeleteSelf": "No puedes eliminarte a ti mismo",
         "currentPasswordIncorrect": "La contraseña actual es incorrecta",

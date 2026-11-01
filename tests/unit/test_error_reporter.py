@@ -1,4 +1,6 @@
 import json
+import errno
+import sqlite3
 import time
 from contextlib import contextmanager
 
@@ -471,6 +473,64 @@ def test_unhandled_request_reports_and_returns_500(test_db, sent):
     assert sent[0]["props"]["kind"] == "request"
     assert sent[0]["props"]["component"] == "GET /api/__boom"
     assert sent[0]["props"]["status"] == 500
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+@pytest.mark.parametrize(
+    "failure,status_code,key",
+    [
+        (sqlite3.OperationalError("database or disk is full"), 507, "full"),
+        (
+            OSError(errno.ENOSPC, "No space left on device", "/private/path"),
+            507,
+            "full",
+        ),
+        (OSError(errno.EDQUOT, "Disk quota exceeded", "/private/path"), 507, "full"),
+        (OSError(errno.EIO, "Input/output error", "/private/path"), 503, "io"),
+        (
+            OperationalError(
+                "UPDATE private_table SET token='secret'",
+                {},
+                sqlite3.OperationalError("database or disk is full"),
+            ),
+            507,
+            "full",
+        ),
+    ],
+)
+def test_storage_failures_have_safe_recovery_details(
+    test_db, sent, failure, status_code, key, wrapped
+):
+    def boom():
+        try:
+            raise failure
+        except Exception:
+            if wrapped:
+                raise HTTPException(500, detail="unhelpful wrapper")
+            raise
+
+    with _test_route("/api/__storage", boom) as client:
+        response = client.get("/api/__storage")
+    assert response.status_code == status_code
+    assert response.json() == {"detail": {"key": f"backend.errors.storage.{key}"}}
+    assert "private" not in response.text and "secret" not in response.text
+    flush()
+    assert sent[0]["props"]["status"] == status_code
+    assert sent[0]["props"]["error_key"] == f"storage.{key}"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "listing archives failed: OSError: [Errno 5] Input/output error: '/backup'",
+        "(sqlite3.OperationalError) database or disk is full",
+        "OSError: [Errno 28] No space left on device",
+    ],
+)
+def test_handled_storage_failure_remains_actionable(sent, message):
+    report_failure(kind="job", type_="archive_sync_failed", message=message)
+    flush()
+    assert sent[0]["props"]["handled"] is False
 
 
 def test_http_500_reports_its_cause_and_keeps_the_response(test_db, sent):

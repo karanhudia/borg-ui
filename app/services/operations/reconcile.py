@@ -33,6 +33,47 @@ DEFAULT_INTERVAL_MINUTES = 60
 # it without a process restart. The wait for the next run is cut into the
 # same slices, so a changed interval applies within one of them.
 POLL_INTERVAL_WHEN_DISABLED_MINUTES = 5
+MAX_FAILURE_COOLDOWN_MINUTES = 6 * 60
+
+
+def archive_sync_cooling_down(db: Session, repository_id: int) -> bool:
+    """Pace repeated terminal failures; explicit refreshes remain immediate.
+
+    Busy locks already defer inside the runner. Only finished sync attempts
+    count here, never skipped dependencies, history work or active deferrals.
+    A successful listing (including a manual or backup follow-up) resets it.
+    Persisted verdicts make the cooldown survive a process restart.
+    """
+    recent = (
+        db.query(Operation)
+        .filter(
+            Operation.repository_id == repository_id,
+            Operation.kind == "archive_sync",
+            Operation.status.in_(("failed", "completed", "completed_with_warnings")),
+            Operation.completed_at.isnot(None),
+        )
+        .order_by(Operation.completed_at.desc(), Operation.id.desc())
+        .limit(4)
+        .all()
+    )
+    failures = 0
+    for operation in recent:
+        if operation.status != "failed":
+            break
+        failures += 1
+    if not failures:
+        return False
+    system_settings = db.query(SystemSettings).first()
+    interval = max(
+        1,
+        (system_settings.stats_refresh_interval_minutes if system_settings else None)
+        or DEFAULT_INTERVAL_MINUTES,
+    )
+    # Never accelerate an interval the operator deliberately set above the cap.
+    minutes = max(
+        interval, min(interval * 2 ** (failures - 1), MAX_FAILURE_COOLDOWN_MINUTES)
+    )
+    return utc_now() < recent[0].completed_at + timedelta(minutes=minutes)
 
 
 def has_active_index_work(db: Session, repository_id: int) -> bool:
@@ -111,6 +152,8 @@ def enqueue_reconcile_run(
         db, history=history_possible_for(db, repository_id), mode=mode
     )
     if not kinds or (not force and has_active_index_work(db, repository_id)):
+        return []
+    if not manual and not force and archive_sync_cooling_down(db, repository_id):
         return []
     return enqueue_chain(
         db,
