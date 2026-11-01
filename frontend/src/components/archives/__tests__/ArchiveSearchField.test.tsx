@@ -83,6 +83,19 @@ describe('ArchiveSearchField', () => {
     expect(within(row).getByText(/in 7 archives/)).toBeInTheDocument()
   })
 
+  it('keeps the folder path in left-to-right order while cutting it at the front', async () => {
+    respondWith([searchResult({ path: '_backup/alex/docs/invoices.xlsx' })])
+    renderField()
+    submitSearch()
+    const row = await screen.findByTestId('search-result-_backup/alex/docs/invoices.xlsx')
+    // The folder line is right-to-left only so it truncates at the front; the
+    // path itself must stay an isolated LTR run so "_backup" is not shown as
+    // "backup_".
+    const folder = within(row).getByText('_backup/alex/docs')
+    expect(folder.tagName).toBe('BDI')
+    expect(folder).toHaveAttribute('dir', 'ltr')
+  })
+
   it("reads present against the newest archive of the result's own series", async () => {
     // The photos series runs later in the day, so it owns the newest archive
     // in the repository. A file at the head of the nightly series is still
