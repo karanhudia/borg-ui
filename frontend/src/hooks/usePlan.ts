@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { Plan, Feature, canAccess } from '../core/features'
+import { noteFullAccessEnd } from '../utils/paywallOffer'
 import type { EntitlementInfo } from './useSystemInfo'
 
 interface UsePlanResult {
@@ -17,6 +19,9 @@ export function usePlan(): UsePlanResult {
   const features: Record<string, Plan> = data?.features ?? {}
   const featureAccess = data?.feature_access ?? {}
   const entitlement = data?.entitlement
+  const fullAccessEnds =
+    entitlement?.ui_state === 'full_access_active' ? entitlement.expires_at : null
+  useEffect(() => noteFullAccessEnd(fullAccessEnds), [fullAccessEnds])
 
   return {
     plan,
