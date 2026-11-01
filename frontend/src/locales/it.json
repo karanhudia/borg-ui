@@ -5939,7 +5939,7 @@
         "listFailed": "Impossibile elencare gli archivi del repository: {{error}}",
         "remoteBorg2Incompatible": "Il server remoto non esegue un server Borg 2 compatibile. Installa Borg 2 sull'host remoto e imposta il percorso Borg remoto sul binario borg2, oppure usa Borg 1 per questo repository.",
         "failedToCreateRepository": "Impossibile creare il repository",
-        "failedToVerifyRepository": "Impossibile verificare il repository",
+        "failedToVerifyRepository": "Impossibile verificare il repository: {{error}}",
         "failedToImportRepository": "Impossibile importare il repository",
         "failedToUploadKeyfile": "Impossibile caricare il file chiave",
         "failedToExportKeyfile": "Impossibile esportare il file chiave",

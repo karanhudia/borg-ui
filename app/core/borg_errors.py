@@ -129,6 +129,39 @@ class RestoreRefused(Exception):
         self.detail = detail
 
 
+def bounded_operation_diagnostic(reason: str) -> str:
+    """Redact before bounding so a truncated secret cannot escape masking."""
+    from app.utils.redaction import redact_secrets
+
+    diagnostic = redact_secrets(str(reason)).strip()
+    if len(diagnostic) > 2000:
+        marker = "\n... [truncated] ...\n"
+        diagnostic = diagnostic[:400] + marker + diagnostic[-(1600 - len(marker)) :]
+    return diagnostic
+
+
+def repository_failure_status(result: dict) -> int:
+    """Classify evidenced refusals only; unknown Borg failures remain 500."""
+    reason = "\n".join(
+        str(result.get(key) or "") for key in ("error", "stderr")
+    ).lower()
+    # 422, not 403: the frontend reads 403 as a role refusal and toasts so.
+    if result.get("return_code") == 21 or "permission denied" in reason:
+        return 422
+    if (
+        result.get("return_code") == 19
+        or "fileexistserror: [errno 17]" in reason
+        # Borg 1's legacy exit code 2 cannot distinguish an occupied target.
+        # This exact message is emitted by PathAlreadyExists (borg 1.4.3).
+        or any(
+            _re.fullmatch(r"there is already something at .+\.", line.strip())
+            for line in reason.splitlines()
+        )
+    ):
+        return 409
+    return 500
+
+
 class ArchiveListingError(Exception):
     """An expected Borg listing failure with bounded, secret-free diagnostics."""
 

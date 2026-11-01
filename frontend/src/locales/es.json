@@ -5939,7 +5939,7 @@
         "listFailed": "Error al listar los archivos del repositorio: {{error}}",
         "remoteBorg2Incompatible": "El servidor remoto no ejecuta un servidor Borg 2 compatible. Instale Borg 2 en el host remoto y configure la ruta remota de Borg al binario borg2, o use Borg 1 para este repositorio.",
         "failedToCreateRepository": "Error al crear el repositorio",
-        "failedToVerifyRepository": "Error al verificar el repositorio",
+        "failedToVerifyRepository": "Error al verificar el repositorio: {{error}}",
         "failedToImportRepository": "Error al importar el repositorio",
         "failedToUploadKeyfile": "Error al subir el archivo de clave",
         "failedToExportKeyfile": "Error al exportar el archivo de clave",
