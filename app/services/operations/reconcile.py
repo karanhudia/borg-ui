@@ -53,7 +53,8 @@ def archive_sync_cooling_down(db: Session, repository_id: int) -> bool:
             Operation.completed_at.isnot(None),
         )
         .order_by(Operation.completed_at.desc(), Operation.id.desc())
-        .limit(4)
+        # Ten failures reach the six-hour cap even at a one-minute interval.
+        .limit(10)
         .all()
     )
     failures = 0

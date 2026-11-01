@@ -22,3 +22,5 @@ Storage remediation on private user hosts requires their operators. No claim of 
 ## Verification
 
 The 13 API/telemetry regressions and five cooldown regressions failed before implementation. The affected main, reporter, reconcile, runner and index suites pass 308 tests. Ruff lint/format, locale key and placeholder parity, and whitespace checks pass. Independent review exercised extended SQLite I/O codes and cyclic causes and found no issues. Existing deprecation/resource warnings remain.
+
+Follow-up validation: a short refresh interval regression proved four stored failures were insufficient to reach the six-hour cap. Inspect ten bounded verdicts instead; the five-minute interval now reaches the cap and intervals longer than six hours remain preserved. The reconcile/runner/index suites pass 230 tests, and independent reconcile verification passes 38 tests.

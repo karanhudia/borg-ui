@@ -143,6 +143,28 @@ def test_successful_sync_resets_reconcile_failure_cooldown(db, repos, monkeypatc
     assert reconcile.enqueue_reconcile_run(db, repo.id)
 
 
+@pytest.mark.parametrize("interval,failures,minutes", [(5, 8, 360), (720, 4, 720)])
+def test_failure_cooldown_honors_operator_interval(
+    db, repos, monkeypatch, interval, failures, minutes
+):
+    monkeypatch.setattr(reconcile, "registered_kinds", lambda: {"archive_sync"})
+    repo, _ = repos
+    db.query(SystemSettings).update({"stats_refresh_interval_minutes": interval})
+    last_failure = datetime(2026, 11, 1, 12)
+    for i in range(failures):
+        _sync_verdict(db, repo, last_failure - timedelta(minutes=failures - i - 1))
+    monkeypatch.setattr(
+        reconcile,
+        "utc_now",
+        lambda: last_failure + timedelta(minutes=minutes, seconds=-1),
+    )
+    assert reconcile.enqueue_reconcile_run(db, repo.id) == []
+    monkeypatch.setattr(
+        reconcile, "utc_now", lambda: last_failure + timedelta(minutes=minutes)
+    )
+    assert reconcile.enqueue_reconcile_run(db, repo.id)
+
+
 @pytest.mark.unit
 def test_enqueue_reconcile_runs_despite_a_running_history_index(db, repos, monkeypatch):
     """A history index can run for hours. It must not block the hourly
