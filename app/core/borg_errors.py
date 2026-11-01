@@ -145,8 +145,9 @@ def repository_failure_status(result: dict) -> int:
     reason = "\n".join(
         str(result.get(key) or "") for key in ("error", "stderr")
     ).lower()
+    # 422, not 403: the frontend reads 403 as a role refusal and toasts so.
     if result.get("return_code") == 21 or "permission denied" in reason:
-        return 403
+        return 422
     if (
         result.get("return_code") == 19
         or "fileexistserror: [errno 17]" in reason

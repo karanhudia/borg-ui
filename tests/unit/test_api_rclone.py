@@ -4297,7 +4297,7 @@ def test_rclone_repository_rejects_borg2_payload(
     "reason,status",
     [
         ("unexpected Borg verification failure", 500),
-        ("Permission denied", 403),
+        ("Permission denied", 422),
         ("There is already something at /cache/repo.", 409),
         ("passphrase supplied in BORG_PASSPHRASE is incorrect.", 400),
         ("not a valid repository", 400),

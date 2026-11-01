@@ -22,7 +22,7 @@
 ## Evidence and implementation outcome
 
 - Repository errors now keep at most 2,000 characters after secret redaction, retaining both the beginning and final cause. Existing translated import/verification copy interpolates the diagnostic in all four locales.
-- Recognized permission failures return 403; occupied paths return 409 from modern code 19, FileExistsError, or Borg 1's exact `There is already something at <path>.` line. Unknown failures remain 500. Existing lock refusal behavior and rollback semantics remain covered.
+- Recognized permission failures return 422 (403 is reserved for role refusals, which the frontend toasts as such); occupied paths return 409 from modern code 19, FileExistsError, or Borg 1's exact `There is already something at <path>.` line. Unknown failures remain 500. Existing lock refusal behavior and rollback semantics remain covered.
 - A disposable-directory probe with installed Borg 1.4.3 reproduced the occupied-target line with exit 2 and verified the existing file was preserved.
 - Prune dry-run exceptions now carry the bounded diagnostic in exception text and their existing API log field, preserving telemetry reason and preview diagnostics.
 - SFTP servers without a subsystem/server receive an actionable 422 without a shell fallback. Existing login-relative/home normalization remains intact.
@@ -34,7 +34,7 @@ Regression tests were observed failing before their corresponding fixes. Final f
 
 ## Review correction: mounted-cache rclone import
 
-Independent review found that mounted-cache rclone import still returned blanket HTTP 400 for generic verification failures. The regression now exercises unknown failure (500), permission denial (403), occupied target (409), passphrase refusal (400), and invalid repository (400), asserting diagnostic preservation and removal of uncommitted repository/storage records. Before the fix, the first three status assertions failed while the user-correctable 400 cases passed. Mounted-cache Borg 2 rejection remains at the existing validation boundary. The generic verification branch now uses `repository_failure_status` after preserving the explicit 400 refusals.
+Independent review found that mounted-cache rclone import still returned blanket HTTP 400 for generic verification failures. The regression now exercises unknown failure (500), permission denial (422), occupied target (409), passphrase refusal (400), and invalid repository (400), asserting diagnostic preservation and removal of uncommitted repository/storage records. Before the fix, the first three status assertions failed while the user-correctable 400 cases passed. Mounted-cache Borg 2 rejection remains at the existing validation boundary. The generic verification branch now uses `repository_failure_status` after preserving the explicit 400 refusals.
 
 Review correction verification: `test_api_rclone.py` plus `test_operation_error_recovery.py`: **148 passed**. Ruff and diff whitespace checks passed.
 

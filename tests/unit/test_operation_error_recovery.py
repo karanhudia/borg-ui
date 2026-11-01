@@ -10,8 +10,8 @@ from fastapi import HTTPException
 @pytest.mark.parametrize(
     "result,status",
     [
-        ({"return_code": 21}, 403),
-        ({"error": "PermissionError: [Errno 13] Permission denied: '/repo'"}, 403),
+        ({"return_code": 21}, 422),
+        ({"error": "PermissionError: [Errno 13] Permission denied: '/repo'"}, 422),
         ({"return_code": 19}, 409),
         ({"return_code": 2, "stderr": "There is already something at /repo."}, 409),
         ({"stderr": "FileExistsError: [Errno 17] File exists: '/repo'"}, 409),
@@ -49,7 +49,7 @@ def test_prune_exception_preserves_bounded_redacted_reason():
 
 
 @pytest.mark.parametrize(
-    "reason,status", [("Permission denied", 403), ("unknown failure", 500)]
+    "reason,status", [("Permission denied", 422), ("unknown failure", 500)]
 )
 def test_import_failure_preserves_reason(
     test_client, test_db, admin_headers, tmp_path, reason, status
@@ -120,7 +120,7 @@ async def test_sftp_unavailable_is_actionable_without_shell_fallback(test_db, re
 
 @pytest.mark.parametrize(
     "reason,status",
-    [("Permission denied", 403), ("FileExistsError: [Errno 17] File exists", 409)],
+    [("Permission denied", 422), ("FileExistsError: [Errno 17] File exists", 409)],
 )
 def test_create_refused_target_status(
     test_client, admin_headers, tmp_path, reason, status
@@ -142,7 +142,7 @@ def test_create_refused_target_status(
 
 
 @pytest.mark.parametrize(
-    "reason,status", [("Permission denied", 403), ("unknown probe failure", 500)]
+    "reason,status", [("Permission denied", 422), ("unknown probe failure", 500)]
 )
 def test_update_unverified_path_preserves_reason_and_original_path(
     test_client, test_db, admin_headers, reason, status
@@ -180,7 +180,7 @@ def test_update_unverified_path_preserves_reason_and_original_path(
 
 
 @pytest.mark.parametrize("route", ["import", "update"])
-@pytest.mark.parametrize("return_code,status", [(21, 403), (19, 409), (2, 500)])
+@pytest.mark.parametrize("return_code,status", [(21, 422), (19, 409), (2, 500)])
 def test_borg1_exit_code_reaches_real_verification_consumer(
     test_client, test_db, admin_headers, tmp_path, route, return_code, status
 ):
