@@ -51,7 +51,8 @@ def storage_failure(error: BaseException | str) -> StorageFailure | None:
             # can be copied into outer exceptions too. Only inspect text
             # when no authoritative underlying exception is available.
             text = str(current)
-            text = text[:8192] + text[-8192:]
+            if len(text) > 16384:
+                text = text[:8192] + text[-8192:]
             if _FULL.search(text):
                 return "full"
             if _IO.search(text):
