@@ -354,8 +354,15 @@ def create_backup_operation(
     shadowed. `retry` holds the details row's retry columns. With
     `repository` None the caller passes the path it was given and is
     expected to fail the row itself before committing."""
+    from app.core.borg_major import is_borg2
+    from app.core.features import require_feature_access
     from app.services.backup_route_planner import apply_repository_route_to_backup_job
     from app.services.operations.enqueue import enqueue, wake_runner
+
+    # Every backup is created here, so this is where a Borg 2 backup is
+    # refused once the plan no longer includes Borg 2, whoever asked for it.
+    if repository is not None and is_borg2(repository):
+        require_feature_access(db, "borg_v2")
 
     stored = {k: v for k, v in (params or {}).items() if v is not None}
     stored["executor"] = executor

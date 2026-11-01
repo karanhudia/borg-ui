@@ -2314,7 +2314,8 @@
   "availabilitySchedule": {
     "skipReasons": {
       "minimumIntervalNotElapsed": "El intervalo mínimo no ha transcurrido",
-      "sourceUnavailable": "Fuente no disponible"
+      "sourceUnavailable": "Fuente no disponible",
+      "planRequired": "En pausa: requiere Pro"
     }
   },
   "cloudStorageJobs": {
