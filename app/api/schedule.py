@@ -2808,11 +2808,16 @@ def _skip_if_plan_required(db: Session, job: ScheduledJob, now: datetime) -> boo
             )
         )
         if repo is not None
-    ] or [
-        repo
-        for repo in _get_schedule_repositories(db, job)
-        if repo.id == job.repository_id or repo.path == job.repository
     ]
+    if not repositories:
+        single = (
+            db.get(Repository, job.repository_id)
+            if job.repository_id
+            else db.query(Repository).filter(Repository.path == job.repository).first()
+            if job.repository
+            else None
+        )
+        repositories = [single] if single is not None else []
     borg2 = [repo for repo in repositories if is_borg2(repo)]
     if not borg2 or has_feature(db, BORG2_FEATURE):
         return False

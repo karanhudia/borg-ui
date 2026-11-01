@@ -281,3 +281,67 @@ def test_plan_allowed_by_an_override_still_needs_borg2(test_db):
 
     assert decision.allowed is False
     assert decision.feature == "borg_v2"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_job_repository_id_wins_over_a_leftover_borg2_path(test_db):
+    _set_plan(test_db, "community")
+    leftover = _v2_repo(test_db)
+    borg1 = _create_repo(test_db, "Borg 1", "/repos/borg1")
+    now = datetime(2026, 1, 1, 2, 0)
+    job = ScheduledJob(
+        name="Nightly",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=borg1.id,
+        repository=leftover.path,
+        next_run=now - timedelta(minutes=1),
+    )
+    test_db.add(job)
+    test_db.commit()
+
+    with patch(
+        "app.api.schedule._dispatch_due_scheduled_job", return_value="k"
+    ) as dispatch:
+        await schedule_api.dispatch_due_scheduled_backups(test_db, now)
+
+    dispatch.assert_called_once()
+    assert test_db.query(AvailabilityScheduleSkip).count() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_real_run_on_pro_rearms_the_notice(test_db):
+    repo = _v2_repo(test_db)
+    job = ScheduledJob(
+        name="Nightly", cron_expression="0 2 * * *", enabled=True, repository_id=repo.id
+    )
+    test_db.add(job)
+    test_db.commit()
+    day = datetime(2026, 1, 1, 2, 0)
+
+    async def due(plan: str, at: datetime) -> None:
+        _set_plan(test_db, plan)
+        job.next_run = at - timedelta(minutes=1)
+        test_db.commit()
+        await schedule_api.dispatch_due_scheduled_backups(test_db, at)
+
+    with (
+        patch(
+            "app.api.schedule._send_schedule_failure", new_callable=AsyncMock
+        ) as notice,
+        patch(
+            "app.api.schedule.execute_scheduled_backup_with_maintenance",
+            new_callable=AsyncMock,
+        ),
+        patch("app.api.schedule.asyncio.create_task", side_effect=_close),
+        patch("app.api.schedule._track_scheduled_backup_task"),
+        patch("app.services.operations.enqueue.wake_runner"),
+    ):
+        await due("community", day)
+        await due("pro", day + timedelta(days=1))  # real dispatch sets last_run
+        await due("community", day + timedelta(days=2))
+
+    assert notice.call_count == 2
+    assert test_db.query(Operation).count() == 1
