@@ -123,7 +123,9 @@ def evaluate_backup_plan_access(
             source_directories=_decode_plan_source_directories(plan),
         ),
     )
-    if decision.reason is None and any(
+    # an existing refusal comes first; an allowed plan still needs Borg 2 for
+    # its Borg 2 repositories, whatever else an override grants it
+    if decision.allowed and any(
         link.enabled and link.repository is not None and is_borg2(link.repository)
         for link in plan.repositories
     ):

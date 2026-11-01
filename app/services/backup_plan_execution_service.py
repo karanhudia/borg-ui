@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
+from app.core.borg_major import is_borg2
 from app.core.borg_router import BorgRouter
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
@@ -45,6 +46,7 @@ from app.services.operations.maintenance_start import (
     start_inline_maintenance,
 )
 from app.services.backup_plan_policy import (
+    BORG2_FEATURE,
     PLAN_REQUIRED_SKIP_REASON,
     evaluate_backup_plan_access,
     plan_required_message,
@@ -643,11 +645,17 @@ def _agent_job(db: Session, *, agent_job_id: int) -> Optional[AgentJob]:
     return db.get(AgentJob, agent_job_id)
 
 
-def _first_enabled_repository_path(plan: BackupPlan) -> str:
-    for link in plan.repositories:
-        if link.enabled and link.repository is not None:
-            return link.repository.path
-    return ""
+def _notice_repository_path(plan: BackupPlan, feature: str) -> str:
+    """The repository a plan-required notice names: a Borg 2 one when Borg 2
+    is what is missing, so a notification scoped to it is the one sent."""
+    repos = [
+        link.repository
+        for link in plan.repositories
+        if link.enabled and link.repository is not None
+    ]
+    if feature == BORG2_FEATURE:
+        repos = [repo for repo in repos if is_borg2(repo)] or repos
+    return repos[0].path if repos else ""
 
 
 async def _send_plan_required_notice(
@@ -794,7 +802,7 @@ class BackupPlanExecutionService:
                     asyncio.create_task(
                         _send_plan_required_notice(
                             plan.name,
-                            _first_enabled_repository_path(plan),
+                            _notice_repository_path(plan, access_decision.feature),
                             plan_required_message(
                                 access_decision.feature, access_decision.required
                             ),

@@ -2797,10 +2797,24 @@ def _skip_if_plan_required(db: Session, job: ScheduledJob, now: datetime) -> boo
     first skip since the job last ran: a backup that stops must not stop
     silently.
     """
-    repositories = _get_schedule_repositories(db, job)
-    if not any(is_borg2(repo) for repo in repositories) or has_feature(
-        db, BORG2_FEATURE
-    ):
+    # the repositories `_dispatch_due_scheduled_job` would back up: the links
+    # when there are any, the single repository otherwise
+    repositories = [
+        repo
+        for repo in (
+            db.get(Repository, link.repository_id)
+            for link in db.query(ScheduledJobRepository).filter_by(
+                scheduled_job_id=job.id
+            )
+        )
+        if repo is not None
+    ] or [
+        repo
+        for repo in _get_schedule_repositories(db, job)
+        if repo.id == job.repository_id or repo.path == job.repository
+    ]
+    borg2 = [repo for repo in repositories if is_borg2(repo)]
+    if not borg2 or has_feature(db, BORG2_FEATURE):
         return False
 
     previous = db.query(AvailabilityScheduleSkip.id).filter(
@@ -2819,9 +2833,7 @@ def _skip_if_plan_required(db: Session, job: ScheduledJob, now: datetime) -> boo
     db.commit()
     logger.info("Scheduled job skipped: plan does not include Borg 2", job_id=job.id)
     if first_refusal:
-        asyncio.create_task(
-            _send_schedule_failure(job.name, repositories[0].path, message)
-        )
+        asyncio.create_task(_send_schedule_failure(job.name, borg2[0].path, message))
     return True
 
 

@@ -192,3 +192,92 @@ async def test_scheduled_job_dispatches_borg2_on_pro(test_db):
 
     dispatch.assert_called_once()
     assert test_db.query(AvailabilityScheduleSkip).count() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_job_skip_follows_the_repositories_dispatch_would_use(test_db):
+    from app.database.models import ScheduledJobRepository
+
+    _set_plan(test_db, "community")
+    stale_borg2 = _v2_repo(test_db)
+    borg1 = _create_repo(test_db, "Borg 1", "/repos/borg1")
+    second_borg2 = _create_repo(test_db, "Second", "/repos/second", borg_version=2)
+    now = datetime(2026, 1, 1, 2, 0)
+    # links win over the leftover repository_id, as in dispatch
+    linked_borg1 = ScheduledJob(
+        name="Linked",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=stale_borg2.id,
+        next_run=now - timedelta(minutes=1),
+    )
+    mixed = ScheduledJob(
+        name="Mixed",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        next_run=now - timedelta(minutes=1),
+    )
+    test_db.add_all([linked_borg1, mixed])
+    test_db.flush()
+    test_db.add_all(
+        [
+            ScheduledJobRepository(
+                scheduled_job_id=linked_borg1.id,
+                repository_id=borg1.id,
+                execution_order=0,
+            ),
+            ScheduledJobRepository(
+                scheduled_job_id=mixed.id, repository_id=borg1.id, execution_order=0
+            ),
+            ScheduledJobRepository(
+                scheduled_job_id=mixed.id,
+                repository_id=second_borg2.id,
+                execution_order=1,
+            ),
+        ]
+    )
+    test_db.commit()
+
+    with (
+        patch(
+            "app.api.schedule._send_schedule_failure", new_callable=AsyncMock
+        ) as notice,
+        patch("app.api.schedule.asyncio.create_task", side_effect=_close),
+        patch(
+            "app.api.schedule._dispatch_due_scheduled_job", return_value="k"
+        ) as dispatch,
+    ):
+        await schedule_api.dispatch_due_scheduled_backups(test_db, now)
+
+    assert [c.args[1].id for c in dispatch.call_args_list] == [linked_borg1.id]
+    # the notice names the Borg 2 repository, not the first one listed
+    assert notice.call_args.args[:2] == ("Mixed", second_borg2.path)
+
+
+@pytest.mark.unit
+def test_plan_allowed_by_an_override_still_needs_borg2(test_db):
+    from app.services.backup_plan_policy import (
+        BackupPlanFeatureDecision,
+        evaluate_backup_plan_access,
+    )
+    from app.core.features import Plan
+
+    _set_plan(test_db, "community")
+    plan = _create_scheduled_plan(test_db, [_v2_repo(test_db)])
+    granted = BackupPlanFeatureDecision(
+        allowed=True,
+        current=Plan.COMMUNITY,
+        required=Plan.PRO,
+        feature="backup_plan_multi_repository",
+        reason="multi_repository",
+    )
+
+    with patch(
+        "app.services.backup_plan_policy.evaluate_backup_plan_feature_access",
+        return_value=granted,
+    ):
+        decision = evaluate_backup_plan_access(test_db, plan)
+
+    assert decision.allowed is False
+    assert decision.feature == "borg_v2"
