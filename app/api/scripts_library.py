@@ -409,7 +409,7 @@ async def create_script(
     """Create a new script"""
     # Check if name already exists
     existing = db.query(Script).filter(Script.name == script_data.name).first()
-    if existing and script_data.category == "template":
+    if script_data.category == "template":
         # Generated source scripts are sent again every time a plan with that source
         # is saved, and they outlive deleted plans. Reuse an identical one, under its
         # own name or a numbered copy; give an edited one the next free name instead
@@ -427,10 +427,11 @@ async def create_script(
         for script in copies.values():
             if _same_generated_script(script, script_data):
                 return _script_create_response(script)
-        n = 2
-        while f"{base} ({n})" in copies:
-            n += 1
-        script_data = script_data.model_copy(update={"name": f"{base} ({n})"})
+        if existing:
+            n = 2
+            while f"{base} ({n})" in copies:
+                n += 1
+            script_data = script_data.model_copy(update={"name": f"{base} ({n})"})
     elif existing:
         raise HTTPException(
             status_code=400,
@@ -519,8 +520,17 @@ def _same_generated_script(existing: Script, script_data: ScriptCreate) -> bool:
     ):
         return False
     try:
-        return read_script_file(existing.file_path) == script_data.content
-    except HTTPException:
+        parameters = script_data.parameters or parse_script_parameters(
+            script_data.content
+        )
+        stored_parameters = (
+            json.loads(existing.parameters) if existing.parameters else []
+        )
+        return (
+            stored_parameters == parameters
+            and read_script_file(existing.file_path) == script_data.content
+        )
+    except (HTTPException, json.JSONDecodeError):
         return False
 
 

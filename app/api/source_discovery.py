@@ -1561,6 +1561,7 @@ def _detect_template(
 
 
 PROBE_STARTED_MARKER = "BORG_UI_PROBE_STARTED"
+PROBE_EXIT_MARKER = "BORG_UI_PROBE_EXIT:"
 
 
 def _build_remote_probe_script(
@@ -1577,6 +1578,7 @@ def _build_remote_probe_script(
     # find would look like a scan that found nothing. Fail loudly instead.
     lines = [
         "set +e",
+        f'trap \'printf "{PROBE_EXIT_MARKER}%s\\n" "$?" >&2\' 0',
         f"echo {PROBE_STARTED_MARKER} >&2",
         "command -v find >/dev/null 2>&1 || { echo 'find: not found' >&2; exit 127; }",
     ]
@@ -1887,11 +1889,22 @@ async def _scan_remote_database_paths(
         if os.path.exists(key_file_path):
             os.unlink(key_file_path)
 
-    # The probe writes a marker to stderr first, so a failed run without it never
-    # reached the host. Banners ssh prints don't decide anything.
-    probe_ran = PROBE_STARTED_MARKER in (result.stderr or "")
-    stderr = (result.stderr or "").replace(PROBE_STARTED_MARKER, "").strip()
-    if result.returncode != 0 and not probe_ran:
+    # SSH returns 255 for transport errors, but a remote command may also exit
+    # 255. Its exit trap reports that case explicitly; a start marker alone
+    # cannot distinguish a dropped connection from a completed remote command.
+    remote_exit_code = None
+    diagnostic_lines = []
+    for line in (result.stderr or "").splitlines():
+        if line == PROBE_STARTED_MARKER:
+            continue
+        if line.startswith(PROBE_EXIT_MARKER):
+            exit_code = line.removeprefix(PROBE_EXIT_MARKER)
+            if exit_code.isascii() and exit_code.isdecimal():
+                remote_exit_code = int(exit_code)
+                continue
+        diagnostic_lines.append(line)
+    stderr = "\n".join(diagnostic_lines).strip()
+    if result.returncode == 255 and remote_exit_code != 255:
         return _failure_response(
             status_code=502,
             scan_target=scan_target,

@@ -947,6 +947,54 @@ class TestGeneratedScriptNameReuse:
 
         assert first.json()["file_path"] != edited.json()["file_path"]
 
+    def test_numbered_copy_is_reused_after_base_script_is_deleted(
+        self, test_client, admin_headers, test_db
+    ):
+        base = self._create(test_client, admin_headers)
+        copy = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        test_db.query(Script).filter(Script.id == base.json()["id"]).delete()
+        test_db.commit()
+
+        again = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        different = self._create(
+            test_client, admin_headers, content="#!/bin/sh\necho 3\n"
+        )
+
+        assert again.status_code == 201
+        assert again.json()["id"] == copy.json()["id"]
+        assert different.json()["name"] == "Export Docker container: web"
+
+    def test_changed_parameter_definitions_get_a_separate_reusable_copy(
+        self, test_client, admin_headers
+    ):
+        original = [
+            {"name": "DEST", "type": "text", "default": "/one", "required": False}
+        ]
+        changed = [
+            {"name": "DEST", "type": "text", "default": "/two", "required": False}
+        ]
+        first = self._create(test_client, admin_headers, parameters=original)
+        second = self._create(test_client, admin_headers, parameters=changed)
+        again = self._create(test_client, admin_headers, parameters=changed)
+
+        assert second.status_code == 201
+        assert second.json()["id"] != first.json()["id"]
+        assert second.json()["parameters"] == changed
+        assert again.json()["id"] == second.json()["id"]
+
+    def test_inferred_and_explicit_equivalent_parameters_reuse_the_script(
+        self, test_client, admin_headers
+    ):
+        content = "#!/bin/sh\necho ${DEST:-/backup}\n"
+        first = self._create(test_client, admin_headers, content=content)
+        again = self._create(
+            test_client,
+            admin_headers,
+            content=content,
+            parameters=first.json()["parameters"],
+        )
+        assert again.json()["id"] == first.json()["id"]
+
     def test_custom_script_name_clash_still_refused(self, test_client, admin_headers):
         assert (
             self._create(test_client, admin_headers, category="custom").status_code
