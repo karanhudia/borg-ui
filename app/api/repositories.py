@@ -3271,14 +3271,21 @@ async def _import_rclone_repository_record(
             storage.last_sync_error = (
                 verify_result.get("error") or "Borg verification failed"
             )
+            error_msg = _borg_result_error(verify_result) or "Unknown error"
+            # Mounted-cache rclone imports are Borg 1 only; invalid paths and
+            # passphrase refusals stay user-correctable, like direct imports.
+            user_refusal = any(
+                marker in error_msg.lower()
+                for marker in ("passphrase", "encrypted", "not a valid repository")
+            )
             raise HTTPException(
-                status_code=400,
+                status_code=400
+                if user_refusal
+                else repository_failure_status(verify_result),
                 detail={
                     "key": "backend.errors.repo.failedToVerifyRepository",
-                    "message": _borg_result_error(verify_result),
-                    "params": {
-                        "error": _borg_result_error(verify_result) or "Unknown error"
-                    },
+                    "message": error_msg,
+                    "params": {"error": error_msg},
                 },
             )
 

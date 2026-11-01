@@ -31,3 +31,9 @@
 ## Verification
 
 Regression tests were observed failing before their corresponding fixes. Final focused recovery gate: 19 passed. Repository plus recovery gate: 254 passed. API mount, Borg error, and archive-index boundary gate: 173 passed. Ruff and diff whitespace checks pass. Existing dependency deprecation warnings remain; mount capability tests include existing planned-feature skips.
+
+## Review correction: mounted-cache rclone import
+
+Independent review found that mounted-cache rclone import still returned blanket HTTP 400 for generic verification failures. The regression now exercises unknown failure (500), permission denial (403), occupied target (409), passphrase refusal (400), and invalid repository (400), asserting diagnostic preservation and removal of uncommitted repository/storage records. Before the fix, the first three status assertions failed while the user-correctable 400 cases passed. Mounted-cache Borg 2 rejection remains at the existing validation boundary. The generic verification branch now uses `repository_failure_status` after preserving the explicit 400 refusals.
+
+Review correction verification: `test_api_rclone.py` plus `test_operation_error_recovery.py`: **148 passed**. Ruff and diff whitespace checks passed.
