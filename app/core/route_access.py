@@ -373,6 +373,7 @@ ROUTE_ACCESS_REGISTRY: dict[tuple[str, str], AccessLevel] = {
     ("POST", "/api/system/licensing/deactivate"): "admin",
     ("POST", "/api/system/licensing/feature-trial"): "admin",
     ("POST", "/api/system/licensing/import"): "admin",
+    ("POST", "/api/system/licensing/paywall-offer"): "authenticated",
     ("POST", "/api/system/licensing/refresh"): "admin",
     ("GET", "/api/system/licensing/seats"): "admin",
     ("POST", "/api/system/licensing/seats/release"): "admin",
