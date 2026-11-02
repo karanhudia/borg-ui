@@ -1492,6 +1492,32 @@ describe('SourceStep', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows the reason a database scan failed', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.scanDatabases.mockRejectedValue({
+      response: {
+        status: 502,
+        data: {
+          warnings: [
+            {
+              code: 'SSH_AUTH_FAILED',
+              message: 'Could not connect to backup@nas: Permission denied (publickey)',
+            },
+          ],
+        },
+      },
+    })
+    render(<StatefulSourceStep />)
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    fireEvent.click(await screen.findByRole('tab', { name: /^database$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
+
+    expect(
+      await screen.findByText('Could not connect to backup@nas: Permission denied (publickey)')
+    ).toBeInTheDocument()
+  })
+
   it('shows every detected database instance from a scan', async () => {
     const user = userEvent.setup()
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })

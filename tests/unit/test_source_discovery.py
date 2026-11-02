@@ -1156,6 +1156,147 @@ class TestSourceDiscovery:
             "sqlite",
         }
 
+    @pytest.mark.parametrize(
+        ("returncode", "stderr", "warning_code", "status_code", "diagnostic"),
+        [
+            # ssh connected; the remote shell failed after printing one result.
+            (
+                1,
+                "BORG_UI_PROBE_STARTED\nsh: 3: find: not found",
+                "SCAN_FAILED",
+                200,
+                "not found",
+            ),
+            # A successful run can still print an ssh banner on stderr.
+            (0, "ssh: Authorized users only\nBORG_UI_PROBE_STARTED", None, 200, ""),
+            # A banner and a probe failure together are still a probe failure.
+            (
+                127,
+                "ssh: Authorized users only\nBORG_UI_PROBE_STARTED\nfind: not found",
+                "SCAN_FAILED",
+                200,
+                "not found",
+            ),
+            (127, "shell: sh: not found", "SCAN_FAILED", 200, "sh: not found"),
+            (
+                255,
+                "BORG_UI_PROBE_STARTED\nclient_loop: send disconnect: Broken pipe",
+                "SSH_HOST_UNREACHABLE",
+                502,
+                "Broken pipe",
+            ),
+            (
+                255,
+                "BORG_UI_PROBE_STARTED\nremote command not found\nBORG_UI_PROBE_EXIT:255\n",
+                "SCAN_FAILED",
+                200,
+                "not found",
+            ),
+            (
+                255,
+                "BORG_UI_PROBE_STARTED\nBORG_UI_PROBE_EXIT:0\nconnection reset",
+                "SSH_HOST_UNREACHABLE",
+                502,
+                "connection reset",
+            ),
+        ],
+    )
+    def test_database_scan_remote_probe_failure_is_not_a_connection_failure(
+        self,
+        test_client,
+        admin_headers,
+        test_db,
+        monkeypatch,
+        returncode,
+        stderr,
+        warning_code,
+        status_code,
+        diagnostic,
+    ):
+        ssh_key = SSHKey(
+            name="source-probe-failed-key",
+            public_key="ssh-ed25519 AAAATEST source-probe-failed-key",
+            private_key=encrypt_secret("fake private key"),
+            key_type="ed25519",
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+        connection = SSHConnection(
+            ssh_key_id=ssh_key.id,
+            host="example.test",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        def fake_remote_probe(**kwargs):
+            return SimpleNamespace(
+                returncode=returncode,
+                stdout="EXIST\t/srv/postgresql\t1\nMATCH\t/srv/postgresql/PG_VERSION\n",
+                stderr=stderr,
+            )
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_remote_database_probe",
+            fake_remote_probe,
+            raising=False,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "remote",
+                "source_ssh_connection_id": connection.id,
+                "paths": ["/srv/postgresql"],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == status_code
+        assert [item["id"] for item in response.json()["detections"]] == (
+            ["postgresql"] if status_code == 200 else []
+        )
+        warnings = response.json()["warnings"]
+        assert [w["code"] for w in warnings] == ([warning_code] if warning_code else [])
+        if warning_code:
+            assert diagnostic in warnings[0]["message"]
+            assert "BORG_UI_PROBE_STARTED" not in warnings[0]["message"]
+            assert "BORG_UI_PROBE_EXIT" not in warnings[0]["message"]
+
+    def test_remote_probe_script_fails_loudly_without_find(self, tmp_path):
+        script = source_discovery._build_remote_probe_script(
+            ["/srv"], set(), max_depth=2, ignore_patterns=[]
+        )
+
+        result = subprocess.run(
+            ["/bin/sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": str(tmp_path)},
+        )
+
+        assert result.returncode == 127
+        assert "find: not found" in result.stderr
+        assert "BORG_UI_PROBE_EXIT:127\n" in result.stderr
+
+    @pytest.mark.parametrize("exit_code", [0, 127, 255])
+    def test_remote_probe_reports_its_exit_status(self, exit_code):
+        script = source_discovery._build_remote_probe_script(
+            [], set(), max_depth=2, ignore_patterns=[]
+        )
+        result = subprocess.run(
+            ["/bin/sh", "-c", f"{script}\nexit {exit_code}"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == exit_code
+        assert f"BORG_UI_PROBE_EXIT:{exit_code}\n" in result.stderr
+
     def test_database_scan_walks_recursively_to_find_nested_db(
         self, test_client, admin_headers, tmp_path, monkeypatch
     ):

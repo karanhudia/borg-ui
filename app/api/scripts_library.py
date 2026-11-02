@@ -15,6 +15,8 @@ from collections import Counter
 from pathlib import Path
 import os
 import hashlib
+import re
+import secrets
 
 from app.database.database import get_db
 from app.database.models import (
@@ -153,9 +155,10 @@ def generate_script_filename(name: str, script_id: Optional[int] = None) -> str:
         name_hash = hashlib.md5(f"{script_id}_{name}".encode()).hexdigest()[:8]
         return f"{safe_name}_{name_hash}.sh"
     else:
-        # For new scripts, add timestamp
+        # For new scripts, add timestamp, plus a random part: names that differ
+        # only after the 50-character cut can be created in the same second.
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return f"{safe_name}_{timestamp}.sh"
+        return f"{safe_name}_{timestamp}_{secrets.token_hex(4)}.sh"
 
 
 def write_script_file(file_path: Path, content: str) -> None:
@@ -406,7 +409,30 @@ async def create_script(
     """Create a new script"""
     # Check if name already exists
     existing = db.query(Script).filter(Script.name == script_data.name).first()
-    if existing:
+    if script_data.category == "template":
+        # Generated source scripts are sent again every time a plan with that source
+        # is saved, and they outlive deleted plans. Reuse an identical one, under its
+        # own name or a numbered copy; give an edited one the next free name instead
+        # of refusing the save.
+        # Copies can have gaps (a deleted "(2)" next to a "(3)"), so look at all of them.
+        base = script_data.name
+        copy_name = re.compile(rf"{re.escape(base)} \(\d+\)")
+        copies = {
+            script.name: script
+            for script in db.query(Script)
+            .filter(Script.name.startswith(base, autoescape=True))
+            .all()
+            if script.name == base or copy_name.fullmatch(script.name)
+        }
+        for script in copies.values():
+            if _same_generated_script(script, script_data):
+                return _script_create_response(script)
+        if existing:
+            n = 2
+            while f"{base} ({n})" in copies:
+                n += 1
+            script_data = script_data.model_copy(update={"name": f"{base} ({n})"})
+    elif existing:
         raise HTTPException(
             status_code=400,
             detail=f"Script with name '{script_data.name}' already exists",
@@ -483,6 +509,58 @@ async def create_script(
         stored_params=script.parameters,
     )
 
+    return _script_create_response(script)
+
+
+def _same_generated_script(existing: Script, script_data: ScriptCreate) -> bool:
+    if (
+        existing.category != "template"
+        or (existing.description or "") != (script_data.description or "")
+        or existing.timeout != script_data.timeout
+        or existing.run_on != script_data.run_on
+    ):
+        return False
+    try:
+        parameters = script_data.parameters or parse_script_parameters(
+            script_data.content
+        )
+        stored_parameters = (
+            json.loads(existing.parameters) if existing.parameters else []
+        )
+        return (
+            stored_parameters == parameters
+            and read_script_file(existing.file_path) == script_data.content
+        )
+    except (HTTPException, json.JSONDecodeError):
+        return False
+
+
+def _plan_source_script_uses(db: Session, script_id: int) -> list[str]:
+    """Plans whose database/container/app sources run this script, as
+    "Plan name (source-pre-backup)" entries."""
+    uses = []
+    plans = (
+        db.query(BackupPlan)
+        .filter(BackupPlan.source_locations.like("%_backup_script_id%"))
+        .all()
+    )
+    for plan in plans:
+        try:
+            locations = json.loads(plan.source_locations or "[]")
+        except json.JSONDecodeError:
+            continue
+        for location in locations if isinstance(locations, list) else []:
+            for kind in ("database", "container", "app"):
+                selection = location.get(kind) if isinstance(location, dict) else None
+                if not isinstance(selection, dict):
+                    continue
+                for hook in ("pre", "post"):
+                    if str(selection.get(f"{hook}_backup_script_id")) == str(script_id):
+                        uses.append(f"{plan.name} (source-{hook}-backup)")
+    return uses
+
+
+def _script_create_response(script: Script) -> ScriptResponse:
     # Parse from database to ensure consistency and filter system variables
     response_parameters = (
         filter_system_variables_from_params(
@@ -708,6 +786,23 @@ async def delete_script(
                     "count": len(valid_repo_scripts),
                     "places": places_text,
                     "repos": ", ".join(repo_details),
+                },
+            },
+        )
+
+    # Generated source scripts are referenced only inside a plan's source_locations
+    # JSON, and reused generated scripts can be shared by several plans. Deleting one
+    # would leave those plans failing their source hooks, so refuse like above.
+    source_uses = _plan_source_script_uses(db, script_id)
+    if source_uses:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.scripts.scriptInUse",
+                "params": {
+                    "count": len(source_uses),
+                    "places": "place" if len(source_uses) == 1 else "places",
+                    "repos": ", ".join(source_uses),
                 },
             },
         )
