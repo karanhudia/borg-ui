@@ -7,19 +7,14 @@ import json
 import os
 
 BACKEND_JOBS = {
-    "backend-lint",
     "backend-unit-coverage",
     "backend-unit-coverage-combine",
     "backend-migration-paths",
     "backend-api-integration",
-    "coverage-backend",
 }
 ALWAYS_JOBS = {
-    "frontend-contracts",
-    "runtime-base-image",
     "typecheck-lint-format",
     "frontend-vitest",
-    "coverage-frontend",
     "frontend-build",
     "smoke-borg-core",
     "smoke-borg-extended",

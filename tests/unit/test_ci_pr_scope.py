@@ -139,19 +139,14 @@ def test_scope_cli_handles_missing_git_metadata_by_running_everything(tmp_path):
 
 
 BACKEND = [
-    "backend-lint",
     "backend-unit-coverage",
     "backend-unit-coverage-combine",
     "backend-migration-paths",
     "backend-api-integration",
-    "coverage-backend",
 ]
 OTHER = [
-    "frontend-contracts",
-    "runtime-base-image",
     "typecheck-lint-format",
     "frontend-vitest",
-    "coverage-frontend",
     "frontend-build",
     "smoke-borg-core",
     "smoke-borg-extended",
@@ -289,6 +284,54 @@ def test_workflow_summary_covers_every_job_and_scope_is_backend_only():
         if name != "smoke-borg-core":
             assert "if" not in jobs[name]
     assert jobs["smoke-borg-core"]["if"] == "github.event_name != 'schedule'"
-    assert jobs["backend-unit-coverage"]["strategy"]["matrix"]["shard"] == [1, 2, 3, 4]
+    assert jobs["backend-unit-coverage"]["strategy"]["matrix"]["shard"] == [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+    ]
+    assert jobs["backend-unit-coverage"]["strategy"]["matrix"]["total_shards"] == [6]
     for name in ("smoke-borg-core", "smoke-borg-extended", "smoke-borg-ssh-localhost"):
         assert jobs[name]["strategy"]["matrix"]["borg"] == ["image", "apt"]
+
+
+def test_preparation_performs_every_unconditional_contract_guard():
+    jobs = yaml.safe_load((ROOT / ".github/workflows/tests.yml").read_text())["jobs"]
+    steps = jobs["prepare"]["steps"]
+    contract = next(s for s in steps if s.get("id") == "frontend-contracts")
+    # Lint failures must not suppress the previously independent guards.
+    assert contract["if"] == "${{ !cancelled() }}"
+    for test_file in (
+        "test_borg2_only_url_prefixes_parity.py",
+        "test_borg_version_boundaries.py",
+        "test_borg_dispatch_guardrails.py",
+        "test_npm_audit_known_vulns.py",
+    ):
+        assert test_file in contract["run"]
+    assert "image" in jobs["prepare"]["outputs"]
+    lint = next(s for s in steps if s.get("id") == "backend-lint")
+    assert lint["if"] == "steps.scope.outputs.backend == 'true'"
+    assert "ruff check app tests" in lint["run"]
+    assert "ruff format --check app tests" in lint["run"]
+
+
+def test_coverage_uploads_stay_on_producing_runners_and_migrations_are_isolated():
+    jobs = yaml.safe_load((ROOT / ".github/workflows/tests.yml").read_text())["jobs"]
+    for job_id in ("frontend-vitest", "backend-unit-coverage-combine"):
+        assert any(
+            s.get("uses", "").startswith("codecov/codecov-action@")
+            for s in jobs[job_id]["steps"]
+        )
+    migrations = jobs["backend-migration-paths"]
+    assert migrations["strategy"]["matrix"]["shard"] == [1, 2]
+    assert migrations["services"]["postgres"]["env"]["POSTGRES_DB"] == "borg_test"
+    assert migrations["strategy"]["fail-fast"] is False
+    selection = next(
+        s
+        for s in migrations["steps"]
+        if s.get("name") == "Select complete migration file shard"
+    )
+    assert "--balance-by files" in selection["run"]
+    assert "pytest tests/migrations --collect-only" in selection["run"]
