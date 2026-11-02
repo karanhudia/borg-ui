@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { fn } from 'storybook/test'
 import AnnouncementModal from './AnnouncementModal'
+import manifest from '../data/announcements.json'
+import type { Announcement } from '../types/announcements'
 
 // Accent text follows the theme palette and the muted line stays at 4.5:1,
 // so check both modes with the Theme toolbar.
@@ -73,5 +75,13 @@ export const ManyHighlights: Story = {
       dismissible: true,
       snooze_days: 7,
     },
+  },
+}
+
+export const Release246Update: Story = {
+  args: {
+    announcement: manifest.announcements.find(
+      (announcement) => announcement.id === 'update-available-2.4.6'
+    ) as Announcement,
   },
 }

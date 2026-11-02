@@ -1,7 +1,68 @@
 {
   "version": 1,
-  "generated_at": "2026-10-25T00:00:00Z",
+  "generated_at": "2026-11-02T00:00:00Z",
   "announcements": [
+    {
+      "id": "update-available-2.4.6",
+      "type": "update_available",
+      "priority": 210,
+      "title": "Borg UI 2.4.6 is available",
+      "title_localized": {
+        "es": "Borg UI 2.4.6 ya está disponible",
+        "de": "Borg UI 2.4.6 ist verfügbar",
+        "it": "Borg UI 2.4.6 è disponibile"
+      },
+      "message": "Update to Borg UI 2.4.6 for more reliable backups and restores, clearer errors, and safer handling of source and storage failures. Updating is recommended.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.4.6 para obtener copias de seguridad y restauraciones más fiables, errores más claros y un manejo más seguro de los fallos de origen y almacenamiento. Se recomienda actualizar.",
+        "de": "Aktualisieren Sie auf Borg UI 2.4.6 für zuverlässigere Backups und Wiederherstellungen, verständlichere Fehlermeldungen und einen sichereren Umgang mit Quell- und Speicherfehlern. Das Update wird empfohlen.",
+        "it": "Aggiorna a Borg UI 2.4.6 per backup e ripristini più affidabili, errori più chiari e una gestione più sicura dei problemi delle sorgenti e dello spazio di archiviazione. Si consiglia di aggiornare."
+      },
+      "highlights": [
+        "Backups fail visibly when configured SSH sources cannot be prepared, instead of silently omitting them",
+        "Zero-file restore failures are detected and restore errors retain useful diagnostics",
+        "Clearer storage, repository and mount errors, with retries for archive-sync lock contention",
+        "Stronger credential redaction in diagnostics and fixes to source setup and database scans",
+        "Borg 2 backups now pause consistently when the installed plan no longer includes Borg 2; see the release notes before upgrading"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Las copias fallan de forma visible cuando no se pueden preparar los orígenes SSH configurados, en lugar de omitirlos sin aviso",
+          "Se detectan los fallos de restauración sin archivos y los errores conservan información de diagnóstico útil",
+          "Errores de almacenamiento, repositorio y montaje más claros, con reintentos ante bloqueos al sincronizar archivos",
+          "Mejor ocultación de credenciales en los diagnósticos y correcciones en la configuración de orígenes y los análisis de bases de datos",
+          "Las copias de Borg 2 ahora se pausan de forma coherente cuando el plan instalado deja de incluir Borg 2; consulta las notas antes de actualizar"
+        ],
+        "de": [
+          "Backups schlagen sichtbar fehl, wenn konfigurierte SSH-Quellen nicht vorbereitet werden können, statt sie stillschweigend auszulassen",
+          "Fehlgeschlagene Wiederherstellungen ohne Dateien werden erkannt und Wiederherstellungsfehler behalten hilfreiche Diagnosedetails",
+          "Verständlichere Speicher-, Repository- und Mount-Fehler sowie erneute Versuche bei Sperren während der Archivsynchronisierung",
+          "Besseres Maskieren von Zugangsdaten in Diagnosen und Korrekturen bei der Quelleneinrichtung und Datenbanksuche",
+          "Borg-2-Backups pausieren jetzt durchgängig, wenn der installierte Plan Borg 2 nicht mehr umfasst; lesen Sie vor dem Update die Versionshinweise"
+        ],
+        "it": [
+          "I backup falliscono in modo visibile se non è possibile preparare le sorgenti SSH configurate, invece di ometterle senza avviso",
+          "Vengono rilevati i ripristini falliti senza file e gli errori conservano dettagli diagnostici utili",
+          "Errori di archiviazione, repository e montaggio più chiari, con nuovi tentativi in caso di blocchi durante la sincronizzazione degli archivi",
+          "Migliore oscuramento delle credenziali nei dati diagnostici e correzioni alla configurazione delle sorgenti e alle scansioni dei database",
+          "I backup di Borg 2 ora vengono sospesi in modo coerente quando il piano installato non include più Borg 2; consulta le note prima di aggiornare"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la versión",
+        "de": "Versionshinweise ansehen",
+        "it": "Vedi le note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.4.6",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-11-02T00:00:00Z",
+      "ends_at": "2027-11-02T00:00:00Z",
+      "target_plans": ["community", "pro", "enterprise"],
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.4.6-rc.999"
+    },
     {
       "id": "update-available-2.4.1",
       "type": "update_available",
