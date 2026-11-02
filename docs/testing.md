@@ -91,6 +91,9 @@ resolves the runtime image and runs backend lint when the full suite is selected
 All three smoke suites
 keep both Borg variants on every PR. An unexpected skip, cancellation, failure,
 or missing job fails the summary. Security checks retain their existing scope.
+Lint or contract failures remain fatal, while independent backend and smoke
+tests continue when their required routing outputs and build assets are available.
+Coverage combination still requires successful preparation and unit shards.
 
 Backend unit tests use six deterministic file shards balanced by historical
 runtime. All shards download the same per-run timing baseline. Missing, invalid,

@@ -250,13 +250,23 @@ def test_git_diff_cli_covers_entire_pr_and_both_sides_of_renames(tmp_path):
     assert scope(base) == "backend=true"
 
 
-def test_summary_cli_fails_when_required_work_is_accidentally_skipped():
+@pytest.mark.parametrize(
+    "backend,name,result,expected",
+    [
+        ("false", "smoke-borg-extended", "skipped", "smoke-borg-extended: skipped"),
+        ("true", "prepare", "failure", "CI preparation failed"),
+        ("false", "prepare", "failure", "CI preparation failed"),
+    ],
+)
+def test_summary_cli_fails_even_if_other_selected_checks_pass(
+    backend, name, result, expected
+):
     import os
     import json
 
-    jobs = job_results("false")
-    jobs["smoke-borg-extended"]["result"] = "skipped"
-    result = subprocess.run(
+    jobs = job_results(backend)
+    jobs[name]["result"] = result
+    process = subprocess.run(
         [sys.executable, str(ROOT / "scripts/ci/check_results.py")],
         env={
             **os.environ,
@@ -266,8 +276,8 @@ def test_summary_cli_fails_when_required_work_is_accidentally_skipped():
         capture_output=True,
         text=True,
     )
-    assert result.returncode != 0
-    assert "smoke-borg-extended: skipped" in result.stderr
+    assert process.returncode != 0
+    assert expected in process.stderr
 
 
 def test_workflow_summary_covers_every_job_and_scope_is_backend_only():
@@ -277,13 +287,29 @@ def test_workflow_summary_covers_every_job_and_scope_is_backend_only():
     assert set(summary["needs"]) == set(jobs) - {"test-results"}
     assert set(jobs) - {"prepare", "test-results"} == set(BACKEND + OTHER)
     for name in BACKEND:
-        assert jobs[name]["if"] == "needs.prepare.outputs.backend == 'true'"
+        condition = "needs.prepare.outputs.backend == 'true'"
+        if name != "backend-unit-coverage-combine":
+            condition = "${{ !cancelled() && " + condition + " }}"
+        assert jobs[name]["if"] == condition
         needs = jobs[name]["needs"]
         assert "prepare" in ([needs] if isinstance(needs, str) else needs)
     for name in OTHER:
-        if name != "smoke-borg-core":
+        if not name.startswith("smoke-"):
             assert "if" not in jobs[name]
-    assert jobs["smoke-borg-core"]["if"] == "github.event_name != 'schedule'"
+    # An explicit status function allows independent checks after guard failure.
+    # Smoke still needs real build artifacts and a resolved runtime image.
+    for name in ("smoke-borg-core", "smoke-borg-extended", "smoke-borg-ssh-localhost"):
+        condition = (
+            "!cancelled() && needs.frontend-build.result == 'success'"
+            " && needs.prepare.outputs.image != ''"
+        )
+        if name == "smoke-borg-core":
+            condition += " && github.event_name != 'schedule'"
+        assert jobs[name]["if"] == "${{ " + condition + " }}"
+    assert jobs["backend-unit-coverage-combine"]["needs"] == [
+        "prepare",
+        "backend-unit-coverage",
+    ]
     assert jobs["backend-unit-coverage"]["strategy"]["matrix"]["shard"] == [
         1,
         2,
