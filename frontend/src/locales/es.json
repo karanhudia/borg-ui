@@ -5810,6 +5810,10 @@
   },
   "backend": {
     "errors": {
+      "storage": {
+        "full": "El almacenamiento está lleno o se ha agotado su cuota. Libere espacio y compruebe la cuota del volumen de la base de datos de Borg UI y del almacenamiento afectado antes de reintentar. Borg UI no elimina datos para recuperarse de este error.",
+        "io": "El almacenamiento ha informado de un error de entrada/salida. Compruebe el disco, el sistema de archivos y los montajes antes de reintentar. Verifique el estado de la operación antes de volver a enviarla."
+      },
       "auth": {
         "cannotDeleteSelf": "No puedes eliminarte a ti mismo",
         "currentPasswordIncorrect": "La contraseña actual es incorrecta",
@@ -5935,7 +5939,7 @@
         "listFailed": "Error al listar los archivos del repositorio: {{error}}",
         "remoteBorg2Incompatible": "El servidor remoto no ejecuta un servidor Borg 2 compatible. Instale Borg 2 en el host remoto y configure la ruta remota de Borg al binario borg2, o use Borg 1 para este repositorio.",
         "failedToCreateRepository": "Error al crear el repositorio",
-        "failedToVerifyRepository": "Error al verificar el repositorio",
+        "failedToVerifyRepository": "Error al verificar el repositorio: {{error}}",
         "failedToImportRepository": "Error al importar el repositorio",
         "failedToUploadKeyfile": "Error al subir el archivo de clave",
         "failedToExportKeyfile": "Error al exportar el archivo de clave",
@@ -6283,6 +6287,7 @@
         "containerRestartedDuringRestore": "El contenedor se reinició durante la operación de restauración",
         "failedCreateDestinationDir": "Error al crear el directorio de destino: {{error}}",
         "failedPrepareSourcePaths": "Error al preparar las rutas de origen: todos los montajes SSH fallaron o no hay rutas válidas",
+        "failedPrepareSourcePathsDetails": "No se pudo preparar una fuente de copia de seguridad. Compruebe su conexión, ruta y permisos de acceso. {{error}}",
         "restoreCanaryInsideSshMount": "Canario de restauración no preparado: el origen SSH {{remotePath}} cubre la ruta del canario, por lo que prepararlo escribiría en el host de origen. Cambia la comprobación de restauración de este repositorio al modo «Rutas de prueba seleccionadas» o «Prueba de archivo completo».",
         "restoreCanaryMountTableUnavailable": "Canario de restauración no preparado: no se pudo leer la tabla de montajes",
         "restoreCanaryReplaceFailed": "Canario de restauración no preparado: no se pudo eliminar la copia anterior en {{path}}",
@@ -6927,5 +6932,12 @@
       "folderCount_other": "{{count}} carpetas",
       "remove": "Quitar {{app}}"
     }
+  },
+  "paywallOffer": {
+    "line": "Oferta única para esta instalación: 5 % en Lite o Pro, anual o vitalicio, válida 7 días desde que la actives.",
+    "claim": "Obtener 5 % de descuento",
+    "claimed": "Tu oferta del {{percent}} % está en cada enlace de compra hasta el {{date}}.",
+    "unavailable": "Esta oferta no está disponible para esta instalación.",
+    "failed": "No se pudo obtener la oferta ahora mismo. Inténtalo de nuevo en un momento."
   }
 }

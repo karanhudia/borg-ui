@@ -770,6 +770,14 @@ export const licensingAPI = {
     api.post<{ result: string; reason?: string }>('/system/licensing/feature-trial', {
       feature,
     }),
+  paywallOffer: (trigger: string, intentDays: number) =>
+    api.post<{
+      result: string
+      reason?: string
+      offer_id?: string
+      percent?: number
+      expires_at?: string
+    }>('/system/licensing/paywall-offer', { trigger, intent_days: intentDays }),
   seats: () => api.get('/system/licensing/seats'),
   releaseSeat: (instanceId: string) =>
     api.post('/system/licensing/seats/release', { instance_id: instanceId }),

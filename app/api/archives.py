@@ -444,7 +444,7 @@ async def _stream_server_archive_tar(
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to download folder: {stream.stderr or 'Borg export failed'}",
-                )
+                ) from None
             first_chunk = None
     except Exception:
         cleanup_temp_key_file(temp_key_file)

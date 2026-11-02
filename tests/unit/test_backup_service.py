@@ -2933,8 +2933,9 @@ class TestBackupServicePeriodicSync:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("local_sources", [[], ["/local/important"]])
     async def test_prepare_source_paths_resolves_relative_remote_paths(
-        self, backup_service, db_session, monkeypatch
+        self, backup_service, db_session, monkeypatch, local_sources
     ):
         connection = SSHConnection(
             host="example.com",
@@ -2966,7 +2967,8 @@ class TestBackupServicePeriodicSync:
 
         processed_paths, ssh_mount_info = await backup_service._prepare_source_paths(
             [
-                f"ssh://{connection.username}@{connection.host}:{connection.port}/etc/komodo"
+                f"ssh://{connection.username}@{connection.host}:{connection.port}/etc/komodo",
+                *local_sources,
             ],
             job_id=42,
             source_connection_id=connection.id,
@@ -2976,7 +2978,7 @@ class TestBackupServicePeriodicSync:
         assert captured["remote_paths"] == ["/etc/komodo"]
         # Backup sources must mount with faithful symlink handling (issue #751).
         assert captured["preserve_symlinks"] is True
-        assert processed_paths == ["etc/komodo"]
+        assert processed_paths == ["etc/komodo", *local_sources]
         assert ssh_mount_info == [("/tmp/sshfs_mount_test", "etc/komodo")]
 
     @pytest.mark.asyncio
@@ -3105,8 +3107,8 @@ class TestBackupServicePeriodicSync:
             )
 
         assert (mounted / "remote-file").read_text(encoding="utf-8") == "remote"
-        # Registered before staging, so the job's cleanup still unmounts them.
-        assert backup_service.ssh_mounts[42] == ["mount-1"]
+        # Preparation now cleans successful mounts before propagating failure.
+        assert 42 not in backup_service.ssh_mounts
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -3190,8 +3192,8 @@ class TestBackupServicePeriodicSync:
             str(p.relative_to(mount_point)) for p in mount_point.rglob("*")
         )
         assert remote_entries == ["remote-file"]
-        # Registered before staging, so the job's cleanup still unmounts them.
-        assert backup_service.ssh_mounts[42] == ["mount-1"]
+        # Preparation now cleans successful mounts before propagating failure.
+        assert 42 not in backup_service.ssh_mounts
 
     @pytest.mark.asyncio
     async def test_prepare_source_paths_refuses_canary_staging_without_mount_table(
@@ -3319,3 +3321,226 @@ class TestApplyCreatedArchiveStats:
         job = self._job()
         _apply_created_archive_stats(job, lines)
         assert vars(job) == vars(self._job())
+
+
+@pytest.mark.unit
+class TestSourcePreparationFailures:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("local_paths", [[], ["/local/important"]])
+    async def test_failed_remote_source_never_returns_partial_backup(
+        self, backup_service, db_session, monkeypatch, local_paths
+    ):
+        connection = SSHConnection(host="remote.test", username="borg", port=22)
+        db_session.add(connection)
+        db_session.commit()
+        connection_id = connection.id
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        mount = AsyncMock(side_effect=PermissionError("SFTP permission denied"))
+        monkeypatch.setattr(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared", mount
+        )
+        with pytest.raises(RuntimeError, match="SFTP permission denied") as raised:
+            await backup_service._prepare_source_paths(
+                [*local_paths, "ssh://borg@remote.test:22/data"],
+                42,
+                source_connection_id=connection_id,
+            )
+        assert isinstance(raised.value.__cause__, PermissionError)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "url,connection_id,reason",
+        [
+            ("ssh://invalid", None, "SSH URL"),
+            ("ssh://borg@missing.test:22/data", None, "SSH connection"),
+            ("ssh://borg@missing.test:22/data", 98765, "SSH connection"),
+        ],
+    )
+    async def test_unresolvable_remote_source_is_rejected(
+        self, backup_service, db_session, monkeypatch, url, connection_id, reason
+    ):
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        with pytest.raises(ValueError, match=reason):
+            await backup_service._prepare_source_paths(
+                ["/local/important", url], 42, source_connection_id=connection_id
+            )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("incomplete", [False, True])
+    async def test_failed_preparation_releases_successful_mounts(
+        self, backup_service, db_session, monkeypatch, incomplete
+    ):
+        from app.services.mount_service import mount_service
+
+        for host in ("first.test", "second.test"):
+            db_session.add(SSHConnection(host=host, username="borg", port=22))
+        db_session.commit()
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        results = [("/tmp/shared", [("mount-first", "data")])]
+        if incomplete:
+            # Mount service returned fewer sources than requested for this connection.
+            sources = [
+                "ssh://borg@first.test:22/data",
+                "ssh://borg@first.test:22/other",
+            ]
+            reason = "source"
+        else:
+            results.append(PermissionError("remote access denied"))
+            sources = [
+                "ssh://borg@first.test:22/data",
+                "ssh://borg@second.test:22/other",
+            ]
+            reason = "remote access denied"
+        monkeypatch.setattr(
+            mount_service, "mount_ssh_paths_shared", AsyncMock(side_effect=results)
+        )
+        monkeypatch.setattr(
+            mount_service,
+            "get_mount",
+            lambda mount_id: SimpleNamespace(mount_point="/tmp/shared/data"),
+        )
+        unmount = AsyncMock(return_value=True)
+        monkeypatch.setattr(mount_service, "unmount", unmount)
+        with pytest.raises(RuntimeError, match=reason):
+            await backup_service._prepare_source_paths(sources, 42)
+        unmount.assert_awaited_once_with("mount-first")
+        assert 42 not in backup_service.ssh_mounts
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "missing_connection",
+        "missing_selected_connection",
+        "mount_failure",
+        "long_mount_failure",
+        "bearer_mount_failure",
+        "basic_mount_failure",
+        "key_value_mount_failure",
+        "escaped_mount_failure",
+    ],
+)
+async def test_execute_backup_records_source_preparation_cause(
+    backup_service, db_session, tmp_path, scenario
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "data").mkdir()
+    (repo_path / "config").write_text("[repository]\nversion = 1\n")
+    source_path = tmp_path / "source"
+    source_path.mkdir()
+    repo = Repository(
+        name="Source failure repo",
+        path=str(repo_path),
+        encryption="none",
+        repository_type="local",
+        compression="lz4",
+        source_directories=json.dumps(
+            [str(source_path), "ssh://borg@source.test:22/data"]
+        ),
+    )
+    db_session.add(repo)
+    if "mount_failure" in scenario:
+        db_session.add(SSHConnection(host="source.test", username="borg", port=22))
+    db_session.commit()
+    job = seed_job_operation(
+        db_session, "backup", repository=repo.path, status="pending"
+    )
+    db_session.commit()
+    job_id = job.id
+    session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
+    notifications = SimpleNamespace(
+        send_backup_start=AsyncMock(),
+        send_backup_success=AsyncMock(),
+        send_backup_warning=AsyncMock(),
+        send_backup_failure=AsyncMock(),
+    )
+    mount_error = "SFTP permission denied password=mount-secret"
+    authorization_errors = {
+        "bearer_mount_failure": "Authorization: Bearer mount-secret",
+        "basic_mount_failure": "Authorization: Basic bW91bnQtc2VjcmV0",
+        "key_value_mount_failure": "authorization='Bearer mount-secret'",
+        "escaped_mount_failure": r'{"message":"{\"Authorization\": \"Bearer mount-secret\"}"}',
+    }
+    if scenario in authorization_errors:
+        mount_error = f"SFTP permission denied {authorization_errors[scenario]}"
+    if scenario == "long_mount_failure":
+        mount_error = (
+            "SFTP permission denied password='"
+            + "mount-secret " * 300
+            + "' "
+            + "context " * 300
+            + "final mount cause"
+        )
+    with (
+        patch("app.services.backup_service.SessionLocal", session_local),
+        patch.object(
+            backup_service,
+            "_execute_hooks",
+            AsyncMock(
+                return_value={
+                    "success": True,
+                    "execution_logs": [],
+                    "scripts_executed": 0,
+                    "scripts_failed": 0,
+                    "using_library": False,
+                }
+            ),
+        ),
+        patch(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            AsyncMock(side_effect=PermissionError(mount_error)),
+        ),
+        patch.object(
+            backup_service, "_calculate_and_update_size_background", AsyncMock()
+        ),
+        patch(
+            "app.services.backup_service.resolve_repo_ssh_key_file", return_value=None
+        ),
+        patch(
+            "app.services.backup_service.asyncio.create_task",
+            side_effect=_discard_background_task,
+        ),
+        patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec", AsyncMock()
+        ) as execute,
+        patch("app.services.backup_service.notification_service", notifications),
+        patch("app.services.backup_service.mqtt_service"),
+    ):
+        overrides = (
+            {
+                "source_directories": [str(source_path)],
+                "source_ssh_connection_id": 98765,
+            }
+            if scenario == "missing_selected_connection"
+            else {}
+        )
+        await backup_service.execute_backup(
+            job_id, repo.path, db=db_session, **overrides
+        )
+    db_session.expire_all()
+    failed = resolve_backup_job(db_session, job_id)
+    assert failed.status == "failed"
+    detail = json.loads(failed.error_message)
+    assert detail["key"] == "backend.errors.service.failedPrepareSourcePathsDetails"
+    reason = (
+        "SSH connection" if scenario.startswith("missing") else "SFTP permission denied"
+    )
+    assert reason in detail["params"]["error"]
+    assert "mount-secret" not in failed.error_message
+    assert "bW91bnQtc2VjcmV0" not in failed.error_message
+    assert len(detail["params"]["error"]) <= 1000
+    if scenario == "long_mount_failure":
+        assert "final mount cause" in detail["params"]["error"]
+    execute.assert_not_awaited()
+    notifications.send_backup_failure.assert_awaited_once()

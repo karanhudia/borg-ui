@@ -8,6 +8,8 @@ import { Feature, Plan, PLAN_LABEL } from '../core/features'
 import { getPlanAccent } from './planDrawerColors'
 import { buildBuyUrl, refreshBuyLink } from '../utils/externalLinks'
 import PlanInfoDrawer from './PlanInfoDrawer'
+import PaywallOffer from './PaywallOffer'
+import { recordPaywallIntent } from '../utils/paywallOffer'
 import { usePlan } from '../hooks/usePlan'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
@@ -64,6 +66,11 @@ export default function UpgradePrompt({
     })
   // Once per mount: the prompt re-renders as the panel around it loads.
   const shownTracked = useRef(false)
+  // Every card here is one the user reached on purpose (a page they opened, a
+  // lock they clicked, an action refused), so it counts toward the offer.
+  useEffect(() => {
+    recordPaywallIntent()
+  }, [])
   useEffect(() => {
     if (!feature || !surface || !reportShown || shownTracked.current) return
     shownTracked.current = true
@@ -216,6 +223,7 @@ export default function UpgradePrompt({
               {t('upgradePrompt.learnMore')}
             </Button>
           </Stack>
+          <PaywallOffer surface={analyticsSurface} />
         </Box>
         {drawer}
       </Fragment>
@@ -282,6 +290,7 @@ export default function UpgradePrompt({
         >
           {t('upgradePrompt.buyLink')}
         </Button>
+        <PaywallOffer surface={analyticsSurface} />
         <Button
           variant="text"
           size="small"

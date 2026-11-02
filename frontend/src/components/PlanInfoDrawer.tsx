@@ -21,6 +21,7 @@ import { compareVersions } from '../utils/announcements'
 import { buildBuyUrl, refreshBuyLink } from '../utils/externalLinks'
 import { getPlanDrawerColors } from './planDrawerColors'
 import PlanUpcomingFeatures from './PlanUpcomingFeatures'
+import PaywallOffer from './PaywallOffer'
 import { parseBackendDate } from '../utils/dateUtils'
 
 interface PlanInfoDrawerProps {
@@ -263,7 +264,6 @@ export default function PlanInfoDrawer({
     : entitlement?.ui_state === 'full_access_expired'
       ? 'app-expired'
       : 'app-drawer'
-  const buyOffer = entitlement?.ui_state === 'full_access_expired' ? 'expired' : undefined
 
   const handleBuyClick = () => {
     if (!buyPlan) return
@@ -289,7 +289,7 @@ export default function PlanInfoDrawer({
         size="small"
         fullWidth
         component="a"
-        href={buildBuyUrl({ plan: 'pro', src: 'app-expired', offer: 'expired' })}
+        href={buildBuyUrl({ plan: 'pro', src: 'app-expired' })}
         onClickCapture={refreshBuyLink}
         onAuxClickCapture={refreshBuyLink}
         onContextMenuCapture={refreshBuyLink}
@@ -307,6 +307,9 @@ export default function PlanInfoDrawer({
       >
         {t('plan.expiredUpgradeCta')}
       </Button>
+      <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center' }}>
+        <PaywallOffer surface="plan_drawer" />
+      </Box>
     </Alert>
   )
 
@@ -898,7 +901,7 @@ export default function PlanInfoDrawer({
           {buyPlan && (
             <Button
               component="a"
-              href={buildBuyUrl({ plan: buyPlan, src: buySource, offer: buyOffer })}
+              href={buildBuyUrl({ plan: buyPlan, src: buySource })}
               onClickCapture={refreshBuyLink}
               onAuxClickCapture={refreshBuyLink}
               onContextMenuCapture={refreshBuyLink}

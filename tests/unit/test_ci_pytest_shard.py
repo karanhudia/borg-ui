@@ -85,3 +85,76 @@ def test_select_shard_rejects_empty_test_counts():
 
     with pytest.raises(ValueError, match="No pytest test nodes"):
         module.select_shard({}, shard_index=1, shard_total=2)
+
+
+def test_duration_weights_override_test_counts_and_calibrate_missing_files():
+    module = load_shard_module()
+    counts = {"tests/a.py": 10, "tests/b.py": 1, "tests/c.py": 2, "tests/d.py": 1}
+    # Known files average 110/11 = 10 seconds per test; missing c weighs 20.
+    durations = {"tests/a.py": 10.0, "tests/b.py": 100.0, "tests/stale.py": 9999.0}
+    assert module.select_shard(
+        counts, shard_index=1, shard_total=2, durations=durations
+    ) == ["tests/b.py"]
+    assert module.select_shard(
+        counts, shard_index=2, shard_total=2, durations=durations
+    ) == ["tests/a.py", "tests/c.py", "tests/d.py"]
+
+
+def test_duration_shards_are_deterministic_complete_and_disjoint():
+    module = load_shard_module()
+    counts = {f"tests/test_{index}.py": index + 1 for index in range(17)}
+    durations = {"tests/test_0.py": 500, "tests/test_5.py": 2}
+    shards = [
+        module.select_shard(counts, shard_index=i, shard_total=4, durations=durations)
+        for i in range(1, 5)
+    ]
+    flattened = [path for shard in shards for path in shard]
+    assert len(flattened) == len(set(flattened)) == len(counts)
+    assert set(flattened) == set(counts)
+    reversed_counts = dict(reversed(list(counts.items())))
+    for index, shard in enumerate(shards, 1):
+        assert set(shard) == set(
+            module.select_shard(
+                reversed_counts, shard_index=index, shard_total=4, durations=durations
+            )
+        )
+
+
+def test_selector_cli_uses_history_and_ignores_corrupt_history(tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    history = tmp_path / "durations.json"
+    history.write_text(
+        json.dumps({"tests/a.py": 1, "tests/b.py": 100, "tests/c.py": 1})
+    )
+    command = [
+        sys.executable,
+        str(SCRIPT_PATH),
+        "--shard-index",
+        "1",
+        "--shard-total",
+        "2",
+        "--durations-file",
+        str(history),
+    ]
+    nodes = "tests/a.py::one\ntests/a.py::two\ntests/b.py::one\ntests/c.py::one\n"
+    result = subprocess.run(command, input=nodes, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["tests/b.py"]
+    history.write_text("broken JSON")
+    result = subprocess.run(command, input=nodes, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["tests/a.py"]
+    assert "history" in result.stderr.lower()
+
+
+def test_missing_file_weight_uses_measured_seconds_per_collected_test():
+    module = load_shard_module()
+    counts = {"tests/a.py": 1, "tests/b.py": 1, "tests/c.py": 8, "tests/new.py": 10}
+    durations = {"tests/a.py": 100, "tests/b.py": 20, "tests/c.py": 10}
+    # 130 measured seconds / 10 known tests makes the new file weigh 130 seconds.
+    assert module.select_shard(
+        counts, shard_index=1, shard_total=2, durations=durations
+    ) == ["tests/new.py"]

@@ -2697,6 +2697,10 @@ class TestRepositoriesUpdate:
 
         assert response.status_code == 400
         assert response.json()["detail"]["key"] == key
+        if key == "backend.errors.repo.failedToVerifyRepository":
+            assert response.json()["detail"]["params"]["error"] == (
+                stderr.decode() or "Borg command exited with status 2"
+            )
         assert "wrong-passphrase" not in response.text
         assert "wrong-passphrase" not in repr(logs)
         assert self._stored_passphrase(test_db, repo) == "old-passphrase"
