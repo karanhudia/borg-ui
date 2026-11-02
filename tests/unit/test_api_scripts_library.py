@@ -6,6 +6,8 @@ Key test focus:
 - Shows "X places used" to be clear about pre-backup + post-backup = 2 places
 """
 
+import json
+
 import pytest
 from app.database.models import (
     BackupPlan,
@@ -994,6 +996,53 @@ class TestGeneratedScriptNameReuse:
             parameters=first.json()["parameters"],
         )
         assert again.json()["id"] == first.json()["id"]
+
+    def test_changed_description_is_not_reused(self, test_client, admin_headers):
+        first = self._create(test_client, admin_headers)
+        redescribed = self._create(test_client, admin_headers, description="New text")
+
+        assert redescribed.json()["id"] != first.json()["id"]
+
+    def test_script_used_by_a_plan_source_cannot_be_deleted(
+        self, test_client, admin_headers, test_db
+    ):
+        script_id = self._create(test_client, admin_headers).json()["id"]
+        test_db.add(
+            BackupPlan(
+                name="Containers",
+                enabled=True,
+                source_type="local",
+                source_directories='["/exports/web"]',
+                source_locations=json.dumps(
+                    [
+                        {
+                            "paths": ["/exports/web"],
+                            "container": {
+                                "container_name": "web",
+                                "pre_backup_script_id": script_id,
+                            },
+                        }
+                    ]
+                ),
+                exclude_patterns="[]",
+                archive_name_template="{plan_name}-{now}",
+                compression="lz4",
+                repository_run_mode="series",
+                max_parallel_repositories=1,
+                failure_behavior="continue",
+                schedule_enabled=False,
+                timezone="UTC",
+            )
+        )
+        test_db.commit()
+
+        response = test_client.delete(
+            f"/api/scripts/{script_id}", headers=admin_headers
+        )
+
+        assert response.status_code == 400
+        assert "Containers (source-pre-backup)" in response.text
+        assert test_db.query(Script).filter(Script.id == script_id).first()
 
     def test_custom_script_name_clash_still_refused(self, test_client, admin_headers):
         assert (

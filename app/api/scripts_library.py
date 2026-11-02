@@ -515,6 +515,7 @@ async def create_script(
 def _same_generated_script(existing: Script, script_data: ScriptCreate) -> bool:
     if (
         existing.category != "template"
+        or (existing.description or "") != (script_data.description or "")
         or existing.timeout != script_data.timeout
         or existing.run_on != script_data.run_on
     ):
@@ -532,6 +533,31 @@ def _same_generated_script(existing: Script, script_data: ScriptCreate) -> bool:
         )
     except (HTTPException, json.JSONDecodeError):
         return False
+
+
+def _plan_source_script_uses(db: Session, script_id: int) -> list[str]:
+    """Plans whose database/container/app sources run this script, as
+    "Plan name (source-pre-backup)" entries."""
+    uses = []
+    plans = (
+        db.query(BackupPlan)
+        .filter(BackupPlan.source_locations.like("%_backup_script_id%"))
+        .all()
+    )
+    for plan in plans:
+        try:
+            locations = json.loads(plan.source_locations or "[]")
+        except json.JSONDecodeError:
+            continue
+        for location in locations if isinstance(locations, list) else []:
+            for kind in ("database", "container", "app"):
+                selection = location.get(kind) if isinstance(location, dict) else None
+                if not isinstance(selection, dict):
+                    continue
+                for hook in ("pre", "post"):
+                    if str(selection.get(f"{hook}_backup_script_id")) == str(script_id):
+                        uses.append(f"{plan.name} (source-{hook}-backup)")
+    return uses
 
 
 def _script_create_response(script: Script) -> ScriptResponse:
@@ -760,6 +786,23 @@ async def delete_script(
                     "count": len(valid_repo_scripts),
                     "places": places_text,
                     "repos": ", ".join(repo_details),
+                },
+            },
+        )
+
+    # Generated source scripts are referenced only inside a plan's source_locations
+    # JSON, and reused generated scripts can be shared by several plans. Deleting one
+    # would leave those plans failing their source hooks, so refuse like above.
+    source_uses = _plan_source_script_uses(db, script_id)
+    if source_uses:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.scripts.scriptInUse",
+                "params": {
+                    "count": len(source_uses),
+                    "places": "place" if len(source_uses) == 1 else "places",
+                    "repos": ", ".join(source_uses),
                 },
             },
         )
