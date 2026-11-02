@@ -111,6 +111,8 @@ Security path checks, npm audit, pip-audit, filesystem scanning, reports, and th
 summary share one runner. Every required gate must succeed; a failed gate still
 allows the remaining scans and reports to run. Docker image scanning retains its
 push, scheduled, and manual scope.
+The audit job disables npm installation lifecycle hooks, preserving the locked
+dependency tree while preventing hooks from modifying inputs to later scans.
 
 Unit, integration, and migration JUnit reports are available as workflow
 artifacts. To profile locally:

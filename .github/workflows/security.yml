@@ -65,7 +65,9 @@ jobs:
         working-directory: frontend
         # --no-audit: the bundled npm 10 would otherwise submit its own audit
         # request here; redundant, the dedicated step below audits with npm 11.
-        run: npm ci --no-audit
+        # Audit-only installs need no lifecycle hooks; dependency scripts must
+        # not modify inputs or gate code used by the following security scans.
+        run: npm ci --no-audit --ignore-scripts
 
       - name: Update npm for the bulk advisory endpoint
         if: ${{ !cancelled() }}
@@ -78,7 +80,7 @@ jobs:
         # legacy path; pinned to the exact release validated against this
         # lockfile so the security gate's own tooling cannot drift between runs.
         run: |
-          npm install -g npm@11.19.0
+          npm install -g npm@11.19.0 --ignore-scripts
           test "$(npm --version)" = "11.19.0"
 
       - name: Run npm audit
