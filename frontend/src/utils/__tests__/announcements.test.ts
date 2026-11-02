@@ -6,6 +6,7 @@ import {
   getAnnouncementAckKey,
   getAnnouncementSnoozeKey,
   isAnnouncementEligible,
+  isVersionString,
   resolveAnnouncementLocale,
   selectAnnouncement,
   snoozeAnnouncement,
@@ -41,6 +42,117 @@ describe('announcements utils', () => {
     expect(compareVersions('2.0.0-alpha.1', '2.0.0-alpha.2')).toBe(-1)
     expect(compareVersions('2.0.0-beta.1', '2.0.0-alpha.9')).toBe(1)
     expect(compareVersions('2.0.0', '2.0.0-beta.4')).toBe(1)
+  })
+
+  it.each(['1.2', '1.2.3.4', '01.2.3', '1.02.3', '1.2.03', '1.2.3-01', '1.2.3-rc.01'])(
+    'rejects malformed SemVer %s before announcement selection',
+    (version) => {
+      expect(isVersionString(version)).toBe(false)
+      for (const bound of ['min_app_version', 'max_app_version'] as const) {
+        expect(
+          isAnnouncementEligible(
+            { ...baseAnnouncement, [bound]: version },
+            { appVersion: '1.2.3', plan: 'community', now: new Date() }
+          )
+        ).toBe(false)
+      }
+    }
+  )
+
+  it.each([
+    '1.2.3-alpha--one',
+    '1.2.3+build--two',
+    '1.2.3--',
+    '1.2.3+-',
+    '0.0.0',
+    '1.2.3-0+001',
+    ' v1.2.3-rc--1+build--2 ',
+  ])('accepts valid SemVer %s for announcement bounds', (version) => {
+    expect(isVersionString(version)).toBe(true)
+    expect(
+      isAnnouncementEligible(
+        { ...baseAnnouncement, min_app_version: version, max_app_version: version },
+        { appVersion: version, plan: 'community', now: new Date() }
+      )
+    ).toBe(true)
+  })
+
+  it('ignores build metadata when checking prerelease version bounds', () => {
+    expect(compareVersions('2.4.1-rc.1+build.2', '2.4.1-rc.1')).toBe(0)
+    expect(
+      isAnnouncementEligible(
+        { ...baseAnnouncement, min_app_version: '2.4.1-rc.1', max_app_version: '2.4.1-rc.1' },
+        { appVersion: '2.4.1-rc.1+build.2', plan: 'community', now: new Date() }
+      )
+    ).toBe(true)
+  })
+
+  it('preserves hyphens within prerelease identifiers', () => {
+    expect(compareVersions('2.4.1-rc-1', '2.4.1-rc-2')).toBeLessThan(0)
+  })
+
+  it.each([
+    ['2.4.1-rc-Z', '2.4.1-rc-a'],
+    ['2.4.1-alpha.A', '2.4.1-alpha.a'],
+  ])('orders %s before %s by ASCII rather than locale', (earlier, later) => {
+    expect(compareVersions(earlier, later)).toBeLessThan(0)
+    expect(compareVersions(later, earlier)).toBeGreaterThan(0)
+  })
+
+  it('includes an uppercase prerelease below the lowercase maximum', () => {
+    expect(
+      isAnnouncementEligible(
+        { ...baseAnnouncement, max_app_version: '2.4.1-rc-a' },
+        { appVersion: '2.4.1-rc-Z', plan: 'community', now: new Date() }
+      )
+    ).toBe(true)
+  })
+
+  it.each([undefined, null, 245, '', 'unknown', '   '])(
+    'does not target a versioned announcement when the app version is %s',
+    (appVersion) => {
+      expect(
+        isAnnouncementEligible(baseAnnouncement, {
+          appVersion: appVersion as unknown as string,
+          plan: 'community',
+          now: new Date(),
+        })
+      ).toBe(false)
+      expect(
+        isAnnouncementEligible(
+          { ...baseAnnouncement, min_app_version: undefined, max_app_version: undefined },
+          {
+            appVersion: appVersion as unknown as string,
+            plan: 'community',
+            now: new Date(),
+          }
+        )
+      ).toBe(true)
+    }
+  )
+
+  it('ignores malformed entries without losing valid announcements', () => {
+    const malformed = [
+      null,
+      undefined,
+      false,
+      2,
+      'notice',
+      [],
+      {},
+      { ...baseAnnouncement, starts_at: {} },
+      { ...baseAnnouncement, starts_at: null },
+      { ...baseAnnouncement, starts_at: 0 },
+      { ...baseAnnouncement, starts_at: false },
+      { ...baseAnnouncement, ends_at: 'not-a-date' },
+      { ...baseAnnouncement, min_app_version: 245 },
+      { ...baseAnnouncement, min_app_version: 'unknown' },
+      { ...baseAnnouncement, title_localized: ['unexpected'] },
+      { ...baseAnnouncement, message: undefined },
+    ] as unknown as Announcement[]
+    const context = { appVersion: '1.60.0', plan: 'community' as const, now: new Date() }
+    for (const entry of malformed) expect(isAnnouncementEligible(entry, context)).toBe(false)
+    expect(selectAnnouncement([...malformed, baseAnnouncement], context)).toEqual(baseAnnouncement)
   })
 
   it('filters out acknowledged announcements', () => {
