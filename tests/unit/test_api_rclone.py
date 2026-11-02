@@ -4293,8 +4293,24 @@ def test_rclone_repository_rejects_borg2_payload(
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "reason,status",
+    [
+        ("unexpected Borg verification failure", 500),
+        ("Permission denied", 422),
+        ("There is already something at /cache/repo.", 409),
+        ("passphrase supplied in BORG_PASSPHRASE is incorrect.", 400),
+        ("not a valid repository", 400),
+    ],
+)
 def test_import_rclone_repository_verify_failure_removes_repository_record(
-    test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+    test_client: TestClient,
+    admin_headers,
+    test_db,
+    tmp_path,
+    monkeypatch,
+    reason,
+    status,
 ):
     remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
     test_db.add(remote)
@@ -4310,7 +4326,7 @@ def test_import_rclone_repository_verify_failure_removes_repository_record(
     )
     monkeypatch.setattr(
         "app.api.repositories.verify_existing_repository",
-        AsyncMock(return_value={"success": False, "error": "not a borg repo"}),
+        AsyncMock(return_value={"success": False, "error": reason}),
     )
 
     response = test_client.post(
@@ -4328,11 +4344,12 @@ def test_import_rclone_repository_verify_failure_removes_repository_record(
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == status
     assert (
         response.json()["detail"]["key"]
         == "backend.errors.repo.failedToVerifyRepository"
     )
+    assert response.json()["detail"]["params"]["error"] == reason
     assert (
         test_db.query(Repository)
         .filter(Repository.name == "Imported Cloud Repo")

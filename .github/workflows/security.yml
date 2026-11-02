@@ -10,6 +10,12 @@ on:
     - cron: '0 9 * * 1'
   workflow_dispatch:  # Allow manual triggering
 
+concurrency:
+  # Only PR runs share a group. Non-PR runs need distinct pending slots so
+  # rapid pushes or manual runs cannot replace an older queued security scan.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Required permissions for uploading to GitHub Security tab
 permissions:
   contents: read

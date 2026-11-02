@@ -5810,6 +5810,10 @@
   },
   "backend": {
     "errors": {
+      "storage": {
+        "full": "Storage is full or its quota is exhausted. Free space and check the quota on the Borg UI database and affected storage volumes, then retry. Borg UI does not delete data to recover from this error.",
+        "io": "Storage reported an input/output error. Check the affected disk, filesystem and mounts before retrying. Verify the operation state before submitting it again."
+      },
       "auth": {
         "cannotDeleteSelf": "Cannot delete yourself",
         "currentPasswordIncorrect": "Current password is incorrect",
@@ -5935,7 +5939,7 @@
         "listFailed": "Failed to list repository archives: {{error}}",
         "remoteBorg2Incompatible": "The remote server is not running a compatible Borg 2 server. Install Borg 2 on the remote host and set the remote Borg path to its borg2 binary, or use Borg 1 for this repository.",
         "failedToCreateRepository": "Failed to create repository",
-        "failedToVerifyRepository": "Failed to verify repository",
+        "failedToVerifyRepository": "Failed to verify repository: {{error}}",
         "failedToImportRepository": "Failed to import repository",
         "failedToUploadKeyfile": "Failed to upload keyfile",
         "failedToExportKeyfile": "Failed to export keyfile",
@@ -6283,6 +6287,7 @@
         "containerRestartedDuringRestore": "Container restarted during restore operation",
         "failedCreateDestinationDir": "Failed to create destination directory: {{error}}",
         "failedPrepareSourcePaths": "Failed to prepare source paths: all SSH mounts failed or no valid paths",
+        "failedPrepareSourcePathsDetails": "Failed to prepare a backup source. Check its connection, path and access permissions. {{error}}",
         "restoreCanaryInsideSshMount": "Restore canary not staged: the SSH source {{remotePath}} covers the canary path, so staging it would write to the source host. Set this repository's restore check to the \"Selected probe paths\" or \"Full archive drill\" mode.",
         "restoreCanaryMountTableUnavailable": "Restore canary not staged: the mount table could not be read",
         "restoreCanaryReplaceFailed": "Restore canary not staged: could not remove the previous copy at {{path}}",
@@ -6922,5 +6927,12 @@
       "folderCount_other": "{{count}} folders",
       "remove": "Remove {{app}}"
     }
+  },
+  "paywallOffer": {
+    "line": "One-time offer for this install: 5% off Lite or Pro, yearly or lifetime, valid 7 days after you claim it.",
+    "claim": "Claim 5% off",
+    "claimed": "Your {{percent}}% offer is on every buy link until {{date}}.",
+    "unavailable": "This offer isn't available for this install.",
+    "failed": "The offer could not be claimed just now. Try again in a moment."
   }
 }

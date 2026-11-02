@@ -469,6 +469,64 @@ async def test_a_denied_feature_trial_leaves_the_plan_alone(db_session):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_a_paywall_offer_claim_sends_the_instance_and_passes_the_answer_on(
+    db_session,
+):
+    state = get_or_create_licensing_state(db_session)
+    answer = {
+        "result": "issued",
+        "offer_id": "ofr_1",
+        "percent": 5,
+        "expires_at": "2026-11-07T00:00:00Z",
+    }
+    post = AsyncMock(return_value=answer)
+    with patch.object(licensing_service, "_post_activation", post):
+        result = await licensing_service.request_paywall_offer(
+            db_session, trigger="repeat", intent_days=4
+        )
+
+    post.assert_awaited_once_with(
+        "/v1/offers/claim",
+        {"instance_id": state.instance_id, "trigger": "repeat", "intent_days": 4},
+    )
+    assert result == answer
+    # An offer is a discount, not access: the plan does not move.
+    assert state.status != "active"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_refused_paywall_offer_comes_back_as_a_result(db_session):
+    with patch.object(
+        licensing_service,
+        "_post_activation",
+        AsyncMock(return_value={"result": "denied", "reason": "offer_already_used"}),
+    ):
+        result = await licensing_service.request_paywall_offer(
+            db_session, trigger="expired", intent_days=0
+        )
+    assert result == {"result": "denied", "reason": "offer_already_used"}
+    # An "issued" answer missing the id or end date is an error, not a
+    # refusal, so the app does not remember it and the user can try again.
+    with (
+        patch.object(
+            licensing_service,
+            "_post_activation",
+            AsyncMock(return_value={"result": "issued", "percent": 5}),
+        ),
+        pytest.raises(RuntimeError, match="without an offer id"),
+    ):
+        await licensing_service.request_paywall_offer(
+            db_session, trigger="repeat", intent_days=3
+        )
+    with pytest.raises(RuntimeError, match="Unknown offer trigger"):
+        await licensing_service.request_paywall_offer(
+            db_session, trigger="always", intent_days=0
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_a_feature_trial_for_an_unknown_feature_is_refused(db_session):
     with pytest.raises(RuntimeError, match="Unknown feature"):
         await request_feature_trial(db_session, feature="nope", app_version="2.3.0")

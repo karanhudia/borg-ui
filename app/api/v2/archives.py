@@ -760,7 +760,7 @@ async def _tar_download_response(stream, directory_path: str) -> StreamingRespon
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to download folder: {stream.stderr or 'Borg export failed'}",
-            )
+            ) from None
         first_chunk = None
 
     async def body():

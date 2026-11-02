@@ -1,4 +1,6 @@
 import json
+import errno
+import sqlite3
 import time
 from contextlib import contextmanager
 
@@ -10,6 +12,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
+from app.core.storage_errors import storage_failure
 from app.database.models import LicensingState, Operation, User
 from app.services import error_reporter
 from app.services.error_reporter import (
@@ -473,6 +476,135 @@ def test_unhandled_request_reports_and_returns_500(test_db, sent):
     assert sent[0]["props"]["status"] == 500
 
 
+@pytest.mark.parametrize("wrapped", [False, True])
+@pytest.mark.parametrize(
+    "failure,status_code,key",
+    [
+        (sqlite3.OperationalError("database or disk is full"), 507, "full"),
+        (
+            OSError(errno.ENOSPC, "No space left on device", "/private/path"),
+            507,
+            "full",
+        ),
+        (OSError(errno.EDQUOT, "Disk quota exceeded", "/private/path"), 507, "full"),
+        (OSError(errno.EIO, "Input/output error", "/private/path"), 503, "io"),
+        (
+            OperationalError(
+                "UPDATE private_table SET token='secret'",
+                {},
+                sqlite3.OperationalError("database or disk is full"),
+            ),
+            507,
+            "full",
+        ),
+    ],
+)
+def test_storage_failures_have_safe_recovery_details(
+    test_db, sent, failure, status_code, key, wrapped
+):
+    def boom():
+        try:
+            raise failure
+        except Exception:
+            if wrapped:
+                raise HTTPException(500, detail="unhelpful wrapper")
+            raise
+
+    with _test_route("/api/__storage", boom) as client:
+        response = client.get("/api/__storage")
+    assert response.status_code == status_code
+    assert response.json() == {"detail": {"key": f"backend.errors.storage.{key}"}}
+    assert "private" not in response.text and "secret" not in response.text
+    flush()
+    assert sent[0]["props"]["status"] == status_code
+    assert sent[0]["props"]["error_key"] == f"storage.{key}"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "listing archives failed: OSError: [Errno 5] Input/output error: '/backup'",
+        "(sqlite3.OperationalError) database or disk is full",
+        "OSError: [Errno 28] No space left on device",
+    ],
+)
+def test_handled_storage_failure_remains_actionable(sent, message):
+    report_failure(kind="job", type_="archive_sync_failed", message=message)
+    flush()
+    assert sent[0]["props"]["handled"] is False
+
+
+@pytest.mark.parametrize("location", ["statement", "parameters"])
+@pytest.mark.parametrize(
+    "storage_text", ["database or disk is full", "[Errno 5] Input/output error"]
+)
+def test_sqlalchemy_query_data_does_not_classify_as_storage_failure(
+    location, storage_text
+):
+    statement = (
+        "SELECT :value" if location == "parameters" else f"SELECT '{storage_text}'"
+    )
+    params = {"value": storage_text} if location == "parameters" else {}
+    failure = OperationalError(
+        statement, params, sqlite3.OperationalError("no such table")
+    )
+    assert storage_text in str(failure)
+    assert storage_failure(failure) is None
+
+
+def test_sqlalchemy_query_data_does_not_set_storage_telemetry_key(sent):
+    failure = OperationalError(
+        "SELECT 'database or disk is full'",
+        {},
+        sqlite3.OperationalError("no such table"),
+    )
+    report_exception(failure, kind="request", status=500)
+    flush()
+    assert sent[0]["props"]["status"] == 500
+    assert "error_key" not in sent[0]["props"]
+
+
+@pytest.mark.parametrize("wrapper", ["http", "runtime"])
+@pytest.mark.parametrize(
+    "storage_text", ["database or disk is full", "[Errno 5] Input/output error"]
+)
+def test_copied_sqlalchemy_text_does_not_override_its_cause(
+    sent, wrapper, storage_text
+):
+    try:
+        try:
+            raise OperationalError(
+                f"SELECT '{storage_text}'",
+                {},
+                sqlite3.OperationalError("no such table"),
+            )
+        except OperationalError as cause:
+            if wrapper == "http":
+                raise HTTPException(500, detail=f"Failed request: {cause}") from cause
+            raise RuntimeError(f"Failed request: {cause}") from cause
+    except Exception as failure:
+        assert storage_failure(failure) is None
+        report_exception(failure, kind="request", status=500)
+    flush()
+    assert "error_key" not in sent[0]["props"]
+
+
+def test_sqlalchemy_query_data_keeps_unrelated_http_failure(test_db, sent):
+    def boom():
+        raise OperationalError(
+            "SELECT 'database or disk is full'",
+            {},
+            sqlite3.OperationalError("no such table"),
+        )
+
+    with _test_route("/api/__query_data", boom) as client:
+        response = client.get("/api/__query_data")
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal Server Error"}
+    flush()
+    assert "error_key" not in sent[0]["props"]
+
+
 def test_http_500_reports_its_cause_and_keeps_the_response(test_db, sent):
     def wrapped():
         try:
@@ -671,3 +803,82 @@ def test_only_production_outside_ci_reports():
     assert error_reporting_allowed("production", {}) is True
     assert error_reporting_allowed("development", {}) is False
     assert error_reporting_allowed("production", {"CI": "true"}) is False
+
+
+@pytest.mark.parametrize("helper", ["borg1", "borg2"])
+@pytest.mark.parametrize(
+    "diagnostic,status_code,key",
+    [
+        ("[Errno 28] No space left on device: /private/export", 507, "full"),
+        ("[Errno 5] Input/output error: /private/export", 503, "io"),
+        ("[Errno 13] Permission denied: /private/export", 500, None),
+    ],
+)
+def test_failed_tar_stream_preserves_storage_recovery_and_causal_telemetry(
+    test_db, sent, monkeypatch, helper, diagnostic, status_code, key
+):
+    from app.api import archives as borg1_archives
+    from app.api.v2 import archives as borg2_archives
+    from app.database.models import Repository
+
+    class FailedTarStream:
+        return_code = 2
+        stderr = diagnostic
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    stream = FailedTarStream()
+    repository = Repository(name="Export", path="/private/repository", borg_version=1)
+    monkeypatch.setattr(borg1_archives, "_build_repo_env", lambda repo, db: ({}, None))
+    monkeypatch.setattr(
+        borg1_archives.borg, "export_archive_tar", lambda *args, **kwargs: stream
+    )
+
+    async def download():
+        if helper == "borg1":
+            return await borg1_archives._stream_server_archive_tar(
+                repository, "archive", "documents", test_db
+            )
+        return await borg2_archives._tar_download_response(stream, "documents")
+
+    with _test_route("/api/__failed_tar_stream", download) as client:
+        response = client.get("/api/__failed_tar_stream")
+    assert response.status_code == status_code
+    if key:
+        assert response.json() == {"detail": {"key": f"backend.errors.storage.{key}"}}
+        assert "private" not in response.text
+    else:
+        assert diagnostic in response.json()["detail"]
+    flush()
+    assert len(sent) == 1
+    props = sent[0]["props"]
+    assert props["type"].endswith("HTTPException")
+    assert diagnostic in props["message"]
+    assert props["status"] == status_code
+    if key:
+        assert props["error_key"] == f"storage.{key}"
+    else:
+        assert "error_key" not in props
+
+
+def test_http_error_handler_does_not_report_explicitly_suppressed_context(
+    test_db, sent
+):
+    async def wrapped():
+        try:
+            raise ValueError("incidental iteration failure")
+        except ValueError:
+            raise HTTPException(500, detail="authoritative failure") from None
+
+    with _test_route("/api/__suppressed_context", wrapped) as client:
+        response = client.get("/api/__suppressed_context")
+    assert response.status_code == 500
+    assert response.json() == {"detail": "authoritative failure"}
+    flush()
+    assert sent[0]["props"]["type"].endswith("HTTPException")
+    assert "authoritative failure" in sent[0]["props"]["message"]
+    assert "incidental iteration failure" not in sent[0]["props"]["stack"]

@@ -81,7 +81,7 @@ afterward. The endpoint defaults to `https://license.borgui.com` and is
 overridable with `ACTIVATION_SERVICE_URL`, so if you want to see the traffic or
 block it, point that at your own host or firewall the one you configured.
 
-Four requests exist, and this is every field each one sends
+Five requests exist, and this is every field each one sends
 (`app/services/licensing_service.py`):
 
 | Request | Fields |
@@ -90,10 +90,16 @@ Four requests exist, and this is every field each one sends
 | Entitlement refresh (`/v1/entitlements/refresh`) | `instance_id`, `current_entitlement_id`, `app_version` |
 | License activation (`/v1/licenses/activate`) | `instance_id`, `license_key`, `app_version` |
 | License deactivation (`/v1/licenses/deactivate`) | `instance_id`, `license_id` |
+| One-time offer claim (`/v1/offers/claim`) | `instance_id`, `trigger`, `intent_days` |
 
 `instance_id` is a random id generated on your instance. `hostname` is the
 container's `HOSTNAME` environment variable, and it is sent only by the first
 request. No authentication headers are attached to any of them.
+
+The offer claim is sent only when someone clicks "Claim 5% off" in an upgrade
+card. `trigger` says why the card offered it (full access just ended, or
+upgrade cards opened on three different days) and `intent_days` is that count
+of days. The count is kept in your browser, not on the server.
 
 Nothing else is in these requests: no repository names, no paths, no archive
 contents, no file names, no user accounts, and no email addresses.
@@ -112,8 +118,9 @@ stops contacting the service on its own. Plan upgrades and full-access
 activation then cannot refresh automatically.
 
 What remains is only contact you start yourself: entering a license key,
-refreshing it, or removing it from Settings, all admin-only actions that do
-nothing until you take them. If you want an instance that cannot reach the
+refreshing it, or removing it from Settings (admin-only), or claiming the
+one-time offer in an upgrade card. None of them does anything until you take
+it. If you want an instance that cannot reach the
 service at all, block it at your firewall.
 
 ### Usage analytics

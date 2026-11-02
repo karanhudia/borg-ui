@@ -8,10 +8,17 @@ on:
       - "frontend/.storybook/**"
       - "frontend/scripts/**"
       - "frontend/src/**"
+      - "frontend/public/**"
       - "frontend/package.json"
       - "frontend/package-lock.json"
       - ".github/workflows/visual-regression.yml"
       - ".github/workflows/visual-snapshot-capture.yml"
+
+# Only superseded PR captures are cancelled. Trusted publication keeps its
+# separate, non-cancelling queue in visual-regression.yml.
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

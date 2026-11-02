@@ -12,6 +12,7 @@ import {
 import {
   acknowledgeAnnouncement,
   getAnnouncementSnoozeDays,
+  isValidAnnouncement,
   resolveAnnouncementLocale,
   selectAnnouncement,
   snoozeAnnouncement,
@@ -49,11 +50,13 @@ export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
 
   const [now] = useState(() => new Date())
   const announcement = useMemo(() => {
-    if (!systemInfo || !manifest) return null
+    if (!systemInfo || !manifest || !Array.isArray(manifest.announcements)) return null
 
     const selectedAnnouncement = selectAnnouncement(
       manifest.announcements.filter(
-        (manifestAnnouncement) => !hiddenAnnouncementIds.includes(manifestAnnouncement.id)
+        (manifestAnnouncement) =>
+          isValidAnnouncement(manifestAnnouncement) &&
+          !hiddenAnnouncementIds.includes(manifestAnnouncement.id)
       ),
       {
         appVersion: systemInfo.app_version,

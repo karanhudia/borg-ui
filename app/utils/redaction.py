@@ -56,6 +56,15 @@ _KEY_VALUE = re.compile(
     rf"""((?!["']?\*\*\*)(?:{_QUOTED}|(?!(?:true|false|null|none)\b)(?:[^\s"'&,;}}]|{_INNER_QUOTE})+))"""
 )
 
+# Header values also occur in key=value output and JSON/Python diagnostics,
+# including JSON-escaped strings. Keep delimiters and the scheme intact,
+# but mask the credential without crossing a line.
+_AUTHORIZATION = re.compile(
+    r"""(?i)((?<![\w-])authorization(?:\\*["'])?[ \t]*[:=][ \t]*"""
+    r"""(?:\\*["'])?(?:bearer|basic)[ \t]+)"""
+    r"""[^\s"'\\,;}\]]+"""
+)
+
 _SECRET_NAME = re.compile(rf"(?i){_SECRET_KEY}")
 # ?key=value / &key=value. The key is decoded before the name check because
 # URL parsers (redis-py included) decode it too: `pass%77ord` is `password`.
@@ -117,9 +126,10 @@ def _redact_netloc(match: re.Match, at: str, colon: str) -> str:
 
 
 def redact_secrets(text: Optional[str]) -> Optional[str]:
-    """`text` with URL credentials and secret-named values replaced by `***`."""
+    """Mask URL credentials, authorization credentials and secret-named values."""
     if not text:
         return text
+    text = _AUTHORIZATION.sub(lambda m: f"{m.group(1)}***", text)
     for pattern, at, colon in _URL_PATTERNS:
         text = pattern.sub(lambda m: _redact_netloc(m, at, colon), text)
     text = _redact_query(text)

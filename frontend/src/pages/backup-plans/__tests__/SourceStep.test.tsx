@@ -667,6 +667,32 @@ describe('SourceStep', () => {
     expect(screen.getByText('/var/tmp/borg-ui/database-dumps/postgresql')).toBeInTheDocument()
   })
 
+  it('keeps the common path prefix in left-to-right order while cutting it at the front', () => {
+    renderSourceStep({
+      wizardState: {
+        ...createInitialState(),
+        sourceType: 'local',
+        sourceDirectories: ['/_src/sub/a', '/_src/sub/b'],
+        sourceLocations: [
+          {
+            source_type: 'local',
+            source_ssh_connection_id: null,
+            paths: ['/_src/sub/a', '/_src/sub/b'],
+          },
+        ],
+      },
+    })
+
+    // The prefix box uses direction: rtl so long paths lose their start, not
+    // their end. The path itself must stay an isolated LTR run, or the bidi
+    // algorithm moves leading neutral characters such as "_" to the end.
+    const prefix = screen.getByTitle('/_src/sub/')
+    const isolated = prefix.querySelector('bdi')
+    expect(isolated).not.toBeNull()
+    expect(isolated).toHaveAttribute('dir', 'ltr')
+    expect(isolated).toHaveTextContent('/_src/sub/')
+  })
+
   it('opens straight into the path picker with the source-kind pivot', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
     renderSourceStep()

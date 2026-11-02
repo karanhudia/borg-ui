@@ -5810,6 +5810,10 @@
   },
   "backend": {
     "errors": {
+      "storage": {
+        "full": "Lo spazio di archiviazione è pieno o la quota è esaurita. Liberare spazio e controllare la quota dei volumi del database di Borg UI e dell’archiviazione interessata, quindi riprovare. Borg UI non elimina dati per risolvere questo errore.",
+        "io": "L’archiviazione ha segnalato un errore di input/output. Controllare disco, filesystem e montaggi prima di riprovare. Verificare lo stato dell’operazione prima di inviarla nuovamente."
+      },
       "auth": {
         "cannotDeleteSelf": "Non puoi eliminare te stesso",
         "currentPasswordIncorrect": "La password attuale non è corretta",
@@ -5935,7 +5939,7 @@
         "listFailed": "Impossibile elencare gli archivi del repository: {{error}}",
         "remoteBorg2Incompatible": "Il server remoto non esegue un server Borg 2 compatibile. Installa Borg 2 sull'host remoto e imposta il percorso Borg remoto sul binario borg2, oppure usa Borg 1 per questo repository.",
         "failedToCreateRepository": "Impossibile creare il repository",
-        "failedToVerifyRepository": "Impossibile verificare il repository",
+        "failedToVerifyRepository": "Impossibile verificare il repository: {{error}}",
         "failedToImportRepository": "Impossibile importare il repository",
         "failedToUploadKeyfile": "Impossibile caricare il file chiave",
         "failedToExportKeyfile": "Impossibile esportare il file chiave",
@@ -6283,6 +6287,7 @@
         "containerRestartedDuringRestore": "Container riavviato durante l'operazione di ripristino",
         "failedCreateDestinationDir": "Impossibile creare la directory di destinazione: {{error}}",
         "failedPrepareSourcePaths": "Impossibile preparare i percorsi sorgente: tutti i mount SSH falliti o nessun percorso valido",
+        "failedPrepareSourcePathsDetails": "Impossibile preparare un’origine del backup. Controlla la connessione, il percorso e i permessi di accesso. {{error}}",
         "restoreCanaryInsideSshMount": "Canary di ripristino non preparato: la sorgente SSH {{remotePath}} copre il percorso del canary, quindi prepararlo scriverebbe sull'host di origine. Imposta il controllo di ripristino di questo repository sulla modalità «Percorsi di prova selezionati» o «Verifica archivio completo».",
         "restoreCanaryMountTableUnavailable": "Canary di ripristino non preparato: impossibile leggere la tabella dei mount",
         "restoreCanaryReplaceFailed": "Canary di ripristino non preparato: impossibile rimuovere la copia precedente in {{path}}",
@@ -6922,5 +6927,12 @@
       "folderCount_other": "{{count}} cartelle",
       "remove": "Rimuovi {{app}}"
     }
+  },
+  "paywallOffer": {
+    "line": "Offerta una tantum per questa installazione: 5% su Lite o Pro, annuale o a vita, valida 7 giorni dall'attivazione.",
+    "claim": "Ottieni il 5% di sconto",
+    "claimed": "La tua offerta del {{percent}}% è su ogni link di acquisto fino al {{date}}.",
+    "unavailable": "Questa offerta non è disponibile per questa installazione.",
+    "failed": "Non è stato possibile ottenere l'offerta in questo momento. Riprova tra poco."
   }
 }

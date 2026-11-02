@@ -9,12 +9,13 @@ from typing import Optional
 from app.core.borg import BorgInterface
 from app.core.borg2 import borg2
 from app.core.features import get_current_plan, FEATURES
-from app.core.security import get_current_admin_user
+from app.core.security import get_current_admin_user, get_current_user
 from app.config import get_runtime_app_version
 from app.database.database import get_db
 from app.services.licensing_service import (
     activate_paid_license,
     request_feature_trial,
+    request_paywall_offer,
     deactivate_paid_license,
     get_entitlement_summary,
     get_feature_access,
@@ -173,6 +174,28 @@ async def start_feature_trial(
     except Exception as e:
         logger.warning("Failed to start feature trial", error=str(e))
         raise _licensing_http_error("feature_trial_failed", str(e))
+
+
+class PaywallOfferRequest(BaseModel):
+    trigger: str = Field(..., pattern="^(expired|repeat)$")
+    intent_days: int = Field(0, ge=0, le=365)
+
+
+@router.post("/licensing/paywall-offer")
+async def claim_paywall_offer(
+    request: PaywallOfferRequest,
+    db: Session = Depends(get_db),
+    _: object = Depends(get_current_user),
+):
+    """Claim this install's one-time offer. Any signed-in user may: the buy
+    link is open to them too. A refusal is a result, not an error."""
+    try:
+        return await request_paywall_offer(
+            db, trigger=request.trigger, intent_days=request.intent_days
+        )
+    except Exception as e:
+        logger.warning("Failed to claim paywall offer", error=str(e))
+        raise _licensing_http_error("paywall_offer_failed", str(e))
 
 
 @router.post("/licensing/deactivate")
