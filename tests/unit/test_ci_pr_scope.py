@@ -139,19 +139,14 @@ def test_scope_cli_handles_missing_git_metadata_by_running_everything(tmp_path):
 
 
 BACKEND = [
-    "backend-lint",
     "backend-unit-coverage",
     "backend-unit-coverage-combine",
     "backend-migration-paths",
     "backend-api-integration",
-    "coverage-backend",
 ]
 OTHER = [
-    "frontend-contracts",
-    "runtime-base-image",
     "typecheck-lint-format",
     "frontend-vitest",
-    "coverage-frontend",
     "frontend-build",
     "smoke-borg-core",
     "smoke-borg-extended",
@@ -255,13 +250,23 @@ def test_git_diff_cli_covers_entire_pr_and_both_sides_of_renames(tmp_path):
     assert scope(base) == "backend=true"
 
 
-def test_summary_cli_fails_when_required_work_is_accidentally_skipped():
+@pytest.mark.parametrize(
+    "backend,name,result,expected",
+    [
+        ("false", "smoke-borg-extended", "skipped", "smoke-borg-extended: skipped"),
+        ("true", "prepare", "failure", "CI preparation failed"),
+        ("false", "prepare", "failure", "CI preparation failed"),
+    ],
+)
+def test_summary_cli_fails_even_if_other_selected_checks_pass(
+    backend, name, result, expected
+):
     import os
     import json
 
-    jobs = job_results("false")
-    jobs["smoke-borg-extended"]["result"] = "skipped"
-    result = subprocess.run(
+    jobs = job_results(backend)
+    jobs[name]["result"] = result
+    process = subprocess.run(
         [sys.executable, str(ROOT / "scripts/ci/check_results.py")],
         env={
             **os.environ,
@@ -271,8 +276,8 @@ def test_summary_cli_fails_when_required_work_is_accidentally_skipped():
         capture_output=True,
         text=True,
     )
-    assert result.returncode != 0
-    assert "smoke-borg-extended: skipped" in result.stderr
+    assert process.returncode != 0
+    assert expected in process.stderr
 
 
 def test_workflow_summary_covers_every_job_and_scope_is_backend_only():
@@ -282,13 +287,77 @@ def test_workflow_summary_covers_every_job_and_scope_is_backend_only():
     assert set(summary["needs"]) == set(jobs) - {"test-results"}
     assert set(jobs) - {"prepare", "test-results"} == set(BACKEND + OTHER)
     for name in BACKEND:
-        assert jobs[name]["if"] == "needs.prepare.outputs.backend == 'true'"
+        condition = "needs.prepare.outputs.backend == 'true'"
+        if name != "backend-unit-coverage-combine":
+            condition = "${{ !cancelled() && " + condition + " }}"
+        assert jobs[name]["if"] == condition
         needs = jobs[name]["needs"]
         assert "prepare" in ([needs] if isinstance(needs, str) else needs)
     for name in OTHER:
-        if name != "smoke-borg-core":
+        if not name.startswith("smoke-"):
             assert "if" not in jobs[name]
-    assert jobs["smoke-borg-core"]["if"] == "github.event_name != 'schedule'"
-    assert jobs["backend-unit-coverage"]["strategy"]["matrix"]["shard"] == [1, 2, 3, 4]
+    # An explicit status function allows independent checks after guard failure.
+    # Smoke still needs real build artifacts and a resolved runtime image.
+    for name in ("smoke-borg-core", "smoke-borg-extended", "smoke-borg-ssh-localhost"):
+        condition = (
+            "!cancelled() && needs.frontend-build.result == 'success'"
+            " && needs.prepare.outputs.image != ''"
+        )
+        if name == "smoke-borg-core":
+            condition += " && github.event_name != 'schedule'"
+        assert jobs[name]["if"] == "${{ " + condition + " }}"
+    assert jobs["backend-unit-coverage-combine"]["needs"] == [
+        "prepare",
+        "backend-unit-coverage",
+    ]
+    assert jobs["backend-unit-coverage"]["strategy"]["matrix"]["shard"] == [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+    ]
+    assert jobs["backend-unit-coverage"]["strategy"]["matrix"]["total_shards"] == [6]
     for name in ("smoke-borg-core", "smoke-borg-extended", "smoke-borg-ssh-localhost"):
         assert jobs[name]["strategy"]["matrix"]["borg"] == ["image", "apt"]
+
+
+def test_preparation_performs_every_unconditional_contract_guard():
+    jobs = yaml.safe_load((ROOT / ".github/workflows/tests.yml").read_text())["jobs"]
+    steps = jobs["prepare"]["steps"]
+    contract = next(s for s in steps if s.get("id") == "frontend-contracts")
+    # Lint failures must not suppress the previously independent guards.
+    assert contract["if"] == "${{ !cancelled() }}"
+    for test_file in (
+        "test_borg2_only_url_prefixes_parity.py",
+        "test_borg_version_boundaries.py",
+        "test_borg_dispatch_guardrails.py",
+        "test_npm_audit_known_vulns.py",
+    ):
+        assert test_file in contract["run"]
+    assert "image" in jobs["prepare"]["outputs"]
+    lint = next(s for s in steps if s.get("id") == "backend-lint")
+    assert lint["if"] == "steps.scope.outputs.backend == 'true'"
+    assert "ruff check app tests" in lint["run"]
+    assert "ruff format --check app tests" in lint["run"]
+
+
+def test_coverage_uploads_stay_on_producing_runners_and_migrations_are_isolated():
+    jobs = yaml.safe_load((ROOT / ".github/workflows/tests.yml").read_text())["jobs"]
+    for job_id in ("frontend-vitest", "backend-unit-coverage-combine"):
+        assert any(
+            s.get("uses", "").startswith("codecov/codecov-action@")
+            for s in jobs[job_id]["steps"]
+        )
+    migrations = jobs["backend-migration-paths"]
+    assert migrations["strategy"]["matrix"]["shard"] == [1, 2]
+    assert migrations["services"]["postgres"]["env"]["POSTGRES_DB"] == "borg_test"
+    assert migrations["strategy"]["fail-fast"] is False
+    selection = next(
+        s
+        for s in migrations["steps"]
+        if s.get("name") == "Select complete migration file shard"
+    )
+    assert "--balance-by files" in selection["run"]
+    assert "pytest tests/migrations --collect-only" in selection["run"]

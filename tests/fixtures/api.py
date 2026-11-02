@@ -155,7 +155,14 @@ def test_client(test_db):
 
     # Use context manager to trigger startup/shutdown events
     with TestClient(app) as client:
-        yield client
+        try:
+            yield client
+        finally:
+            # Unlike production's request-owned sessions, the fixture keeps
+            # this session open through every request. Discard leftover test
+            # writes before real shutdown drains tasks and releases its lease:
+            # otherwise SQLite's write lock blocks that cleanup until timeout.
+            test_db.rollback()
 
 
 class HeldRunner:

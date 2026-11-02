@@ -25,29 +25,33 @@ permissions:
   issues: write  # Required for posting PR comments (GitHub uses the issues API)
 
 jobs:
-  personal-paths:
-    name: Personal Path Leak Scan
+  security-summary:
+    name: Security Scan Summary
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
+      - name: Setup Python
+        if: ${{ !cancelled() }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'  # keep in sync with docker/runtime-base.env
+
       - name: Self-test the path checker
+        if: ${{ !cancelled() }}
+        id: path-checker-self-test
         run: ./scripts/check-no-personal-paths.sh --self-test
 
       - name: Check for personal paths in tracked files
+        if: ${{ !cancelled() }}
+        id: personal-paths
         run: ./scripts/check-no-personal-paths.sh
 
-  npm-audit:
-    name: Frontend Security (npm audit)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
       - name: Setup Node.js
+        if: ${{ !cancelled() }}
         uses: actions/setup-node@v7
         with:
           # jest-dom 7 and jsdom 30 require Node >= 22; match the repo-wide
@@ -57,12 +61,16 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        if: ${{ !cancelled() }}
         working-directory: frontend
         # --no-audit: the bundled npm 10 would otherwise submit its own audit
         # request here; redundant, the dedicated step below audits with npm 11.
-        run: npm ci --no-audit
+        # Audit-only installs need no lifecycle hooks; dependency scripts must
+        # not modify inputs or gate code used by the following security scans.
+        run: npm ci --no-audit --ignore-scripts
 
       - name: Update npm for the bulk advisory endpoint
+        if: ${{ !cancelled() }}
         # npm tries the bulk advisory endpoint first and falls back to the
         # quick-audit endpoint when the bulk request fails or returns data it
         # cannot use. Node 22's bundled npm 10 ends up on that fallback, which
@@ -72,10 +80,12 @@ jobs:
         # legacy path; pinned to the exact release validated against this
         # lockfile so the security gate's own tooling cannot drift between runs.
         run: |
-          npm install -g npm@11.19.0
+          npm install -g npm@11.19.0 --ignore-scripts
           test "$(npm --version)" = "11.19.0"
 
       - name: Run npm audit
+        if: ${{ !cancelled() }}
+        id: npm-audit
         working-directory: frontend
         run: |
           # Audit production dependencies only (omit dev) — devDependencies like oxlint
@@ -94,14 +104,14 @@ jobs:
         continue-on-error: false
 
       - name: Generate npm audit report
-        if: always()
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: |
           npm audit --json > npm-audit-report.json || true
           npm audit > npm-audit-report.txt || true
 
       - name: Upload npm audit report
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: npm-audit-report
@@ -110,23 +120,13 @@ jobs:
             frontend/npm-audit-report.txt
           retention-days: 30
 
-  pip-audit:
-    name: Backend Security (pip-audit)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Setup Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'  # keep in sync with docker/runtime-base.env
-
       - name: Install pip-audit
+        if: ${{ !cancelled() }}
         run: pip install pip-audit
 
       - name: Run pip-audit
+        if: ${{ !cancelled() }}
+        id: pip-audit
         run: |
           # Scan requirements.txt for vulnerabilities
           # Ignore known vulnerabilities with no available fix:
@@ -143,13 +143,13 @@ jobs:
             "${known_no_fix_ignore_args[@]}"
 
       - name: Generate pip-audit report
-        if: always()
+        if: ${{ !cancelled() }}
         run: |
           pip-audit -r requirements.txt --format json > pip-audit-report.json || true
           pip-audit -r requirements.txt > pip-audit-report.txt || true
 
       - name: Upload pip-audit report
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: pip-audit-report
@@ -158,15 +158,9 @@ jobs:
             pip-audit-report.txt
           retention-days: 30
 
-  trivy-fs:
-    name: Trivy Filesystem Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
       - name: Run Trivy vulnerability scanner (filesystem)
+        if: ${{ !cancelled() }}
+        id: trivy-fs
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -178,12 +172,12 @@ jobs:
 
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           sarif_file: 'trivy-results.sarif'
 
       - name: Generate human-readable Trivy report
-        if: always()
+        if: ${{ !cancelled() }}
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -193,12 +187,73 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM'
 
       - name: Upload Trivy report
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: trivy-filesystem-report
           path: trivy-report.txt
           retention-days: 30
+
+      - name: Create security summary
+        if: always()
+        run: |
+          echo "# 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan Date:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "## Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.npm-audit.outcome }}" == "success" ]; then
+            echo "✅ **Frontend (npm audit):** PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Frontend (npm audit):** FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.pip-audit.outcome }}" == "success" ]; then
+            echo "✅ **Backend (pip-audit):** PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Backend (pip-audit):** FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.trivy-fs.outcome }}" == "success" ]; then
+            echo "✅ **Filesystem (Trivy):** PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Filesystem (Trivy):** FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 **Detailed reports available in workflow artifacts**" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR (if applicable)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            let comment = '## 🔒 Security Scan Results\n\n';
+
+            comment += `**Commit:** ${context.sha.substring(0, 7)}\n\n`;
+            comment += '| Check | Status |\n';
+            comment += '|-------|--------|\n';
+            comment += `| Frontend (npm audit) | ${'${{ steps.npm-audit.outcome }}' === 'success' ? '✅ PASSED' : '❌ FAILED'} |\n`;
+            comment += `| Backend (pip-audit) | ${'${{ steps.pip-audit.outcome }}' === 'success' ? '✅ PASSED' : '❌ FAILED'} |\n`;
+            comment += `| Filesystem (Trivy) | ${'${{ steps.trivy-fs.outcome }}' === 'success' ? '✅ PASSED' : '❌ FAILED'} |\n`;
+            comment += '\n📊 See workflow artifacts for detailed reports.\n';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+      - name: Require every security gate to pass
+        if: always()
+        env:
+          SECURITY_CHECK_RESULTS: ${{ toJSON(steps) }}
+        run: python3 scripts/ci/check_security_results.py
 
   trivy-docker:
     name: Trivy Docker Image Scan
@@ -277,67 +332,3 @@ jobs:
           name: trivy-docker-report
           path: trivy-docker-report.txt
           retention-days: 30
-
-  security-summary:
-    name: Security Scan Summary
-    runs-on: ubuntu-latest
-    needs: [npm-audit, pip-audit, trivy-fs]
-    if: always()
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v8
-
-      - name: Create security summary
-        run: |
-          echo "# 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Scan Date:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "## Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ "${{ needs.npm-audit.result }}" == "success" ]; then
-            echo "✅ **Frontend (npm audit):** PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Frontend (npm audit):** FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ "${{ needs.pip-audit.result }}" == "success" ]; then
-            echo "✅ **Backend (pip-audit):** PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Backend (pip-audit):** FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ "${{ needs.trivy-fs.result }}" == "success" ]; then
-            echo "✅ **Filesystem (Trivy):** PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Filesystem (Trivy):** FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📊 **Detailed reports available in workflow artifacts**" >> $GITHUB_STEP_SUMMARY
-
-      - name: Comment on PR (if applicable)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const fs = require('fs');
-            let comment = '## 🔒 Security Scan Results\n\n';
-
-            comment += `**Commit:** ${context.sha.substring(0, 7)}\n\n`;
-            comment += '| Check | Status |\n';
-            comment += '|-------|--------|\n';
-            comment += `| Frontend (npm audit) | ${'${{ needs.npm-audit.result }}' === 'success' ? '✅ PASSED' : '❌ FAILED'} |\n`;
-            comment += `| Backend (pip-audit) | ${'${{ needs.pip-audit.result }}' === 'success' ? '✅ PASSED' : '❌ FAILED'} |\n`;
-            comment += `| Filesystem (Trivy) | ${'${{ needs.trivy-fs.result }}' === 'success' ? '✅ PASSED' : '❌ FAILED'} |\n`;
-            comment += '\n📊 See workflow artifacts for detailed reports.\n';
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
