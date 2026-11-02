@@ -5,6 +5,7 @@ from structlog, stdlib, uvicorn or alembic alike, through `redact_secrets`.
 Call sites never need to redact before logging.
 """
 
+import json
 import logging
 import re
 from typing import Optional
@@ -42,6 +43,10 @@ _SECRET_KEY = rf"(?=[\w-]*{_SECRET_WORDS})[\w-]+"
 _DOUBLE_QUOTED = r""""(?:[^"\\\n]|\\.)*"""
 _SINGLE_QUOTED = r"""'(?:[^'\\\n]|\\.|'"'"')*"""
 _QUOTED = rf"""{_DOUBLE_QUOTED}"?|{_SINGLE_QUOTED}'?"""
+# Decode complete JSON string tokens before applying the ordinary redactors.
+# Do not start inside an escaped quote run: repeatedly scanning an unterminated
+# run from every quote would turn a large diagnostic into quadratic work.
+_JSON_STRING = re.compile(rf'(?<!\\){_DOUBLE_QUOTED}"')
 # A quote inside a bare value is part of the secret (`ab"cd`); one followed
 # by a delimiter or the end closes the string around it (JSON, a repr).
 _INNER_QUOTE = r"""["'](?![\s,;:}\]&#]|$)"""
@@ -62,7 +67,7 @@ _KEY_VALUE = re.compile(
 _AUTHORIZATION = re.compile(
     r"""(?i)((?<![\w-])authorization(?:\\*["'])?[ \t]*[:=][ \t]*"""
     r"""(?:\\*["'])?(?:bearer|basic)[ \t]+)"""
-    r"""[^\s"'\\,;}\]]+"""
+    r"""(?:\\+(?:/|u[0-9a-f]{4})|[^\s"'\\,;}\]])+"""
 )
 
 _SECRET_NAME = re.compile(rf"(?i){_SECRET_KEY}")
@@ -125,10 +130,23 @@ def _redact_netloc(match: re.Match, at: str, colon: str) -> str:
     return f"{scheme}{userinfo}{at}{host}"
 
 
+def _redact_json_string(match: re.Match) -> str:
+    original = match.group()
+    if "\\" not in original:
+        return original
+    try:
+        decoded = json.loads(original)
+    except json.JSONDecodeError:
+        return original
+    redacted = redact_secrets(decoded)
+    return json.dumps(redacted) if redacted != decoded else original
+
+
 def redact_secrets(text: Optional[str]) -> Optional[str]:
     """Mask URL credentials, authorization credentials and secret-named values."""
     if not text:
         return text
+    text = _JSON_STRING.sub(_redact_json_string, text)
     text = _AUTHORIZATION.sub(lambda m: f"{m.group(1)}***", text)
     for pattern, at, colon in _URL_PATTERNS:
         text = pattern.sub(lambda m: _redact_netloc(m, at, colon), text)

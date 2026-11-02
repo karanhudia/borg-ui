@@ -313,7 +313,9 @@ class TestRestoreServiceExecution:
             patch("app.services.restore_service.SessionLocal", testing_session_local),
             patch(
                 "app.services.restore_service.Path.mkdir",
-                side_effect=PermissionError("no permission"),
+                side_effect=PermissionError(
+                    "no permission password=destination-secret"
+                ),
             ),
         ):
             await service._execute_local_to_local(
@@ -328,6 +330,8 @@ class TestRestoreServiceExecution:
         refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "failed"
         assert "failedCreateDestinationDir" in refreshed.error_message
+        assert "no permission" in json.loads(refreshed.error_message)["params"]["error"]
+        assert "destination-secret" not in refreshed.error_message
         verification.close()
 
     @pytest.mark.unit
@@ -620,13 +624,44 @@ class TestRestoreServiceExecution:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "returncode,stderr,key,hint",
+        [
+            (
+                1,
+                "permission denied\n",
+                "restoreFailedZeroFilesPermission",
+                "permission denied",
+            ),
+            (
+                104,
+                '{"type":"log_message","levelname":"WARNING","msgid":"BackupOSError","message":"Input/output error on /restore/data"}\n',
+                "restoreFailedZeroFiles",
+                "Input/output error",
+            ),
+            (
+                105,
+                '{"type":"log_message","levelname":"WARNING","msgid":"BackupPermissionError","message":"Cannot set attributes on /restore/data"}',
+                "restoreFailedZeroFilesPermission",
+                "Cannot set attributes",
+            ),
+            (
+                104,
+                "failed "
+                + "context " * 300
+                + "password=hidden-secret final I/O failure\n",
+                "restoreFailedZeroFiles",
+                "final I/O failure",
+            ),
+        ],
+    )
     async def test_local_restore_warning_with_zero_files_becomes_failed(
-        self, testing_session_local, restore_job
+        self, testing_session_local, restore_job, returncode, stderr, key, hint
     ):
         service = RestoreService()
         process = FakeRestoreProcess(
-            returncode=1,
-            stderr_chunks=[b"permission denied\n"],
+            returncode=returncode,
+            stderr_chunks=[stderr],
             stdout_lines=[],
         )
 
@@ -657,8 +692,14 @@ class TestRestoreServiceExecution:
         verification = testing_session_local()
         refreshed = resolve_restore_job(verification, restore_job.id)
         assert refreshed.status == "failed"
-        assert "restoreFailedZeroFilesPermission" in refreshed.error_message
+        detail = json.loads(refreshed.error_message)
+        assert detail["key"] == f"backend.errors.service.{key}Details"
+        assert detail["params"]["exitCode"] == returncode
+        assert hint in detail["params"]["error"]
+        assert "hidden-secret" not in refreshed.error_message
+        assert len(detail["params"]["error"]) <= 1000
         notification_mock.send_restore_failure.assert_awaited_once()
+        notification_mock.send_restore_success.assert_not_awaited()
         verification.close()
 
     @pytest.mark.unit
@@ -1236,3 +1277,108 @@ async def test_a_stall_timeout_only_resends_a_cancel_already_asked_for(
     assert row.status == "cancel_requested"
     assert row.error_message == "Cancelled by user"
     assert row.updated_at == before
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "returncode,restored_file,large_output",
+    [
+        (2, False, False),
+        (104, False, False),
+        (105, False, False),
+        (0, False, False),
+        (105, True, False),
+        (0, False, True),
+    ],
+)
+async def test_ssh_destination_failure_and_partial_restore_verdicts(
+    testing_session_local,
+    db_session,
+    restore_job,
+    tmp_path,
+    returncode,
+    restored_file,
+    large_output,
+):
+    connection = SSHConnection(host="remote.test", username="borg", port=22)
+    db_session.add(connection)
+    db_session.commit()
+    connection_id = connection.id
+    progress = (
+        '{"type":"progress_percent","current":1,"total":2,"info":["restored.txt"],"finished":false}\n'
+        if restored_file
+        else ""
+    )
+    process = FakeRestoreProcess(
+        returncode=returncode,
+        stderr_chunks=([b"x" * 1024 + b"\n"] * 10000 if large_output else [])
+        + [
+            progress
+            + '{"type":"log_message","levelname":"WARNING","message":"Input/output error password=private-secret"}'
+        ],
+    )
+    notifications = SimpleNamespace(
+        send_restore_success=AsyncMock(), send_restore_failure=AsyncMock()
+    )
+    with (
+        patch("app.services.restore_service.SessionLocal", testing_session_local),
+        patch(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            AsyncMock(return_value=(str(tmp_path), [("ssh-mount", "remote-target")])),
+        ),
+        patch(
+            "app.services.mount_service.mount_service.unmount", AsyncMock()
+        ) as unmount,
+        patch(
+            "app.services.restore_service.asyncio.create_subprocess_exec",
+            AsyncMock(return_value=process),
+        ),
+        patch("app.services.restore_service.notification_service", notifications),
+    ):
+        import tracemalloc
+
+        if large_output:
+            tracemalloc.start()
+        try:
+            await RestoreService()._execute_local_to_ssh(
+                restore_job.id,
+                restore_job.repository,
+                restore_job.archive,
+                "/remote/destination",
+                destination_connection_id=connection_id,
+            )
+        finally:
+            if large_output:
+                _, peak = tracemalloc.get_traced_memory()
+                tracemalloc.stop()
+        if large_output:
+            # Keep the captured lines and bounded tail, without allocating a
+            # second complete diagnostic string for a successful extraction.
+            assert peak < 1025 * 10000 * 1.75
+    verification = testing_session_local()
+    job = resolve_restore_job(verification, restore_job.id)
+    assert "private-secret" not in job.logs
+    assert "Input/output error" in job.logs
+    if returncode == 0 or restored_file:
+        assert job.status == (
+            "completed" if returncode == 0 else "completed_with_warnings"
+        )
+        notifications.send_restore_failure.assert_not_awaited()
+        notifications.send_restore_success.assert_awaited_once()
+        unmount.assert_awaited_once_with("ssh-mount")
+        verification.close()
+        return
+    assert job.status == "failed"
+    detail = json.loads(job.error_message)
+    if returncode == 2:
+        assert detail["key"] == "backend.errors.service.restoreFailedExitCodeDetails"
+    else:
+        assert "ZeroFiles" in detail["key"]
+    assert detail["params"]["exitCode"] == returncode
+    assert "Input/output error" in detail["params"]["error"]
+    assert "private-secret" not in job.error_message
+    notifications.send_restore_failure.assert_awaited_once()
+    notifications.send_restore_success.assert_not_awaited()
+    unmount.assert_awaited_once_with("ssh-mount")
+    verification.close()

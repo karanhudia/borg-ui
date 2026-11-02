@@ -356,3 +356,50 @@ async def test_notify_agent_restore_dispatches_success_and_failure(monkeypatch):
         ),
     )
     assert "failure" in calls
+
+
+@pytest.mark.unit
+def test_agent_failed_restore_retains_redacted_borg_diagnostic():
+    service = RestoreService()
+    service._collect_agent_job_logs = lambda db, job_id: (
+        '{"type":"log_message","levelname":"ERROR","message":"Input/output error password=private-secret"}'
+    )
+    job = _restore_job_stub()
+    service._apply_agent_restore_terminal(
+        None,
+        job,
+        SimpleNamespace(
+            status="failed",
+            result={"return_code": 2},
+            error_message="repository.restore exited with code 2",
+            id=1,
+        ),
+    )
+    detail = json.loads(job.error_message)
+    assert detail["params"]["exitCode"] == 2
+    assert "Input/output error" in detail["params"]["error"]
+    assert "private-secret" not in job.error_message
+
+
+@pytest.mark.unit
+def test_agent_failed_restore_uses_reported_cause_when_logs_only_have_progress():
+    service = RestoreService()
+    service._collect_agent_job_logs = lambda db, job_id: (
+        '{"type":"progress_percent","current":0,"total":0}'
+    )
+    job = _restore_job_stub()
+    service._apply_agent_restore_terminal(
+        None,
+        job,
+        SimpleNamespace(
+            status="failed",
+            result={
+                "return_code": 2,
+                "stderr_tail": "Permission denied on destination",
+            },
+            error_message="repository.restore exited with code 2",
+            id=1,
+        ),
+    )
+    detail = json.loads(job.error_message)
+    assert "Permission denied" in detail["params"]["error"]
