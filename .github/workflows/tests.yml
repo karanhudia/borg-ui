@@ -20,42 +20,98 @@ env:
   SMOKE_URL: "http://localhost:8082"
 
 jobs:
-  backend-lint:
-    name: Backend / Lint & Format
+  prepare:
+    name: CI / Preparation and contract guards
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+    outputs:
+      backend: ${{ steps.scope.outputs.backend }}
+      image: ${{ steps.tag.outputs.image }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
+      - name: Select checks from complete PR diff
+        id: scope
+        env:
+          CI_EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CHECKOUT_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/ci/pr_scope.py --event "$CI_EVENT_NAME" \
+            --base "$PR_BASE_SHA" --head "$CHECKOUT_SHA" >> "$GITHUB_OUTPUT"
+
+      # Only successful main runs write this cache. Resolve it ONCE so all
+      # shards use the same weights, even if main finishes during this run.
+      - name: Restore trusted backend timing history
+        if: steps.scope.outputs.backend == 'true'
+        uses: actions/cache/restore@v5
+        with:
+          path: ci-timings/history.json
+          key: backend-unit-timings-${{ runner.os }}-v1-${{ github.sha }}
+          restore-keys: backend-unit-timings-${{ runner.os }}-v1-
+
+      - name: Ensure timing baseline exists
+        if: steps.scope.outputs.backend == 'true'
+        run: |
+          mkdir -p ci-timings
+          test -s ci-timings/history.json || printf '{}\n' > ci-timings/history.json
+
+      - name: Freeze timing baseline for all shards
+        if: steps.scope.outputs.backend == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-unit-timing-baseline
+          path: ci-timings/history.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Compute runtime base tag
+        id: tag
+        run: echo "image=docker.io/ainullcode/borg-ui-runtime-base:$(bash docker/runtime-base-tag.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python for required contract guards
         uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Install contract dependencies
+        run: pip install -r requirements.txt
 
-      - name: Run Ruff lint
+      - name: Backend lint and format
+        id: backend-lint
+        if: steps.scope.outputs.backend == 'true'
         run: |
           ruff check app tests
-
-      - name: Run Ruff format check
-        run: |
           ruff format --check app tests
 
+      - name: Check frontend and backend contract invariants
+        id: frontend-contracts
+        if: ${{ !cancelled() }}
+        run: |
+          pytest -q \
+            tests/unit/test_borg2_only_url_prefixes_parity.py \
+            tests/unit/test_borg_version_boundaries.py \
+            tests/unit/test_borg_dispatch_guardrails.py \
+            tests/unit/test_npm_audit_known_vulns.py
+
+  # Guard failures stay fatal in the summary, but independent tests still run.
+  # Explicit status functions override GitHub's implicit success() dependency gate.
   backend-unit-coverage:
     name: Backend / Unit Tests (${{ matrix.shard }}/${{ matrix.total_shards }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: prepare
+    if: ${{ !cancelled() && needs.prepare.outputs.backend == 'true' }}
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-        total_shards: [4]
+        shard: [1, 2, 3, 4, 5, 6]
+        total_shards: [6]
 
     services:
       redis:
@@ -117,11 +173,21 @@ jobs:
           mkdir -p coverage-data
 
       - name: Select backend unit test shard
+        # Every shard downloads the immutable manifest produced by prepare.
+        # A failed download fails this shard; independent fallback would risk
+        # assigning different files on different runners.
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-unit-timing-baseline
+          path: ci-timings
+
+      - name: Assign backend unit test shard
         run: |
           python -m pytest tests/unit --collect-only -q -o addopts='' > .pytest-unit-nodes.txt
           python scripts/ci/select_pytest_shard.py \
             --shard-index "${{ matrix.shard }}" \
             --shard-total "${{ matrix.total_shards }}" \
+            --durations-file ci-timings/history.json \
             < .pytest-unit-nodes.txt \
             > .pytest-unit-shard.txt
           test -s .pytest-unit-shard.txt
@@ -135,12 +201,24 @@ jobs:
             "${PYTEST_FILES[@]}" \
             -v \
             --cov=app \
-            --cov-report=term-missing
+            --cov-report=term-missing \
+            --durations=50 \
+            --junitxml=test-results/unit-${{ matrix.shard }}.xml \
+            -o junit_family=xunit1
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
           BORG_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/borg_test
           COVERAGE_FILE: coverage-data/unit-${{ matrix.shard }}.coverage
+
+      - name: Upload backend unit timing report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-unit-junit-${{ matrix.shard }}
+          path: test-results/unit-${{ matrix.shard }}.xml
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload backend coverage data
         uses: actions/upload-artifact@v7
@@ -153,7 +231,8 @@ jobs:
   backend-unit-coverage-combine:
     name: Backend / Unit Coverage Report
     runs-on: ubuntu-latest
-    needs: [backend-unit-coverage]
+    needs: [prepare, backend-unit-coverage]
+    if: needs.prepare.outputs.backend == 'true'
     permissions:
       contents: write
       pull-requests: write
@@ -171,7 +250,14 @@ jobs:
       - name: Install coverage dependency
         run: |
           python -m pip install --upgrade pip
-          pip install "coverage[toml]==7.13.5"
+          pip install "$(sed -n '/^coverage\[toml\]==/p' requirements.txt)"
+
+      - name: Download backend unit timing reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: backend-unit-junit-*
+          path: test-results
+          merge-multiple: true
 
       - name: Download backend coverage data
         uses: actions/download-artifact@v8
@@ -179,6 +265,22 @@ jobs:
           pattern: backend-unit-coverage-*
           path: coverage-artifacts/backend
           merge-multiple: true
+
+      - name: Require every unit shard report
+        run: >-
+          python scripts/ci/verify_shard_reports.py --shards 6
+          --junit-dir test-results --coverage-dir coverage-artifacts/backend
+
+      - name: Merge backend unit timings
+        run: python scripts/ci/pytest_durations.py test-results/unit-*.xml --output ci-timings/history.json
+
+      - name: Upload fresh backend timing history
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-unit-timing-history
+          path: ci-timings/history.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Combine backend coverage
         run: |
@@ -212,10 +314,27 @@ jobs:
           MINIMUM_GREEN: 70
           MINIMUM_ORANGE: 50
 
+      - name: Upload backend coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          disable_search: true
+          flags: backend-unit
+          name: backend-unit-coverage
+          verbose: true
+          fail_ci_if_error: false
+
   backend-migration-paths:
-    name: Backend / Migration Upgrade Paths
+    name: Backend / Migration Upgrade Paths (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: prepare
+    if: ${{ !cancelled() && needs.prepare.outputs.backend == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     permissions:
       contents: read
 
@@ -253,29 +372,43 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run migration upgrade path tests
-        run: pytest tests/migrations -v
+      # Every matrix entry owns a separate runner, Postgres service and temp
+      # directory. Never parallelize tests against one shared migration DB.
+      # File-only weights keep assignments stable if a new release tag expands
+      # parameter counts between checkouts on the two runners.
+      - name: Select complete migration file shard
+        run: |
+          python -m pytest tests/migrations --collect-only -q -o addopts='' > .pytest-migration-nodes.txt
+          python scripts/ci/select_pytest_shard.py \
+            --shard-index "${{ matrix.shard }}" --shard-total 2 --balance-by files \
+            < .pytest-migration-nodes.txt > .pytest-migration-shard.txt
+          test -s .pytest-migration-shard.txt
         env:
           BORG_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/borg_test
           BORG_TEST_REQUIRE_RELEASE_TAGS: "1"
 
-  runtime-base-image:
-    name: Backend / Resolve runtime base image
-    runs-on: ubuntu-latest
-    outputs:
-      image: ${{ steps.tag.outputs.image }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
+      - name: Run migration upgrade path tests
+        run: |
+          mapfile -t PYTEST_FILES < .pytest-migration-shard.txt
+          pytest "${PYTEST_FILES[@]}" -v --durations=50 --junitxml=test-results/migrations-${{ matrix.shard }}.xml
+        env:
+          BORG_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/borg_test
+          BORG_TEST_REQUIRE_RELEASE_TAGS: "1"
 
-      - name: Compute runtime base tag
-        id: tag
-        run: echo "image=docker.io/ainullcode/borg-ui-runtime-base:$(bash docker/runtime-base-tag.sh)" >> "$GITHUB_OUTPUT"
+      - name: Upload migration timing report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-migration-junit-${{ matrix.shard }}
+          path: test-results/migrations-${{ matrix.shard }}.xml
+          if-no-files-found: error
+          retention-days: 7
 
   backend-api-integration:
     name: Backend / Integration Tests
     runs-on: ubuntu-latest
-    needs: runtime-base-image
+    needs: prepare
+    if: ${{ !cancelled() && needs.prepare.outputs.backend == 'true' }}
     # Without a cap a hung test holds the runner for GitHub's six hour
     # default; the suite finishes in a couple of minutes.
     timeout-minutes: 20
@@ -284,7 +417,7 @@ jobs:
     # run on the runner's glibc/OpenSSL). A Borg bump PR stays red here until its
     # base image is pushed, same as the Dockerfile base-image guard.
     container:
-      image: ${{ needs.runtime-base-image.outputs.image }}
+      image: ${{ needs.prepare.outputs.image }}
 
     services:
       redis:
@@ -321,10 +454,19 @@ jobs:
       - name: Run backend integration suite
         run: |
           chown -R borg:borg . /tmp/borg-ui-tests
-          gosu borg pytest tests/integration -v
+          gosu borg pytest tests/integration -v --durations=50 --junitxml=test-results/integration.xml
         env:
           REDIS_HOST: redis
           REDIS_PORT: 6379
+
+      - name: Upload integration timing report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-integration-junit
+          path: test-results/integration.xml
+          if-no-files-found: error
+          retention-days: 7
 
   typecheck-lint-format:
     name: Frontend / Code Quality
@@ -348,6 +490,10 @@ jobs:
       - name: Check locale key parity
         working-directory: frontend
         run: npm run check:locales
+
+      - name: Test snapshot worker safety
+        working-directory: frontend
+        run: node --test scripts/snapshot-workers.node-test.mjs
 
       - name: TypeScript type check
         working-directory: frontend
@@ -392,52 +538,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  coverage-backend:
-    name: Coverage / Backend
-    runs-on: ubuntu-latest
-    needs: [backend-unit-coverage-combine, backend-api-integration, frontend-vitest]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Download backend coverage artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: backend-coverage-xml
-          path: coverage-artifacts/backend
-
-      - name: Upload backend coverage to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-artifacts/backend/coverage.xml
-          disable_search: true
-          flags: backend-unit
-          name: backend-unit-coverage
-          verbose: true
-          fail_ci_if_error: false
-
-  coverage-frontend:
-    name: Coverage / Frontend
-    runs-on: ubuntu-latest
-    needs: [backend-unit-coverage-combine, backend-api-integration, frontend-vitest]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Download frontend coverage artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: frontend-coverage-lcov
-          path: coverage-artifacts/frontend
-
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-artifacts/frontend/lcov.info
+          files: ./frontend/coverage/lcov.info
           disable_search: true
           flags: frontend
           name: frontend-coverage
@@ -494,17 +599,17 @@ jobs:
 
   smoke-borg-core:
     name: Smoke / Core (borg ${{ matrix.borg }})
-    if: github.event_name != 'schedule'
+    if: ${{ !cancelled() && needs.frontend-build.result == 'success' && needs.prepare.outputs.image != '' && github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    needs: [frontend-build, runtime-base-image]
+    needs: [frontend-build, prepare]
     strategy:
       fail-fast: false
       matrix:
         # image: the Borg 1.4.x and Borg 2 builds users get (runtime base image).
         # apt: the Borg 1 that distributions ship (1.2.x on Ubuntu 24.04).
         borg: [image, apt]
-    container: ${{ matrix.borg == 'image' && needs.runtime-base-image.outputs.image || null }}
+    container: ${{ matrix.borg == 'image' && needs.prepare.outputs.image || null }}
 
     services:
       redis:
@@ -615,16 +720,17 @@ jobs:
 
   smoke-borg-extended:
     name: Smoke / Extended (borg ${{ matrix.borg }})
+    if: ${{ !cancelled() && needs.frontend-build.result == 'success' && needs.prepare.outputs.image != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [frontend-build, runtime-base-image]
+    needs: [frontend-build, prepare]
     strategy:
       fail-fast: false
       matrix:
         # image: the Borg 1.4.x and Borg 2 builds users get (runtime base image).
         # apt: the Borg 1 that distributions ship (1.2.x on Ubuntu 24.04).
         borg: [image, apt]
-    container: ${{ matrix.borg == 'image' && needs.runtime-base-image.outputs.image || null }}
+    container: ${{ matrix.borg == 'image' && needs.prepare.outputs.image || null }}
 
     services:
       redis:
@@ -735,9 +841,10 @@ jobs:
 
   smoke-borg-ssh-localhost:
     name: Smoke / SSH (borg ${{ matrix.borg }})
+    if: ${{ !cancelled() && needs.frontend-build.result == 'success' && needs.prepare.outputs.image != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [frontend-build, runtime-base-image]
+    needs: [frontend-build, prepare]
     strategy:
       fail-fast: false
       matrix:
@@ -745,7 +852,7 @@ jobs:
         # Borg 1 that distributions ship (1.2.x on Ubuntu 24.04).
         borg: [image, apt]
     # --privileged: sshfs mounts need /dev/fuse and CAP_SYS_ADMIN.
-    container: ${{ matrix.borg == 'image' && fromJSON(format('{{"image":"{0}","options":"--privileged"}}', needs.runtime-base-image.outputs.image)) || null }}
+    container: ${{ matrix.borg == 'image' && fromJSON(format('{{"image":"{0}","options":"--privileged"}}', needs.prepare.outputs.image)) || null }}
 
     services:
       redis:
@@ -916,89 +1023,33 @@ jobs:
   test-results:
     name: CI / Summary
     runs-on: ubuntu-latest
-    needs: [backend-lint, backend-unit-coverage, backend-unit-coverage-combine, backend-migration-paths, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-backend, coverage-frontend, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
+    needs: [prepare, backend-unit-coverage, backend-unit-coverage-combine, backend-migration-paths, backend-api-integration, typecheck-lint-format, frontend-vitest, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
     if: always()
-
+    permissions:
+      contents: read
     steps:
-      - name: Check test results
-        run: |
-          echo "Backend / Lint & Format: ${{ needs.backend-lint.result }}"
-          echo "Backend / Unit Test Shards: ${{ needs.backend-unit-coverage.result }}"
-          echo "Backend / Unit Coverage Report: ${{ needs.backend-unit-coverage-combine.result }}"
-          echo "Backend / Migration Upgrade Paths: ${{ needs.backend-migration-paths.result }}"
-          echo "Backend / Integration Tests: ${{ needs.backend-api-integration.result }}"
-          echo "Frontend / Code Quality: ${{ needs.typecheck-lint-format.result }}"
-          echo "Frontend / Unit Tests: ${{ needs.frontend-vitest.result }}"
-          echo "Coverage / Backend: ${{ needs.coverage-backend.result }}"
-          echo "Coverage / Frontend: ${{ needs.coverage-frontend.result }}"
-          echo "Frontend / Build: ${{ needs.frontend-build.result }}"
-          echo "Smoke / Core: ${{ needs.smoke-borg-core.result }}"
-          echo "Smoke / Extended: ${{ needs.smoke-borg-extended.result }}"
-          echo "Smoke / SSH: ${{ needs.smoke-borg-ssh-localhost.result }}"
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-          if [ "${{ needs.backend-lint.result }}" != "success" ]; then
-            echo "Backend / Lint & Format failed"
-            exit 1
-          fi
+      - name: Check every selected result
+        env:
+          CI_JOB_RESULTS: ${{ toJSON(needs) }}
+          CI_EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/ci/check_results.py
 
-          if [ "${{ needs.backend-unit-coverage.result }}" != "success" ]; then
-            echo "Backend / Unit Test Shards failed"
-            exit 1
-          fi
+      # This runs only AFTER the complete selected suite passed. PRs can read
+      # main's history, but cannot publish weights for other PRs to consume.
+      - name: Download successful main timing history
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-unit-timing-history
+          path: ci-timings
 
-          if [ "${{ needs.backend-unit-coverage-combine.result }}" != "success" ]; then
-            echo "Backend / Unit Coverage Report failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.backend-migration-paths.result }}" != "success" ]; then
-            echo "Backend / Migration Upgrade Paths failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.backend-api-integration.result }}" != "success" ]; then
-            echo "Backend / Integration Tests failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.typecheck-lint-format.result }}" != "success" ]; then
-            echo "Frontend / Code Quality failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.frontend-vitest.result }}" != "success" ]; then
-            echo "Frontend / Unit Tests failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.coverage-backend.result }}" != "success" ]; then
-            echo "Coverage / Backend failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.coverage-frontend.result }}" != "success" ]; then
-            echo "Coverage / Frontend failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.frontend-build.result }}" != "success" ]; then
-            echo "Frontend / Build failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.smoke-borg-core.result }}" != "success" ] && [ "${{ needs.smoke-borg-core.result }}" != "skipped" ]; then
-            echo "Smoke / Core failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.smoke-borg-extended.result }}" != "success" ] && [ "${{ needs.smoke-borg-extended.result }}" != "skipped" ]; then
-            echo "Smoke / Extended failed"
-            exit 1
-          fi
-
-          if [ "${{ needs.smoke-borg-ssh-localhost.result }}" != "success" ] && [ "${{ needs.smoke-borg-ssh-localhost.result }}" != "skipped" ]; then
-            echo "Smoke / SSH failed"
-            exit 1
-          fi
-
-          echo "All test lanes passed"
+      - name: Save trusted backend timing history
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v5
+        with:
+          path: ci-timings/history.json
+          key: backend-unit-timings-${{ runner.os }}-v1-${{ github.sha }}

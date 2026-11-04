@@ -202,6 +202,7 @@ class RestoreJobFacade:
         """The service captures the process output and assigns it once, at the
         end. The operation keeps it in its log file rather than on the row."""
         from app.services.operations.runner import operation_log_path
+        from app.utils.redaction import redact_secrets
 
         if value is None:
             return
@@ -211,7 +212,7 @@ class RestoreJobFacade:
             else operation_log_path(self.operation.id)
         )
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(value, encoding="utf-8")
+        path.write_text(redact_secrets(value), encoding="utf-8")
         self.operation.log_file_path = str(path)
 
 

@@ -6,6 +6,8 @@ Key test focus:
 - Shows "X places used" to be clear about pre-backup + post-backup = 2 places
 """
 
+import json
+
 import pytest
 from app.database.models import (
     BackupPlan,
@@ -870,3 +872,183 @@ class TestScriptDeleteScheduleReference:
             .count()
             == 0
         )
+
+
+@pytest.mark.unit
+class TestGeneratedScriptNameReuse:
+    """Saving a plan again sends its generated (template) scripts again under the
+    same names; that must not fail with 'already exists'."""
+
+    def _create(self, client, headers, **overrides):
+        payload = {
+            "name": "Export Docker container: web",
+            "description": "Export a Docker container",
+            "content": "#!/usr/bin/env bash\ndocker export web\n",
+            "timeout": 900,
+            "run_on": "always",
+            "category": "template",
+            **overrides,
+        }
+        return client.post("/api/scripts", json=payload, headers=headers)
+
+    def test_identical_generated_script_is_reused(self, test_client, admin_headers):
+        first = self._create(test_client, admin_headers)
+        second = self._create(test_client, admin_headers)
+
+        assert first.status_code == 201
+        assert second.status_code == 201
+        assert second.json()["id"] == first.json()["id"]
+
+    def test_edited_generated_script_gets_next_free_name(
+        self, test_client, admin_headers
+    ):
+        first = self._create(test_client, admin_headers)
+        edited = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        again = self._create(test_client, admin_headers, content="#!/bin/sh\necho 3\n")
+
+        assert edited.status_code == 201
+        assert edited.json()["id"] != first.json()["id"]
+        assert edited.json()["name"] == "Export Docker container: web (2)"
+        assert again.json()["name"] == "Export Docker container: web (3)"
+
+    def test_saving_an_edited_generated_script_again_reuses_its_copy(
+        self, test_client, admin_headers
+    ):
+        self._create(test_client, admin_headers)
+        edited = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        again = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+
+        assert again.json()["id"] == edited.json()["id"]
+        assert again.json()["name"] == "Export Docker container: web (2)"
+
+    def test_identical_copy_after_a_deleted_copy_is_still_reused(
+        self, test_client, admin_headers, test_db
+    ):
+        self._create(test_client, admin_headers)
+        self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        third = self._create(test_client, admin_headers, content="#!/bin/sh\necho 3\n")
+        test_db.query(Script).filter(
+            Script.name == "Export Docker container: web (2)"
+        ).delete()
+        test_db.commit()
+
+        again = self._create(test_client, admin_headers, content="#!/bin/sh\necho 3\n")
+        other = self._create(test_client, admin_headers, content="#!/bin/sh\necho 4\n")
+
+        assert again.json()["id"] == third.json()["id"]
+        assert other.json()["name"] == "Export Docker container: web (2)"
+
+    def test_long_names_cut_to_the_same_prefix_keep_separate_files(
+        self, test_client, admin_headers
+    ):
+        long_name = "Export Docker container: " + "x" * 60
+        first = self._create(test_client, admin_headers, name=long_name)
+        edited = self._create(
+            test_client, admin_headers, name=long_name, content="#!/bin/sh\necho 2\n"
+        )
+
+        assert first.json()["file_path"] != edited.json()["file_path"]
+
+    def test_numbered_copy_is_reused_after_base_script_is_deleted(
+        self, test_client, admin_headers, test_db
+    ):
+        base = self._create(test_client, admin_headers)
+        copy = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        test_db.query(Script).filter(Script.id == base.json()["id"]).delete()
+        test_db.commit()
+
+        again = self._create(test_client, admin_headers, content="#!/bin/sh\necho 2\n")
+        different = self._create(
+            test_client, admin_headers, content="#!/bin/sh\necho 3\n"
+        )
+
+        assert again.status_code == 201
+        assert again.json()["id"] == copy.json()["id"]
+        assert different.json()["name"] == "Export Docker container: web"
+
+    def test_changed_parameter_definitions_get_a_separate_reusable_copy(
+        self, test_client, admin_headers
+    ):
+        original = [
+            {"name": "DEST", "type": "text", "default": "/one", "required": False}
+        ]
+        changed = [
+            {"name": "DEST", "type": "text", "default": "/two", "required": False}
+        ]
+        first = self._create(test_client, admin_headers, parameters=original)
+        second = self._create(test_client, admin_headers, parameters=changed)
+        again = self._create(test_client, admin_headers, parameters=changed)
+
+        assert second.status_code == 201
+        assert second.json()["id"] != first.json()["id"]
+        assert second.json()["parameters"] == changed
+        assert again.json()["id"] == second.json()["id"]
+
+    def test_inferred_and_explicit_equivalent_parameters_reuse_the_script(
+        self, test_client, admin_headers
+    ):
+        content = "#!/bin/sh\necho ${DEST:-/backup}\n"
+        first = self._create(test_client, admin_headers, content=content)
+        again = self._create(
+            test_client,
+            admin_headers,
+            content=content,
+            parameters=first.json()["parameters"],
+        )
+        assert again.json()["id"] == first.json()["id"]
+
+    def test_changed_description_is_not_reused(self, test_client, admin_headers):
+        first = self._create(test_client, admin_headers)
+        redescribed = self._create(test_client, admin_headers, description="New text")
+
+        assert redescribed.json()["id"] != first.json()["id"]
+
+    def test_script_used_by_a_plan_source_cannot_be_deleted(
+        self, test_client, admin_headers, test_db
+    ):
+        script_id = self._create(test_client, admin_headers).json()["id"]
+        test_db.add(
+            BackupPlan(
+                name="Containers",
+                enabled=True,
+                source_type="local",
+                source_directories='["/exports/web"]',
+                source_locations=json.dumps(
+                    [
+                        {
+                            "paths": ["/exports/web"],
+                            "container": {
+                                "container_name": "web",
+                                "pre_backup_script_id": script_id,
+                            },
+                        }
+                    ]
+                ),
+                exclude_patterns="[]",
+                archive_name_template="{plan_name}-{now}",
+                compression="lz4",
+                repository_run_mode="series",
+                max_parallel_repositories=1,
+                failure_behavior="continue",
+                schedule_enabled=False,
+                timezone="UTC",
+            )
+        )
+        test_db.commit()
+
+        response = test_client.delete(
+            f"/api/scripts/{script_id}", headers=admin_headers
+        )
+
+        assert response.status_code == 400
+        assert "Containers (source-pre-backup)" in response.text
+        assert test_db.query(Script).filter(Script.id == script_id).first()
+
+    def test_custom_script_name_clash_still_refused(self, test_client, admin_headers):
+        assert (
+            self._create(test_client, admin_headers, category="custom").status_code
+            == 201
+        )
+        clash = self._create(test_client, admin_headers, category="custom")
+
+        assert clash.status_code == 400

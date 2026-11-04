@@ -1431,3 +1431,72 @@ async def test_other_setting_deleted_mid_send_still_reaches_the_rest(
     )
 
     assert len(delivered) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "service_url,is_html,include_json",
+    [
+        ("mailto://user:pass@smtp.example.com", True, False),
+        ("mailto://user:pass@smtp.example.com", True, True),
+        ("slack://token/channel", False, True),
+    ],
+)
+async def test_restore_failure_escapes_only_html_notification_values(
+    test_db,
+    mock_apprise,
+    mock_repository,
+    service_url,
+    is_html,
+    include_json,
+    monkeypatch,
+):
+    from html import escape
+
+    # Exercise the JSON attachment path even for an HTML transport; the
+    # renderer must be safe independently of today's transport-selection policy.
+    monkeypatch.setattr(
+        "app.services.notification_service._should_include_json",
+        lambda setting: include_json,
+    )
+
+    mock_repository.name = "<b>repository</b>&name"
+    mock_repository.path = "/restore/<i>location</i>&path"
+    setting = NotificationSettings(
+        name="Restore failure alert",
+        service_url=service_url,
+        enabled=True,
+        notify_on_restore_failure=True,
+        monitor_all_repositories=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+    archive = "<span>archive</span>&name"
+    diagnostic = '</pre><img src="https://example.test/image" onerror="alert(1)">&'
+    await notification_service.send_restore_failure(
+        test_db, mock_repository.name, archive, diagnostic
+    )
+    body = apprise_instance.notify.call_args.kwargs["body"]
+    values = (mock_repository.name, mock_repository.path, archive, diagnostic)
+    if is_html:
+        assert "<img" not in body
+    for value in values:
+        if is_html:
+            assert value not in body
+            assert escape(value, quote=False) in body or escape(value) in body
+        else:
+            assert value in body
+
+
+@pytest.mark.parametrize("is_html", [False, True])
+def test_json_webhook_keeps_literal_payload_when_diagnostics_contain_html(is_html):
+    payload = '{"error_message":"</pre><img src=error>&"}'
+    assert (
+        _append_json_to_body(
+            "body", payload, is_html=is_html, service_url="jsons://example.test/hook"
+        )
+        == payload
+    )

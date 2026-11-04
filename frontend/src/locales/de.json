@@ -2314,7 +2314,8 @@
   "availabilitySchedule": {
     "skipReasons": {
       "minimumIntervalNotElapsed": "Mindestintervall noch nicht erreicht",
-      "sourceUnavailable": "Quelle nicht verfügbar"
+      "sourceUnavailable": "Quelle nicht verfügbar",
+      "planRequired": "Pausiert: erfordert Pro"
     }
   },
   "cloudStorageJobs": {
@@ -5853,6 +5854,10 @@
   },
   "backend": {
     "errors": {
+      "storage": {
+        "full": "Der Speicher ist voll oder das Kontingent ist ausgeschöpft. Schaffen Sie freien Speicher und prüfen Sie das Kontingent des Borg-UI-Datenbankvolumes und der betroffenen Speicher. Versuchen Sie es danach erneut. Borg UI löscht keine Daten, um diesen Fehler zu beheben.",
+        "io": "Der Speicher hat einen Ein-/Ausgabefehler gemeldet. Prüfen Sie Datenträger, Dateisystem und Einbindungen vor einem erneuten Versuch. Prüfen Sie den Vorgangsstatus, bevor Sie ihn erneut starten."
+      },
       "auth": {
         "cannotDeleteSelf": "Sie können sich nicht selbst löschen",
         "currentPasswordIncorrect": "Das aktuelle Passwort ist falsch",
@@ -5978,7 +5983,7 @@
         "listFailed": "Repository-Archive konnten nicht aufgelistet werden: {{error}}",
         "remoteBorg2Incompatible": "Auf dem Remote-Server läuft kein kompatibler Borg-2-Server. Installiere Borg 2 auf dem Remote-Host und setze den Remote-Borg-Pfad auf dessen borg2-Binary, oder verwende Borg 1 für dieses Repository.",
         "failedToCreateRepository": "Repository konnte nicht erstellt werden",
-        "failedToVerifyRepository": "Repository konnte nicht verifiziert werden",
+        "failedToVerifyRepository": "Repository konnte nicht verifiziert werden: {{error}}",
         "failedToImportRepository": "Repository konnte nicht importiert werden",
         "failedToUploadKeyfile": "Schlüsseldatei konnte nicht hochgeladen werden",
         "failedToExportKeyfile": "Schlüsseldatei konnte nicht exportiert werden",
@@ -6327,6 +6332,7 @@
         "containerRestartedDuringRestore": "Container wurde während der Wiederherstellungsoperation neu gestartet",
         "failedCreateDestinationDir": "Zielverzeichnis konnte nicht erstellt werden: {{error}}",
         "failedPrepareSourcePaths": "Quellpfade konnten nicht vorbereitet werden: Alle SSH-Mounts fehlgeschlagen oder keine gültigen Pfade",
+        "failedPrepareSourcePathsDetails": "Eine Sicherungsquelle konnte nicht vorbereitet werden. Prüfen Sie die Verbindung, den Pfad und die Zugriffsrechte. {{error}}",
         "restoreCanaryInsideSshMount": "Restore-Canary nicht bereitgestellt: Die SSH-Quelle {{remotePath}} überdeckt den Canary-Pfad, die Bereitstellung würde auf den Quell-Host schreiben. Stelle die Restore-Prüfung dieses Repositorys auf den Modus „Ausgewählte Probe-Pfade“ oder „Vollständiger Archiv-Drill“ um.",
         "restoreCanaryMountTableUnavailable": "Restore-Canary nicht bereitgestellt: Die Mount-Tabelle konnte nicht gelesen werden",
         "restoreCanaryReplaceFailed": "Restore-Canary nicht bereitgestellt: Die vorherige Kopie unter {{path}} konnte nicht entfernt werden",
@@ -6338,11 +6344,16 @@
         "warningRemoteProcessMayBeRunning": "(Warnung: Remote-Prozess läuft möglicherweise noch, manuelle Überprüfung empfohlen)",
         "postBackupHooksAlsoFailed": "Post-Backup-Hooks sind ebenfalls fehlgeschlagen: {{failed}}/{{total}} Skripte fehlgeschlagen",
         "restoreFailedZeroFiles": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Prüfen Sie die Protokolle für Details.",
+        "restoreFailedZeroFilesDetails": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Prüfen Sie die Protokolle für Details. {{error}}",
         "restoreFailedZeroFilesPermission": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Zugriff verweigert - möglicherweise benötigen Sie Root-Zugriff oder einen anderen Zielpfad.",
+        "restoreFailedZeroFilesPermissionDetails": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Zugriff verweigert - möglicherweise benötigen Sie Root-Zugriff oder einen anderen Zielpfad. {{error}}",
         "restoreFailedZeroFilesPathNotFound": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Pfad nicht im Archiv gefunden oder Ziel existiert nicht.",
+        "restoreFailedZeroFilesPathNotFoundDetails": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Pfad nicht im Archiv gefunden oder Ziel existiert nicht. {{error}}",
         "restoreFailedZeroFilesNoOutput": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Keine Fehlerausgabe von Borg. Dateien existieren möglicherweise nicht im Archiv oder der Zugriff wurde verweigert.",
         "restoreFailedExitCode": "Der Wiederherstellungsprozess wurde mit Code {{exitCode}} beendet",
+        "restoreFailedExitCodeDetails": "Der Wiederherstellungsprozess wurde mit Code {{exitCode}} beendet: {{error}}",
         "restoreFailed": "Wiederherstellung fehlgeschlagen",
+        "restoreFailedDetails": "Wiederherstellung fehlgeschlagen: {{error}}",
         "jobCompletedWithWarning": "Mit Warnung abgeschlossen (Exitcode {{exitCode}})",
         "restoreFailedOnAgent": "Wiederherstellung auf dem Agent fehlgeschlagen: {{error}}",
         "agentRepositoryScriptsNotRun": "Sicherung abgeschlossen, aber diese Skripte liefen nicht, weil ein Agent-Repository nur Agent-Skripte ausführt: {{scripts}}",
@@ -6593,7 +6604,17 @@
     "trialNeedsAdmin": "Bitten Sie eine Administratorin oder einen Administrator, den Test zu starten.",
     "trialUnavailable": "Derzeit ist kein kostenloser Test verfügbar.",
     "trialEnded": "Ihre Pro-Vorschau ist beendet.",
-    "tryFree": "Kostenlos testen"
+    "tryFree": "Kostenlos testen",
+    "locked": {
+      "database_discovery": "Durchsuche die Quellmaschine nach Datenbanken und füge sie mit wenigen Klicks einem Backup-Plan hinzu. Teil von Pro.",
+      "container_backups": "Sichere das Dateisystem eines Docker-Containers: Borg UI exportiert es in einen Staging-Pfad, bevor Borg es liest. Teil von Pro.",
+      "borg_v2": "Borg-2-Repositories (Beta) anlegen und importieren. Teil von Pro.",
+      "alerting_monitoring": "Werde benachrichtigt, wenn das neueste Archiv eines Repositorys älter ist als erlaubt. Teil von Pro.",
+      "backup_reports": "Sende geplante Zusammenfassungen zur Aktualität der Backups und zur letzten Aktivität. Teil von Pro."
+    },
+    "refused": {
+      "borg_v2": "Dies ist ein Borg-2-Repository. Borg 2 ist Teil von Pro und dein 30-tägiger Vollzugriff ist abgelaufen, daher braucht diese Aktion Pro. Deine Archive sind sicher: Du kannst weiterhin Dateien darin durchsuchen und herunterladen."
+    }
   },
   "announcements": {
     "latestRelease": "Neueste Version",
@@ -6956,5 +6977,12 @@
       "folderCount_other": "{{count}} Ordner",
       "remove": "{{app}} entfernen"
     }
+  },
+  "paywallOffer": {
+    "line": "Einmaliges Angebot für diese Installation: 5 % auf Lite oder Pro, jährlich oder dauerhaft, gültig 7 Tage ab dem Einlösen.",
+    "claim": "5 % Rabatt sichern",
+    "claimed": "Dein Angebot über {{percent}} % gilt bis {{date}} auf jedem Kauflink.",
+    "unavailable": "Dieses Angebot ist für diese Installation nicht verfügbar.",
+    "failed": "Das Angebot konnte gerade nicht eingelöst werden. Versuche es gleich noch einmal."
   }
 }

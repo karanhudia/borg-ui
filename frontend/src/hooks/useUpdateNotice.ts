@@ -7,7 +7,12 @@ import {
   fetchAnnouncementsManifest,
   getAnnouncementsUrl,
 } from '../services/announcements'
-import { compareVersions, resolveAnnouncementLocale } from '../utils/announcements'
+import {
+  compareVersions,
+  isValidAnnouncement,
+  isVersionString,
+  resolveAnnouncementLocale,
+} from '../utils/announcements'
 import { useSystemInfo } from './useSystemInfo'
 import { useAnalytics } from './useAnalytics'
 
@@ -76,10 +81,17 @@ export function useUpdateNotice(): UseUpdateNoticeResult {
   })
 
   const notice = useMemo<UpdateNotice | null>(() => {
-    if (!systemInfo || !manifest) return null
+    if (
+      !systemInfo ||
+      !isVersionString(systemInfo.app_version) ||
+      !manifest ||
+      !Array.isArray(manifest.announcements)
+    )
+      return null
     void dismissedTick
 
     const candidates = manifest.announcements
+      .filter(isValidAnnouncement)
       .filter((a) => a.type === 'update_available')
       .filter((a) => !isNoticeDismissed(a.id))
       .map((a) => ({ announcement: a, version: extractVersion(a) }))

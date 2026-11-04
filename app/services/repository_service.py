@@ -78,6 +78,7 @@ class RepositoryService:
                         "success": False,
                         "error": result.get("stderr")
                         or "Repository verification failed",
+                        "return_code": result.get("return_code"),
                     }
 
                 import json

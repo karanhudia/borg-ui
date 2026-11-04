@@ -576,7 +576,7 @@ type PlanDetail = { key?: string; feature?: string; required?: string; current?:
 
 // The backend sends a detail as an object, a key string or a JSON string (see
 // getBackendErrorKey in services/api.ts).
-const planDetail = (detail: unknown): PlanDetail | undefined => {
+export const planDetail = (detail: unknown): PlanDetail | undefined => {
   if (typeof detail !== 'string') return (detail as PlanDetail | null) ?? undefined
   if (!detail.startsWith('{')) return { key: detail }
   try {

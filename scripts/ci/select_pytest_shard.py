@@ -7,6 +7,14 @@ import argparse
 import sys
 from collections.abc import Iterable
 
+try:
+    from .pytest_durations import load_durations
+except ImportError:  # Direct execution and importlib-based test loading.
+    if __name__ == "__main__":
+        from pytest_durations import load_durations
+    else:
+        from scripts.ci.pytest_durations import load_durations
+
 
 def count_tests_by_file(lines: Iterable[str]) -> dict[str, int]:
     """Count collected pytest node IDs by their owning test file."""
@@ -31,26 +39,50 @@ def select_shard(
     *,
     shard_index: int,
     shard_total: int,
+    durations: dict[str, float] | None = None,
+    balance_by: str = "tests",
 ) -> list[str]:
-    """Return the test files assigned to one balanced one-based shard."""
+    """Balance by tests/durations, or stable file weights that ignore history."""
     if shard_total < 1:
         raise ValueError("shard_total must be at least 1")
     if shard_index < 1 or shard_index > shard_total:
         raise ValueError("shard_index must be between 1 and shard_total")
     if not test_counts:
         raise ValueError("No pytest test nodes found in input")
+    if balance_by not in {"tests", "files"}:
+        raise ValueError("balance_by must be tests or files")
 
     shard_paths: list[list[str]] = [[] for _ in range(shard_total)]
-    shard_test_counts = [0 for _ in range(shard_total)]
+    shard_weights = [0.0 for _ in range(shard_total)]
 
-    files_by_weight = sorted(test_counts.items(), key=lambda item: (-item[1], item[0]))
-    for test_file, test_count in files_by_weight:
+    if balance_by == "files":
+        # Release tags can expand parameter counts between migration runners.
+        # Stable file weights keep the assignment independent of that metadata.
+        weights = {path: 1.0 for path in test_counts}
+    else:
+        known = {
+            path: seconds
+            for path, seconds in (durations or {}).items()
+            if path in test_counts
+        }
+        seconds_per_test = (
+            sum(known.values()) / sum(test_counts[path] for path in known)
+            if known
+            else 1.0
+        )
+        weights = {
+            path: known.get(path, count * seconds_per_test)
+            for path, count in test_counts.items()
+        }
+
+    files_by_weight = sorted(weights.items(), key=lambda item: (-item[1], item[0]))
+    for test_file, weight in files_by_weight:
         target_index = min(
             range(shard_total),
-            key=lambda index: (shard_test_counts[index], index),
+            key=lambda index: (shard_weights[index], index),
         )
         shard_paths[target_index].append(test_file)
-        shard_test_counts[target_index] += test_count
+        shard_weights[target_index] += weight
 
     selected = set(shard_paths[shard_index - 1])
     return [test_file for test_file in test_counts if test_file in selected]
@@ -60,6 +92,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse CLI arguments for shard selection."""
     parser = argparse.ArgumentParser(
         description="Select pytest test files for one balanced CI shard.",
+    )
+    parser.add_argument(
+        "--balance-by",
+        choices=("tests", "files"),
+        default="tests",
+        help="Balance by tests/durations (default), or by files ignoring counts and history.",
+    )
+    parser.add_argument(
+        "--durations-file",
+        help="Optional JSON file of historical test-file seconds; invalid history is ignored.",
     )
     parser.add_argument(
         "--shard-index",
@@ -86,6 +128,10 @@ def main(argv: list[str] | None = None) -> int:
             test_counts,
             shard_index=args.shard_index,
             shard_total=args.shard_total,
+            balance_by=args.balance_by,
+            durations=load_durations(args.durations_file)
+            if args.durations_file and args.balance_by == "tests"
+            else None,
         )
     except ValueError as exc:
         print(f"select_pytest_shard.py: {exc}", file=sys.stderr)

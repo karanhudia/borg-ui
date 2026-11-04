@@ -20,6 +20,7 @@ import {
   SquarePen,
   Trash2,
 } from 'lucide-react'
+import type { KeyboardEvent } from 'react'
 import type { TFunction } from 'i18next'
 
 import BackupPlanScheduleBadge from '../../../components/BackupPlanScheduleBadge'
@@ -48,6 +49,8 @@ interface BackupPlanIdleCardProps {
   sourceTypeLabel: string
   hasRunHistory: boolean
   onRun: () => void
+  /** Run is locked by the plan: a click opens the upgrade card instead. */
+  onLockedRun?: () => void
   onToggle: () => void
   onEdit: () => void
   onDelete: () => void
@@ -74,6 +77,7 @@ export function BackupPlanIdleCard({
   sourceTypeLabel,
   hasRunHistory,
   onRun,
+  onLockedRun,
   onToggle,
   onEdit,
   onDelete,
@@ -690,7 +694,23 @@ export function BackupPlanIdleCard({
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
             <Tooltip title={runTooltip} placement="top">
-              <span>
+              {/* A disabled button gets no events, so the wrapper takes the
+                  click (and the keyboard) while the plan locks the run. */}
+              <span
+                {...(planBlockedByLicense && onLockedRun
+                  ? {
+                      role: 'button',
+                      tabIndex: 0,
+                      onClick: onLockedRun,
+                      onKeyDown: (event: KeyboardEvent) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return
+                        event.preventDefault()
+                        onLockedRun()
+                      },
+                      style: { cursor: 'pointer', display: 'inline-flex' },
+                    }
+                  : {})}
+              >
                 <Button
                   variant="contained"
                   size="small"

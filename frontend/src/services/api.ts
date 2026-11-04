@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { getBrowserTimeZone } from '@/utils/dateUtils'
 import { trackApiError } from '@/utils/analytics'
+import { openUpgradeForRefusal } from '@/utils/upgradeDialog'
 import {
   API_BASE_URL,
   buildApiUrl,
@@ -122,6 +123,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     trackApiError(error)
+    openUpgradeForRefusal(error)
     // Only redirect to login for 401 errors on authenticated endpoints
     // Don't redirect if:
     // 1. We're trying to login
@@ -768,6 +770,14 @@ export const licensingAPI = {
     api.post<{ result: string; reason?: string }>('/system/licensing/feature-trial', {
       feature,
     }),
+  paywallOffer: (trigger: string, intentDays: number) =>
+    api.post<{
+      result: string
+      reason?: string
+      offer_id?: string
+      percent?: number
+      expires_at?: string
+    }>('/system/licensing/paywall-offer', { trigger, intent_days: intentDays }),
   seats: () => api.get('/system/licensing/seats'),
   releaseSeat: (instanceId: string) =>
     api.post('/system/licensing/seats/release', { instance_id: instanceId }),

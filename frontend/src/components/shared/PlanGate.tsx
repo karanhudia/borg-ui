@@ -3,6 +3,7 @@ import { Box, Tooltip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { Feature, FEATURES, PLAN_LABEL } from '../../core/features'
 import { useFeatureAnalytics } from '../../hooks/useFeatureAnalytics'
+import { useLockedClick } from '../../hooks/useLockedClick'
 import { usePlan } from '../../hooks/usePlan'
 import UpgradePrompt from '../UpgradePrompt'
 
@@ -14,7 +15,8 @@ interface PlanGateProps {
   preview?: ReactNode
   /** Only apply the gate when this condition is true; renders children unconditionally when false */
   when?: boolean
-  /** Show children disabled instead of replacing them with an upgrade prompt */
+  /** Show children disabled instead of replacing them with an upgrade prompt;
+   *  a click on them opens the upgrade card (useLockedClick) */
   disabled?: boolean
   /** Stable analytics surface name for blocked feature events */
   surface?: string
@@ -24,6 +26,9 @@ interface PlanGateProps {
   analyticsData?: Record<string, unknown>
   /** Optional feature-specific upgrade prompt message */
   message?: string
+  /** With `disabled`: the control's own name, so a screen reader hears which
+   *  lock it is (its children are inert and cannot name it) */
+  label?: string
 }
 
 export default function PlanGate({
@@ -37,10 +42,12 @@ export default function PlanGate({
   operation = 'render_gate',
   analyticsData,
   message,
+  label,
 }: PlanGateProps) {
   const { t } = useTranslation()
   const { can, isLoading } = usePlan()
   const { trackFeatureBlocked } = useFeatureAnalytics()
+  const lockedClick = useLockedClick()
   const lastTrackedBlockedKey = useRef<string | null>(null)
   const allowed = !when || can(feature)
   const gateMode = disabled
@@ -76,14 +83,27 @@ export default function PlanGate({
   if (isLoading) return null
   if (allowed) return <>{children}</>
   if (disabled) {
+    const requiresPlan = t('upgradePrompt.requiresPlan', { plan: PLAN_LABEL[FEATURES[feature]] })
+    const openLock = () => lockedClick(feature, { surface, control: operation, message })
+    // Still looks locked, but answers a click with the upgrade card: a greyed
+    // control that does nothing is a dead end for anyone who wants it.
     return (
-      <Tooltip
-        title={t('upgradePrompt.requiresPlan', { plan: PLAN_LABEL[FEATURES[feature]] })}
-        arrow
-        placement="right"
-      >
-        <Box sx={{ cursor: 'not-allowed', width: 'fit-content' }}>
-          <Box sx={{ opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>{children}</Box>
+      <Tooltip title={requiresPlan} arrow placement="right">
+        <Box
+          role="button"
+          tabIndex={0}
+          aria-label={label ? `${label}, ${requiresPlan}` : requiresPlan}
+          onClick={openLock}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return
+            event.preventDefault()
+            openLock()
+          }}
+          sx={{ cursor: 'pointer', width: 'fit-content', borderRadius: 1 }}
+        >
+          <Box inert sx={{ opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>
+            {children}
+          </Box>
         </Box>
       </Tooltip>
     )

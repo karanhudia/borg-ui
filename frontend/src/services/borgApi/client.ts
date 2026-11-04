@@ -13,6 +13,7 @@ import axios from 'axios'
 import { markApiRequest } from '@/utils/apiErrorDiagnostics'
 import { BASE_PATH } from '@/utils/basePath'
 import { trackApiError } from '@/utils/analytics'
+import { openUpgradeForRefusal } from '@/utils/upgradeDialog'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
 import { getApiBaseUrl } from '../remoteBackends/gateway'
@@ -49,6 +50,7 @@ httpClient.interceptors.response.use(
   (response) => response,
   (error) => {
     trackApiError(error)
+    openUpgradeForRefusal(error)
     if (
       error.response?.status === 401 &&
       error.config?.url !== '/auth/login' &&

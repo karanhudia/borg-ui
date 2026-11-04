@@ -33,6 +33,7 @@ from typing import Literal, Optional
 import requests
 
 from app.config import get_runtime_app_version, settings
+from app.core.storage_errors import storage_failure
 from app.database.database import SessionLocal
 from app.database.models import LicensingState, User
 from app.utils.redaction import redact_secrets
@@ -377,6 +378,9 @@ def report_exception(
     try:
         type_ = _type_name(exc)
         message = str(exc)
+        # Classify the exception before rendering it: SQLAlchemy's string
+        # includes query data unrelated to the underlying database error.
+        failure = storage_failure(exc)
         _report(
             kind=kind,
             type_=type_,
@@ -392,7 +396,8 @@ def report_exception(
             handled=False,
             stack=_format_stack(exc),
             status=status,
-            error_key=error_key,
+            error_key=error_key
+            or (f"backend.errors.storage.{failure}" if failure else None),
         )
     except Exception:
         pass
@@ -408,6 +413,7 @@ def report_failure(
 ) -> None:
     try:
         safe_message = redact_secrets(message) or ""
+        failure = storage_failure(safe_message)
         _report(
             kind=kind,
             type_=type_,
@@ -420,7 +426,9 @@ def report_failure(
                 normalize_message(scrub_secrets(safe_message)),
             ],
             component=component,
-            handled=handled,
+            # A caught storage failure must still be actionable in the dashboard.
+            handled=handled and failure is None,
+            error_key=f"backend.errors.storage.{failure}" if failure else None,
             # Handled Borg failures carry stderr in the message rather than
             # an exception traceback. Keep it inspectable beyond the 500-char
             # summary through the same bounded, redacted detail field.

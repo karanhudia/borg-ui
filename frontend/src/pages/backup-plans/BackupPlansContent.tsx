@@ -15,6 +15,7 @@ import { BackupPlanIdleCard } from './PlanRunComponents'
 import { isActiveRun } from './runStatus'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../../hooks/useFeatureAnalytics'
+import { useLockedClick } from '../../hooks/useLockedClick'
 import { usePlan } from '../../hooks/usePlan'
 import type { Feature } from '../../core/features'
 
@@ -170,6 +171,7 @@ function BackupPlansContentImpl({
   const theme = useTheme()
   const { track, EventCategory, EventAction } = useAnalytics()
   const { trackFeatureBlocked } = useFeatureAnalytics()
+  const lockedClick = useLockedClick()
   // While the plan loads it reads as community, so every lock would be false.
   const { isLoading: planLoading } = usePlan()
   // A plan whose Run is locked by the plan is a paywall too: report each locked
@@ -630,6 +632,21 @@ function BackupPlansContentImpl({
                         })
                         onRunPlan(plan.id)
                       }}
+                      onLockedRun={() =>
+                        lockedClick(
+                          usesMultiRepositoryFeature && !canUseMultiRepository
+                            ? 'backup_plan_multi_repository'
+                            : usesDatabaseFeature && !canUseDatabaseDiscovery
+                              ? 'database_discovery'
+                              : 'container_backups',
+                          {
+                            surface: 'backup_plan_card',
+                            control: 'run_plan',
+                            // Already says which features and what to do.
+                            message: runTooltip,
+                          }
+                        )
+                      }
                       onToggle={() => {
                         trackBackupPlan(EventAction.EDIT, {
                           operation: 'toggle_plan',

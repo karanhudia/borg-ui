@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAnnouncementSurface } from '../hooks/useAnnouncementSurface'
 import { useSystemInfo } from '../hooks/useSystemInfo'
 import PasskeyEnrollmentPrompt from './PasskeyEnrollmentPrompt'
+import UpgradeDialog from './UpgradeDialog'
 import { QuickStartProvider } from './quick-start/QuickStartProvider'
 import { forgetPendingDeletes } from './jobs/jobCache'
 import { useActiveBackendTarget } from '../services/remoteBackends/context'
@@ -180,6 +181,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           onIgnore={handlePasskeyPromptIgnore}
           onSuccess={handlePasskeyPromptSuccess}
         />
+        <UpgradeDialog />
       </Box>
     </QuickStartProvider>
   )

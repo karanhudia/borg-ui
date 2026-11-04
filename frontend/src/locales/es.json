@@ -2314,7 +2314,8 @@
   "availabilitySchedule": {
     "skipReasons": {
       "minimumIntervalNotElapsed": "El intervalo mínimo no ha transcurrido",
-      "sourceUnavailable": "Fuente no disponible"
+      "sourceUnavailable": "Fuente no disponible",
+      "planRequired": "En pausa: requiere Pro"
     }
   },
   "cloudStorageJobs": {
@@ -5853,6 +5854,10 @@
   },
   "backend": {
     "errors": {
+      "storage": {
+        "full": "El almacenamiento está lleno o se ha agotado su cuota. Libere espacio y compruebe la cuota del volumen de la base de datos de Borg UI y del almacenamiento afectado antes de reintentar. Borg UI no elimina datos para recuperarse de este error.",
+        "io": "El almacenamiento ha informado de un error de entrada/salida. Compruebe el disco, el sistema de archivos y los montajes antes de reintentar. Verifique el estado de la operación antes de volver a enviarla."
+      },
       "auth": {
         "cannotDeleteSelf": "No puedes eliminarte a ti mismo",
         "currentPasswordIncorrect": "La contraseña actual es incorrecta",
@@ -5978,7 +5983,7 @@
         "listFailed": "Error al listar los archivos del repositorio: {{error}}",
         "remoteBorg2Incompatible": "El servidor remoto no ejecuta un servidor Borg 2 compatible. Instale Borg 2 en el host remoto y configure la ruta remota de Borg al binario borg2, o use Borg 1 para este repositorio.",
         "failedToCreateRepository": "Error al crear el repositorio",
-        "failedToVerifyRepository": "Error al verificar el repositorio",
+        "failedToVerifyRepository": "Error al verificar el repositorio: {{error}}",
         "failedToImportRepository": "Error al importar el repositorio",
         "failedToUploadKeyfile": "Error al subir el archivo de clave",
         "failedToExportKeyfile": "Error al exportar el archivo de clave",
@@ -6327,6 +6332,7 @@
         "containerRestartedDuringRestore": "El contenedor se reinició durante la operación de restauración",
         "failedCreateDestinationDir": "Error al crear el directorio de destino: {{error}}",
         "failedPrepareSourcePaths": "Error al preparar las rutas de origen: todos los montajes SSH fallaron o no hay rutas válidas",
+        "failedPrepareSourcePathsDetails": "No se pudo preparar una fuente de copia de seguridad. Compruebe su conexión, ruta y permisos de acceso. {{error}}",
         "restoreCanaryInsideSshMount": "Canario de restauración no preparado: el origen SSH {{remotePath}} cubre la ruta del canario, por lo que prepararlo escribiría en el host de origen. Cambia la comprobación de restauración de este repositorio al modo «Rutas de prueba seleccionadas» o «Prueba de archivo completo».",
         "restoreCanaryMountTableUnavailable": "Canario de restauración no preparado: no se pudo leer la tabla de montajes",
         "restoreCanaryReplaceFailed": "Canario de restauración no preparado: no se pudo eliminar la copia anterior en {{path}}",
@@ -6338,11 +6344,16 @@
         "warningRemoteProcessMayBeRunning": "(Advertencia: El proceso remoto puede seguir en ejecución, se recomienda verificación manual)",
         "postBackupHooksAlsoFailed": "Los hooks post-copia de seguridad también fallaron: {{failed}}/{{total}} scripts fallaron",
         "restoreFailedZeroFiles": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Consulte los registros para más detalles.",
+        "restoreFailedZeroFilesDetails": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Consulte los registros para más detalles. {{error}}",
         "restoreFailedZeroFilesPermission": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Permiso denegado - puede que necesite acceso de root o una ruta de destino diferente.",
+        "restoreFailedZeroFilesPermissionDetails": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Permiso denegado - puede que necesite acceso de root o una ruta de destino diferente. {{error}}",
         "restoreFailedZeroFilesPathNotFound": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Ruta no encontrada en el archivo o el destino no existe.",
+        "restoreFailedZeroFilesPathNotFoundDetails": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Ruta no encontrada en el archivo o el destino no existe. {{error}}",
         "restoreFailedZeroFilesNoOutput": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Sin salida de error de Borg. Es posible que los archivos no existan en el archivo o que el acceso esté denegado.",
         "restoreFailedExitCode": "El proceso de restauración terminó con el código {{exitCode}}",
+        "restoreFailedExitCodeDetails": "El proceso de restauración terminó con el código {{exitCode}}: {{error}}",
         "restoreFailed": "La restauración falló",
+        "restoreFailedDetails": "La restauración falló: {{error}}",
         "jobCompletedWithWarning": "Completado con advertencia (código de salida {{exitCode}})",
         "restoreFailedOnAgent": "La restauración falló en el agente: {{error}}",
         "agentRepositoryScriptsNotRun": "Copia completada, pero estos scripts no se ejecutaron porque un repositorio de agente solo ejecuta scripts del agente: {{scripts}}",
@@ -6593,7 +6604,17 @@
     "trialNeedsAdmin": "Pida a un administrador que inicie la prueba.",
     "trialUnavailable": "Ahora mismo no hay prueba gratuita disponible.",
     "trialEnded": "Su vista previa de Pro ha terminado.",
-    "tryFree": "Pruébelo gratis"
+    "tryFree": "Pruébelo gratis",
+    "locked": {
+      "database_discovery": "Busca bases de datos en la máquina de origen y añádelas a un plan de copia en pocos clics. Parte de Pro.",
+      "container_backups": "Haz copia del sistema de archivos de un contenedor Docker: Borg UI lo exporta a una ruta temporal antes de que Borg lo lea. Parte de Pro.",
+      "borg_v2": "Crea e importa repositorios Borg 2 (beta). Parte de Pro.",
+      "alerting_monitoring": "Recibe una alerta cuando el archivo más reciente de un repositorio sea más antiguo de lo permitido. Parte de Pro.",
+      "backup_reports": "Envía resúmenes programados sobre la actualidad de las copias y la actividad reciente. Parte de Pro."
+    },
+    "refused": {
+      "borg_v2": "Este es un repositorio Borg 2. Borg 2 forma parte de Pro y tu acceso completo de 30 días ha terminado, así que esta acción necesita Pro. Tus archivos están a salvo: aún puedes explorarlos y descargar sus ficheros."
+    }
   },
   "announcements": {
     "latestRelease": "Última versión",
@@ -6956,5 +6977,12 @@
       "folderCount_other": "{{count}} carpetas",
       "remove": "Quitar {{app}}"
     }
+  },
+  "paywallOffer": {
+    "line": "Oferta única para esta instalación: 5 % en Lite o Pro, anual o vitalicio, válida 7 días desde que la actives.",
+    "claim": "Obtener 5 % de descuento",
+    "claimed": "Tu oferta del {{percent}} % está en cada enlace de compra hasta el {{date}}.",
+    "unavailable": "Esta oferta no está disponible para esta instalación.",
+    "failed": "No se pudo obtener la oferta ahora mismo. Inténtalo de nuevo en un momento."
   }
 }

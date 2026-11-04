@@ -300,7 +300,9 @@ export default function BackupPlanRunsPanel({
                 ? t('availabilitySchedule.skipReasons.minimumIntervalNotElapsed')
                 : run.skip_reason === 'source_unavailable'
                   ? t('availabilitySchedule.skipReasons.sourceUnavailable')
-                  : undefined
+                  : run.skip_reason === 'plan_required'
+                    ? t('availabilitySchedule.skipReasons.planRequired')
+                    : undefined
             }
           />
           {isActiveRun(run.status) && (

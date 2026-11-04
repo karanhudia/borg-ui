@@ -30,6 +30,7 @@ from app.services.process_cancel import terminate_tracked_process
 from app.utils.http_detail import detail_text, structured_detail
 from app.utils.local_paths import is_restore_destination_allowed
 from app.utils.borg_arguments import validate_operand
+from app.utils.restore_errors import restore_error_detail, zero_file_restore_detail
 
 logger = structlog.get_logger()
 
@@ -595,19 +596,24 @@ class RestoreService:
             if return_code is None and agent_message:
                 # the agent gave up before Borg ran; its reason is the error
                 job.error_message = json.dumps(
-                    {
-                        "key": "backend.errors.service.restoreFailedOnAgent",
-                        "params": {"error": agent_message},
-                    }
+                    restore_error_detail("restoreFailedOnAgent", agent_message)
                 )
                 return
+            result = agent_job.result if isinstance(agent_job.result, dict) else {}
             job.error_message = json.dumps(
-                {
-                    "key": "backend.errors.service.restoreFailedExitCode",
-                    "params": {
-                        "exitCode": return_code if return_code is not None else -1
-                    },
-                }
+                restore_error_detail(
+                    "restoreFailedExitCode",
+                    "\n".join(
+                        value
+                        for value in (
+                            agent_message,
+                            job.logs,
+                            result.get("stderr_tail"),
+                        )
+                        if isinstance(value, str)
+                    ),
+                    exit_code=return_code if return_code is not None else -1,
+                )
             )
             return
 
@@ -723,10 +729,7 @@ class RestoreService:
                     logger.error("Failed to create destination directory", error=str(e))
                     job.status = "failed"
                     job.error_message = json.dumps(
-                        {
-                            "key": "backend.errors.service.failedCreateDestinationDir",
-                            "params": {"error": str(e)},
-                        }
+                        restore_error_detail("failedCreateDestinationDir", str(e))
                     )
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
@@ -818,7 +821,9 @@ class RestoreService:
                     while True:
                         chunk = await process.stderr.read(8192)  # Read in chunks
                         if not chunk:
-                            break
+                            if not buffer:
+                                break
+                            chunk = b"\n"  # Process the final unterminated diagnostic.
 
                         buffer += chunk
 
@@ -1043,28 +1048,8 @@ class RestoreService:
                         # No files restored - this is a failure, not a warning
                         job.status = "failed"
 
-                        # Try to extract meaningful error from stderr
-                        error_hint = "Check logs for details."
-                        if "permission denied" in stderr_output.lower():
-                            error_hint = "Permission denied - you may need root access or different destination path."
-                        elif "no such file" in stderr_output.lower():
-                            error_hint = "Path not found in archive or destination doesn't exist."
-                        elif not stderr_output.strip():
-                            error_hint = "No error output from borg. Files may not exist in archive or permission denied."
-
-                        if "permission denied" in stderr_output.lower():
-                            _restore_key = "restoreFailedZeroFilesPermission"
-                        elif "no such file" in stderr_output.lower():
-                            _restore_key = "restoreFailedZeroFilesPathNotFound"
-                        elif not stderr_output.strip():
-                            _restore_key = "restoreFailedZeroFilesNoOutput"
-                        else:
-                            _restore_key = "restoreFailedZeroFiles"
                         job.error_message = json.dumps(
-                            {
-                                "key": f"backend.errors.service.{_restore_key}",
-                                "params": {"exitCode": process.returncode},
-                            }
+                            zero_file_restore_detail(process.returncode, stderr_output)
                         )
                         job.completed_at = datetime.now(timezone.utc)
                         job.logs = f"STDOUT:\n{chr(10).join(stdout_lines) if stdout_lines else '(no output)'}\n\nSTDERR:\n{stderr_output if stderr_output else '(no output)'}"
@@ -1085,7 +1070,7 @@ class RestoreService:
                                 db_session,
                                 repository_path,
                                 archive_name,
-                                f"0 files restored. Exit code {process.returncode}. Likely permission or path error.",
+                                job.error_message,
                                 None,
                             )
                         except Exception as e:
@@ -1138,10 +1123,11 @@ class RestoreService:
                     job.status = "failed"
                     stderr_output = "\n".join(stderr_lines)
                     job.error_message = json.dumps(
-                        {
-                            "key": "backend.errors.service.restoreFailedExitCode",
-                            "params": {"exitCode": process.returncode},
-                        }
+                        restore_error_detail(
+                            "restoreFailedExitCode",
+                            stderr_output,
+                            exit_code=process.returncode,
+                        )
                     )
                     job.completed_at = datetime.now(timezone.utc)
                     job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
@@ -1197,7 +1183,7 @@ class RestoreService:
                 )
                 job.status = "failed"
                 job.error_message = json.dumps(
-                    {"key": "backend.errors.service.restoreFailed"}
+                    restore_error_detail("restoreFailed", str(e))
                 )
                 job.completed_at = datetime.now(timezone.utc)
                 db_session.commit()
@@ -1211,7 +1197,7 @@ class RestoreService:
                 if job:
                     job.status = "failed"
                     job.error_message = json.dumps(
-                        {"key": "backend.errors.service.restoreFailed"}
+                        restore_error_detail("restoreFailed", str(e))
                     )
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
@@ -1559,7 +1545,9 @@ class RestoreService:
                 while True:
                     chunk = await process.stderr.read(8192)
                     if not chunk:
-                        break
+                        if not buffer:
+                            break
+                        chunk = b"\n"  # Process the final unterminated diagnostic.
 
                     buffer += chunk
 
@@ -1696,35 +1684,48 @@ class RestoreService:
             await asyncio.gather(read_stderr(), read_stdout())
             await process.wait()
 
-            # Check exit code (same logic as local restore)
-            if process.returncode == 0 or is_borg_warning_exit_code(process.returncode):
-                if is_borg_warning_exit_code(process.returncode):
-                    warning_msgs = [
-                        line
-                        for line in stderr_lines
-                        if not line.strip().startswith("{") and line.strip()
-                    ]
-                    if warning_msgs:
-                        logger.warning(
-                            "Restore completed with warnings",
-                            mount_path=mount_path,
-                            nfiles=nfiles,
-                            warnings=warning_msgs[-5:],
-                        )
-                logger.info(
-                    "Restore extraction successful",
+            job.logs = "\n".join(stderr_lines[-100:])
+            warning = is_borg_warning_exit_code(process.returncode)
+            if process.returncode != 0 and (not warning or nfiles == 0):
+                # Match local restores: a warning without extracted files must
+                # not claim the restore succeeded merely because Borg finished.
+                stderr_output = "\n".join(stderr_lines)
+                job.status = "failed"
+                job.error_message = json.dumps(
+                    zero_file_restore_detail(process.returncode, stderr_output)
+                    if warning
+                    else restore_error_detail(
+                        "restoreFailedExitCode",
+                        stderr_output,
+                        exit_code=process.returncode,
+                    )
+                )
+                job.completed_at = datetime.now(timezone.utc)
+                db_session.commit()
+                try:
+                    await notification_service.send_restore_failure(
+                        db_session,
+                        repository_path,
+                        archive_name,
+                        job.error_message,
+                        None,
+                    )
+                except Exception as notification_error:
+                    logger.warning(
+                        "Failed to send restore failure notification",
+                        error=str(notification_error),
+                    )
+                return
+
+            if warning:
+                logger.warning(
+                    "Restore completed with warnings",
                     mount_path=mount_path,
                     nfiles=nfiles,
                 )
-            else:
-                error_msgs = [
-                    line
-                    for line in stderr_lines
-                    if not line.strip().startswith("{") and line.strip()
-                ]
-                raise Exception(
-                    f"Extraction failed with code {process.returncode}: {' '.join(error_msgs[-10:])}"
-                )
+            logger.info(
+                "Restore extraction successful", mount_path=mount_path, nfiles=nfiles
+            )
 
             # Mark as completed
             job.status = (
@@ -1744,7 +1745,6 @@ class RestoreService:
             job.progress_percent = 100.0
             job.completed_at = datetime.now(timezone.utc)
             job.current_file = "Restore completed"
-            job.logs = "\n".join(stderr_lines[-100:])
             db_session.commit()
 
             logger.info(
@@ -1781,7 +1781,7 @@ class RestoreService:
                     job.error_message = json.dumps(
                         e.detail
                         if isinstance(e, RestoreRefused)
-                        else {"key": "backend.errors.service.restoreFailed"}
+                        else restore_error_detail("restoreFailed", str(e))
                     )
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()

@@ -12,6 +12,7 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.core.borg_major import is_borg2
+from app.core.borg_errors import bounded_operation_diagnostic
 from app.database.models import Archive, Operation, Repository
 from app.services.prune_service import _log_message
 
@@ -590,8 +591,10 @@ def archives_by_series(db: Session, repository: Repository) -> dict[str, list[Ar
 
 class DryRunFailed(Exception):
     def __init__(self, log: str):
-        super().__init__("prune dry run failed")
-        self.log = log
+        self.log = bounded_operation_diagnostic(log)
+        super().__init__(
+            f"prune dry run failed: {self.log}" if self.log else "prune dry run failed"
+        )
 
 
 @dataclass

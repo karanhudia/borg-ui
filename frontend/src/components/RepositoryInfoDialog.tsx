@@ -31,6 +31,7 @@ import StatsFreshness from './StatsFreshness'
 import { statsUpdatedAt, statsUpdating } from '../utils/repositoryStats'
 import type { SyncState } from '../types/archives'
 import PlanGate from './shared/PlanGate'
+import { usePlan } from '../hooks/usePlan'
 import UpgradePrompt from './UpgradePrompt'
 import type { Repository, RepositoryStorage } from '../types'
 import { isV2Repo } from '../utils/repoCapabilities'
@@ -320,6 +321,7 @@ export default function RepositoryInfoDialog({
   errorMessage = null,
 }: RepositoryInfoDialogProps) {
   const { t } = useTranslation()
+  const { can, isLoading: planLoading } = usePlan()
   const [displayRepository, setDisplayRepository] = useState<Repository | null>(repository)
   // The storage figures and the pending kinds are kept the way the live
   // info is, so the closing transition does not flip them to "unknown";
@@ -652,8 +654,9 @@ export default function RepositoryInfoDialog({
                 archive header show them, never a live per-version block.
                 A failed refresh shows them under its error too; a Borg 2
                 repository's stay behind the same plan gate as its details,
-                whose prompt says so. */}
-            <PlanGate feature="borg_v2" when={isV2Repo(displayRepository)} fallback={null}>
+                whose prompt says so: the same condition, without a second
+                blocked event for the one lock. */}
+            {!planLoading && (!isV2Repo(displayRepository) || can('borg_v2')) && (
               <Box sx={{ mt: 2 }}>
                 <RepositoryStats
                   variant="detail"
@@ -662,7 +665,7 @@ export default function RepositoryInfoDialog({
                   indexPendingKinds={displayIndexPending ?? displayRepository.index_pending_kinds}
                 />
               </Box>
-            </PlanGate>
+            )}
           </>
         )}
       </DialogContent>

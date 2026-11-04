@@ -77,7 +77,9 @@ function ResultRow({
         <Tooltip title={result.path} enterDelay={700} placement="top-start">
           {/* The deepest folders identify the file, so the directory is cut at
               the front: "local/Users/…/Documents/taxes/" beats a row that
-              ellipsises away everything after the home directory. */}
+              ellipsises away everything after the home directory. The path sits
+              in an isolated ltr run so rtl does not reorder leading "_" or
+              digits to the end. */}
           <Typography
             variant="caption"
             noWrap
@@ -89,7 +91,7 @@ function ResultRow({
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
             }}
           >
-            {dir.replace(/\/$/, '')}
+            <bdi dir="ltr">{dir.replace(/\/$/, '')}</bdi>
           </Typography>
         </Tooltip>
         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>

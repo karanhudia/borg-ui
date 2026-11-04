@@ -80,6 +80,7 @@ import type {
 import { formatBytes } from '../../../utils/dateUtils'
 import type { Feature } from '../../../core/features'
 import { useFeatureAnalytics } from '../../../hooks/useFeatureAnalytics'
+import { useLockedClick } from '../../../hooks/useLockedClick'
 import { usePlan } from '../../../hooks/usePlan'
 import type { ScriptOption, SSHConnection, WizardState } from '../types'
 import type { SourceScriptCreateInput } from './types'
@@ -804,6 +805,7 @@ export function SourceSelectionDialog({
   canUseContainerBackups = true,
 }: SourceSelectionDialogProps) {
   const { trackFeatureBlocked } = useFeatureAnalytics()
+  const lockedClick = useLockedClick()
   const [view, setView] = useState<SourceChoiceView>(initialView)
   const [scanDialogOpen, setScanDialogOpen] = useState(initialScanDialogOpen)
   const [restoreScanDialogOnOpen, setRestoreScanDialogOnOpen] = useState(false)
@@ -4071,6 +4073,12 @@ export function SourceSelectionDialog({
             <SourceKindPivot
               view={view}
               onChange={(next) => setView(next)}
+              onLockedClick={(kind) =>
+                lockedClick(kind === 'database' ? 'database_discovery' : 'container_backups', {
+                  surface: 'source_selection_dialog',
+                  control: 'source_kind_pivot',
+                })
+              }
               disabled={{
                 database: !canUseDatabaseDiscovery,
                 container: !canUseContainerBackups,
@@ -4110,12 +4118,21 @@ type SourceKindCounts = { files: number; database: number; container: number; ap
 interface SourceKindPivotProps {
   view: SourceChoiceView
   onChange: (next: SourceChoiceView) => void
+  /** A locked tab answers its click with the upgrade card. */
+  onLockedClick?: (kind: 'database' | 'container') => void
   counts: SourceKindCounts
   disabled?: Partial<Record<'database' | 'container', boolean>>
   t: TFunction
 }
 
-function SourceKindPivot({ view, onChange, counts, disabled = {}, t }: SourceKindPivotProps) {
+function SourceKindPivot({
+  view,
+  onChange,
+  onLockedClick,
+  counts,
+  disabled = {},
+  t,
+}: SourceKindPivotProps) {
   const segments: {
     key: 'files' | 'database' | 'container' | 'app'
     target: SourceChoiceView
@@ -4181,7 +4198,10 @@ function SourceKindPivot({ view, onChange, counts, disabled = {}, t }: SourceKin
             aria-selected={selected}
             aria-disabled={segmentDisabled ? 'true' : undefined}
             onClick={() => {
-              if (segmentDisabled) return
+              if (segmentDisabled) {
+                onLockedClick?.(segment.key as 'database' | 'container')
+                return
+              }
               if (segment.target !== view) onChange(segment.target)
             }}
             sx={{
@@ -4197,7 +4217,7 @@ function SourceKindPivot({ view, onChange, counts, disabled = {}, t }: SourceKin
               fontWeight: selected ? 600 : 500,
               fontSize: '0.8125rem',
               color: selected ? 'text.primary' : 'text.secondary',
-              cursor: segmentDisabled ? 'not-allowed' : 'pointer',
+              cursor: 'pointer',
               opacity: segmentDisabled ? 0.55 : 1,
               transition: 'all 0.15s ease',
               '&:hover':

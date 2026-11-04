@@ -6,6 +6,7 @@ import type { TFunction } from 'i18next'
 
 import { BackupPlansContent } from '../BackupPlansContent'
 import type { BackupPlan, BackupPlanRun } from '../../../types'
+import { upgradeDialogStore } from '../../../utils/upgradeDialog'
 
 const { mockTrack, trackEventMock } = vi.hoisted(() => ({
   mockTrack: vi.fn(),
@@ -442,6 +443,24 @@ describe('BackupPlansContent', () => {
         gate_mode: 'disabled',
       })
     )
+
+    // The locked Run answers its click with the upgrade card.
+    fireEvent.click(screen.getByRole('button', { name: /requires Pro/i }))
+    expect(onRunPlan).not.toHaveBeenCalled()
+    expect(trackEventMock).toHaveBeenCalledWith(
+      'Plan',
+      'FeatureBlocked',
+      expect.objectContaining({
+        feature: 'database_discovery',
+        surface: 'backup_plan_card',
+        operation: 'locked_click',
+        control: 'run_plan',
+      })
+    )
+    expect(upgradeDialogStore.get()).toMatchObject({
+      feature: 'database_discovery',
+      surface: 'backup_plan_card',
+    })
   })
 
   it('reports no lock while the plan is still loading, then reports it once known', () => {
