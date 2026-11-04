@@ -957,6 +957,9 @@ async def wait_for_agent_repository_operation_job(
                     lock_contention=lock_contention_for_waiter(agent_job, db),
                 ),
             )
+        # As in the backup and script waiters, release the idle read so
+        # the agent's completion report and other requests can use the pool.
+        db.rollback()
         await asyncio.sleep(poll_interval_seconds)
 
     raise HTTPException(
