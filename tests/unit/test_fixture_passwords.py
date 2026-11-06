@@ -17,7 +17,7 @@ def test_fixed_password_hashes_cannot_be_mutated(fixture_password_hashes):
 def test_user_fixtures_hash_fixed_passwords_once_without_weakening_bcrypt(
     tmp_path, monkeypatch
 ):
-    """Repeated users keep fresh database state while reusing two real hashes."""
+    """Repeated users keep fresh database state while reusing three real hashes."""
     # Parent selection must not deselect the independent child probe's tests.
     monkeypatch.setenv("PYTEST_ADDOPTS", "-k fixture_passwords")
     root = Path(__file__).resolve().parents[2]
@@ -62,19 +62,22 @@ from app.core.security import verify_password
 from app.database.models import User
 
 @pytest.mark.parametrize("iteration", range(3))
-@pytest.mark.parametrize("fixture_name,password,username", [
-    ("test_user", "testpass123", "testuser"),
-    ("sample_user", "testpass123", "testuser"),
-    ("admin_user", "admin123", "admin"),
+@pytest.mark.parametrize("fixture_name,password,username,role", [
+    ("test_user", "testpass123", "testuser", "viewer"),
+    ("sample_user", "testpass123", "testuser", "viewer"),
+    ("admin_user", "admin123", "admin", "admin"),
+    ("operator_user", "operator123", "operator", "operator"),
 ])
-def test_real_user(request, db_session, iteration, fixture_name, password, username):
+def test_real_user(request, db_session, iteration, fixture_name, password, username, role):
     assert db_session.query(User).count() == 0
     user = request.getfixturevalue(fixture_name)
     assert user.username == username
+    assert user.role == role
     assert db_session.query(User).count() == 1
     assert verify_password(password, user.password_hash)
     assert not verify_password("wrong-password", user.password_hash)
     assert user.password_hash.startswith("$2b$12$")
+    user.role = "changed-only-in-this-test"
     user.username = "changed-only-in-this-test"
     user.password_hash = "changed-only-in-this-test"
     db_session.commit()
@@ -92,4 +95,4 @@ def test_real_user(request, db_session, iteration, fixture_name, password, usern
     assert result.returncode == 0, result.stdout + result.stderr
     observed = json.loads((tmp_path / "observed.json").read_text())
     print(f"Real fixture password hash profile: {observed}")
-    assert observed["calls"] == {"testpass123": 1, "admin123": 1}
+    assert observed["calls"] == {"testpass123": 1, "admin123": 1, "operator123": 1}
