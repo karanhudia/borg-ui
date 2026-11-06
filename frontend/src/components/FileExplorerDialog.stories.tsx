@@ -39,11 +39,15 @@ function useMockedAgentFilesystem() {
   }, [])
 }
 
-function useMockedRcloneRemoteFilesystem() {
+function useMockedRcloneRemoteFilesystem(authorizationRequired = false) {
   useEffect(() => {
     const mock = new MockAdapter(api, { onNoMatch: 'passthrough' })
 
     mock.onGet('/rclone/remotes/10/browse').reply((config) => {
+      if (authorizationRequired) {
+        return [409, { detail: { key: 'backend.errors.rclone.authorizationRequired' } }]
+      }
+
       const path = typeof config.params?.path === 'string' ? config.params.path : ''
 
       return [
@@ -83,7 +87,7 @@ function useMockedRcloneRemoteFilesystem() {
     return () => {
       mock.restore()
     }
-  }, [])
+  }, [authorizationRequired])
 }
 
 const meta = {
@@ -109,8 +113,11 @@ function ManagedAgentBrowserStory(args: ComponentProps<typeof FileExplorerDialog
   )
 }
 
-function RcloneRemoteBrowserStory(args: ComponentProps<typeof FileExplorerDialog>) {
-  useMockedRcloneRemoteFilesystem()
+function RcloneRemoteBrowserStory({
+  authorizationRequired = false,
+  ...args
+}: ComponentProps<typeof FileExplorerDialog> & { authorizationRequired?: boolean }) {
+  useMockedRcloneRemoteFilesystem(authorizationRequired)
   const [container, setContainer] = useState<HTMLDivElement | null>(null)
 
   return (
@@ -149,4 +156,9 @@ export const RcloneRemoteBrowser: Story = {
     selectMode: 'directories',
   },
   render: (args) => <RcloneRemoteBrowserStory {...args} />,
+}
+
+export const RcloneAuthorizationRequired: Story = {
+  args: { ...RcloneRemoteBrowser.args },
+  render: (args) => <RcloneRemoteBrowserStory {...args} authorizationRequired />,
 }
