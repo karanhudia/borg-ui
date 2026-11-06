@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,10 @@ from app.config import settings
 
 class RcloneUnavailable(RuntimeError):
     """Raised when the rclone binary is not available."""
+
+
+class RcloneAuthorizationRequired(RuntimeError):
+    """Raised when the provider explicitly rejects an OAuth grant."""
 
 
 @dataclass
@@ -198,6 +203,14 @@ class RcloneService:
     async def lsjson(self, target: str, *, timeout: int = 60) -> list[dict[str, Any]]:
         result = await self.execute(self.lsjson_command(target), timeout=timeout)
         if not result.success:
+            if re.search(
+                r"(?:oauth2:|couldn't fetch token:)\s*[\"']?invalid_grant\b"
+                r'|"error"\s*:\s*"invalid_grant"',
+                result.stderr,
+            ):
+                raise RcloneAuthorizationRequired(
+                    "Cloud remote authorization is required"
+                )
             raise RuntimeError(result.stderr or "rclone lsjson failed")
         parsed = result.json()
         return parsed if isinstance(parsed, list) else []

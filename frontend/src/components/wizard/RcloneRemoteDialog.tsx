@@ -421,7 +421,12 @@ export default function RcloneRemoteDialog({
       setOauthSession(session)
       applyOAuthConfig(session, requestProvider, requestId)
       if (session.status === 'failed') {
-        setOauthError(session.error || t('wizard.location.rcloneOAuthFailed'))
+        setOauthError(
+          translateBackendKey(
+            session.error_detail ?? session.error,
+            'wizard.location.rcloneOAuthFailed'
+          )
+        )
       }
     } catch {
       if (isCurrentOAuthRequest(requestId, requestProvider)) {
@@ -504,7 +509,10 @@ export default function RcloneRemoteDialog({
         : t('wizard.location.rcloneOAuthAuthorized')
     }
     if (oauthSession.status === 'failed') {
-      return oauthSession.error || t('wizard.location.rcloneOAuthFailed')
+      return translateBackendKey(
+        oauthSession.error_detail ?? oauthSession.error,
+        'wizard.location.rcloneOAuthFailed'
+      )
     }
     if (oauthSession.status === 'starting') return t('wizard.location.rcloneOAuthStarting')
     return t('wizard.location.rcloneOAuthWaiting')

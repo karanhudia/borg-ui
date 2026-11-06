@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { userEvent, within } from 'storybook/test'
 import type { ComponentProps } from 'react'
 import { Box } from '@mui/material'
 import RcloneRemoteDialog from './RcloneRemoteDialog'
@@ -331,4 +332,34 @@ export const BorgUiOAuthCredentialsPartiallySaved: Story = {
     ),
   },
   render: renderDialog,
+}
+
+export const BorgUiOAuthRejected: Story = {
+  args: {
+    ...GuidedGoogleDriveRemote.args,
+    onStartOAuth: async () => ({
+      session_id: 'storybook-oauth',
+      provider: 'drive',
+      status: 'failed',
+      oauth_mode: 'borg_ui',
+      config: null,
+      error:
+        'Authorization failed (HTTP 400: invalid_grant). Check provider settings or start authorization again.',
+      error_detail: {
+        key: 'backend.errors.rclone.oauthCodeExchangeRejected',
+        params: { http_status: 400, provider_error: 'invalid_grant' },
+      },
+    }),
+  },
+  render: renderDialog,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body)
+    await userEvent.click(canvas.getByRole('button', { name: 'Start Borg UI OAuth' }))
+    const rejection = await canvas.findByText(
+      'The provider rejected authorization (HTTP 400: invalid_grant). Check provider settings or start authorization again.',
+      {},
+      { timeout: 5000 }
+    )
+    rejection.scrollIntoView({ block: 'center' })
+  },
 }

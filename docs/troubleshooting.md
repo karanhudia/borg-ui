@@ -160,6 +160,43 @@ repository's manual refresh to retry immediately. A successful listing resets
 the cooldown; backup follow-up listings and manual refreshes are not delayed by
 it. Lock contention uses the operations runner's separate bounded retry policy.
 
+## Missing paths on managed agents and SSH hosts
+
+A missing path is checked on the selected agent or SSH host, rather than on
+Borg UI's server. Use the full path returned by that machine's browser and
+check that its filesystem or mount is available. A permission error requires
+access to that path for the account running the agent or SSH session.
+
+Some restricted SSH accounts expose paths relative to their login directory.
+Borg UI retains that compatibility retry for missing-path failures. It does
+not retry authentication, host-key, transport or permission failures as a
+different path. If the alternate path also fails, the original requested
+path's error remains authoritative.
+
+## A repository already exists at the creation path
+
+If the repository is already listed, use its existing entry. If it exists on
+the selected machine but is not listed in Borg UI, use **Import** to add it.
+Do not delete or initialize over an existing repository to clear this error.
+A failed agent creation returning a conflict does not authorize overwriting
+its data.
+
+## Cloud remote authorization needs renewal
+
+If browsing a cloud remote reports that authorization expired or was revoked,
+open **Cloud Storage**, edit that remote, run browser authorization again and
+save the updated remote. Then retry browsing. Keep the remote in place while
+repositories reference it; do not delete it or change Borg UI's `SECRET_KEY`
+to repair a cloud provider token.
+
+If the provider rejects a browser authorization code, start a fresh browser
+authorization flow; codes may be expired or already used. A client-credentials
+rejection requires the administrator to check that provider's configured
+OAuth app credentials and redirect URI. Error diagnostics expose only the
+provider's known error code and HTTP status, not its token response or your
+credentials. A network or provider service failure is not proof that a saved
+token is revoked.
+
 ## Paths and Permissions
 
 ### Permission denied

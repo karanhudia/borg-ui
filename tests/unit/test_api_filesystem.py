@@ -496,7 +496,7 @@ class TestFilesystemBrowseSSH:
                     return SimpleNamespace(
                         returncode=0,
                         stdout='sftp> cd "/backups"\nsftp> ls -la\n',
-                        stderr='remote readdir("/backups"): Permission denied\n',
+                        stderr='remote readdir("/backups"): No such file or directory\n',
                     )
 
                 if commands == 'cd "backups"\nls -la\n':
@@ -570,7 +570,7 @@ class TestFilesystemBrowseSSH:
                     return SimpleNamespace(
                         returncode=0,
                         stdout='sftp> cd "/backups"\nsftp> ls -la\n',
-                        stderr='remote readdir("/backups"): Permission denied\n',
+                        stderr='remote readdir("/backups"): No such file or directory\n',
                     )
 
                 if commands == 'cd "backups"\nls -la\n':
@@ -650,7 +650,7 @@ class TestFilesystemBrowseSSH:
                     return SimpleNamespace(
                         returncode=0,
                         stdout='sftp> cd "/backups/repo"\nsftp> ls -la\n',
-                        stderr='remote readdir("/backups/repo"): Permission denied\n',
+                        stderr='remote readdir("/backups/repo"): No such file or directory\n',
                     )
 
                 if commands == 'cd "backups/repo"\nls -la\n':
@@ -1073,12 +1073,20 @@ class TestFilesystemValidationAndCreateFolder:
         assert response.json()["success"] is True
         assert response.json()["path"] == "/remote/new-folder"
 
+    @pytest.mark.parametrize(
+        "missing_error",
+        [
+            "Couldn't create directory: No such file or directory\n",
+            'remote mkdir "/backups/new-folder": No such file or directory\n',
+        ],
+    )
     def test_create_folder_ssh_retries_login_relative_path(
         self,
         test_client: TestClient,
         admin_headers,
         test_db,
         monkeypatch,
+        missing_error,
     ):
         secret_key = filesystem.settings.secret_key
         ssh_key = _create_ssh_key_record(test_db, secret_key)
@@ -1095,7 +1103,7 @@ class TestFilesystemValidationAndCreateFolder:
                 return SimpleNamespace(
                     returncode=1,
                     stdout="",
-                    stderr="Couldn't create directory: No such file or directory\n",
+                    stderr=missing_error,
                 )
             if commands == 'mkdir "backups/new-folder"\n':
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -1275,3 +1283,147 @@ class TestSshHomeDirectory:
 
         assert response.status_code == 200
         assert response.json() == {"path": None}
+
+
+@pytest.mark.unit
+class TestSshLoginRelativeRetryBoundaries:
+    @pytest.mark.parametrize("operation", ["browse", "validate", "create-folder"])
+    @pytest.mark.parametrize(
+        "original_error",
+        [
+            'remote readdir("/backups"): Permission denied',
+            'remote mkdir "/backups/new": Permission denied',
+            "backup@example.com: Permission denied (publickey).",
+            "Host key verification failed.",
+            "Connection closed by remote host",
+            "Connection timed out",
+            "Unknown storage failure",
+            "bash: /usr/lib/sftp-server: No such file or directory",
+            "bash: stat: command not found",
+            "Connection reset: No such file or directory",
+            'remote readdir("/No such file or directory"): Permission denied',
+            "stat: /backups: No such file or directory\nConnection closed by remote host",
+        ],
+    )
+    def test_nonmissing_failures_never_try_login_relative_path(
+        self,
+        test_client,
+        admin_headers,
+        test_db,
+        monkeypatch,
+        operation,
+        original_error,
+    ):
+        # A successful relative path must never hide a denied or broken connection.
+        key = _create_ssh_key_record(test_db, filesystem.settings.secret_key)
+        _create_ssh_connection_record(test_db, key)
+        commands = []
+        key_paths = []
+
+        def run(cmd, *args, **kwargs):
+            commands.append(
+                cmd[-1]
+                if cmd[0] == "ssh"
+                else Path(cmd[cmd.index("-b") + 1]).read_text()
+            )
+            key_paths.append(cmd[cmd.index("-i") + 1])
+            if len(commands) == 1:
+                return SimpleNamespace(returncode=1, stdout="", stderr=original_error)
+            return SimpleNamespace(returncode=0, stdout="directory", stderr="")
+
+        monkeypatch.setattr(filesystem.subprocess, "run", run)
+        monkeypatch.setattr(filesystem, "is_borg_repository_ssh", lambda *args: False)
+        params = dict(
+            path="/backups",
+            connection_type="ssh",
+            ssh_key_id=key.id,
+            host="example.com",
+            username="borg",
+            port=22,
+        )
+        if operation == "create-folder":
+            response = test_client.post(
+                "/api/filesystem/create-folder",
+                json={**params, "folder_name": "new"},
+                headers=admin_headers,
+            )
+        elif operation == "validate":
+            response = test_client.post(
+                "/api/filesystem/validate-path", params=params, headers=admin_headers
+            )
+        else:
+            response = test_client.get(
+                "/api/filesystem/browse", params=params, headers=admin_headers
+            )
+        if operation == "validate":
+            assert response.status_code == 200
+            assert response.json()["exists"] is False
+        else:
+            assert response.status_code >= 400
+        assert len(commands) == 1
+        assert all(not Path(path).exists() for path in key_paths)
+
+    @pytest.mark.parametrize("operation", ["browse", "validate", "create-folder"])
+    @pytest.mark.parametrize("retry_failure", ["result", "timeout", "oserror"])
+    def test_failed_relative_retry_preserves_absolute_failure(
+        self, test_client, admin_headers, test_db, monkeypatch, operation, retry_failure
+    ):
+        key = _create_ssh_key_record(test_db, filesystem.settings.secret_key)
+        _create_ssh_connection_record(test_db, key)
+        commands = []
+        key_paths = []
+        absolute_path = "/backups/new" if operation == "create-folder" else "/backups"
+        original_error = (
+            f'Couldn\'t stat remote file "{absolute_path}": No such file or directory'
+        )
+
+        def run(cmd, *args, **kwargs):
+            commands.append(
+                cmd[-1]
+                if cmd[0] == "ssh"
+                else Path(cmd[cmd.index("-b") + 1]).read_text()
+            )
+            key_paths.append(cmd[cmd.index("-i") + 1])
+            if len(commands) == 1:
+                return SimpleNamespace(returncode=1, stdout="", stderr=original_error)
+            if retry_failure == "timeout":
+                raise filesystem.subprocess.TimeoutExpired(cmd, 10)
+            if retry_failure == "oserror":
+                raise OSError("relative retry connection broke")
+            return SimpleNamespace(
+                returncode=1, stdout="", stderr="relative retry permission denied"
+            )
+
+        monkeypatch.setattr(filesystem.subprocess, "run", run)
+        params = dict(
+            path="/backups",
+            connection_type="ssh",
+            ssh_key_id=key.id,
+            host="example.com",
+            username="borg",
+            port=22,
+        )
+        if operation == "create-folder":
+            response = test_client.post(
+                "/api/filesystem/create-folder",
+                json={**params, "folder_name": "new"},
+                headers=admin_headers,
+            )
+        elif operation == "validate":
+            response = test_client.post(
+                "/api/filesystem/validate-path", params=params, headers=admin_headers
+            )
+        else:
+            response = test_client.get(
+                "/api/filesystem/browse", params=params, headers=admin_headers
+            )
+        if operation == "validate":
+            assert response.status_code == 200
+            assert response.json()["exists"] is False
+            assert response.json()["path"] == "/backups"
+        else:
+            assert response.status_code == 500
+            assert original_error in response.json()["detail"]
+            assert "relative retry" not in response.json()["detail"]
+        assert len(commands) == 2
+        assert all(not Path(path).exists() for path in key_paths)

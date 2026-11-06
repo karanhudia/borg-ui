@@ -150,3 +150,30 @@ def test_rclone_execute_uses_create_subprocess_exec(monkeypatch):
     assert result.success is True
     assert captured["argv"] == ("rclone", "version")
     assert "shell" not in captured["kwargs"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_lsjson_invalid_grant_retains_runtime_error_compatibility(monkeypatch):
+    from unittest.mock import AsyncMock
+    from app.services.rclone_service import RcloneAuthorizationRequired
+
+    service = RcloneService()
+    monkeypatch.setattr(
+        service,
+        "execute",
+        AsyncMock(
+            return_value=RcloneCommandResult(
+                False,
+                1,
+                "",
+                'oauth2: "invalid_grant" secret-token',
+                [],
+                "rclone lsjson",
+            )
+        ),
+    )
+    with pytest.raises(RuntimeError) as failure:
+        await service.lsjson("cloud:")
+    assert isinstance(failure.value, RcloneAuthorizationRequired)
+    assert "secret-token" not in str(failure.value)
