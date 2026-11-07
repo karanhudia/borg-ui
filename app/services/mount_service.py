@@ -103,6 +103,8 @@ NO_FUSE_SUPPORT_MARKERS = (
     # fusermount itself is refused: an environment limit, not a borg failure.
     "fusermount3: mount failed: permission denied",
     "fusermount: mount failed: permission denied",
+    "fusermount3: mount failed: operation not permitted",
+    "fusermount: mount failed: operation not permitted",
 )
 
 SSHFS_NO_SUCH_FILE_MARKERS = (
