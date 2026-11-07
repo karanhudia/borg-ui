@@ -1443,6 +1443,8 @@ class TestSshLoginRelativeRetryBoundaries:
             422,
         ),
         ("@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@", 422),
+        ("user@host: Permission denied (password).", 422),
+        ('remote readdir("/x"): Permission denied', 500),
         ('remote readdir("/x"): Failure', 500),
         (None, 500),
     ],

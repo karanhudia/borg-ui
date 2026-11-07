@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import asyncio
 import os
+import re
 import shlex
 import subprocess
 import structlog
@@ -373,15 +374,20 @@ def _remote_file_exists_error(result) -> bool:
 # The SSH server refused the login or its host key is not trusted: the user
 # fixes the connection, so this is not a server fault (no 500).
 _SSH_REFUSAL_MARKERS = (
-    "permission denied (publickey",
     "host key verification failed",
     "remote host identification has changed",
 )
+# OpenSSH's login refusal lists whatever methods the server offers, e.g.
+# "(publickey)", "(password)" or "(publickey,password,keyboard-interactive)".
+_SSH_AUTH_REFUSAL = re.compile(r"permission denied \([a-z0-9@.,-]+\)")
 
 
 def _ssh_failure_status(error_msg: str | None) -> int:
     lowered = (error_msg or "").lower()
-    return 422 if any(m in lowered for m in _SSH_REFUSAL_MARKERS) else 500
+    refused = _SSH_AUTH_REFUSAL.search(lowered) or any(
+        m in lowered for m in _SSH_REFUSAL_MARKERS
+    )
+    return 422 if refused else 500
 
 
 @router.get("/browse", response_model=BrowseResponse)
