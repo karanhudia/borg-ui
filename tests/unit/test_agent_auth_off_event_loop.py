@@ -69,6 +69,7 @@ def test_the_loop_answers_while_an_agent_token_is_checked(
     health = test_client.get("/health")
     release.set()
     poll.join(HOLD_SECONDS * 2)
+    assert not poll.is_alive()
 
     assert health.status_code == 200
     # The check was still held when /health came back: it did not need the
@@ -98,6 +99,7 @@ def test_agent_tokens_are_checked_concurrently(
         poll.start()
     for poll in polls:
         poll.join(HOLD_SECONDS * 2)
+        assert not poll.is_alive()
 
     assert outcomes == [200, 200]
 
