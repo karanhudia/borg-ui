@@ -21,6 +21,7 @@ def fixture_password_hashes():
         {
             "testpass123": get_password_hash("testpass123"),
             "admin123": get_password_hash("admin123"),
+            "operator123": get_password_hash("operator123"),
         }
     )
 
