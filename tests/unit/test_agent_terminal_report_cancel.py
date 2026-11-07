@@ -37,6 +37,7 @@ async def test_committed_report_is_notified_after_the_request_is_cancelled():
             pass
 
         await asyncio.wait_for(notified.wait(), timeout=2)
+        await asyncio.gather(*agents._REPORT_TASKS)
 
     session.close.assert_called_once()
 

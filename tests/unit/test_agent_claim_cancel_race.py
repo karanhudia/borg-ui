@@ -38,8 +38,7 @@ def _queued_job(db):
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_a_claim_loses_to_a_cancel_that_landed_after_its_read(test_db):
+def test_a_claim_loses_to_a_cancel_that_landed_after_its_read(test_db):
     agent, job = _queued_job(test_db)
     real_get = agents._get_agent_job
 
@@ -58,7 +57,7 @@ async def test_a_claim_loses_to_a_cancel_that_landed_after_its_read(test_db):
 
     with patch.object(agents, "_get_agent_job", read_then_cancel):
         with pytest.raises(HTTPException) as refused:
-            await agents.claim_job(job.id, current_agent=agent, db=test_db)
+            agents.claim_job(job.id, current_agent=agent, db=test_db)
 
     assert refused.value.status_code == 409
     test_db.expire_all()
@@ -66,10 +65,9 @@ async def test_a_claim_loses_to_a_cancel_that_landed_after_its_read(test_db):
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_a_queued_job_is_claimed(test_db):
+def test_a_queued_job_is_claimed(test_db):
     agent, job = _queued_job(test_db)
 
-    response = await agents.claim_job(job.id, current_agent=agent, db=test_db)
+    response = agents.claim_job(job.id, current_agent=agent, db=test_db)
 
     assert response.status == "claimed"

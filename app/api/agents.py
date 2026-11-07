@@ -3,6 +3,7 @@ import json
 import math
 import os
 import secrets
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -19,7 +20,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field, StrictInt
-from sqlalchemy import case
+from sqlalchemy import case, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import structlog
@@ -37,7 +38,7 @@ from app.core.agent_constants import DEFAULT_AGENT_POLL_INTERVAL_SECONDS
 from app.core.agent_versions import borg_pin_satisfied, hello_lists_running_jobs
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.core.security import get_password_hash, verify_password
-from app.database.database import ends_read_on_return, get_db
+from app.database.database import ends_read_on_return, get_db, run_off_loop
 from app.database.models import (
     AgentEnrollmentToken,
     AgentJob,
@@ -369,6 +370,39 @@ def _resolve_enrollment_token(raw_token: str, db: Session) -> AgentEnrollmentTok
     raise _invalid_enrollment_token()
 
 
+def _consume_enrollment_token(token_id: int, agent_id: int, db: Session) -> bool:
+    """Mark the token used, unless it stopped being valid since it was read.
+
+    `_resolve_enrollment_token` looks at a copy, so requests with the same
+    token can all pass it; the WHERE guard decides on the row, so the token
+    enrolls one agent. A revocation committed meanwhile stands as well. The
+    time is taken here: the agent's token is hashed after the check, and a
+    token that expired during that is refused.
+    """
+    now = _now_utc()
+    consumed = (
+        db.query(AgentEnrollmentToken)
+        .filter(
+            AgentEnrollmentToken.id == token_id,
+            AgentEnrollmentToken.used_at.is_(None),
+            AgentEnrollmentToken.revoked_at.is_(None),
+            or_(
+                AgentEnrollmentToken.expires_at.is_(None),
+                # Naive UTC, the form the column stores (see `utc_now`).
+                AgentEnrollmentToken.expires_at > now.replace(tzinfo=None),
+            ),
+        )
+        .update(
+            {
+                AgentEnrollmentToken.used_at: now,
+                AgentEnrollmentToken.used_by_agent_id: agent_id,
+            },
+            synchronize_session=False,
+        )
+    )
+    return bool(consumed)
+
+
 def _serialize_agent_job(job: AgentJob) -> AgentJobPollItem:
     return AgentJobPollItem(
         id=job.id,
@@ -488,19 +522,25 @@ def _is_request_scoped_repository_job(job: AgentJob) -> bool:
 
 
 def _claim_transition_from_read_status(
-    job: AgentJob, db: Session, values: dict[Any, Any]
+    job: AgentJob,
+    db: Session,
+    values: dict[Any, Any],
+    *,
+    idle_since: Optional[datetime] = None,
 ) -> bool:
     """Apply `values` only while the job still has the status it was read with.
 
     A cancel request or a verdict committed after the read is newer than the
     decision made from it; the WHERE guard lets it stand instead of writing
-    over it. On success the ORM object is refreshed with the values written.
+    over it. With `idle_since`, a sign of life since that time stands as well:
+    a report only moves `updated_at`, so the status alone would not show it.
+    On success the ORM object is refreshed with the values written.
     """
-    moved = (
-        db.query(AgentJob)
-        .filter(AgentJob.id == job.id, AgentJob.status == job.status)
-        .update(values, synchronize_session=False)
-    )
+    guards = [AgentJob.id == job.id, AgentJob.status == job.status]
+    if idle_since is not None:
+        # Naive UTC, the form the column stores (see `utc_now`).
+        guards.append(AgentJob.updated_at <= idle_since.replace(tzinfo=None))
+    moved = db.query(AgentJob).filter(*guards).update(values, synchronize_session=False)
     if not moved:
         db.expire(job)
         return False
@@ -645,13 +685,18 @@ def _requeue_stale_agent_jobs(
         )
         if not skip_age_check and _job_activity_at(job) > stale_cutoff:
             continue
+        idle_since = None if skip_age_check else stale_cutoff
 
         if job.status == "cancel_requested":
             # Someone asked this job to stop and the agent no longer runs
             # it: the cancel is done, the backup or operation it carries
             # included. Queueing it again would run the work (a prune, an
-            # archive delete) after it was cancelled.
-            _cancel_agent_job(job, db, completed_at=now)
+            # archive delete) after it was cancelled. The guard holds the row
+            # for the cancel, unless a report showed the job does run.
+            if _claim_transition_from_read_status(
+                job, db, {AgentJob.updated_at: now}, idle_since=idle_since
+            ):
+                _cancel_agent_job(job, db, completed_at=now)
             continue
 
         if _is_request_scoped_repository_job(job):
@@ -670,6 +715,7 @@ def _requeue_stale_agent_jobs(
                         "for the result)."
                     ),
                 },
+                idle_since=idle_since,
             ):
                 _cancel_if_requested_meanwhile(
                     job,
@@ -689,6 +735,7 @@ def _requeue_stale_agent_jobs(
                 AgentJob.started_at: None,
                 AgentJob.updated_at: now,
             },
+            idle_since=idle_since,
         ):
             _cancel_if_requested_meanwhile(
                 job,
@@ -903,7 +950,9 @@ def _claim_progress_write(job: AgentJob, db: Session) -> bool:
     WHERE guard decides on the row, not on this copy: a job that is final by
     now keeps its outcome, the final archive counters included, and the
     report writes nothing. A job still active stays locked until the report
-    commits, so a completion recorded meanwhile lands after it (#1404)."""
+    commits, so a completion recorded meanwhile lands after it (#1404). The
+    copy is refreshed under that lock: a report passes on to the linked job
+    what the row holds, also counters another report wrote since the read."""
     claimed = (
         db.query(AgentJob)
         .filter(
@@ -915,6 +964,7 @@ def _claim_progress_write(job: AgentJob, db: Session) -> bool:
     if not claimed:
         db.expire(job)
         return False
+    db.refresh(job)
     return True
 
 
@@ -1197,13 +1247,30 @@ def _get_agent_token_from_websocket(websocket: WebSocket) -> Optional[str]:
     return auth_header.split(" ", 1)[1].strip()
 
 
-def _mark_agent_job_claimed(job: AgentJob, *, now: Optional[datetime] = None) -> None:
+def _mark_agent_job_claimed(job: AgentJob, db: Session) -> bool:
+    """Take the job off the queue, on either transport. Conditional on
+    `queued`: a cancel that took the job off the queue after it was read wins,
+    as does a claim on the other transport, whose claim time names the run.
+    True when this call made the move; the caller commits."""
     if job.status != "queued":
-        return
-    now = now or _now_utc()
-    job.status = "claimed"
-    job.claimed_at = now
-    job.updated_at = now
+        # The usual acknowledgement: the dispatch claimed the job before it
+        # sent it. Even an UPDATE that matches no row waits for SQLite's write
+        # lock, and the session handler runs on the loop.
+        return False
+    now = _now_utc()
+    claimed = (
+        db.query(AgentJob)
+        .filter(AgentJob.id == job.id, AgentJob.status == "queued")
+        .update(
+            {
+                AgentJob.status: "claimed",
+                AgentJob.claimed_at: now,
+                AgentJob.updated_at: now,
+            },
+            synchronize_session=False,
+        )
+    )
+    return bool(claimed)
 
 
 def _mark_agent_job_started(
@@ -1241,7 +1308,10 @@ def _mark_agent_job_started(
     if not moved:
         db.expire(job)
         return None
-    db.expire(job, ["status"])
+    # Read back under that lock, not from this copy: a dispatch or another
+    # report may have written since the job was loaded, and the claim time
+    # names the agent's run.
+    db.expire(job)
     now = _now_utc()
     if job.claimed_at is None:
         job.claimed_at = now
@@ -1599,6 +1669,22 @@ async def _notify_agent_job_outcome(db: Session, job: AgentJob) -> None:
         )
 
 
+async def _notify_agent_job_started(db: Session, job: AgentJob) -> None:
+    """Send the backup-start notification of a start report recorded in a
+    worker thread. Called after the commit, so as in
+    `_notify_agent_job_outcome` the lookup must not fail the transport."""
+    try:
+        backup_job = await asyncio.to_thread(_get_linked_backup_job, job, db)
+        if backup_job is not None:
+            await notify_backup_job_started(db, job, backup_job)
+    except Exception as exc:
+        logger.warning(
+            "Failed to dispatch agent job notification",
+            agent_job_id=orm_identity_id(job),
+            error=str(exc),
+        )
+
+
 def _cancel_agent_job(
     job: AgentJob, db: Session, *, completed_at: Optional[datetime] = None
 ) -> None:
@@ -1784,7 +1870,7 @@ async def _handle_agent_session_message(
 
     if message_type == "command_ack":
         if job:
-            _mark_agent_job_claimed(job)
+            _mark_agent_job_claimed(job, db)
             db.commit()
         return
 
@@ -1961,7 +2047,8 @@ def _parse_int(value: Any, *, default: int = 0) -> int:
 
 
 @router.post("/register", response_model=AgentRegisterResponse)
-async def register_agent(
+@ends_read_on_return
+def register_agent(
     payload: AgentRegisterRequest,
     db: Session = Depends(get_db),
 ):
@@ -1997,8 +2084,9 @@ async def register_agent(
     db.add(agent)
     db.flush()
 
-    enrollment_token.used_at = now
-    enrollment_token.used_by_agent_id = agent.id
+    if not _consume_enrollment_token(enrollment_token.id, agent.id, db):
+        db.rollback()
+        raise _invalid_enrollment_token()
     db.commit()
     db.refresh(agent)
 
@@ -2018,7 +2106,8 @@ async def register_agent(
 
 
 @router.post("/heartbeat", response_model=AgentHeartbeatResponse)
-async def heartbeat(
+@ends_read_on_return
+def heartbeat(
     payload: AgentHeartbeatRequest,
     current_agent: AgentMachine = Depends(get_current_agent),
     db: Session = Depends(get_db),
@@ -2188,7 +2277,8 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
 
 
 @router.post("/unregister", status_code=status.HTTP_204_NO_CONTENT)
-async def unregister_agent(
+@ends_read_on_return
+def unregister_agent(
     current_agent: AgentMachine = Depends(get_current_agent),
     db: Session = Depends(get_db),
 ):
@@ -2224,7 +2314,8 @@ def poll_jobs(
 
 
 @router.post("/jobs/{job_id}/claim", response_model=AgentJobStatusResponse)
-async def claim_job(
+@ends_read_on_return
+def claim_job(
     job_id: int,
     current_agent: AgentMachine = Depends(get_current_agent),
     db: Session = Depends(get_db),
@@ -2233,27 +2324,43 @@ async def claim_job(
     _reject_final_job(job)
 
     if job.status == "queued":
-        now = _now_utc()
-        # Conditional on `queued`: a cancel that took the job off the queue
-        # after it was read here wins, and the agent is told it is final.
-        claimed = (
-            db.query(AgentJob)
-            .filter(AgentJob.id == job.id, AgentJob.status == "queued")
-            .update(
-                {
-                    AgentJob.status: "claimed",
-                    AgentJob.claimed_at: now,
-                    AgentJob.updated_at: now,
-                },
-                synchronize_session=False,
-            )
-        )
+        claimed = _mark_agent_job_claimed(job, db)
         db.commit()
         db.refresh(job)
         if not claimed:
+            # If a cancel won, the agent is told the job is final.
             _reject_final_job(job)
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
+
+
+def _record_job_start(
+    job_id: int, payload: AgentJobStartRequest, agent_id: int
+) -> tuple[bool, str]:
+    """Own session, as in `_record_job_completion`. True when this report is
+    the backup's first, so the caller notifies exactly once."""
+    from app.database.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        job = _get_agent_job(job_id, db.get(AgentMachine, agent_id), db)
+        _reject_final_job(job)
+
+        if job.status not in ("queued", "claimed", "cancel_requested", "running"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"key": "backend.errors.agents.jobNotStartable"},
+            )
+
+        # Same path the WebSocket transport takes - one place applies a start
+        # report and decides whether it triggers the backup-start notification.
+        started_backup_job = _mark_agent_job_started(
+            job, db, started_at=payload.started_at
+        )
+        db.commit()
+        return started_backup_job is not None, job.status
+    finally:
+        db.close()
 
 
 @router.post("/jobs/{job_id}/start", response_model=AgentJobStatusResponse)
@@ -2263,27 +2370,24 @@ async def start_job(
     current_agent: AgentMachine = Depends(get_current_agent),
     db: Session = Depends(get_db),
 ):
-    job = _get_agent_job(job_id, current_agent, db)
-    _reject_final_job(job)
-
-    if job.status not in ("queued", "claimed", "cancel_requested", "running"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"key": "backend.errors.agents.jobNotStartable"},
-        )
-
-    # Same path the WebSocket transport takes - one place applies a start
-    # report and decides whether it triggers the backup-start notification.
-    started_backup_job = _mark_agent_job_started(job, db, started_at=payload.started_at)
-    db.commit()
-    if started_backup_job is not None:
-        await notify_backup_job_started(db, job, started_backup_job)
-
-    return AgentJobStatusResponse(id=job.id, status=job.status)
+    # The notification is a coroutine, so the handler stays on the loop and
+    # only the database work moves. Its worker takes a connection of its own:
+    # release the idle read first, or a burst of reports holds the whole pool
+    # and waits for it. The rollback expires the agent, so its id comes first.
+    # `run_off_loop` takes no shared worker thread, which may be with a request
+    # waiting for the connection this gives back, and a cancelled request
+    # waits for it, so its session is not closed under it.
+    agent_id = current_agent.id
+    await run_off_loop(db.rollback)
+    status_value = await _shielded_report(
+        _record_job_start, _notify_agent_job_started, job_id, payload, agent_id
+    )
+    return AgentJobStatusResponse(id=job_id, status=status_value)
 
 
 @router.post("/jobs/{job_id}/progress", response_model=AgentJobStatusResponse)
-async def update_job_progress(
+@ends_read_on_return
+def update_job_progress(
     job_id: int,
     payload: AgentJobProgressRequest,
     current_agent: AgentMachine = Depends(get_current_agent),
@@ -2291,22 +2395,9 @@ async def update_job_progress(
 ):
     job = _get_agent_job(job_id, current_agent, db)
     _reject_final_job(job)
-    if not _claim_progress_write(job, db):
-        db.commit()
-        return AgentJobStatusResponse(id=job.id, status=job.status)
-
-    progress = payload.model_dump(exclude_none=True)
-    for field_name, value in progress.items():
-        setattr(job, field_name, value)
-    if progress:
-        # a keepalive carries no fields and keeps the last snapshot
-        job.progress = progress
-    backup_job = _get_linked_backup_job(job, db)
-    if backup_job:
-        _sync_running_backup_progress(job, backup_job)
-    else:
-        _sync_repository_operation_progress(job, db)
-    job.updated_at = _now_utc()
+    # Same path the WebSocket transport takes. A job that became final since
+    # it was read here takes no write there, and the agent is told its status.
+    _apply_agent_job_progress(job, db, payload.model_dump(exclude_none=True))
     db.commit()
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
@@ -2378,33 +2469,64 @@ def upload_job_log(
 
 # Strong references: the loop only holds weak ones, and a report that is
 # already committed must still get its notification.
-_TERMINAL_REPORT_TASKS: set[asyncio.Task] = set()
+_REPORT_TASKS: set[asyncio.Task] = set()
+
+# The report workers and the notification's job read may wait for a
+# connection. They wait in threads of their own, as many as asyncio's default
+# threads: a notification that holds a connection sends in those.
+_REPORT_THREADS = ThreadPoolExecutor(thread_name_prefix="agent-report")
 
 
-async def _record_and_notify(worker, job_id: int, payload, agent_id: int) -> str:
+async def _in_report_thread(function, *args):
+    return await asyncio.get_running_loop().run_in_executor(
+        _REPORT_THREADS, function, *args
+    )
+
+
+async def _record_and_notify(
+    worker, notify, job_id: int, payload, agent_id: int
+) -> str:
     from app.database.database import SessionLocal
 
-    transitioned, status_value = await asyncio.to_thread(
+    transitioned, status_value = await _in_report_thread(
         worker, job_id, payload, agent_id
     )
     if transitioned:
         db = SessionLocal()
         try:
-            job = await asyncio.to_thread(db.get, AgentJob, job_id)
-            await _notify_agent_job_outcome(db, job)
+            # The report is committed: from here on, as in the notification
+            # itself, a failure is logged and does not fail the request.
+            try:
+                job = await _in_report_thread(db.get, AgentJob, job_id)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to dispatch agent job notification",
+                    agent_job_id=job_id,
+                    error=str(exc),
+                )
+            else:
+                await notify(db, job)
         finally:
-            db.close()
+            await asyncio.to_thread(db.close)
     return status_value
 
 
-async def _terminal_report(worker, job_id: int, payload, agent_id: int) -> str:
-    """Commit a terminal report off the loop, then notify. Shielded: the agent
-    drops a request after 30 s, and its retry would find the job final and
-    never notify, so a committed report always gets its notification."""
-    task = asyncio.ensure_future(_record_and_notify(worker, job_id, payload, agent_id))
-    _TERMINAL_REPORT_TASKS.add(task)
-    task.add_done_callback(_TERMINAL_REPORT_TASKS.discard)
+async def _shielded_report(worker, notify, job_id: int, payload, agent_id: int) -> str:
+    """Commit a report off the loop, then notify. Shielded: the agent drops a
+    request after 30 s, and its retry would find the report recorded and never
+    notify, so a committed report always gets its notification."""
+    task = asyncio.ensure_future(
+        _record_and_notify(worker, notify, job_id, payload, agent_id)
+    )
+    _REPORT_TASKS.add(task)
+    task.add_done_callback(_REPORT_TASKS.discard)
     return await asyncio.shield(task)
+
+
+async def _terminal_report(worker, job_id: int, payload, agent_id: int) -> str:
+    return await _shielded_report(
+        worker, _notify_agent_job_outcome, job_id, payload, agent_id
+    )
 
 
 def _record_job_completion(

@@ -189,15 +189,14 @@ def test_revocation_during_the_hello_wait_wins(test_client: TestClient, test_db)
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_rest_heartbeat_authenticated_before_a_revocation_is_refused(test_db):
+def test_rest_heartbeat_authenticated_before_a_revocation_is_refused(test_db):
     agent = _create_agent(test_db)
     # Resolved by the dependency, then revoked before the handler writes
     current_agent = resolve_agent_from_token(RAW_TOKEN, test_db)
     _set_status(test_db, agent, "revoked")
 
     with pytest.raises(HTTPException) as exc_info:
-        await heartbeat(
+        heartbeat(
             AgentHeartbeatRequest(agent_id="agt_revocation", hostname="after.local"),
             current_agent=current_agent,
             db=test_db,
