@@ -8,7 +8,7 @@ import { remoteMachineSetupPresets } from '../ssh-connections-single-key/connect
 import { createConnectionForm } from '../ssh-connections-single-key/formDefaults'
 import { ConnectionDiagnosticsDialog } from '../ssh-connections-single-key/dialogs/ConnectionDiagnosticsDialog'
 import { DeployKeyDialog } from '../ssh-connections-single-key/dialogs/DeployKeyDialog'
-import type { DeployConnectionPayload } from '../ssh-connections-single-key/types'
+import type { DeployConnectionPayload, SSHKeySummary } from '../ssh-connections-single-key/types'
 
 const remoteMachineSetupPresetBrandColors = Object.fromEntries(
   remoteMachineSetupPresets.map((preset) => [preset.id, preset.brandColor])
@@ -17,9 +17,13 @@ const remoteMachineSetupPresetBrandColors = Object.fromEntries(
 function DeployDialogHarness({
   initialForm,
   onDeploy,
+  sshKeys = [],
+  systemKeyId,
 }: {
   initialForm: DeployConnectionPayload
   onDeploy?: (form: DeployConnectionPayload) => void
+  sshKeys?: SSHKeySummary[]
+  systemKeyId?: number
 }) {
   const [open, setOpen] = useState(true)
   const [connectionForm, setConnectionForm] = useState(initialForm)
@@ -30,6 +34,8 @@ function DeployDialogHarness({
       t={i18n.t.bind(i18n)}
       open={open}
       setOpen={setOpen}
+      sshKeys={sshKeys}
+      systemKeyId={systemKeyId}
       connectionForm={connectionForm}
       setConnectionForm={setConnectionForm}
       hostError={hostError}
@@ -552,6 +558,63 @@ describe('SSHConnectionsSingleKey', () => {
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
 
     expect(dialog).toHaveClass('MuiDialog-paperWidthSm')
+  })
+
+  it('keeps the chosen SSH key when switching to Custom setup', async () => {
+    const onDeploy = vi.fn()
+    renderWithProviders(
+      <DeployDialogHarness
+        initialForm={{
+          ...createConnectionForm(),
+          host: 'backup.example',
+          username: 'borg',
+          password: 'test-password',
+          port: 23,
+          use_sftp_mode: true,
+          default_path: '/home',
+          ssh_path_prefix: '',
+          mount_point: 'hetzner-storage-box',
+        }}
+        sshKeys={[
+          {
+            id: 1,
+            name: 'System SSH Key',
+            key_type: 'ed25519',
+            is_system_key: true,
+            connection_count: 0,
+          },
+          {
+            id: 2,
+            name: 'Backup key',
+            key_type: 'ed25519',
+            is_system_key: false,
+            connection_count: 0,
+          },
+        ]}
+        systemKeyId={1}
+        onDeploy={onDeploy}
+      />
+    )
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: /^ssh key$/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Backup key/i }))
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: /setup preset/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Custom setup/i }))
+
+    expect(within(dialog).getByRole('combobox', { name: /^ssh key$/i })).toHaveTextContent(
+      'Backup key'
+    )
+    fireEvent.click(within(dialog).getByRole('button', { name: /^deploy key$/i }))
+    expect(onDeploy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ssh_key_id: 2,
+        host: 'backup.example',
+        username: 'borg',
+        password: 'test-password',
+        port: 22,
+        default_path: '',
+      })
+    )
   })
 
   it('tests and adds a manual connection with the expected payload', async () => {

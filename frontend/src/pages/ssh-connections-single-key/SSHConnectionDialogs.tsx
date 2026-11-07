@@ -12,6 +12,7 @@ import type {
   DeployConnectionPayload,
   ImportKeyPayload,
   SSHConnection,
+  SSHKeySummary,
   SystemSSHKey,
   TestConnectionPayload,
   UpdateConnectionPayload,
@@ -20,6 +21,7 @@ import type {
 interface SSHConnectionDialogsProps {
   t: TFunction
   systemKey: SystemSSHKey | undefined
+  sshKeys: SSHKeySummary[]
   connections: SSHConnection[]
   selectedConnection: SSHConnection | null
   setSelectedConnection: Dispatch<SetStateAction<SSHConnection | null>>
@@ -78,6 +80,7 @@ interface SSHConnectionDialogsProps {
 export function SSHConnectionDialogs({
   t,
   systemKey,
+  sshKeys,
   connections,
   selectedConnection,
   setSelectedConnection,
@@ -156,6 +159,8 @@ export function SSHConnectionDialogs({
         t={t}
         open={deployDialogOpen}
         setOpen={setDeployDialogOpen}
+        sshKeys={sshKeys}
+        systemKeyId={systemKey?.id}
         connectionForm={connectionForm}
         setConnectionForm={setConnectionForm}
         hostError={connectionHostError}
@@ -179,6 +184,7 @@ export function SSHConnectionDialogs({
         open={editConnectionDialogOpen}
         setOpen={setEditConnectionDialogOpen}
         setSelectedConnection={setSelectedConnection}
+        sshKeys={sshKeys}
         editConnectionForm={editConnectionForm}
         setEditConnectionForm={setEditConnectionForm}
         hostError={editConnectionHostError}

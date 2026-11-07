@@ -19,7 +19,8 @@ The old `/ssh-keys` route redirects to Remote Machines.
 
 ## Key Model
 
-Borg UI stores one system SSH key and uses it for remote connections.
+Borg UI has one system SSH key, and every remote connection uses it unless you
+pick another key for that connection.
 
 Supported key types:
 
@@ -28,6 +29,30 @@ Supported key types:
 - ECDSA, for compatibility
 
 Generate the key in the UI unless you have a reason to import an existing key.
+
+## Additional Keys
+
+Give a remote machine its own key when the server needs one per machine or per
+repository, for example a borgserver that maps each public key to its own
+repository path, or a provider that issues restricted keys.
+
+1. In Remote Machines, open **Additional SSH Keys** and choose **Add Key**.
+2. Generate a key, import one from a path on the Borg UI host (for example a
+   mounted `.ssh` folder from a borgmatic setup), or paste a private key.
+   Keys protected with a passphrase are not supported.
+3. Deploy the new public key to the server, or add it to the server's
+   `authorized_keys` yourself.
+4. Pick the key in the connection dialog when you add or edit a connection.
+   The picker only appears once there is more than one key.
+
+Changing a connection's key marks it as untested, because the new key may not be
+authorised on the server yet. Deploy the key, then test the connection.
+
+Redeploying a key to a connection uses that connection's own key. A key that
+connections still use cannot be deleted: switch those connections to another key
+first. Deleting the system key keeps the connections but marks them as failed.
+Additional keys are stored encrypted like the system key, and are never written
+to the `~/.ssh` folder.
 
 ## Add a Remote Machine
 

@@ -6,11 +6,13 @@ import { SSHConnectionDialogs } from './SSHConnectionDialogs'
 import { SSHConnectionsLoadingSkeleton } from './SSHConnectionsLoadingSkeleton'
 import { RemoteConnectionsSection } from './view/RemoteConnectionsSection'
 import { SSHPageHeader } from './view/SSHPageHeader'
+import { ExtraKeysSection } from './view/ExtraKeysSection'
 import { SystemKeyCard } from './view/SystemKeyCard'
 import type {
   DeployConnectionPayload,
   ImportKeyPayload,
   SSHConnection,
+  SSHKeySummary,
   SystemSSHKey,
   TestConnectionPayload,
   UpdateConnectionPayload,
@@ -24,6 +26,7 @@ interface SSHConnectionsSingleKeyViewProps {
   connectionsLoading: boolean
   keyExists: boolean | undefined
   systemKey: SystemSSHKey | undefined
+  sshKeys: SSHKeySummary[]
   connections: SSHConnection[]
   canManageSsh: boolean
   keyVisible: boolean
@@ -101,6 +104,7 @@ export function SSHConnectionsSingleKeyView({
   connectionsLoading,
   keyExists,
   systemKey,
+  sshKeys,
   connections,
   canManageSsh,
   keyVisible,
@@ -193,6 +197,7 @@ export function SSHConnectionsSingleKeyView({
         setDeleteKeyDialogOpen={setDeleteKeyDialogOpen}
         onCopyPublicKey={handleCopyPublicKey}
       />
+      {keyExists && canManageSsh && <ExtraKeysSection keys={sshKeys} connections={connections} />}
       <RemoteConnectionsSection
         t={t}
         theme={theme}
@@ -212,6 +217,7 @@ export function SSHConnectionsSingleKeyView({
       <SSHConnectionDialogs
         t={t}
         systemKey={systemKey}
+        sshKeys={sshKeys}
         connections={connections}
         selectedConnection={selectedConnection}
         setSelectedConnection={setSelectedConnection}
