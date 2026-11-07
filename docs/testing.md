@@ -139,6 +139,10 @@ The API fixture rolls back uncommitted test writes before real client shutdown,
 so its shared SQLite session cannot block runner lease release. Shutdown still
 waits for task cleanup; committed records remain available.
 
+That session is shared by every request of a test, so requests running at the same
+time must not use it. A test of concurrent requests also takes the `session_per_request`
+fixture, which gives each request its own session, as production does.
+
 New pushes cancel obsolete PR test, security, and screenshot-capture runs. The
 trusted visual publisher keeps its separate serialization and permissions.
 

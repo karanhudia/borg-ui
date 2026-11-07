@@ -181,6 +181,31 @@ def test_client(test_db):
             test_db.rollback()
 
 
+@pytest.fixture
+def session_per_request(test_db):
+    """Give every request its own session, as production does.
+
+    The session of `test_db` is shared, so requests running at the same time
+    must not use it. A test of concurrent requests takes this fixture and keeps
+    `test_db` for its own setup and assertions.
+    """
+    from app.main import app
+
+    request_sessions = sessionmaker(
+        autocommit=False, autoflush=False, bind=test_db.get_bind()
+    )
+
+    def override_get_db():
+        db = request_sessions()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield request_sessions
+
+
 class HeldRunner:
     def __init__(self, client, db):
         self._client = client
