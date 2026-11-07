@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import asyncio
 import os
+import re
 import shlex
 import subprocess
 import structlog
@@ -368,6 +369,25 @@ def _remote_path_missing_error(result) -> bool:
 def _remote_file_exists_error(result) -> bool:
     output = f"{result.stderr or ''}\n{result.stdout or ''}".lower()
     return "file exists" in output
+
+
+# The SSH server refused the login or its host key is not trusted: the user
+# fixes the connection, so this is not a server fault (no 500).
+_SSH_REFUSAL_MARKERS = (
+    "host key verification failed",
+    "remote host identification has changed",
+)
+# OpenSSH's login refusal lists whatever methods the server offers, e.g.
+# "(publickey)", "(password)" or "(publickey,password,keyboard-interactive)".
+_SSH_AUTH_REFUSAL = re.compile(r"permission denied \([a-z0-9@.,-]+\)")
+
+
+def _ssh_failure_status(error_msg: str | None) -> int:
+    lowered = (error_msg or "").lower()
+    refused = _SSH_AUTH_REFUSAL.search(lowered) or any(
+        m in lowered for m in _SSH_REFUSAL_MARKERS
+    )
+    return 422 if refused else 500
 
 
 @router.get("/browse", response_model=BrowseResponse)
@@ -734,7 +754,7 @@ async def browse_ssh_filesystem(
                 stdout=result.stdout[:500] if result.stdout else None,
             )
             raise HTTPException(
-                status_code=500,
+                status_code=_ssh_failure_status(error_msg),
                 detail=f"Failed to list remote directory '{path}': {error_msg or 'Permission denied or path not found'}",
             )
 
@@ -1234,7 +1254,8 @@ def create_folder(
                         stderr=result.stderr[:500] if result.stderr else None,
                     )
                     raise HTTPException(
-                        status_code=500, detail=f"Failed to create folder: {error_msg}"
+                        status_code=_ssh_failure_status(error_msg),
+                        detail=f"Failed to create folder: {error_msg}",
                     )
 
             finally:

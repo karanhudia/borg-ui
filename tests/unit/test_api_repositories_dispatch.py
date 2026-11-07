@@ -433,3 +433,72 @@ class TestRepositoryApiDispatch:
         assert response.status_code == 403
         mock_router.assert_not_called()
         fake_router.break_lock.assert_not_awaited()
+
+
+def test_break_lock_failure_carries_borg_reason_and_read_only_is_422(
+    test_client: TestClient, admin_headers, test_db
+):
+    # Dashboard 612724a0a3c0fe9e: a bare 500 with no reason on a read-only mount.
+    repo = Repository(
+        name="Repo",
+        path="/backups/pi01",
+        encryption="none",
+        repository_type="local",
+        borg_version=1,
+    )
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
+    stderr = (
+        "Failed to create/acquire the lock /backups/pi01/lock.exclusive "
+        "([Errno 30] Read-only file system: '/backups/pi01/lock.exclusive')"
+    )
+    fake_router = Mock(
+        break_lock=AsyncMock(
+            return_value={"success": False, "return_code": 2, "stderr": stderr}
+        )
+    )
+    with patch("app.api.repositories.BorgRouter", return_value=fake_router):
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/break-lock", headers=admin_headers
+        )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["key"] == "backend.errors.repo.failedToBreakLock"
+    assert "Read-only file system" in detail["params"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_repository_command_failure_carries_borg_reason(test_db):
+    # Dashboard f6dc929764bdbe7f: repository info failed with no reason at all.
+    from app.api import repositories
+
+    repo = Repository(
+        name="Repo", path="/repo", encryption="none", repository_type="local"
+    )
+    test_db.add(repo)
+    test_db.commit()
+    stderr = b"Repository /repo does not exist.\n"
+    with patch.object(
+        repositories,
+        "_run_repository_command",
+        AsyncMock(return_value=(2, b"", stderr)),
+    ):
+        with pytest.raises(repositories.HTTPException) as caught:
+            await repositories._run_repository_command_with_retries(
+                repo,
+                test_db,
+                repo_id=repo.id,
+                cmd=["borg", "info", "/repo"],
+                timeout=5,
+                bypass_lock=False,
+                source="default",
+                command_label="info",
+                ssh_log_message="info",
+                failure_key="backend.errors.repo.failedToGetRepositoryInfo",
+            )
+
+    assert caught.value.status_code == 500
+    assert caught.value.detail["key"] == "backend.errors.repo.failedToGetRepositoryInfo"
+    assert "does not exist" in caught.value.detail["params"]["error"]

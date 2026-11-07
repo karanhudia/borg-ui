@@ -78,6 +78,9 @@ def test_import_failure_preserves_reason(
     [
         "fuse: device not found, try 'modprobe fuse' first",
         "fuse: failed to open /dev/fuse: No such file or directory",
+        "fusermount3: mount failed: Permission denied\nRuntime error: FUSE mount failed",
+        "fusermount: mount failed: Operation not permitted",
+        "fusermount3: mount failed: Operation not permitted",
     ],
 )
 def test_missing_fuse_device_is_unavailable(reason):

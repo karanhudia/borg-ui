@@ -81,11 +81,12 @@ class TestSftpBrowseFailures:
                 "backend.errors.filesystem.permissionDenied",
             ),
             (1, "Connection closed by remote host", 500, None),
-            (255, "backup@example.com: Permission denied (publickey).", 500, None),
+            # A refused login is user-correctable (422), never a 403 role refusal.
+            (255, "backup@example.com: Permission denied (publickey).", 422, None),
             (
                 255,
                 "Permission denied (publickey,password,keyboard-interactive).",
-                500,
+                422,
                 None,
             ),
             (
@@ -1427,3 +1428,28 @@ class TestSshLoginRelativeRetryBoundaries:
             assert "relative retry" not in response.json()["detail"]
         assert len(commands) == 2
         assert all(not Path(path).exists() for path in key_paths)
+
+
+@pytest.mark.parametrize(
+    "stderr,status",
+    [
+        # Dashboard f6bd6dce24cfc3f4 / 18cfd693a86f95c0: login refused.
+        (
+            "trade@10.0.0.211: Permission denied (publickey,password,keyboard-interactive).\nConnection closed",
+            422,
+        ),
+        (
+            "No ED25519 host key is known for [box]:23 and you have requested strict checking.\nHost key verification failed.",
+            422,
+        ),
+        ("@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@", 422),
+        ("user@host: Permission denied (password).", 422),
+        ('remote readdir("/x"): Permission denied', 500),
+        ('remote readdir("/x"): Failure', 500),
+        (None, 500),
+    ],
+)
+def test_ssh_refusals_are_user_correctable_not_server_errors(stderr, status):
+    from app.api.filesystem import _ssh_failure_status
+
+    assert _ssh_failure_status(stderr) == status

@@ -15,9 +15,24 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("repositories") as batch:
-        batch.add_column(sa.Column("total_size_source", sa.String(), nullable=True))
-        batch.add_column(sa.Column("borg_last_modified", sa.DateTime(), nullable=True))
+    # Alembic does not run SQLite DDL in a transaction: a boot killed after
+    # the ALTER but before the version bump keeps the column, and re-running
+    # this revision must not fail on the duplicate. Self-contained on purpose.
+    existing = {
+        c["name"] for c in sa.inspect(op.get_bind()).get_columns("repositories")
+    }
+    missing = [
+        column
+        for column in (
+            sa.Column("total_size_source", sa.String(), nullable=True),
+            sa.Column("borg_last_modified", sa.DateTime(), nullable=True),
+        )
+        if column.name not in existing
+    ]
+    if missing:
+        with op.batch_alter_table("repositories") as batch:
+            for column in missing:
+                batch.add_column(column)
 
 
 def downgrade() -> None:
