@@ -275,7 +275,7 @@ def test_listing_crash_leads_with_borg_cause_not_its_wrapper():
         "OSError: [Errno 5] Input/output error: '/repo/index.12'\n"
         "\n"
         "Platform: Linux host 6.1.0 x86_64\n"
-        "sys.argv: ['borg', 'list', '--token=footer-secret']"
+        "SSH_ORIGINAL_COMMAND: BORG_PASSPHRASE=footer-secret"
     )
     message = str(ArchiveListingError({"return_code": 2, "stderr": stderr}))
 
@@ -283,4 +283,4 @@ def test_listing_crash_leads_with_borg_cause_not_its_wrapper():
         "listing archives failed (exit code 2): "
         "OSError: [Errno 5] Input/output error: '/repo/index.12'\nLocal Exception"
     )
-    assert "footer-secret" not in message.splitlines()[0]
+    assert "footer-secret" not in message
