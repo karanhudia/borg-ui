@@ -146,7 +146,12 @@ def repository_failure_status(result: dict) -> int:
         str(result.get(key) or "") for key in ("error", "stderr")
     ).lower()
     # 422, not 403: the frontend reads 403 as a role refusal and toasts so.
-    if result.get("return_code") == 21 or "permission denied" in reason:
+    if (
+        result.get("return_code") == 21
+        or "permission denied" in reason
+        # A read-only mount is the host's configuration, not a Borg UI fault.
+        or "[errno 30] read-only file system" in reason
+    ):
         return 422
     if (
         result.get("return_code") == 19
@@ -182,6 +187,22 @@ class ArchiveListingError(Exception):
             # Redact before truncation: cutting a quoted secret first could
             # leave part of its value outside the redactor's match.
             diagnostic = redact_secrets(str(reason)).strip()
+            # A crash opens with Borg's wrapper ("Local Exception", then the
+            # traceback), so a reported message cut to its first lines named no
+            # cause. Lead with the cause; the full diagnostic still follows.
+            first = diagnostic.splitlines()[0].strip() if diagnostic else ""
+            if first in (
+                "Local Exception",
+                "Remote Exception",
+                "Traceback (most recent call last):",
+            ):
+                from app.services.repository_executor import _tail_reason_line
+
+                cause = _tail_reason_line(
+                    diagnostic, lock_contention=self.is_lock_contention
+                )
+                if cause:
+                    diagnostic = f"{cause}\n{diagnostic}"
             if len(diagnostic) > 2000:
                 # The last exception follows the frames; keeping only the
                 # start can turn a useful error into an unexplained traceback.

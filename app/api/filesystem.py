@@ -370,6 +370,20 @@ def _remote_file_exists_error(result) -> bool:
     return "file exists" in output
 
 
+# The SSH server refused the login or its host key is not trusted: the user
+# fixes the connection, so this is not a server fault (no 500).
+_SSH_REFUSAL_MARKERS = (
+    "permission denied (publickey",
+    "host key verification failed",
+    "remote host identification has changed",
+)
+
+
+def _ssh_failure_status(error_msg: str | None) -> int:
+    lowered = (error_msg or "").lower()
+    return 422 if any(m in lowered for m in _SSH_REFUSAL_MARKERS) else 500
+
+
 @router.get("/browse", response_model=BrowseResponse)
 async def browse_filesystem(
     path: str = Query("/local", description="Path to browse"),
@@ -734,7 +748,7 @@ async def browse_ssh_filesystem(
                 stdout=result.stdout[:500] if result.stdout else None,
             )
             raise HTTPException(
-                status_code=500,
+                status_code=_ssh_failure_status(error_msg),
                 detail=f"Failed to list remote directory '{path}': {error_msg or 'Permission denied or path not found'}",
             )
 
@@ -1234,7 +1248,8 @@ def create_folder(
                         stderr=result.stderr[:500] if result.stderr else None,
                     )
                     raise HTTPException(
-                        status_code=500, detail=f"Failed to create folder: {error_msg}"
+                        status_code=_ssh_failure_status(error_msg),
+                        detail=f"Failed to create folder: {error_msg}",
                     )
 
             finally:
