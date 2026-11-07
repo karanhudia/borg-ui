@@ -11,6 +11,8 @@ Old merge results without an identity cannot delete rows.
 from alembic import op
 import sqlalchemy as sa
 
+from app.database.alembic_columns import add_missing_columns
+
 revision = "f2a3b4c5d6e7"
 down_revision = "a9b8c7d6e5f4"
 branch_labels = None
@@ -18,7 +20,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("archives", sa.Column("generation_id", sa.String(36), nullable=True))
+    add_missing_columns(
+        "archives",
+        sa.Column("generation_id", sa.String(36), nullable=True),
+    )
 
 
 def downgrade() -> None:

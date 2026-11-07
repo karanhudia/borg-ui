@@ -8,6 +8,8 @@ Create Date: 2026-09-06
 from alembic import op
 import sqlalchemy as sa
 
+from app.database.alembic_columns import add_missing_columns
+
 revision = "8f2a4c6e1d3b"
 down_revision = "7de0064b0d99"
 branch_labels = None
@@ -15,9 +17,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("repositories") as batch:
-        batch.add_column(sa.Column("total_size_source", sa.String(), nullable=True))
-        batch.add_column(sa.Column("borg_last_modified", sa.DateTime(), nullable=True))
+    add_missing_columns(
+        "repositories",
+        sa.Column("total_size_source", sa.String(), nullable=True),
+        sa.Column("borg_last_modified", sa.DateTime(), nullable=True),
+    )
 
 
 def downgrade() -> None:

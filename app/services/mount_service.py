@@ -99,6 +99,10 @@ NO_FUSE_SUPPORT_MARKERS = (
     "borgfs is not supported",
     "fuse: device not found",
     "failed to open /dev/fuse",
+    # The container may not mount (no CAP_SYS_ADMIN / unprivileged), so
+    # fusermount itself is refused: an environment limit, not a borg failure.
+    "fusermount3: mount failed: permission denied",
+    "fusermount: mount failed: permission denied",
 )
 
 SSHFS_NO_SUCH_FILE_MARKERS = (

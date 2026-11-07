@@ -12,6 +12,8 @@ Create Date: 2026-09-21
 from alembic import op
 import sqlalchemy as sa
 
+from app.database.alembic_columns import add_missing_columns
+
 
 revision = "a1b2c3d4e5f6"
 down_revision = "a7c3e9f1b5d2"
@@ -20,10 +22,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("licensing_state") as batch_op:
-        batch_op.add_column(
-            sa.Column("license_key_encrypted", sa.String(), nullable=True)
-        )
+    add_missing_columns(
+        "licensing_state",
+        sa.Column("license_key_encrypted", sa.String(), nullable=True),
+    )
 
 
 def downgrade() -> None:

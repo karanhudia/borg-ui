@@ -1038,3 +1038,28 @@ def test_ensure_schema_preserves_initial_build_failure_after_partial_ddl(
     # The next startup diagnoses the interrupted state before running more DDL.
     with pytest.raises(RuntimeError, match="[Ii]ncomplete.*restore"):
         db_upgrade.ensure_schema()
+
+
+@pytest.mark.unit
+def test_a_revision_interrupted_after_its_alter_is_finished_on_next_boot(tmp_path):
+    # SQLite DDL is not transactional under Alembic: a boot killed after
+    # 8f2a4c6e1d3b's ALTER but before its version bump keeps the column at the
+    # previous revision. The next boot must finish the upgrade, not fail on the
+    # duplicate column (dashboard e9d33421b6cb1d9b).
+    from app.database.db_upgrade import _sqlite_url, _upgrade_to
+
+    db = tmp_path / "borg.db"
+    _upgrade_to(_sqlite_url(db), "7de0064b0d99")
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(
+            text("ALTER TABLE repositories ADD COLUMN total_size_source VARCHAR")
+        )
+    engine.dispose()
+
+    assert alembic_init(db).action == "migrated"
+    engine = create_engine(f"sqlite:///{db}")
+    columns = {c["name"] for c in inspect(engine).get_columns("repositories")}
+    engine.dispose()
+    assert {"total_size_source", "borg_last_modified"} <= columns
+    assert alembic_init(db).action == "skipped"
