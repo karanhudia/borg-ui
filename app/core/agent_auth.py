@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -8,6 +9,9 @@ from app.database.models import AgentMachine
 
 AGENT_AUTH_HEADER = "X-Borg-Agent-Authorization"
 AGENT_TOKEN_PREFIX_LENGTH = 20
+# An agent in one of these states may not authenticate, and nothing it sends
+# may move it back to online.
+INACTIVE_AGENT_STATUSES = ("disabled", "revoked", "deleted")
 
 
 def get_agent_token_from_request(request: Request) -> Optional[str]:
@@ -36,7 +40,7 @@ def resolve_agent_from_token(token: Optional[str], db: Session) -> AgentMachine:
 
     for agent in candidates:
         if verify_password(token, agent.token_hash):
-            if agent.status in ("disabled", "revoked", "deleted"):
+            if agent.status in INACTIVE_AGENT_STATUSES:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail={"key": "backend.errors.agents.agentDisabled"},
@@ -57,3 +61,37 @@ async def get_current_agent(
     agent = resolve_agent_from_token(token, db)
     request.state.current_agent = agent
     return agent
+
+
+def agent_is_active(db: Session, agent_machine_id: int) -> bool:
+    """Whether the agent may still act, read from the row, not from an object
+    loaded earlier in a long-lived session."""
+    current = (
+        db.query(AgentMachine.status)
+        .filter(AgentMachine.id == agent_machine_id)
+        .scalar()
+    )
+    return current is not None and current not in INACTIVE_AGENT_STATUSES
+
+
+def mark_agent_online(db: Session, agent_machine_id: int, now: datetime) -> bool:
+    """Mark an agent online and seen, unless it was revoked, disabled or
+    deleted. The WHERE guard decides on the row: an open session or a
+    request authenticated before the revocation must not undo it. False
+    means the agent is no longer allowed in."""
+    marked = (
+        db.query(AgentMachine)
+        .filter(
+            AgentMachine.id == agent_machine_id,
+            AgentMachine.status.notin_(INACTIVE_AGENT_STATUSES),
+        )
+        .update(
+            {
+                AgentMachine.status: "online",
+                AgentMachine.last_seen_at: now,
+                AgentMachine.updated_at: now,
+            },
+            synchronize_session=False,
+        )
+    )
+    return bool(marked)

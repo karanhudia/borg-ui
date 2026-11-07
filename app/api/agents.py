@@ -28,7 +28,9 @@ from app.core.borg_major import is_borg2
 from app.core.agent_auth import (
     AGENT_AUTH_HEADER,
     AGENT_TOKEN_PREFIX_LENGTH,
+    agent_is_active,
     get_current_agent,
+    mark_agent_online,
     resolve_agent_from_token,
 )
 from app.core.agent_constants import DEFAULT_AGENT_POLL_INTERVAL_SECONDS
@@ -1708,6 +1710,10 @@ def _load_session_job(
     )
 
 
+class AgentSessionRevoked(Exception):
+    """The agent was revoked, disabled or deleted while its session was open."""
+
+
 async def _handle_agent_session_message(
     db: Session,
     agent_machine_id: int,
@@ -1727,10 +1733,9 @@ async def _handle_agent_session_message(
         # socket alive but never reach here, so without this an idle-but-healthy
         # agent looks stale.
         now = _now_utc()
-        db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).update(
-            {"last_seen_at": now, "status": "online", "updated_at": now},
-            synchronize_session=False,
-        )
+        if not mark_agent_online(db, agent_machine_id, now):
+            db.rollback()
+            raise AgentSessionRevoked()
         db.commit()
         # From agent 0.1.21 the heartbeat lists the jobs the process runs,
         # and a started job that has left the list is settled as on the REST
@@ -2025,6 +2030,14 @@ async def heartbeat(
         )
 
     now = _now_utc()
+    # Authenticated at the start of the request; a revocation committed since
+    # then wins.
+    if not mark_agent_online(db, current_agent.id, now):
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"key": "backend.errors.agents.agentDisabled"},
+        )
     current_agent.hostname = payload.hostname or current_agent.hostname
     current_agent.agent_version = payload.agent_version or current_agent.agent_version
     current_agent.timezone = (
@@ -2036,9 +2049,6 @@ async def heartbeat(
     resolve_agent_upgrade(current_agent)
     current_agent.capabilities = payload.capabilities
     current_agent.last_error = payload.last_error
-    current_agent.status = "online"
-    current_agent.last_seen_at = now
-    current_agent.updated_at = now
     _requeue_stale_agent_jobs(
         db,
         current_agent,
@@ -2090,6 +2100,12 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
             return
 
         now = _now_utc()
+        # The token was checked before the hello wait; a revocation committed
+        # since then wins.
+        if not mark_agent_online(db, current_agent.id, now):
+            db.rollback()
+            await websocket.close(code=1008, reason="Agent disabled")
+            return
         current_agent.hostname = hello.hostname or current_agent.hostname
         current_agent.agent_version = hello.agent_version or current_agent.agent_version
         current_agent.timezone = (
@@ -2100,10 +2116,7 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
         # once this report's binaries include the pinned major.
         resolve_agent_upgrade(current_agent)
         current_agent.capabilities = hello.capabilities
-        current_agent.status = "online"
         current_agent.last_error = None
-        current_agent.last_seen_at = now
-        current_agent.updated_at = now
         _requeue_stale_agent_jobs(
             db,
             current_agent,
@@ -2142,10 +2155,16 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
 
         while True:
             message = await websocket.receive_json()
+            # The session authenticated once, at connect: nothing a revoked
+            # or deleted agent sends is taken any more.
+            if not agent_is_active(db, current_agent.id):
+                raise AgentSessionRevoked()
             if isinstance(message, dict):
                 await _handle_agent_session_message(
                     db, current_agent.id, message, connection=connection
                 )
+    except AgentSessionRevoked:
+        await websocket.close(code=1008, reason="Agent disabled")
     except WebSocketDisconnect:
         pass
     finally:
@@ -2154,15 +2173,18 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
                 connection.agent_machine_id, connection
             )
             if disconnected:
-                current = (
-                    db.query(AgentMachine)
-                    .filter(AgentMachine.id == connection.agent_machine_id)
-                    .first()
+                # Guarded: a revocation committed meanwhile stays
+                db.query(AgentMachine).filter(
+                    AgentMachine.id == connection.agent_machine_id,
+                    AgentMachine.status == "online",
+                ).update(
+                    {
+                        AgentMachine.status: "offline",
+                        AgentMachine.updated_at: _now_utc(),
+                    },
+                    synchronize_session=False,
                 )
-                if current and current.status == "online":
-                    current.status = "offline"
-                    current.updated_at = _now_utc()
-                    db.commit()
+                db.commit()
 
 
 @router.post("/unregister", status_code=status.HTTP_204_NO_CONTENT)
