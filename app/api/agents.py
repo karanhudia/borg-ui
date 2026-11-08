@@ -37,7 +37,7 @@ from app.core.agent_constants import DEFAULT_AGENT_POLL_INTERVAL_SECONDS
 from app.core.agent_versions import borg_pin_satisfied, hello_lists_running_jobs
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.core.security import get_password_hash, verify_password
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.database.models import (
     AgentEnrollmentToken,
     AgentJob,
@@ -2204,6 +2204,7 @@ async def unregister_agent(
 
 
 @router.get("/jobs/poll", response_model=AgentJobPollResponse)
+@ends_read_on_return
 def poll_jobs(
     limit: int = Query(default=1, ge=1, le=10),
     current_agent: AgentMachine = Depends(get_current_agent),
@@ -2316,6 +2317,7 @@ async def update_job_progress(
     response_model=AgentJobLogResponse,
     response_model_exclude_none=True,
 )
+@ends_read_on_return
 def upload_job_log(
     job_id: int,
     payload: AgentJobLogRequest,
@@ -2553,6 +2555,7 @@ async def fail_job(
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=AgentJobStatusResponse)
+@ends_read_on_return
 def mark_job_canceled(
     job_id: int,
     payload: AgentJobCanceledRequest,

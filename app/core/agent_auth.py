@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.core.security import verify_password
-from app.database.database import get_db
+from app.database.database import (
+    end_read_keeping_loaded,
+    get_db,
+    handler_uses_session_on_loop,
+)
 from app.database.models import AgentMachine
 
 AGENT_AUTH_HEADER = "X-Borg-Agent-Authorization"
@@ -60,6 +64,11 @@ def get_current_agent(request: Request, db: Session = Depends(get_db)) -> AgentM
 
     token = get_agent_token_from_request(request)
     agent = resolve_agent_from_token(token, db)
+    # The token lookup's connection goes back to the pool now, not when the
+    # request ends: the handler may first wait for a worker thread or a
+    # connection of its own.
+    if not handler_uses_session_on_loop(request):
+        end_read_keeping_loaded(db, agent)
     request.state.current_agent = agent
     return agent
 
