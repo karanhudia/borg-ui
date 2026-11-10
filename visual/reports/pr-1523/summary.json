@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-11-09T08:33:17.353Z",
+  "generatedAt": "2026-11-10T07:31:44.682Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1523 visual report",
-    "commitSha": "4ecd81e517fd",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/42586207628"
+    "commitSha": "4dad0410fc31",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/42775756046"
   },
   "totals": {
     "baseline": 1256,
     "actual": 1256,
     "compared": 1256,
-    "changed": 3,
+    "changed": 5,
     "added": 0,
     "removed": 0,
-    "unchanged": 1253
+    "unchanged": 1251
   },
   "changed": [
     {
@@ -35,13 +35,49 @@
       }
     },
     {
-      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "diffPixels": 171690,
+      "fileName": "backup-plans-sourceselectiondialog--database-template-detail.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-template-detail.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-template-detail.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-template-detail.png",
+      "diffPixels": 1808,
       "totalPixels": 1024000,
-      "diffRatio": 0.167666015625,
+      "diffRatio": 0.001765625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "diffPixels": 67100,
+      "totalPixels": 329160,
+      "diffRatio": 0.20385222991858062,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
+      "diffPixels": 1762,
+      "totalPixels": 1024000,
+      "diffRatio": 0.001720703125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -57,9 +93,9 @@
       "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 394,
+      "diffPixels": 430,
       "totalPixels": 329160,
-      "diffRatio": 0.0011969862680763154,
+      "diffRatio": 0.0013063555717584153,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -679,9 +715,6 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-template-detail--mobile.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-template-detail.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded--mobile.png"
@@ -2688,16 +2721,10 @@
       "fileName": "components-wizard-rclone-remote-dialog--create-error.png"
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png"
-    },
-    {
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png"
@@ -3202,6 +3229,9 @@
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote.png"
