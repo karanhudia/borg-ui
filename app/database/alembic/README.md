@@ -51,6 +51,14 @@ needs no `if not exists` guard of its own; do not add one.
 every statement and checks the next boot finishes it, so a new revision is
 covered without a test of its own for this.
 
+The one exception is the baseline. A first schema build that a release up to
+2.4.8 left interrupted has tables and no recorded revision, which cannot be
+told apart from a database that was never Alembic's, so it is still refused
+untouched ("Incomplete Alembic initialization"); the way out is restoring a
+pre-upgrade backup, as the database migration recovery section of
+`docs/troubleshooting.md` describes. A baseline interrupted from now on rolls
+back whole and is simply built again.
+
 ## Workflow
 
 1. Change `models.py`. AUTOINCREMENT is derived from the primary key, so a new
