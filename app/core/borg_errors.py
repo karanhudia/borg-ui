@@ -129,11 +129,38 @@ class RestoreRefused(Exception):
         self.detail = detail
 
 
+_CRASH_WRAPPERS = ("Local Exception", "Remote Exception")
+_TRACEBACK_HEADER = "Traceback (most recent call last):"
+
+
+def lead_with_cause(diagnostic: str, *, lock_contention: bool = False) -> str:
+    """Put a Borg crash's cause on the first line.
+
+    A crash is Borg's wrapper ("Local Exception") and a traceback, sometimes
+    after interpreter noise ("Exception ignored in: <function
+    Repository.__del__ ...>" and a traceback of its own), so a message cut to
+    its first lines named no cause, or the wrong one. The cause is read from
+    Borg's own traceback; the full diagnostic still follows it.
+    """
+    lines = [line.strip() for line in diagnostic.splitlines()]
+    start = next((i for i, line in enumerate(lines) if line in _CRASH_WRAPPERS), None)
+    if start is None:
+        if not lines or lines[0] != _TRACEBACK_HEADER:
+            return diagnostic
+        start = 0
+    from app.services.repository_executor import _tail_reason_line
+
+    cause = _tail_reason_line(
+        "\n".join(diagnostic.splitlines()[start:]), lock_contention=lock_contention
+    )
+    return f"{cause}\n{diagnostic}" if cause else diagnostic
+
+
 def bounded_operation_diagnostic(reason: str) -> str:
     """Redact before bounding so a truncated secret cannot escape masking."""
     from app.utils.redaction import redact_secrets
 
-    diagnostic = redact_secrets(str(reason)).strip()
+    diagnostic = lead_with_cause(redact_secrets(str(reason)).strip())
     if len(diagnostic) > 2000:
         marker = "\n... [truncated] ...\n"
         diagnostic = diagnostic[:400] + marker + diagnostic[-(1600 - len(marker)) :]
@@ -151,6 +178,10 @@ def repository_failure_status(result: dict) -> int:
         or "permission denied" in reason
         # A read-only mount is the host's configuration, not a Borg UI fault.
         or "[errno 30] read-only file system" in reason
+        # Borg crashed decoding the repository's `config`: the path holds a
+        # file of that name that is not a Borg config, so it is not a
+        # repository (dashboard f60df0963ec9494f).
+        or ("unicodedecodeerror" in reason and "borg/repository.py" in reason)
     ):
         return 422
     if (
@@ -187,22 +218,9 @@ class ArchiveListingError(Exception):
             # Redact before truncation: cutting a quoted secret first could
             # leave part of its value outside the redactor's match.
             diagnostic = redact_secrets(str(reason)).strip()
-            # A crash opens with Borg's wrapper ("Local Exception", then the
-            # traceback), so a reported message cut to its first lines named no
-            # cause. Lead with the cause; the full diagnostic still follows.
-            first = diagnostic.splitlines()[0].strip() if diagnostic else ""
-            if first in (
-                "Local Exception",
-                "Remote Exception",
-                "Traceback (most recent call last):",
-            ):
-                from app.services.repository_executor import _tail_reason_line
-
-                cause = _tail_reason_line(
-                    diagnostic, lock_contention=self.is_lock_contention
-                )
-                if cause:
-                    diagnostic = f"{cause}\n{diagnostic}"
+            diagnostic = lead_with_cause(
+                diagnostic, lock_contention=self.is_lock_contention
+            )
             if len(diagnostic) > 2000:
                 # The last exception follows the frames; keeping only the
                 # start can turn a useful error into an unexplained traceback.

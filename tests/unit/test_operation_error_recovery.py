@@ -15,6 +15,17 @@ from fastapi import HTTPException
         ({"return_code": 19}, 409),
         ({"return_code": 2, "stderr": "There is already something at /repo."}, 409),
         ({"stderr": "FileExistsError: [Errno 17] File exists: '/repo'"}, 409),
+        # A `config` Borg cannot decode: the path is not a repository
+        # (dashboard f60df0963ec9494f). The same error elsewhere stays a 500.
+        (
+            {
+                "return_code": 2,
+                "stderr": '  File "borg/repository.py", line 494, in open\n'
+                "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd",
+            },
+            422,
+        ),
+        ({"return_code": 2, "stderr": "UnicodeDecodeError: 'utf-8' codec"}, 500),
         ({"return_code": 2, "stderr": "unexplained failure"}, 500),
         ({"return_code": 73, "stderr": "Our lock was killed by another borg"}, 500),
     ],

@@ -131,7 +131,7 @@ def test_migrating_sqlite_with_foreign_keys_on_fails(release_trees, tmp_path):
     require_releases()
     code = upgrade_paths.copy_code(tmp_path / "code")
     env = code / "app" / "database" / "alembic" / "env.py"
-    statement = 'connection.exec_driver_sql("PRAGMA foreign_keys=OFF")'
+    statement = 'driver.execute("PRAGMA foreign_keys=OFF")'
     source_text = env.read_text()
     assert statement in source_text, "env.py changed; update this test"
     env.write_text(source_text.replace(statement, "pass"))

@@ -35,6 +35,22 @@ otherwise, and reflection can never see that it is gone, so the drift would be
 permanent and invisible. (The baseline's `create_table` renders it correctly;
 only `batch_alter_table` needs the reminder.)
 
+## Interrupted upgrades
+
+A revision either lands whole or not at all, on both dialects. Postgres does
+that natively. On SQLite the `sqlite3` driver commits DDL statement by
+statement, so `env.py` takes transaction control from it and each revision runs
+in one real transaction with its version bump: a container stopped mid-upgrade,
+a full disk or an I/O error leaves the database at the previous revision.
+
+Databases that a release up to 2.4.8 already left half-way through a revision
+are finished by `ResumableSQLiteImpl` in `env.py`, which skips the tables,
+indexes and columns that revision already created. That is why a revision
+needs no `if not exists` guard of its own; do not add one.
+`tests/migrations/test_interrupted_revisions.py` kills every revision after
+every statement and checks the next boot finishes it, so a new revision is
+covered without a test of its own for this.
+
 ## Workflow
 
 1. Change `models.py`. AUTOINCREMENT is derived from the primary key, so a new

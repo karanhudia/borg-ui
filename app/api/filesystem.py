@@ -384,6 +384,10 @@ _SSH_AUTH_REFUSAL = re.compile(r"permission denied \([a-z0-9@.,-]+\)")
 
 def _ssh_failure_status(error_msg: str | None) -> int:
     lowered = (error_msg or "").lower()
+    # sftp's own answer for a path that is not there, e.g. a typed path or a
+    # remembered one that was since removed (dashboard 898438a9773f9982).
+    if "no such file or directory" in lowered:
+        return 404
     refused = _SSH_AUTH_REFUSAL.search(lowered) or any(
         m in lowered for m in _SSH_REFUSAL_MARKERS
     )

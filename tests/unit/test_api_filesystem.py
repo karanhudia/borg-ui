@@ -81,6 +81,9 @@ class TestSftpBrowseFailures:
                 "backend.errors.filesystem.permissionDenied",
             ),
             (1, "Connection closed by remote host", 500, None),
+            # A path that is not there is not a server fault
+            # (dashboard 898438a9773f9982).
+            (1, "stat remote: No such file or directory", 404, None),
             # A refused login is user-correctable (422), never a 403 role refusal.
             (255, "backup@example.com: Permission denied (publickey).", 422, None),
             (
@@ -1423,7 +1426,7 @@ class TestSshLoginRelativeRetryBoundaries:
             assert response.json()["exists"] is False
             assert response.json()["path"] == "/backups"
         else:
-            assert response.status_code == 500
+            assert response.status_code == 404  # the path is not there
             assert original_error in response.json()["detail"]
             assert "relative retry" not in response.json()["detail"]
         assert len(commands) == 2
