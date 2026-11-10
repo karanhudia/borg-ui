@@ -828,30 +828,21 @@ def test_transfer_with_missing_users_keeps_optional_references_and_drops_require
 
 @pytest.mark.unit
 def test_interrupted_baseline_refuses_to_modify_durable_tables(tmp_path):
+    # The state a baseline interrupted on 2.4.8 or older left behind, when
+    # SQLite DDL was committed statement by statement: the version table
+    # without a revision, and the first tables. (A baseline interrupted now
+    # rolls back whole; see the next-boot assertions in
+    # test_ensure_schema_preserves_initial_build_failure_and_leaves_nothing.)
     db = tmp_path / "borg.db"
-    from sqlalchemy import event
-    from app.database.db_upgrade import _engine, _upgrade_to_head
-
-    engine = _engine(f"sqlite:///{db}")
-
-    def interrupt_after_first_table(conn, cursor, statement, parameters, context, many):
-        if statement.lstrip().startswith("CREATE TABLE agent_machines"):
-            raise RuntimeError("interrupted baseline")
-
-    event.listen(engine, "after_cursor_execute", interrupt_after_first_table)
-    with pytest.raises(RuntimeError, match="interrupted baseline"):
-        _upgrade_to_head(f"sqlite:///{db}", engine)
-    event.remove(engine, "after_cursor_execute", interrupt_after_first_table)
+    engine = create_engine(f"sqlite:///{db}")
     with engine.begin() as conn:
-        assert conn.execute(text("SELECT count(*) FROM alembic_version")).scalar() == 0
         conn.execute(
-            text(
-                "INSERT INTO agent_machines "
-                "(id, name, agent_id, token_hash, token_prefix, status, created_at, updated_at) "
-                "VALUES (7, 'preserve me', 'agent', 'hash', 'prefix', 'online', "
-                "'2026-11-04', '2026-11-04')"
-            )
+            text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
         )
+        conn.execute(
+            text("CREATE TABLE agent_machines (id INTEGER PRIMARY KEY, name VARCHAR)")
+        )
+        conn.execute(text("INSERT INTO agent_machines VALUES (7, 'preserve me')"))
     engine.dispose()
     original = db.read_bytes()
 
@@ -999,7 +990,7 @@ def test_ensure_schema_waits_for_an_in_progress_initialization_before_writing(
 
 
 @pytest.mark.unit
-def test_ensure_schema_preserves_initial_build_failure_after_partial_ddl(
+def test_ensure_schema_preserves_initial_build_failure_and_leaves_nothing(
     tmp_path, monkeypatch
 ):
     import sqlite3
@@ -1030,14 +1021,13 @@ def test_ensure_schema_preserves_initial_build_failure_after_partial_ddl(
         db_upgrade.ensure_schema()
 
     assert caught.value.orig is failure
+    # The tables created before the failure went with it, so the next startup
+    # (with room on the disk again) simply builds the schema.
     with create_engine(f"sqlite:///{db}").connect() as conn:
-        assert set(inspect(conn).get_table_names()) == {
-            "alembic_version",
-            "agent_machines",
-        }
-    # The next startup diagnoses the interrupted state before running more DDL.
-    with pytest.raises(RuntimeError, match="[Ii]ncomplete.*restore"):
-        db_upgrade.ensure_schema()
+        assert "agent_machines" not in inspect(conn).get_table_names()
+    monkeypatch.setattr(db_upgrade, "_upgrade_to_head", upgrade)
+    db_upgrade.ensure_schema()
+    assert db_upgrade._alembic_state(f"sqlite:///{db}") == "head"
 
 
 @pytest.mark.unit

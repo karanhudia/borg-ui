@@ -81,6 +81,11 @@ class TestSftpBrowseFailures:
                 "backend.errors.filesystem.permissionDenied",
             ),
             (1, "Connection closed by remote host", 500, None),
+            # A path that is not there is not a server fault
+            # (dashboard 898438a9773f9982).
+            (1, "stat remote: No such file or directory", 404, None),
+            # The same words about something other than the path stay a 500.
+            (1, "Connection reset: No such file or directory", 500, None),
             # A refused login is user-correctable (422), never a 403 role refusal.
             (255, "backup@example.com: Permission denied (publickey).", 422, None),
             (
@@ -1423,7 +1428,7 @@ class TestSshLoginRelativeRetryBoundaries:
             assert response.json()["exists"] is False
             assert response.json()["path"] == "/backups"
         else:
-            assert response.status_code == 500
+            assert response.status_code == 404  # the path is not there
             assert original_error in response.json()["detail"]
             assert "relative retry" not in response.json()["detail"]
         assert len(commands) == 2
@@ -1446,6 +1451,21 @@ class TestSshLoginRelativeRetryBoundaries:
         ("user@host: Permission denied (password).", 422),
         ('remote readdir("/x"): Permission denied', 500),
         ('remote readdir("/x"): Failure', 500),
+        # A remote path that is not there, in sftp's own words, is a 404 ...
+        ("stat remote: No such file or directory", 404),
+        ('Couldn\'t stat remote file "/backups/new": No such file or directory', 404),
+        ('remote mkdir "/a/b": No such file or directory', 404),
+        ('remote readdir("/x"): No such file or directory', 404),
+        ("stat: cannot statx '/x': No such file or directory", 404),
+        ("mkdir: cannot create directory '/a/b': No such file or directory", 404),
+        # ... the same words about anything else are not, and a refusal wins.
+        ("bash: /usr/lib/sftp-server: No such file or directory", 500),
+        ("Connection reset: No such file or directory", 500),
+        (
+            "user@host: Permission denied (publickey).\n"
+            "stat remote: No such file or directory",
+            422,
+        ),
         (None, 500),
     ],
 )
