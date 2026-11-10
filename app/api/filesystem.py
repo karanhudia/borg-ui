@@ -327,6 +327,29 @@ def _remote_path_command_failed(result) -> bool:
     )
 
 
+# How sftp and the remote shell open a line that reports on a remote path.
+# "No such file or directory" counts as a missing path only on such a line:
+# alone it also describes a missing sftp-server binary or a broken connection.
+_MISSING_REMOTE_PATH_PREFIXES = (
+    "stat:",
+    "mkdir:",
+    'remote mkdir "',
+    "remote stat(",
+    "remote readdir(",
+    "couldn't canonicalize:",
+    "couldn't stat remote file",
+    "couldn't create directory:",
+)
+
+
+def _names_missing_remote_path(lowered: str, prefixes: tuple[str, ...]) -> bool:
+    return any(
+        line.strip().startswith(prefixes)
+        and line.rstrip(". ").endswith("no such file or directory")
+        for line in lowered.splitlines()
+    )
+
+
 def _remote_path_missing_error(result) -> bool:
     """Only remote filesystem diagnostics permit a login-relative retry."""
     if result.returncode == 255:
@@ -348,22 +371,7 @@ def _remote_path_missing_error(result) -> bool:
         )
     ):
         return False
-    return any(
-        line.startswith(
-            (
-                "stat:",
-                "mkdir:",
-                'remote mkdir "',
-                "remote stat(",
-                "remote readdir(",
-                "couldn't canonicalize:",
-                "couldn't stat remote file",
-                "couldn't create directory:",
-            )
-        )
-        and line.rstrip(".").endswith("no such file or directory")
-        for line in stderr.splitlines()
-    )
+    return _names_missing_remote_path(stderr, _MISSING_REMOTE_PATH_PREFIXES)
 
 
 def _remote_file_exists_error(result) -> bool:
@@ -382,24 +390,20 @@ _SSH_REFUSAL_MARKERS = (
 _SSH_AUTH_REFUSAL = re.compile(r"permission denied \([a-z0-9@.,-]+\)")
 
 
-# sftp's own answer for a remote path that is not there (a typed path, or a
-# remembered one since removed; dashboard 898438a9773f9982). Anchored to the
-# sftp operation: "No such file or directory" alone also describes a missing
-# sftp-server binary or a broken connection, which are not a missing path.
-_SFTP_MISSING_PATH = re.compile(
-    r"(?:stat remote|couldn't stat remote file(?: \"[^\"]*\")?|couldn't canonicalize"
-    r"|couldn't create directory|remote \w+ \"[^\"]*\")"
-    r": no such file or directory"
-)
-
-
 def _ssh_failure_status(error_msg: str | None) -> int:
     lowered = (error_msg or "").lower()
     if _SSH_AUTH_REFUSAL.search(lowered) or any(
         m in lowered for m in _SSH_REFUSAL_MARKERS
     ):
         return 422
-    return 404 if _SFTP_MISSING_PATH.search(lowered) else 500
+    # A remote path that is not there (a typed path, or a remembered one since
+    # removed) is not a server fault. "stat remote:" is how the listing itself
+    # reports it (dashboard 898438a9773f9982); it stays out of the shared
+    # prefixes, which also decide the login-relative retry.
+    missing = _names_missing_remote_path(
+        lowered, _MISSING_REMOTE_PATH_PREFIXES + ("stat remote:",)
+    )
+    return 404 if missing else 500
 
 
 @router.get("/browse", response_model=BrowseResponse)

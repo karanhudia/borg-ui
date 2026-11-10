@@ -56,7 +56,43 @@ def _schema(db) -> list[tuple]:
                 if kind == "table"
                 for row in conn.exec_driver_sql(f'PRAGMA table_info("{table}")')
             ]
-        return [tuple(n) for n in names] + sorted(columns)
+            # Rows too: a revision that backfills must leave the same values
+            # whether it ran once or was finished after an interruption.
+            rows = [
+                (table, repr(tuple(row)))
+                for kind, table in names
+                if kind == "table" and table != "alembic_version"
+                for row in conn.exec_driver_sql(f'SELECT * FROM "{table}"')
+            ]
+        return [tuple(n) for n in names] + sorted(columns) + sorted(rows)
+    finally:
+        engine.dispose()
+
+
+def _seed_rows_a_backfill_reads(db) -> None:
+    """Settings rows in both states the paused-stages backfill (c3d4e5f6a7b8)
+    tells apart, so the row comparison has values that can come out wrong."""
+    engine = create_engine(_sqlite_url(db))
+    try:
+        with engine.begin() as conn:
+            info = conn.exec_driver_sql("PRAGMA table_info(system_settings)").all()
+            if "background_paused" not in {column[1] for column in info}:
+                return
+            # whatever else this revision's schema requires, by its type
+            required = {
+                name: "" if "CHAR" in kind.upper() or "TEXT" in kind.upper() else 0
+                for _, name, kind, notnull, default, pk in info
+                if notnull and default is None and not pk
+            }
+            for row_id, paused in ((1, 1), (2, 0)):
+                row = {**required, "id": row_id, "background_paused": paused}
+                conn.execute(
+                    text(
+                        f"INSERT INTO system_settings ({', '.join(row)}) "
+                        f"VALUES ({', '.join(':' + name for name in row)})"
+                    ),
+                    row,
+                )
     finally:
         engine.dispose()
 
@@ -130,6 +166,7 @@ def test_a_revision_an_older_release_left_half_applied_is_finished(tmp_path, rev
     before = tmp_path / "before.db"
     for parent in parents:
         _upgrade_to(_sqlite_url(before), parent)
+    _seed_rows_a_backfill_reads(before)
     clean = tmp_path / "clean.db"
     shutil.copy(before, clean)
     _upgrade_to(_sqlite_url(clean), revision.revision)

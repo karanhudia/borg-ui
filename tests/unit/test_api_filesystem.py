@@ -1455,6 +1455,9 @@ class TestSshLoginRelativeRetryBoundaries:
         ("stat remote: No such file or directory", 404),
         ('Couldn\'t stat remote file "/backups/new": No such file or directory', 404),
         ('remote mkdir "/a/b": No such file or directory', 404),
+        ('remote readdir("/x"): No such file or directory', 404),
+        ("stat: cannot statx '/x': No such file or directory", 404),
+        ("mkdir: cannot create directory '/a/b': No such file or directory", 404),
         # ... the same words about anything else are not, and a refusal wins.
         ("bash: /usr/lib/sftp-server: No such file or directory", 500),
         ("Connection reset: No such file or directory", 500),
