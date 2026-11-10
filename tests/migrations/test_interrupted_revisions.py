@@ -57,11 +57,12 @@ def _schema(db) -> list[tuple]:
                 for row in conn.exec_driver_sql(f'PRAGMA table_info("{table}")')
             ]
             # Rows too: a revision that backfills must leave the same values
-            # whether it ran once or was finished after an interruption.
+            # whether it ran once or was finished after an interruption, and
+            # the recorded revision (alembic_version) must have moved with it.
             rows = [
                 (table, repr(tuple(row)))
                 for kind, table in names
-                if kind == "table" and table != "alembic_version"
+                if kind == "table"
                 for row in conn.exec_driver_sql(f'SELECT * FROM "{table}"')
             ]
         return [tuple(n) for n in names] + sorted(columns) + sorted(rows)
