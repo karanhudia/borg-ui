@@ -633,10 +633,13 @@ keys, same data.
 - A renewal that cannot attach, because it lost that update or because the
   Vault is gone, is surplus: its order is marked paid, its new subscription
   is cancelled immediately through the Paddle API (so it never bills again),
-  and the admin is emailed to refund it. If the cancellation or the email
-  fails, the webhook answers 500 and Paddle delivers it again; the cleanup is
-  repeated until both have worked (a subscription that is already cancelled
-  is not cancelled twice).
+  and the admin is emailed to refund it. The cleanup does not depend on
+  Paddle delivering the webhook again: the webhook first writes a row into
+  `vault_surplus_renewals` (order id, Vault id, subscription id) and then
+  tries both steps. Each step that worked is recorded on the row
+  (`canceled_at`, `notified_at`), and the hourly cron repeats whatever is
+  still missing for as long as it takes. A subscription that Paddle already
+  reports as cancelled is not cancelled twice.
 - A late event of the old subscription must not undo the renewal: a
   subscription event that matches an account only by order id is ignored when
   the account already has a different subscription id.
