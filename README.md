@@ -34,6 +34,8 @@
   Run backups, browse archives, restore files, manage repositories, and automate schedules from one interface.
 </p>
 
+https://github.com/user-attachments/assets/1d0fe7f9-db9a-4941-b8b7-6e6c7f79be3c
+
 ## Highlights
 
 - Dashboard for repository health, activity, schedules, and storage
