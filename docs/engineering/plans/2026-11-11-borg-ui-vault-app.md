@@ -525,7 +525,7 @@ English values:
   "release": {
     "title": "Release space",
     "body": "Archives you pruned or deleted still take up space on your Vault. Releasing removes them for good and frees that space.",
-    "delay": "For safety this happens in 7 days. We email you the date and a link to cancel. For 7 more days after it has run, our support can bring back what it removed.",
+    "delay": "For safety this happens in 7 days. We email you the date and a link to cancel. For 7 more days after it has run, our support can bring back the backups that existed before it started.",
     "confirm": "Schedule release",
     "scheduledToast": "Space release scheduled",
     "cancelledToast": "Space release cancelled",

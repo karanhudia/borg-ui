@@ -775,8 +775,12 @@ Rule: compaction never runs immediately on a customer request.
 
 What the customer is told (app, docs and the `release_done` email): "Space
 release runs 7 days after you ask for it. For 7 more days after it has run,
-our support can bring back what it removed. After that it is gone for good.
-If you did not ask for a release, cancel it."
+our support can bring back the backups that existed before it started. After
+that they are gone for good. If you did not ask for a release, cancel it."
+("That existed before it started" is deliberate: it is exactly what the
+retained copy of 10.1 holds, and it leaves out the one archive a session
+could create and delete in the instant between copy and compaction.)
+
 
 ### 10.1 Retained copy (7 days after every compaction)
 
