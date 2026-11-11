@@ -19,6 +19,11 @@ from sqlalchemy.orm import Session
 
 import app.config as app_config
 from app.core.borg_errors import ArchiveListingError, LOCK_CONTENTION_DETAIL_KEY
+from app.database.database import (
+    checkout_can_wait,
+    connect_off_loop,
+    run_off_loop,
+)
 from app.database.models import (
     Operation,
     OperationsRunnerLease,
@@ -288,14 +293,25 @@ class OperationRunner:
         # by operation id; the tick writes them (`record_unrecorded_outcomes`).
         self.unrecorded_outcomes: dict[int, _UnrecordedOutcome] = {}
 
-    def _session(self) -> Session:
+    def _session(self, **options) -> Session:
         """Open a session. Resolved lazily so test fixtures that patch
         app.database.database.SessionLocal reach the runner too."""
         if self._session_factory is not None:
-            return self._session_factory()
+            return self._session_factory(**options)
         from app.database.database import SessionLocal
 
-        return SessionLocal()
+        return SessionLocal(**options)
+
+    def _engine_if_checkout_can_wait(self):
+        """The engine of the runner's sessions when a checkout from it can
+        wait for a connection; None otherwise (or when it cannot be told)."""
+        factory = self._session_factory
+        if factory is None:
+            from app.database.database import SessionLocal
+
+            factory = SessionLocal
+        engine = getattr(factory, "kw", {}).get("bind")
+        return engine if checkout_can_wait(engine) else None
 
     # -- registry helpers (respect an injected registry in tests) ------------
 
@@ -396,12 +412,23 @@ class OperationRunner:
         self.unrecorded_outcomes = {}
         logger.info("Operations runner started", poll_interval=self._poll_interval)
         recovered = False
+        attempted = False
         try:
             while not self._stopped:
                 # Recovery, the sweep and the claims all assume this is the
                 # only runner; the lease makes that so while a replacement
                 # process overlaps this one (#1166).
-                if self._renew_lease():
+                # The first attempt as before: on the loop, so that a recovery
+                # it allows runs before the app serves the requests it would
+                # otherwise race. Every later one in a thread: on the loop, a
+                # wait for a pooled connection holds every request.
+                held = (
+                    await run_off_loop(self._renew_lease)
+                    if attempted and self._engine_if_checkout_can_wait()
+                    else self._renew_lease()
+                )
+                attempted = True
+                if held:
                     if not recovered:
                         self._recover(before_recovery)
                         recovered = True
@@ -781,7 +808,14 @@ class OperationRunner:
 
     async def tick(self) -> int:
         dispatched = 0
-        db: Session = self._session()
+        # The tick queries on the loop. Its session keeps one connection,
+        # checked out in a thread, for all of it, its claims' commits
+        # included.
+        engine = self._engine_if_checkout_can_wait()
+        connection = await connect_off_loop(engine) if engine is not None else None
+        db: Session = (
+            self._session() if connection is None else self._session(bind=connection)
+        )
         try:
             try:
                 await self.record_unrecorded_outcomes(db)
@@ -874,6 +908,8 @@ class OperationRunner:
                 dispatched += 1
         finally:
             db.close()
+            if connection is not None:
+                connection.close()
         return dispatched
 
     async def _skip(self, db: Session, op: Operation, reason: str) -> None:
