@@ -477,8 +477,11 @@ episode sends its emails again. A `recovered` email is sent only if
 | `recovered` | healthy again after any of the above |
 
 Every lapse email states the read-only date and the deletion date as calendar
-dates, and carries an "Update payment" link (a Paddle customer portal URL
-fetched at send time).
+dates, and carries one button. While the subscription still exists
+(`sub_status` is not `canceled`) it is "Update payment", a Paddle customer
+portal URL fetched at send time. Once Paddle has cancelled the subscription
+that link can no longer save the Vault, so the button is "Renew your Vault", a
+renewal link (section 8.6), and the email text says the subscription has ended.
 
 ### 8.4 Deletion rule
 
@@ -512,6 +515,53 @@ The hourly cron first fetches `GET /v1/accounts` once and stores `used_bytes`
 and `used_checked_at` on every account.
 
 Cron expression: `17 * * * *`.
+
+### 8.6 Renewal after the subscription was cancelled
+
+Paddle cancels the subscription when its payment retries run out, and a
+customer who cancelled on purpose has a cancelled subscription from the end of
+the paid year. Both happen inside the read-only window, and Paddle cannot
+bring a cancelled subscription back. A customer who wants to keep the Vault
+therefore buys a new subscription, and the Worker attaches it to the Vault
+that exists. Nothing on the node changes: same Vault id, same username, same
+keys, same data.
+
+- A renewal invite is a row in `vault_invites` with `renew_vault_id` set. It
+  copies email, language and tier from the account, has no discount, and
+  expires at the Vault's deletion date (`delete_at`, or 14 days from now when
+  that is empty). Its plan is the licence's plan when the account is a bundle
+  and that plan is `lite` or `pro` with a price id; otherwise `licensed`
+  (storage only).
+- It can only be created for an account that is not deleted and whose
+  `sub_status` is `canceled` (`409 vault_deleted`, `409 subscription_active`).
+- Who creates it: the Worker, each time it sends `read_only_start`,
+  `read_only_reminder` or `final_notice` for a cancelled subscription (the
+  token is stored only as a hash, so each email gets a fresh invite), and the
+  admin through `POST /v1/admin/vault/accounts/:vaultId/renewal`.
+- The join page shows a renewal invite as "Renew your Vault": fixed size, no
+  plan choice, no licence key field, no discount line.
+- `POST /v1/vault/orders` with a renewal invite ignores the tier, plan and
+  licence key in the request. It uses the invite's tier and plan and the
+  account's licence, skips the `vault_exists` check, sends no discount, and
+  adds `"renew_vault_id"` to the order metadata. It answers
+  `409 vault_deleted` or `409 subscription_active` when the account changed in
+  the meantime.
+- Fulfilment of an order whose metadata has `renew_vault_id` does not create
+  anything. It marks the order paid, then on the account sets the new
+  `paddle_subscription_id`, `sub_status = 'active'`, `paid_through` from the
+  transaction, clears `cancel_at`, `canceled_at`, `past_due_since` and
+  `sub_event_at`, sets `bundle_license` to whether a plan item was bought,
+  extends a bundle licence to `paid_through + 14 days`, marks the invite
+  redeemed and reconciles. Reconcile unfreezes the node and sends
+  `recovered`. Repeating the webhook changes nothing (the account already has
+  that subscription id). No licence is minted and no `vault_ready` email goes
+  out.
+- If the Vault was deleted between payment and webhook, the order is still
+  marked paid, nothing is attached, and the admin is emailed to refund it.
+- A late event of the old subscription must not undo the renewal: a
+  subscription event that matches an account only by order id is ignored when
+  the account already has a different subscription id.
+
 
 ## 9. Licence Worker API
 
@@ -565,8 +615,8 @@ Failures: `400 license_invalid`, `429 vault_rate_limited`.
 
 | Path | Body | Result |
 |---|---|---|
-| `GET /v1/vault/invites/:token` | | `{"email", "lang", "tier", "plan", "percent": 20, "expiresAt", "tiers": [{"id", "available": bool}], "plans": {"lite": bool, "pro": bool, "licensed": true}}` or `404 invite_not_found` (unknown, used or expired). |
-| `POST /v1/vault/orders` | `{"invite", "tier", "plan", "license_key"?}` | `{"orderId", "paddle": {"environment", "clientToken", "items": [{"priceId", "quantity": 1}], "discountId", "successUrl", "customData"}}`. Errors: `404 invite_not_found`, `400 tier_unavailable`, `400 plan_unavailable`, `400 license_key_required`, `400 license_invalid`, `409 vault_exists` (that licence already owns a Vault). |
+| `GET /v1/vault/invites/:token` | | `{"email", "lang", "tier", "plan", "percent": 20, "renewal": false, "expiresAt", "tiers": [{"id", "available": bool}], "plans": {"lite": bool, "pro": bool, "licensed": true}}` or `404 invite_not_found` (unknown, used or expired). For a renewal invite (8.6): `"renewal": true`, `"percent": 0`, only the invite's tier is `available`, only the invite's plan is true in `plans`; `404 invite_not_found` when its Vault is deleted or its subscription is no longer cancelled. |
+| `POST /v1/vault/orders` | `{"invite", "tier", "plan", "license_key"?}` | `{"orderId", "paddle": {"environment", "clientToken", "items": [{"priceId", "quantity": 1}], "discountId", "successUrl", "customData"}}`. Errors: `404 invite_not_found`, `400 tier_unavailable`, `400 plan_unavailable`, `400 license_key_required`, `400 license_invalid`, `409 vault_exists` (that licence already owns a Vault). Renewal invites: section 8.6, also `409 vault_deleted`, `409 subscription_active`; `discountId` is null. |
 | `POST /v1/vault/release/cancel-link` | `{"token"}` | `{"result": "cancelled"}` or `404`. The link in the release email. |
 
 The existing `GET /v1/storefront/orders/:orderId` adds
@@ -583,6 +633,7 @@ The existing `GET /v1/storefront/orders/:orderId` adds
 | `POST /v1/admin/vault/accounts/:vaultId/tier` | `{"tier"}` | section 9.6 |
 | `POST /v1/admin/vault/accounts/:vaultId/sync` | | forces a node sync and returns the account |
 | `POST /v1/admin/vault/accounts/:vaultId/release` | | runs space release now, without the delay |
+| `POST /v1/admin/vault/accounts/:vaultId/renewal` | | Creates a renewal invite (8.6) and returns `{"inviteUrl": "..."}`. Sends no email. `409 vault_deleted`, `409 subscription_active`. |
 | `DELETE /v1/admin/vault/accounts/:vaultId/keys/:keyId` | | removes one key and syncs the node |
 
 ### 9.5 Worker configuration
@@ -823,3 +874,7 @@ Plans 1 and 4 can run in parallel with plan 2. Plan 3 follows plan 2.
 6. Repeat step 1 in Paddle live, deploy, invite the first waitlist member.
 7. Remove the sentence about planned prices from the Vault page once the first
    invite goes out, and drop the append-only claim if gate A fails.
+8. Decide whether to close the known limit of section 10 (archives pruned
+   after a space release was scheduled).
+9. In gate B, also let a sandbox subscription run into cancellation and buy
+   the renewal link from the read-only email (8.6).
