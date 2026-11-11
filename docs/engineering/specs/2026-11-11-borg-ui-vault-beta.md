@@ -618,10 +618,15 @@ keys, same data.
 - A paid renewal must not lose to deletion. Creating a renewal order sets
   the Vault's `hold_until` to at least 96 hours from now, so a Vault is not
   deleted while a checkout for it is open or its webhook is on the way.
-  Paddle stops redelivering a webhook after about three days, so a payment
-  made soon after the order cannot surface later than the hold. What is left
-  is a customer who keeps the checkout open for days and pays after the
-  Vault is gone: that payment is surplus (below) and refunded.
+  A `transaction.paid` event for a renewal order sets the hold again, to 96
+  hours from then, so the usual gap between "paid" and "completed" is
+  covered too. Known remaining risk: the hold counts from the order and from
+  the paid event, while Paddle's redelivery window counts from each delivery
+  attempt. A customer who pays in the last hours of the hold, and whose paid
+  and completed events are both delayed past it, can find the Vault deleted.
+  That payment is surplus (below) and refunded, but the data is gone. Closing
+  this would need the Paddle transaction id of every open renewal checkout
+  and a lookup before each deletion; it is left out of the beta on purpose.
 - Attaching is one conditional update (`... WHERE sub_status = 'canceled' AND
   deleted_at IS NULL`). Of two renewals paid for one Vault (two tabs, or two
   emails), exactly one wins it.
