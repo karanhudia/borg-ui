@@ -50,9 +50,10 @@ def resolve_agent_from_token(token: Optional[str], db: Session) -> AgentMachine:
     raise _invalid_agent_credentials()
 
 
-async def get_current_agent(
-    request: Request, db: Session = Depends(get_db)
-) -> AgentMachine:
+# A plain `def`, so FastAPI runs it in the threadpool: the token check is a bcrypt
+# comparison, which on the event loop would hold every other request of the
+# process, whatever the route itself is.
+def get_current_agent(request: Request, db: Session = Depends(get_db)) -> AgentMachine:
     cached_agent = getattr(request.state, "current_agent", None)
     if cached_agent is not None:
         return cached_agent
