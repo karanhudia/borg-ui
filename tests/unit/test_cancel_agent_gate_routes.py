@@ -41,7 +41,7 @@ def _old_agent_repo(test_db):
 
 @pytest.mark.unit
 def test_the_operations_cancel_refuses_a_check_an_old_agent_runs(
-    test_client, test_db, admin_headers
+    test_client, test_db, admin_headers, held_runner
 ):
     repo = _old_agent_repo(test_db)
     op = enqueue(test_db, "check", repository_id=repo.id)
@@ -113,7 +113,7 @@ def test_an_unknown_activity_type_is_rejected(test_client, admin_headers):
 
 @pytest.mark.unit
 def test_a_refused_operations_cancel_leaves_the_queued_agent_job_alone(
-    test_client, test_db, admin_headers
+    test_client, test_db, admin_headers, held_runner
 ):
     """The runner does not own the task (another worker's, or left running
     across a restart): the cancel is refused before the agent gate could
@@ -152,7 +152,7 @@ def test_a_refused_operations_cancel_leaves_the_queued_agent_job_alone(
 
 @pytest.mark.unit
 def test_the_operations_cancel_refuses_a_running_kind_that_does_not_stop(
-    test_client, test_db, admin_headers
+    test_client, test_db, admin_headers, held_runner
 ):
     repo = Repository(
         name="stats-repo", path="/repo/stats", encryption="none", compression="lz4"

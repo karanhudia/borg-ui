@@ -17,7 +17,7 @@ def new_run_id() -> str:
 
 
 def wake_runner() -> None:
-    """Nudge the runner loop. Safe to call without a running loop."""
+    """Nudge the runner loop. Safe from any thread, and without a runner."""
     try:
         from app.services.operations.runner import operation_runner
 

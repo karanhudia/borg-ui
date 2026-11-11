@@ -387,7 +387,7 @@ class TestV2BackupRoutes:
         fake_router.compact.assert_awaited_once_with(op.id, raise_busy=True)
 
     def test_backup_compact_rejects_duplicate_running_job(
-        self, test_client: TestClient, admin_headers, test_db
+        self, test_client: TestClient, admin_headers, test_db, held_runner
     ):
         from app.services.operations.enqueue import enqueue
 
@@ -512,7 +512,7 @@ class TestV2BackupRoutes:
         fake_router.check.assert_awaited_once_with(op.id, raise_busy=True)
 
     def test_backup_check_rejects_duplicate_running_job(
-        self, test_client: TestClient, admin_headers, test_db
+        self, test_client: TestClient, admin_headers, test_db, held_runner
     ):
         from app.services.operations.enqueue import enqueue
 

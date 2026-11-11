@@ -35,7 +35,9 @@ def _settings(test_db):
 
 @pytest.mark.unit
 class TestOperationsList:
-    def test_list_filters_and_cursor(self, test_client, test_db, admin_headers):
+    def test_list_filters_and_cursor(
+        self, test_client, test_db, admin_headers, held_runner
+    ):
         repo = _repo(test_db)
         a = enqueue(test_db, "stats", repository_id=repo.id, trigger="manual")
         b = enqueue(test_db, "archive_sync", repository_id=repo.id, trigger="reconcile")
@@ -56,7 +58,7 @@ class TestOperationsList:
         assert r.json()["next_cursor"] is None
 
     def test_list_item_shape_is_activity_superset(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         enqueue(test_db, "stats", repository_id=repo.id)
@@ -93,7 +95,7 @@ class TestOperationsList:
 @pytest.mark.unit
 class TestOperationsQueue:
     def test_queue_reports_running_index_work_of_a_repository(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A running listing, merge or stats holds the repository's index
         slot, not the lane; the board needs the difference to explain a
@@ -117,7 +119,7 @@ class TestOperationsQueue:
         assert groups[None]["index_holder_ids"] == []
 
     def test_queue_names_the_maintenance_operation_that_holds_the_lane(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A prune holds the lane as much as a backup does; the payload says
         which one it is, so the waiting stages do not have to guess."""
@@ -136,7 +138,7 @@ class TestOperationsQueue:
         assert waiting.id in {o["id"] for o in group["operations"]}
 
     def test_queue_reports_no_lane_holder_while_the_lane_is_free(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A running index operation shares the repository rather than
         taking it, so it is not a holder and the lane stays free."""
@@ -154,7 +156,7 @@ class TestOperationsQueue:
         assert group["lane_holder"] is None
 
     def test_queue_holder_is_the_operation_that_took_the_lane(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """With two running exclusive rows the earliest start holds the
         lane; a row without one falls behind it rather than winning on id."""
@@ -177,7 +179,7 @@ class TestOperationsQueue:
         assert group["lane_holder"] == {"kind": "prune", "id": earlier.id}
 
     def test_queue_holder_falls_back_to_the_lowest_id_without_starts(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A plan creates its post-backup prune and compact already running
         and without a start, so two rows can tie on the sentinel; the
@@ -199,7 +201,7 @@ class TestOperationsQueue:
         assert group["lane_holder"] == {"kind": "prune", "id": first.id}
 
     def test_queue_never_gives_the_system_group_a_lane_holder(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """Work without a repository is listed under System, which has no
         lane to take."""
@@ -215,7 +217,7 @@ class TestOperationsQueue:
         assert system["lane_holder"] is None
 
     def test_queue_survives_an_operation_kind_this_build_does_not_know(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A row left by a newer build costs its claim to the lane, not the
         board: it stays in the listing, and the stages under it read as
@@ -239,7 +241,9 @@ class TestOperationsQueue:
         assert group["lane_busy"] is False
         assert group["lane_holder"] is None
 
-    def test_queue_groups_and_limits(self, test_client, test_db, admin_headers):
+    def test_queue_groups_and_limits(
+        self, test_client, test_db, admin_headers, held_runner
+    ):
         repo = _repo(test_db)
         settings = _settings(test_db)
         settings.index_workers = 3
@@ -271,7 +275,9 @@ class TestOperationsQueue:
 
 @pytest.mark.unit
 class TestOperationsDetailAndCancel:
-    def test_detail_includes_run(self, test_client, test_db, admin_headers):
+    def test_detail_includes_run(
+        self, test_client, test_db, admin_headers, held_runner
+    ):
         repo = _repo(test_db)
         a = enqueue(test_db, "stats", repository_id=repo.id)
         b = enqueue(
@@ -291,7 +297,7 @@ class TestOperationsDetailAndCancel:
             == 404
         )
 
-    def test_cancel_queued(self, test_client, test_db, admin_headers):
+    def test_cancel_queued(self, test_client, test_db, admin_headers, held_runner):
         repo = _repo(test_db)
         op = enqueue(test_db, "stats", repository_id=repo.id)
         r = test_client.post(f"/api/operations/{op.id}/cancel", headers=admin_headers)
@@ -300,7 +306,9 @@ class TestOperationsDetailAndCancel:
         test_db.expire_all()
         assert test_db.get(Operation, op.id).status == "cancelled"
 
-    def test_cancel_terminal_is_409(self, test_client, test_db, admin_headers):
+    def test_cancel_terminal_is_409(
+        self, test_client, test_db, admin_headers, held_runner
+    ):
         repo = _repo(test_db)
         op = enqueue(test_db, "stats", repository_id=repo.id)
         op.status = "completed"
@@ -308,14 +316,16 @@ class TestOperationsDetailAndCancel:
         r = test_client.post(f"/api/operations/{op.id}/cancel", headers=admin_headers)
         assert r.status_code == 409
 
-    def test_cancel_requires_operator(self, test_client, test_db, auth_headers):
+    def test_cancel_requires_operator(
+        self, test_client, test_db, auth_headers, held_runner
+    ):
         repo = _repo(test_db)
         op = enqueue(test_db, "stats", repository_id=repo.id)
         r = test_client.post(f"/api/operations/{op.id}/cancel", headers=auth_headers)
         assert r.status_code == 403
 
     def test_cancel_system_operation_requires_admin(
-        self, test_client, test_db, operator_headers, admin_headers
+        self, test_client, test_db, operator_headers, admin_headers, held_runner
     ):
         op = enqueue(test_db, "package_install", repository_id=None)
         r = test_client.post(
@@ -403,7 +413,9 @@ class TestPauseAndLimits:
 
 @pytest.mark.unit
 class TestLogs:
-    def test_logs_and_download(self, test_client, test_db, admin_headers, tmp_path):
+    def test_logs_and_download(
+        self, test_client, test_db, admin_headers, tmp_path, held_runner
+    ):
         repo = _repo(test_db)
         op = enqueue(test_db, "stats", repository_id=repo.id)
         log = tmp_path / f"operation_{op.id}.log"
@@ -425,7 +437,7 @@ class TestLogs:
         assert b"line2" in r.content
 
     def test_logs_hidden_for_queued_operation_by_policy(
-        self, test_client, test_db, admin_headers, tmp_path
+        self, test_client, test_db, admin_headers, tmp_path, held_runner
     ):
         """`has_logs` is false for a queued row, so neither log route may serve it."""
         repo = _repo(test_db)
@@ -448,7 +460,7 @@ class TestLogs:
         )
 
     def test_download_refused_while_operation_running(
-        self, test_client, test_db, admin_headers, tmp_path
+        self, test_client, test_db, admin_headers, tmp_path, held_runner
     ):
         """The runner marks an operation running before the log is fully written."""
         repo = _repo(test_db)
@@ -463,7 +475,7 @@ class TestLogs:
         )
         assert r.status_code == 404
 
-    def test_logs_without_file(self, test_client, test_db, admin_headers):
+    def test_logs_without_file(self, test_client, test_db, admin_headers, held_runner):
         repo = _repo(test_db)
         op = enqueue(test_db, "stats", repository_id=repo.id)
         op.status = "completed_with_warnings"
@@ -472,7 +484,9 @@ class TestLogs:
         assert r.status_code == 200
         assert r.json()["lines"] == []
 
-    def test_download_without_file_is_404(self, test_client, test_db, admin_headers):
+    def test_download_without_file_is_404(
+        self, test_client, test_db, admin_headers, held_runner
+    ):
         repo = _repo(test_db)
         op = enqueue(test_db, "stats", repository_id=repo.id)
         r = test_client.get(
@@ -601,7 +615,7 @@ class TestOperationsRepositories:
         assert len(agent_queries) == 1
 
     def test_rows_cover_every_repository_with_index_totals(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         nas = _repo(test_db, "nas")
         _repo(test_db, "empty")
