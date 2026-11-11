@@ -793,6 +793,20 @@ day 7 would remove it. So nothing a compaction removes is gone at once.
   lock cannot be taken, that repository is not copied and not compacted, and
   the compaction counts as failed, as before. If the compaction itself fails
   after the copy, the copy is removed.
+- Nothing may be written between the copy and the compaction, or the
+  compaction could remove something the copy does not hold. Borg cannot keep
+  one lock across both, so the node closes the door first: for the whole
+  compaction run the account's key lines are the frozen ones (6.3, layer 1),
+  which makes Borg refuse every write of a session that logs in from then
+  on. A session that was already writing holds the repository lock, so the
+  copy fails and nothing is compacted. The normal key lines come back when
+  the run ends, in the same step that restores the limit. A backup that
+  starts during a compaction therefore fails with Borg's storage quota
+  message; it would have failed on the repository lock anyway. What is left
+  is a session that logged in before the door closed and takes the lock in
+  the instant between copy and compaction: it could add an archive and
+  delete it again, and only that archive, seconds old, would be missing from
+  the copy.
 - The copy is a reflink copy: it shares its blocks with the repository, so
   taking it is fast and costs no space at first. It belongs to root and lives
   outside every home directory, so the account cannot reach or delete it and
