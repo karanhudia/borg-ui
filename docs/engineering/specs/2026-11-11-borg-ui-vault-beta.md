@@ -228,15 +228,33 @@ start it recreates every user, key file and quota from `state.json`.
      and `borg check` keep working, and removing the flag makes writes work
      again. Verified on Borg 1.4.0. `10M` is the smallest value Borg accepts,
      so a repository that holds less than 10 MB is not stopped by this layer.
-  2. The quota backstop, for such a small repository and for anything that
-     is not Borg. On the first request with `frozen: true`, compute
+  2. No new repositories. The home directory is handed to root
+     (`chown root:root`, mode `0755`), so the account can no longer create
+     anything directly in it. This matters because `borg init` through a
+     `borg serve` that carries `--storage-quota` writes that quota into the
+     new repository's own config, where it would stay after the freeze ends
+     and cap that repository at 10 MB for good. Existing repository
+     directories still belong to the account, so Borg can take its locks and
+     restores work. Verified on Borg 1.4.0: `borg init` fails, `borg list`,
+     `borg extract` and `borg check` work.
+  3. The quota backstop, for a small repository and for anything that is not
+     Borg. On the first request with `frozen: true`, compute
      `frozen_limit_bytes = used_bytes + 64 MiB`, store it in `state.json`,
      and apply it as the hard limit. Later requests with `frozen: true` keep
      the stored value. The 64 MiB are room for Borg lock files and an index
      rebuild during a restore; they are not a write allowance, layer 1
      removes that.
-  `frozen: false` writes the normal key lines again, clears the stored value
-  and applies `quota_bytes`.
+  `frozen: false` writes the normal key lines again, gives the home directory
+  back to the account (mode `0700`), clears the stored value and applies
+  `quota_bytes`.
+
+  What a frozen Vault can still take, on purpose: a repository that existed
+  before the freeze and holds less than 10 MB can grow until it reaches
+  10 MB, and all of them together by at most 64 MiB. Closing that would mean
+  filtering Borg's protocol or taking the segment directories away from the
+  account, and the second breaks restores after an interrupted backup (Borg
+  removes leftover segments when it opens the repository). The amounts are
+  too small to matter for a lapsed account.
 - A backup that hits the limit fails on the client with
   `OSError: [Errno 122] Disk quota exceeded`. The repository stays readable.
   Space held by the aborted transaction is reclaimed by the next successful
@@ -294,6 +312,13 @@ compaction runs, the account's hard limit is the limit it would otherwise
 have plus `COMPACT_HEADROOM_BYTES = 4 GiB`. The normal limit is applied again
 when the run ends, whatever the result, and by the start-up reconcile when
 the container died in the middle of a run.
+
+The headroom belongs to the whole account, so a backup that runs at the same
+time can use it. That is accepted: a compaction that runs out of space fails
+cleanly and is retried by the release logic (section 10), and an account that
+ends above its restored limit loses nothing; its next backup fails with
+"Disk quota exceeded" until space is released, the same as any Vault over its
+limit.
 
 ### 6.5 Running it
 
@@ -401,9 +426,12 @@ Vault fulfilment, every step idempotent, in this order:
 6. Catch up on the subscription: `GET /subscriptions/{id}` and apply the
    result as a snapshot, with the subscription's `updated_at` as
    `sub_event_at`. This covers a `subscription.past_due` or a cancellation
-   that arrived before the account existed. It runs whenever an account has a
-   subscription id and no `sub_event_at`. A Paddle failure does not fail the
-   webhook: `sub_event_at` stays empty and reconcile (8.5) tries again.
+   that arrived before the account existed. A successful read sets
+   `sub_synced_at`, and the step runs whenever an account has a subscription
+   id and no `sub_synced_at`. A Paddle failure does not fail the webhook:
+   `sub_synced_at` stays empty and reconcile (8.5) tries again. The marker is
+   separate from `sub_event_at` on purpose: an older webhook that arrives
+   after a failed read must not make the read look done.
    Skipped when no Paddle API key is configured.
 7. Create the account on the node (`PUT`, no keys yet). A node failure does
    not fail the webhook: it records `node_error` and the hourly cron retries.
@@ -433,6 +461,8 @@ from Paddle:
   when it is `active` again.
 - `sub_event_at`: `occurred_at` of the last applied event. Older events are
   ignored.
+- `sub_synced_at`: when the subscription was last read from Paddle directly
+  (7.4, fulfilment step 6). Empty means that read is still owed.
 - `hold_until`: admin hold. Deletion never happens before this date.
 
 ### 8.2 Derivation (one pure function)
@@ -502,7 +532,7 @@ fails, nothing else happens and the next run retries.
 
 For each account that is not deleted:
 
-1. When the account has a subscription id and no `sub_event_at`, catch up on
+1. When the account has a subscription id and no `sub_synced_at`, catch up on
    the subscription first (7.4, fulfilment step 6).
    Then evaluate (8.2). Persist `status`, `read_only_at`, `delete_at`.
 2. Sync the node when the desired state differs from the last synced state
@@ -549,8 +579,8 @@ keys, same data.
 - Fulfilment of an order whose metadata has `renew_vault_id` does not create
   anything. It marks the order paid, then on the account sets the new
   `paddle_subscription_id`, `sub_status = 'active'`, `paid_through` from the
-  transaction, clears `cancel_at`, `canceled_at`, `past_due_since` and
-  `sub_event_at`, sets `bundle_license` to whether a plan item was bought,
+  transaction, clears `cancel_at`, `canceled_at`, `past_due_since`,
+  `sub_event_at` and `sub_synced_at`, sets `bundle_license` to whether a plan item was bought,
   extends a bundle licence to `paid_through + 14 days`, marks the invite
   redeemed and reconciles. Reconcile unfreezes the node and sends
   `recovered`. Repeating the webhook changes nothing (the account already has
@@ -662,14 +692,18 @@ for good. An attacker who controls the customer's server can prune everything.
 
 Rule: compaction never runs immediately on a customer request.
 
-1. The customer clicks "Release space" in Borg UI.
-   `POST /v1/vault/release` sets `release_requested_at = now`,
-   `release_at = now + 7 days`, `release_state = 'scheduled'`, stores a token
-   hash, and sends the `release_scheduled` email with the date and a cancel
-   link (`https://borgui.com/vault/release?cancel=<token>`). If the email
-   provider does not accept the email, the release fields are rolled back and
-   the answer is `502 email_failed`: a release nobody was told about does not
-   exist, so the 7 days always start from a warning that was sent.
+1. The customer clicks "Release space" in Borg UI. `POST /v1/vault/release`
+   first sends the `release_scheduled` email with the date (now + 7 days) and
+   a cancel link (`https://borgui.com/vault/release?cancel=<token>`). Only
+   after the email provider accepted it does the Worker store, in one update,
+   `release_requested_at = now`, `release_at = now + 7 days`,
+   `release_state = 'scheduled'` and the token hash. If the provider does not
+   accept the email, nothing is stored and the answer is `502 email_failed`.
+   A release therefore never exists without an accepted warning, also when
+   the Worker stops between the two steps: the customer then holds an email
+   whose cancel link answers 404, and nothing is compacted. Acceptance by the
+   provider is not proof of delivery; the app also shows the scheduled
+   release and a cancel button on the Vault card.
 2. Until `release_at`, the customer can cancel from the app or the email link.
 3. At `release_at` the cron calls the node `compact`, sets
    `release_state = 'running'`, and on later runs reads the node's `compact`
