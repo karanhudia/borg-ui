@@ -360,9 +360,12 @@ def test_a_proxy_login_stops_when_a_retry_would_save_the_same_user(
     assert len(attempts) == 1
 
 
-def _burst(test_client, test_db, monkeypatch, path: str, headers: dict, count: int):
-    """`count` parallel GETs with two worker threads and two connections, the
-    runner on the same pool. Returns the outcome per status code."""
+def _burst(
+    test_client, test_db, monkeypatch, path: str, headers: dict, count: int, json=None
+):
+    """`count` parallel GETs (POSTs of `json`, if given) with two worker
+    threads and two connections, the runner on the same pool. Returns the
+    outcome per status code."""
     from app.main import app
 
     engine = create_engine(
@@ -401,10 +404,14 @@ def _burst(test_client, test_db, monkeypatch, path: str, headers: dict, count: i
             async with httpx.AsyncClient(
                 transport=transport, base_url="http://test", timeout=None
             ) as client:
-                return await asyncio.gather(
-                    *[client.get(path, headers=headers) for _ in range(count)],
-                    return_exceptions=True,
-                )
+                if json is None:
+                    requests = [client.get(path, headers=headers) for _ in range(count)]
+                else:
+                    requests = [
+                        client.post(path, headers=headers, json=json)
+                        for _ in range(count)
+                    ]
+                return await asyncio.gather(*requests, return_exceptions=True)
         finally:
             limiter.total_tokens = tokens
 
@@ -475,6 +482,38 @@ def test_a_burst_on_a_route_that_queries_before_the_user_lookup_succeeds(
             route for route in app.router.routes if getattr(route, "path", "") != path
         ]
     assert outcomes == {200: 8}
+
+
+@pytest.mark.unit
+def test_a_burst_of_token_creations_succeeds_off_the_loop(
+    test_client, test_db, monkeypatch
+):
+    """Creating a token hashes it, commits and reads the row again. On the
+    loop, the hashing holds every other request, and the read after the
+    commit waits there for a connection the other requests hold."""
+    from app.api import tokens
+
+    test_db.add(User(username="burst-tokens", email="tokens@example.org"))
+    test_db.commit()
+    hashed_on_the_loop = []
+    real_hash = tokens.get_password_hash
+
+    def record_hash(value):
+        hashed_on_the_loop.append(_on_the_loop())
+        return real_hash(value)
+
+    monkeypatch.setattr(tokens, "get_password_hash", record_hash)
+    outcomes = _burst(
+        test_client,
+        test_db,
+        monkeypatch,
+        "/api/settings/tokens",
+        _headers("jwt", "burst-tokens"),
+        8,
+        json={"name": "burst"},
+    )
+    assert outcomes == {201: 8}
+    assert hashed_on_the_loop == [False] * 8
 
 
 @pytest.mark.unit
