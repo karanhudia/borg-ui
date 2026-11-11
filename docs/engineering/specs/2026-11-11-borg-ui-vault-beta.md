@@ -228,9 +228,13 @@ start it recreates every user, key file and quota from `state.json`.
      and `borg check` keep working, and removing the flag makes writes work
      again. Verified on Borg 1.4.0. `10M` is the smallest value Borg accepts,
      so a repository that holds less than 10 MB is not stopped by this layer.
-  2. No new repositories. The home directory is handed to root
-     (`chown root:root`, mode `0755`), so the account can no longer create
-     anything directly in it. This matters because `borg init` through a
+  2. No new repositories. The home directory, and every directory below it
+     that is not a Borg repository and not inside one, is handed to root
+     (`chown root:root`, mode `0755`), so the account can no longer create a
+     directory anywhere a new repository could go. A repository is a
+     directory that holds a file `config` and a directory `data`; the walk
+     does not descend into it. Plain directories matter because Borg accepts
+     nested paths such as `<home>/group/second`. All of this matters because `borg init` through a
      `borg serve` that carries `--storage-quota` writes that quota into the
      new repository's own config, where it would stay after the freeze ends
      and cap that repository at 10 MB for good. Existing repository
@@ -244,7 +248,7 @@ start it recreates every user, key file and quota from `state.json`.
      the stored value. The 64 MiB are room for Borg lock files and an index
      rebuild during a restore; they are not a write allowance, layer 1
      removes that.
-  `frozen: false` writes the normal key lines again, gives the home directory
+  `frozen: false` writes the normal key lines again, gives those directories
   back to the account (mode `0700`), clears the stored value and applies
   `quota_bytes`.
 
@@ -431,7 +435,8 @@ Vault fulfilment, every step idempotent, in this order:
    id and no `sub_synced_at`. A Paddle failure does not fail the webhook:
    `sub_synced_at` stays empty and reconcile (8.5) tries again. The marker is
    separate from `sub_event_at` on purpose: an older webhook that arrives
-   after a failed read must not make the read look done.
+   after a failed read must not make the read look done. Reconcile also
+   repeats the read later (8.5), because a webhook can be lost for good.
    Skipped when no Paddle API key is configured.
 7. Create the account on the node (`PUT`, no keys yet). A node failure does
    not fail the webhook: it records `node_error` and the hourly cron retries.
@@ -462,7 +467,7 @@ from Paddle:
 - `sub_event_at`: `occurred_at` of the last applied event. Older events are
   ignored.
 - `sub_synced_at`: when the subscription was last read from Paddle directly
-  (7.4, fulfilment step 6). Empty means that read is still owed.
+  (7.4, fulfilment step 6, and 8.5). Empty means that read is still owed.
 - `hold_until`: admin hold. Deletion never happens before this date.
 
 ### 8.2 Derivation (one pure function)
@@ -505,6 +510,7 @@ episode sends its emails again. A `recovered` email is sent only if
 | `final_notice` | status is `read_only` and `now >= D - 7 days` |
 | `deleted` | after deletion |
 | `recovered` | healthy again after any of the above |
+| `renewal_offer` | status is `read_only`, `sub_status` is `canceled`, and the cancellation (`canceled_at`) is later than the recorded `final_notice`. It is the `final_notice` email in its renewal form, with a deletion date of at least 7 days from now. Without it a customer whose subscription Paddle cancels after the final notice would only ever have received dead payment links. |
 
 Every lapse email states the read-only date and the deletion date as calendar
 dates, and carries one button. While the subscription still exists
@@ -521,6 +527,12 @@ The cron deletes a Vault only when all of these hold:
 2. `notices_json.final_notice` exists and is at least 7 days old.
 3. `hold_until` is null or in the past.
 4. `status` is `read_only`.
+5. When a `renewal_offer` is due (8.3), it has been sent and is at least
+   7 days old.
+6. The subscription was read from Paddle in this same cron run, right before
+   deleting, and the account still meets rules 1 to 5 afterwards. If the read
+   fails, deletion waits for the next run. (Skipped when no Paddle API key is
+   configured.) A recovery whose webhook never arrived is caught here.
 
 Because of rule 2, a missed cron run or an email outage delays deletion
 instead of skipping the warning. Deletion calls the node `DELETE`, then sets
@@ -532,8 +544,11 @@ fails, nothing else happens and the next run retries.
 
 For each account that is not deleted:
 
-1. When the account has a subscription id and no `sub_synced_at`, catch up on
-   the subscription first (7.4, fulfilment step 6).
+1. Read the subscription from Paddle first (7.4, fulfilment step 6) when the
+   account has a subscription id and the read is due: `sub_synced_at` is
+   empty, or older than 24 hours, or older than 1 hour for an account that is
+   not healthy. Paddle gives up on a webhook after about two days, so
+   webhooks alone could leave a customer who paid in the read-only state.
    Then evaluate (8.2). Persist `status`, `read_only_at`, `delete_at`.
 2. Sync the node when the desired state differs from the last synced state
    (`quota`, `frozen`, key list), or when `node_error` is set.
@@ -558,8 +573,10 @@ keys, same data.
 
 - A renewal invite is a row in `vault_invites` with `renew_vault_id` set. It
   copies email, language and tier from the account, has no discount, and
-  expires at the Vault's deletion date (`delete_at`, or 14 days from now when
-  that is empty). Its plan is the licence's plan when the account is a bundle
+  expires 30 days after it was created. What really ends it is the Vault:
+  the invite stops working once the Vault is deleted or has a subscription
+  again. (An expiry at `delete_at` would hand out dead links whenever a late
+  final notice or an admin hold delays deletion.) Its plan is the licence's plan when the account is a bundle
   and that plan is `lite` or `pro` with a price id; otherwise `licensed`
   (storage only).
 - It can only be created for an account that is not deleted and whose
@@ -588,6 +605,11 @@ keys, same data.
   out.
 - If the Vault was deleted between payment and webhook, the order is still
   marked paid, nothing is attached, and the admin is emailed to refund it.
+- Two renewals paid for one Vault (two tabs, or two emails): the first
+  attaches. The second finds a Vault whose subscription is no longer
+  cancelled and attaches nothing: its order is marked paid, its new
+  subscription is cancelled immediately through the Paddle API, and the admin
+  is emailed to refund it. A repeat of either webhook changes nothing.
 - A late event of the old subscription must not undo the renewal: a
   subscription event that matches an account only by order id is ignored when
   the account already has a different subscription id.
@@ -693,17 +715,23 @@ for good. An attacker who controls the customer's server can prune everything.
 Rule: compaction never runs immediately on a customer request.
 
 1. The customer clicks "Release space" in Borg UI. `POST /v1/vault/release`
-   first sends the `release_scheduled` email with the date (now + 7 days) and
-   a cancel link (`https://borgui.com/vault/release?cancel=<token>`). Only
-   after the email provider accepted it does the Worker store, in one update,
-   `release_requested_at = now`, `release_at = now + 7 days`,
-   `release_state = 'scheduled'` and the token hash. If the provider does not
-   accept the email, nothing is stored and the answer is `502 email_failed`.
-   A release therefore never exists without an accepted warning, also when
-   the Worker stops between the two steps: the customer then holds an email
-   whose cancel link answers 404, and nothing is compacted. Acceptance by the
-   provider is not proof of delivery; the app also shows the scheduled
-   release and a cancel button on the Vault card.
+   works in three steps.
+   a. Store `release_state = 'pending'`, `release_requested_at = now` and
+      the token hash. A pending release is never compacted, but it can be
+      cancelled, so the cancel link works from the first second.
+   b. Send the `release_scheduled` email with the date (now + 7 days) and the
+      cancel link (`https://borgui.com/vault/release?cancel=<token>`).
+   c. When the email provider accepted it, read the account again. Only if
+      it is still `pending` with the same token hash, set
+      `release_state = 'scheduled'` and `release_at = now + 7 days`. If it
+      was cancelled in the meantime, leave it cancelled.
+   If the provider does not accept the email, the pending fields are cleared
+   and the answer is `502 email_failed`. If the Worker stops after step a or
+   b, the release stays `pending` and nothing is ever compacted; a pending
+   release older than 10 minutes counts as none and a new request replaces
+   it. Acceptance by the provider is not proof of delivery; the app also
+   shows the scheduled release and a cancel button on the Vault card. The
+   app sees a pending release as no release (`"release": null`).
 2. Until `release_at`, the customer can cancel from the app or the email link.
 3. At `release_at` the cron calls the node `compact`, sets
    `release_state = 'running'`, and on later runs reads the node's `compact`
