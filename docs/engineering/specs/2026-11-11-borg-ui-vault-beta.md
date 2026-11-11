@@ -537,10 +537,19 @@ The cron deletes a Vault only when all of these hold:
    that read, so it never deletes a Vault.
 
 Because of rule 2, a missed cron run or an email outage delays deletion
-instead of skipping the warning. Deletion calls the node `DELETE`, then sets
-`deleted_at`, `status = 'deleted'`, cancels the Paddle subscription immediately
-if it is not already canceled, and sends the `deleted` email. If the node call
-fails, nothing else happens and the next run retries.
+instead of skipping the warning.
+
+Deletion starts with a claim, one conditional update that sets `deleted_at`
+and `status = 'deleted'` only where the row is still not deleted, still has
+the `sub_status` the rules were evaluated with, and has no hold in the
+future. A renewal that attached in the meantime (8.6) or a renewal order
+that just placed a hold makes the claim fail, and nothing is deleted. Once
+the claim has succeeded no renewal can attach any more, because attaching
+requires `deleted_at IS NULL`. Only then does the Worker call the node
+`DELETE`, cancel the Paddle subscription if it is not already canceled, and
+send the `deleted` email. If the node call fails, the account keeps
+`node_error` and the cron repeats the node call on every run until it has
+worked; the email goes out after that.
 
 ### 8.5 Reconcile (hourly cron and after every subscription event)
 
@@ -607,8 +616,12 @@ keys, same data.
   that subscription id). No licence is minted and no `vault_ready` email goes
   out.
 - A paid renewal must not lose to deletion. Creating a renewal order sets
-  the Vault's `hold_until` to at least 48 hours from now, so a Vault is not
+  the Vault's `hold_until` to at least 96 hours from now, so a Vault is not
   deleted while a checkout for it is open or its webhook is on the way.
+  Paddle stops redelivering a webhook after about three days, so a payment
+  made soon after the order cannot surface later than the hold. What is left
+  is a customer who keeps the checkout open for days and pays after the
+  Vault is gone: that payment is surplus (below) and refunded.
 - Attaching is one conditional update (`... WHERE sub_status = 'canceled' AND
   deleted_at IS NULL`). Of two renewals paid for one Vault (two tabs, or two
   emails), exactly one wins it.
