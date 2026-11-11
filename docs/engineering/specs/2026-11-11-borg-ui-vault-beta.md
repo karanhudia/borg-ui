@@ -510,7 +510,7 @@ episode sends its emails again. A `recovered` email is sent only if
 | `final_notice` | status is `read_only` and `now >= D - 7 days` |
 | `deleted` | after deletion |
 | `recovered` | healthy again after any of the above |
-| `renewal_offer` | status is `read_only`, `sub_status` is `canceled`, and the cancellation (`canceled_at`) is later than the recorded `final_notice`. It is the `final_notice` email in its renewal form, with a deletion date of at least 7 days from now. Without it a customer whose subscription Paddle cancels after the final notice would only ever have received dead payment links. |
+| `renewal_offer` | status is `read_only`, `sub_status` is `canceled`, `final_notice` is recorded, and no email of this episode has carried a renewal link yet. The Worker records `renew_link` (a time) in `notices_json` whenever it sends a lapse email with a renewal link; that marker decides this, not `canceled_at`, because a cancellation can be applied long after it happened. The offer is the `final_notice` email in its renewal form, with a deletion date of at least 7 days from now. Without it a customer whose cancellation reaches us after the final notice would only ever have received dead payment links. |
 
 Every lapse email states the read-only date and the deletion date as calendar
 dates, and carries one button. While the subscription still exists
@@ -527,12 +527,14 @@ The cron deletes a Vault only when all of these hold:
 2. `notices_json.final_notice` exists and is at least 7 days old.
 3. `hold_until` is null or in the past.
 4. `status` is `read_only`.
-5. When a `renewal_offer` is due (8.3), it has been sent and is at least
-   7 days old.
+5. When `sub_status` is `canceled`: `notices_json.renew_link` exists and is at
+   least 7 days old. The customer has then had a working renewal link for a
+   week.
 6. The subscription was read from Paddle in this same cron run, right before
    deleting, and the account still meets rules 1 to 5 afterwards. If the read
-   fails, deletion waits for the next run. (Skipped when no Paddle API key is
-   configured.) A recovery whose webhook never arrived is caught here.
+   fails, deletion waits for the next run. A recovery whose webhook never
+   arrived is caught here. Without a Paddle API key the Worker cannot make
+   that read, so it never deletes a Vault.
 
 Because of rule 2, a missed cron run or an email outage delays deletion
 instead of skipping the warning. Deletion calls the node `DELETE`, then sets
@@ -582,7 +584,8 @@ keys, same data.
 - It can only be created for an account that is not deleted and whose
   `sub_status` is `canceled` (`409 vault_deleted`, `409 subscription_active`).
 - Who creates it: the Worker, each time it sends `read_only_start`,
-  `read_only_reminder` or `final_notice` for a cancelled subscription (the
+  `read_only_reminder`, `final_notice` or `renewal_offer` for a cancelled
+  subscription (the
   token is stored only as a hash, so each email gets a fresh invite), and the
   admin through `POST /v1/admin/vault/accounts/:vaultId/renewal`.
 - The join page shows a renewal invite as "Renew your Vault": fixed size, no
@@ -603,13 +606,19 @@ keys, same data.
   `recovered`. Repeating the webhook changes nothing (the account already has
   that subscription id). No licence is minted and no `vault_ready` email goes
   out.
-- If the Vault was deleted between payment and webhook, the order is still
-  marked paid, nothing is attached, and the admin is emailed to refund it.
-- Two renewals paid for one Vault (two tabs, or two emails): the first
-  attaches. The second finds a Vault whose subscription is no longer
-  cancelled and attaches nothing: its order is marked paid, its new
-  subscription is cancelled immediately through the Paddle API, and the admin
-  is emailed to refund it. A repeat of either webhook changes nothing.
+- A paid renewal must not lose to deletion. Creating a renewal order sets
+  the Vault's `hold_until` to at least 48 hours from now, so a Vault is not
+  deleted while a checkout for it is open or its webhook is on the way.
+- Attaching is one conditional update (`... WHERE sub_status = 'canceled' AND
+  deleted_at IS NULL`). Of two renewals paid for one Vault (two tabs, or two
+  emails), exactly one wins it.
+- A renewal that cannot attach, because it lost that update or because the
+  Vault is gone, is surplus: its order is marked paid, its new subscription
+  is cancelled immediately through the Paddle API (so it never bills again),
+  and the admin is emailed to refund it. If the cancellation or the email
+  fails, the webhook answers 500 and Paddle delivers it again; the cleanup is
+  repeated until both have worked (a subscription that is already cancelled
+  is not cancelled twice).
 - A late event of the old subscription must not undo the renewal: a
   subscription event that matches an account only by order id is ignored when
   the account already has a different subscription id.
@@ -721,10 +730,12 @@ Rule: compaction never runs immediately on a customer request.
       cancelled, so the cancel link works from the first second.
    b. Send the `release_scheduled` email with the date (now + 7 days) and the
       cancel link (`https://borgui.com/vault/release?cancel=<token>`).
-   c. When the email provider accepted it, read the account again. Only if
-      it is still `pending` with the same token hash, set
-      `release_state = 'scheduled'` and `release_at = now + 7 days`. If it
-      was cancelled in the meantime, leave it cancelled.
+   c. When the email provider accepted it, activate the release with one
+      conditional update: set `release_state = 'scheduled'` and
+      `release_at = now + 7 days` only where the row is still `pending` with
+      the same token hash. If no row changed, the customer cancelled first
+      and it stays cancelled. There is no read followed by a write, so a
+      cancellation cannot slip in between.
    If the provider does not accept the email, the pending fields are cleared
    and the answer is `502 email_failed`. If the Worker stops after step a or
    b, the release stays `pending` and nothing is ever compacted; a pending
