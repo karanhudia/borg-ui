@@ -23,7 +23,6 @@ through its own session, then the report runs on that copy; or the report
 writes first and the completion, in a thread, waits for its commit.
 """
 
-import asyncio
 import threading
 import time
 from datetime import datetime, timezone
@@ -212,13 +211,11 @@ def test_a_rest_progress_report_after_the_completion_keeps_its_verdict(test_db, 
     assert test_db.get(AgentJob, job.id).status == "running"
     assert _complete(agent, job.id) == (True, "completed")
 
-    response = asyncio.run(
-        update_job_progress(
-            job.id,
-            AgentJobProgressRequest(**PROGRESS),
-            current_agent=test_db.get(AgentMachine, agent.id),
-            db=test_db,
-        )
+    response = update_job_progress(
+        job.id,
+        AgentJobProgressRequest(**PROGRESS),
+        current_agent=test_db.get(AgentMachine, agent.id),
+        db=test_db,
     )
 
     # the answer reads the job as the completion left it

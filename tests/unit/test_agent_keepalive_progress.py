@@ -34,7 +34,9 @@ def test_a_keepalive_keeps_the_last_progress_snapshot(test_db):
     test_db.commit()
 
     _apply_agent_job_progress(job, test_db, {"progress_percent": 42})
+    test_db.commit()
     _apply_agent_job_progress(job, test_db, {})
+    test_db.commit()
 
     assert job.progress == {"progress_percent": 42}
     assert job.progress_percent == 42
