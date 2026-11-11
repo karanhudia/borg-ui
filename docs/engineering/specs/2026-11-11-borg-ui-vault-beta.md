@@ -773,18 +773,69 @@ Rule: compaction never runs immediately on a customer request.
 4. No release is scheduled while the status is `read_only` or `deleted`
    (`409 vault_read_only`).
 
-What the customer is told (app and docs): "Space release runs 7 days after you
-ask for it. It removes for good every archive pruned up to that moment,
-including archives pruned during those 7 days. If you did not ask for this,
-cancel it."
+What the customer is told (app, docs and the `release_done` email): "Space
+release runs 7 days after you ask for it. For 7 more days after it has run,
+our support can bring back what it removed. After that it is gone for good.
+If you did not ask for a release, cancel it."
 
-Known limit, open for the owner (section 16): the 7 days protect against a
-release nobody asked for. They do not protect archives that are pruned after
-a release the owner did ask for. Someone who takes over the customer's server
-on day 6 can prune everything and the compaction on day 7 removes it. Closing
-that needs a copy of the removed data kept on the node for 7 days after each
-compaction (for example a reflink snapshot owned by root), which is not
-designed and not verified.
+### 10.1 Retained copy (7 days after every compaction)
+
+The delay protects against a release nobody asked for. It does not protect
+archives pruned after a release the owner did ask for: someone who takes over
+the customer's server on day 6 can prune everything, and the compaction on
+day 7 would remove it. So nothing a compaction removes is gone at once.
+
+- Before the node compacts a repository it takes a retained copy of it:
+  `cp -r --reflink=always <repo> /srv/vault/.node/retained/<username>/<copy id>/<repo name>`,
+  run as root while the account holds the repository lock (the agent starts
+  `borg with-lock <repo> sh -c 'echo locked; read _'` as the account, waits
+  for the line `locked`, copies, then closes the command's input). If the
+  lock cannot be taken, that repository is not copied and not compacted, and
+  the compaction counts as failed, as before. If the compaction itself fails
+  after the copy, the copy is removed.
+- The copy is a reflink copy: it shares its blocks with the repository, so
+  taking it is fast and costs no space at first. It belongs to root and lives
+  outside every home directory, so the account cannot reach or delete it and
+  it does not count against the account's quota.
+- Effect, verified on Borg 1.4.0 and XFS: after the compaction the account's
+  usage drops at once (114 MiB to 57 MiB in the test), while the space on the
+  disk is only really free when the copy is removed. The node therefore
+  needs spare disk for up to 7 days of released space; the runbook watches
+  free space.
+- A copy is kept `RETAIN_DAYS = 7` days. Expired copies are removed when the
+  agent starts and on every `GET /v1/accounts` (the Worker calls it hourly).
+  Deleting an account removes its copies too. The account object gains
+  `retained_until`: the latest expiry, or null.
+- The file system must support reflinks (`reflink=1`, the default of
+  `mkfs.xfs`). The agent checks this at start and refuses to run without it.
+- Recovery is done by the admin on the node, on a customer's request:
+  `python3 -m agent.recover <username> <repo name> [--as-of <UTC time>]`.
+  It moves the live repository into the retained area (kept 7 days, so the
+  step can be undone), puts a reflink copy of the retained copy in its place,
+  owned by the account, and applies the account's limit again afterwards
+  (the limit is lifted during the swap, because the recovered repository can
+  be larger than the limit allows; the account is then over its limit until
+  it releases space again, and loses nothing).
+- `--as-of` is what brings pruned archives back. A retained copy still holds
+  every segment, but its newest state already has the archives marked as
+  deleted. Borg's append-only log (`transactions` in the repository) lists
+  every transaction with its time. The tool keeps the last transaction at or
+  before the given time, removes the segment files after it and the
+  `index.*`, `hints.*` and `integrity.*` files (Borg rebuilds them), and
+  removes copied lock files. Verified: an archive deleted before the
+  compaction is listed, extracts and passes `borg check` afterwards. The
+  admin cannot list archives (no passphrase), so the customer names a time
+  at which the backups were still good.
+- After a recovery the customer's Borg refuses the repository once with
+  "Cache, or information obtained from the security directory is newer than
+  repository", because the repository went back in time. That is Borg's
+  rollback protection working. A fresh client works at once (verified); on
+  the existing install the customer removes the repository's local cache and
+  security info (`borg delete --cache-only <repo>`, per Borg's documentation)
+  or removes the repository from Borg UI and adds it again.
+- Limit that remains: recovery needs someone to notice within 7 days of the
+  compaction, 14 days after the release was requested, and it needs the
+  passphrase, which only the customer has.
 
 ## 11. Borg UI app
 
@@ -968,7 +1019,7 @@ Plans 1 and 4 can run in parallel with plan 2. Plan 3 follows plan 2.
 6. Repeat step 1 in Paddle live, deploy, invite the first waitlist member.
 7. Remove the sentence about planned prices from the Vault page once the first
    invite goes out, and drop the append-only claim if gate A fails.
-8. Decide whether to close the known limit of section 10 (archives pruned
-   after a space release was scheduled).
+8. Size the node's disk with room for retained copies (section 10.1): up to
+   7 days of released space is still on disk.
 9. In gate B, also let a sandbox subscription run into cancellation and buy
    the renewal link from the read-only email (8.6).
