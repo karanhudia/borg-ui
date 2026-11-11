@@ -113,26 +113,33 @@ Expected: one revision id. On 2026-11-11 it was `f7a4417c5d4d`. Use whatever it 
 
 - [ ] **Step 2: Write the failing migration test**
 
-Copy `tests/unit/test_ssh_connection_shell_restricted_migration.py` to `tests/unit/test_ssh_connection_vault_id_migration.py` and change: `REVISION = "d4e5f6a7b8c9"`, `PREVIOUS = "<the head from step 1>"`, the column name to `vault_id`, and the docstring. Keep its upgrade, downgrade and re-upgrade assertions.
+A revision that no release ships yet must be claimed by a test under `tests/migrations` that uses the `upgraded_from` fixture (`tests/migrations/test_revisions_have_tests.py` enforces this; a copy of an older test under `tests/unit` is rejected). Read `tests/migrations/test_backup_plan_restore_check_after_upgrade.py` and `tests/migrations/conftest.py` first, then create `tests/migrations/test_ssh_connection_vault_id_after_upgrade.py` on the same pattern:
 
-Run: `pytest tests/unit/test_ssh_connection_vault_id_migration.py -q`
-Expected: FAIL, revision `d4e5f6a7b8c9` cannot be located.
+- Module docstring: "Upgrade test for revision a7c3e9d1f5b2 (ssh_connections.vault_id). From every release before it, SSH connections keep their rows and start without a Vault id."
+- `REVISION = "a7c3e9d1f5b2"`, `RELEASES = upgrade_paths.releases_before(REVISION) or ["no-release-tags"]`.
+- `ROWS = {"ssh_connections": [{"id": 500, "host": "backup.example.com", "username": "borg", "port": 22}]}`.
+- One test, `test_connections_survive_and_start_without_a_vault_id(release, dialect, upgraded_from)`, parametrized over `DIALECTS` and `RELEASES` exactly like the example: `require_releases()`, `db = upgraded_from(release, dialect=dialect, rows=ROWS)`, then in a `Session(db.engine)`: `connection = session.get(SSHConnection, 500)`; assert `connection.host == "backup.example.com"` and `connection.vault_id is None`.
+
+The revision id `a7c3e9d1f5b2` was unused on 2026-11-11 (`d4e5f6a7b8c9` is taken by the auto prune preview revision). Check with `ls app/database/alembic/versions | grep a7c3e9d1f5b2`; if that prints a file, pick another 12 character hex id and use it everywhere below.
+
+Run: `pytest tests/migrations/test_ssh_connection_vault_id_after_upgrade.py -q`
+Expected: FAIL (`SSHConnection` has no attribute `vault_id`), or every case skipped when the checkout has no release tags; in that case run `git fetch --tags` first.
 
 - [ ] **Step 3: Write the migration and the model column**
 
-Copy `app/database/alembic/versions/c9d0e1f2a3b4_add_ssh_connection_shell_restricted.py` to `d4e5f6a7b8c9_add_ssh_connection_vault_id.py`. Set `revision = "d4e5f6a7b8c9"`, `down_revision` from step 1, a docstring that says: "add ssh_connections.vault_id. Set when the connection was created by Connect Vault; holds the Borg UI Vault id (vlt_...). Null for every other connection." `upgrade` adds `sa.Column("vault_id", sa.String(), nullable=True)`; `downgrade` drops it. If the revision id `d4e5f6a7b8c9` already exists in the versions folder, pick another 12 character hex id and use it in both files.
+Copy `app/database/alembic/versions/c9d0e1f2a3b4_add_ssh_connection_shell_restricted.py` to `a7c3e9d1f5b2_add_ssh_connection_vault_id.py`. Set `revision = "a7c3e9d1f5b2"`, `down_revision` from step 1, a docstring that says: "add ssh_connections.vault_id. Set when the connection was created by Connect Vault; holds the Borg UI Vault id (vlt_...). Null for every other connection." `upgrade` adds `sa.Column("vault_id", sa.String(), nullable=True)`; `downgrade` drops it.
 
 In `models.py`, add `vault_id = Column(String, nullable=True, index=True)` to `SSHConnection` next to `shell_restricted`, with a one-line comment: `# Borg UI Vault id when Connect Vault created this connection`.
 
 - [ ] **Step 4: Run**
 
-Run: `pytest tests/unit/test_ssh_connection_vault_id_migration.py tests/migrations -q 2>&1 | tail -3`
-Expected: all pass.
+Run: `pytest tests/migrations -q 2>&1 | tail -3`
+Expected: all pass, including `test_revisions_have_tests.py`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/database/alembic/versions app/database/models.py tests/unit/test_ssh_connection_vault_id_migration.py
+git add app/database/alembic/versions app/database/models.py tests/migrations/test_ssh_connection_vault_id_after_upgrade.py
 git commit -m "feat(vault): tag SSH connections created for a Vault"
 ```
 
@@ -206,6 +213,7 @@ git commit -m "feat(vault): read the Vault status from the licence service"
 
 **Interfaces:**
 - Produces in `app/api/ssh_keys.py`: `async def create_system_ssh_key(db, *, name: str, description: str, key_type: str) -> SSHKey`: the body of the existing `generate_ssh_key` handler from "Generate SSH key pair" down to and including the filesystem deploy, moved into a function. It raises `RuntimeError(<message>)` when key generation fails. The handler keeps its existing checks and response and calls this function. Behaviour of the endpoint must not change; `tests/unit/test_api_ssh_keys.py` must still pass untouched.
+- Changes in `app/api/ssh_keys.py`: `test_ssh_key_connection(ssh_key, host, username, port, connection=None)`. The new optional argument replaces the `None` in its `host_key_ssh_opts(None)` call, so a caller that passes a connection is checked against that connection's pinned host key. With `None` it uses the shared known-hosts file and accepts a first-seen key, which is what every existing caller keeps doing.
 - Produces in `vault_service.py`:
   - `async def ensure_system_key(db) -> SSHKey`: the active system key, created as `ed25519` with name `"System SSH Key"` when none exists.
   - `async def connect_vault(db) -> dict`: `{"connection_id": int, "base_path": str, "vault": <public vault>}`.
@@ -218,7 +226,7 @@ git commit -m "feat(vault): read the Vault status from the licence service"
 3. `POST /v1/vault/keys` with `license_key`, `instance_id`, `public_key = ssh_key.public_key`, `label = socket.gethostname()[:64]`. A failure raises `VaultConnectError("service_failed")` with the service's message. A response without a `vault` raises `VaultConnectError("vault_not_found")`.
 4. Upsert the connection: `find_vault_connection(db, vault["vault_id"])`, else a new `SSHConnection`. Set `ssh_key_id`, `host`, `username`, `port`, `default_path = vault["base_path"]`, `vault_id`. Commit.
 5. Pin the host key from the licence service: `pin_host_key(connection, db, vault["host_key"])` from `app.utils.ssh_host_keys`, skipped when `host_key` is empty. Before relying on this, read `scan_host_key` and `host_keys_match` in that module and confirm a line of the form `<host> ssh-ed25519 <base64>` is what a scan of a port 22 host stores; if the module stores a different form (for example without the host), convert to that form here and say so in a comment.
-6. Test the connection with the existing `test_ssh_key_connection(ssh_key, host, username, port)` from `app.api.ssh_keys` (import it inside the function to avoid an import cycle), and record the result on the connection exactly as the `test_ssh_connection` handler in that file does (`status`, `last_test`, `last_success`, `error_message`, `shell_restricted`). A failed test raises `VaultConnectError("ssh_failed")` with the test's error text. The connection row stays, so a retry reuses it.
+6. Test the connection with the existing `test_ssh_key_connection(ssh_key, host, username, port, connection=connection)` from `app.api.ssh_keys` (import it inside the function to avoid an import cycle; passing the connection is what makes the test verify the key pinned in step 5, not a key accepted on first use), and record the result on the connection exactly as the `test_ssh_connection` handler in that file does (`status`, `last_test`, `last_success`, `error_message`, `shell_restricted`). A failed test raises `VaultConnectError("ssh_failed")` with the test's error text. The connection row stays, so a retry reuses it.
 7. Return the dict.
 
 - [ ] **Step 1: Write the failing tests** (append to `tests/unit/test_vault_service.py`)
@@ -227,7 +235,7 @@ Patch `_post_activation`, `app.services.vault_service.pin_host_key` (a `MagicMoc
 
 | Test name | Arrange | Assert |
 |---|---|---|
-| `test_connect_registers_the_system_key_and_creates_the_connection` | mock returns `{"vault": {**VAULT, "connected": True}}` | awaited with `"/v1/vault/keys"` and `public_key == "ssh-ed25519 AAAAexample system"`; one `SSHConnection` with `vault_id`, `host`, `username`, `port == 22`, `default_path == "/srv/vault/v0123456789ab"`, `status == "connected"`, `shell_restricted is True`; `pin_host_key` called once with the vault's `host_key`; result `connection_id` matches, `"host_key" not in result["vault"]` |
+| `test_connect_registers_the_system_key_and_creates_the_connection` | mock returns `{"vault": {**VAULT, "connected": True}}` | awaited with `"/v1/vault/keys"` and `public_key == "ssh-ed25519 AAAAexample system"`; one `SSHConnection` with `vault_id`, `host`, `username`, `port == 22`, `default_path == "/srv/vault/v0123456789ab"`, `status == "connected"`, `shell_restricted is True`; `pin_host_key` called once with the vault's `host_key`; the SSH test mock awaited once with `connection=` that same `SSHConnection`; result `connection_id` matches, `"host_key" not in result["vault"]` |
 | `test_connect_twice_reuses_the_connection` | call twice | exactly one `SSHConnection` row with that `vault_id` |
 | `test_connect_without_a_vault_fails_clearly` | mock returns `{"vault": None}` | raises `VaultConnectError` with `code == "vault_not_found"`; no connection row |
 | `test_connect_reports_a_failed_ssh_test_and_keeps_the_row` | SSH test returns `{"success": False, "error": "Connection refused"}` | raises with `code == "ssh_failed"` and the text in the message; one connection row with `status == "failed"`; a second call with a succeeding test leaves one row with `status == "connected"` |
@@ -516,7 +524,7 @@ English values:
   "release": {
     "title": "Release space",
     "body": "Archives you pruned or deleted still take up space on your Vault. Releasing removes them for good and frees that space.",
-    "delay": "For safety this happens in 7 days. We email you the date and a link to cancel. Until then every pruned archive stays recoverable.",
+    "delay": "For safety this happens in 7 days. We email you the date and a link to cancel. Everything pruned up to that day is then removed for good.",
     "confirm": "Schedule release",
     "scheduledToast": "Space release scheduled",
     "cancelledToast": "Space release cancelled",
@@ -664,7 +672,7 @@ Mock `../../../services/api` (`vaultAPI.connect`, `repositoriesAPI.createReposit
 | `refuses an empty name, a short passphrase and a mismatch before sending anything` | three separate submits show the three messages; `vaultAPI.connect` never called |
 | `connects, then creates the repository with the vault path` | fill "Vault Home Server", passphrase "correct horse" twice, submit; `connect` called once; `createRepository` called once with `path: "/srv/vault/v0123456789ab/vault-home-server"`, `connection_id: 7`, `borg_version: 1`, `encryption: "repokey"`, `passphrase: "correct horse"`; the done title appears; `onConnected` called |
 | `a connect failure returns to the form with the server message` | `connect` rejects with `{ response: { data: { detail: { error: { message: "Connection refused" } } } } }`; alert contains "Connection refused"; the name field still holds the typed value; `createRepository` not called |
-| `a create failure says the vault is connected and allows a retry` | `createRepository` rejects once then resolves; first submit shows the `createFailed` text; second submit reaches the done stage; `connect` was called twice, `createRepository` twice |
+| `a create failure says the vault is connected and allows a retry` | `createRepository` rejects once with `{ response: { data: { detail: { key: 'backend.errors.repo.repositoryNameExists' } } } }`, then resolves; first submit shows the `createFailed` text including the English text of that key from `en.json` (so the message goes through `translateBackendKey(getApiErrorDetail(error))`, as the other repository forms do); second submit reaches the done stage; `connect` was called twice, `createRepository` twice |
 | `the done stage links to backup plans` | clicking "Open backup plans" calls `navigate` with the Backup Plans path |
 | `closing clears the passphrase` | close and reopen: both passphrase fields are empty |
 
@@ -701,7 +709,7 @@ In `Repositories.tsx`:
 - `const vault = useVault(canManageRepositoriesGlobally)`.
 - Between `<RepositoriesHeader .../>` and `<RepositoryGroups .../>`: when `vault.state` is not null, `<VaultCard .../>` with a bottom margin matching the page's section spacing.
 - `onConnect` and `onAddRepository` both open `ConnectVaultDialog` (adding a repository to a connected Vault is the same flow: connect is idempotent and a new repository is created). `defaultName`: `vault-` plus the slug of the hostname from `useSystemInfo()` if it exposes one, otherwise `"vault-backup"`; for a second repository append `-2`, `-3` using `repository_count + 1`.
-- `onUpdatePayment`: `vaultAPI.portal()`, then `window.open(url, '_blank', 'noopener,noreferrer')`; on failure `toast.error(t('vault.portalFailed', { message }))`.
+- `onUpdatePayment`: open the tab inside the click, before the request, because a browser blocks `window.open` once the click's activation has expired: `const tab = window.open('', '_blank')`, then `await vaultAPI.portal()`. On success: `if (tab) { tab.opener = null; tab.location.href = url } else { window.location.assign(url) }` (a blocked popup falls back to the same tab). On failure: `tab?.close()` and `toast.error(t('vault.portalFailed', { message }))`. Do not pass `noopener` to that first `window.open`: it would return `null` and the tab could not be pointed at the URL.
 - `onReleaseSpace` opens `ReleaseSpaceDialog`; confirm calls `vaultAPI.release()`, toasts `scheduledToast`, refetches. `onCancelRelease` calls `vaultAPI.cancelRelease()`, toasts `cancelledToast`, refetches.
 - Pass `vaultPathPrefix(vault.data.vault)` to `RepositoryGroups` when there is a vault.
 
@@ -716,6 +724,9 @@ Mock `vaultAPI.status`. Follow the setup of the existing Repositories page tests
 | `shows the ready card and opens the connect dialog` | status resolves a vault with `connection_id: null`; "Your Vault is ready" visible; clicking "Connect Vault" shows the dialog title |
 | `non-admins never request the vault status` | render with a user lacking `repositories.manage_all`; `vaultAPI.status` not called |
 | `vault repositories carry the Vault chip` | a repository whose path starts with the prefix shows "Vault"; another repository does not |
+| `update payment opens the tab inside the click` | past due vault; `window.open` mocked to return `{ opener: {}, location: { href: '' }, close: vi.fn() }`; click "Update payment" | `window.open` was called with `('', '_blank')` before `vaultAPI.portal` resolved; afterwards the fake tab's `location.href` is the portal URL and its `opener` is `null` |
+| `update payment falls back to this tab when the popup is blocked` | `window.open` returns `null`; `window.location.assign` mocked | `assign` called with the portal URL |
+| `a failed portal request closes the empty tab` | `vaultAPI.portal` rejects | the fake tab's `close` called; an error toast |
 
 - [ ] **Step 2: Run and see it fail, wire it up, run the whole frontend suite**
 

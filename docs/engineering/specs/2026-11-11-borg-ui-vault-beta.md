@@ -218,10 +218,25 @@ start it recreates every user, key file and quota from `state.json`.
 - Hard limit: `xfs_quota -x -c 'limit -u bhard=<N>k <username>' /srv/vault`.
 - Usage for all users in one call: `xfs_quota -x -c 'report -u -b -N' /srv/vault`
   (columns: user, used KiB, soft, hard).
-- Freeze (read-only): on the first request with `frozen: true`, compute
-  `frozen_limit_bytes = used_bytes + 64 MiB`, store it in `state.json`, and
-  apply it as the hard limit. Later requests with `frozen: true` keep the
-  stored value. `frozen: false` clears it and applies `quota_bytes` again.
+- Freeze (read-only) has two layers, both applied on `frozen: true`.
+  1. Borg refuses the writes. Every key line of the account is written with
+     `--storage-quota 10M` in the forced command:
+     `command="borg serve --append-only --storage-quota 10M --restrict-to-path /srv/vault/<username>",restrict <type> <base64>`.
+     Borg then rejects every new object, so `borg create`, `borg delete` and
+     `borg prune` fail with "The storage quota (10.00 MB) has been exceeded",
+     including a backup that adds no new data. `borg list`, `borg extract`
+     and `borg check` keep working, and removing the flag makes writes work
+     again. Verified on Borg 1.4.0. `10M` is the smallest value Borg accepts,
+     so a repository that holds less than 10 MB is not stopped by this layer.
+  2. The quota backstop, for such a small repository and for anything that
+     is not Borg. On the first request with `frozen: true`, compute
+     `frozen_limit_bytes = used_bytes + 64 MiB`, store it in `state.json`,
+     and apply it as the hard limit. Later requests with `frozen: true` keep
+     the stored value. The 64 MiB are room for Borg lock files and an index
+     rebuild during a restore; they are not a write allowance, layer 1
+     removes that.
+  `frozen: false` writes the normal key lines again, clears the stored value
+  and applies `quota_bytes`.
 - A backup that hits the limit fails on the client with
   `OSError: [Errno 122] Disk quota exceeded`. The repository stays readable.
   Space held by the aborted transaction is reclaimed by the next successful
@@ -272,6 +287,13 @@ file named `config`, `runuser -u <username> -- borg compact <dir>`, one after
 another, in a background thread. `freed_bytes` is usage before minus usage
 after. If Borg cannot take the repository lock (a backup is running), the
 state is `failed` with the Borg message and the caller retries later.
+
+Compaction headroom: Borg writes the rewritten segments before it removes the
+old ones, so a Vault that sits at its limit could never free space. While a
+compaction runs, the account's hard limit is the limit it would otherwise
+have plus `COMPACT_HEADROOM_BYTES = 4 GiB`. The normal limit is applied again
+when the run ends, whatever the result, and by the start-up reconcile when
+the container died in the middle of a run.
 
 ### 6.5 Running it
 
@@ -348,7 +370,10 @@ both placed before the existing licence fulfilment logic.
 
 Branch A, subscription events (`event_type` starts with `subscription.`):
 apply the snapshot (section 8.2) and return 200. Unknown subscription ids are
-logged and answered with 200.
+logged and answered with 200. Paddle does not guarantee the order of
+webhooks, so such an event can belong to a Vault that fulfilment has not
+created yet. It is not lost: fulfilment step 6 reads the subscription's
+current state from Paddle.
 
 Branch B, `transaction.completed` whose order has
 `metadata.product == "vault"`: run Vault fulfilment. `transaction.paid` is
@@ -373,9 +398,16 @@ Vault fulfilment, every step idempotent, in this order:
 4. Bundle only: move the minted licence's `expires_at` to
    `paid_through + 14 days`.
 5. Mark the invite redeemed.
-6. Create the account on the node (`PUT`, no keys yet). A node failure does
+6. Catch up on the subscription: `GET /subscriptions/{id}` and apply the
+   result as a snapshot, with the subscription's `updated_at` as
+   `sub_event_at`. This covers a `subscription.past_due` or a cancellation
+   that arrived before the account existed. It runs whenever an account has a
+   subscription id and no `sub_event_at`. A Paddle failure does not fail the
+   webhook: `sub_event_at` stays empty and reconcile (8.5) tries again.
+   Skipped when no Paddle API key is configured.
+7. Create the account on the node (`PUT`, no keys yet). A node failure does
    not fail the webhook: it records `node_error` and the hourly cron retries.
-7. After the response (`waitUntil`): the existing licence email and admin
+8. After the response (`waitUntil`): the existing licence email and admin
    notification for bundles, then the `vault_ready` email.
 
 If any of steps 1 to 5 throws, the handler answers 500 so Paddle retries.
@@ -467,7 +499,9 @@ fails, nothing else happens and the next run retries.
 
 For each account that is not deleted:
 
-1. Evaluate (8.2). Persist `status`, `read_only_at`, `delete_at`.
+1. When the account has a subscription id and no `sub_event_at`, catch up on
+   the subscription first (7.4, fulfilment step 6).
+   Then evaluate (8.2). Persist `status`, `read_only_at`, `delete_at`.
 2. Sync the node when the desired state differs from the last synced state
    (`quota`, `frozen`, key list), or when `node_error` is set.
 3. Send due notices.
@@ -524,7 +558,7 @@ Failures: `400 license_invalid`, `429 vault_rate_limited`.
 | `POST /v1/vault/status` | | `{"vault": <vault object> or null}` |
 | `POST /v1/vault/keys` | `public_key`, `label` (optional, 64 chars) | Registers or replaces this instance's key, syncs the node now, returns `{"vault": ...}`. Errors: `404 vault_not_found`, `409 vault_deleted`, `400 invalid_key`, `409 too_many_keys` (5 per Vault), `502 node_unavailable`. |
 | `POST /v1/vault/portal` | | `{"url": "<Paddle update payment URL>"}`. `404 vault_not_found`. |
-| `POST /v1/vault/release` | | Schedules space release (section 10). Returns `{"vault": ...}`. `409 release_pending`. |
+| `POST /v1/vault/release` | | Schedules space release (section 10). Returns `{"vault": ...}`. `409 release_pending`, `409 vault_read_only`, `502 email_failed`. |
 | `POST /v1/vault/release/cancel` | | Cancels a scheduled release. Returns `{"vault": ...}`. |
 
 ### 9.3 Storefront endpoints (public)
@@ -581,7 +615,10 @@ Rule: compaction never runs immediately on a customer request.
    `POST /v1/vault/release` sets `release_requested_at = now`,
    `release_at = now + 7 days`, `release_state = 'scheduled'`, stores a token
    hash, and sends the `release_scheduled` email with the date and a cancel
-   link (`https://borgui.com/vault/release?cancel=<token>`).
+   link (`https://borgui.com/vault/release?cancel=<token>`). If the email
+   provider does not accept the email, the release fields are rolled back and
+   the answer is `502 email_failed`: a release nobody was told about does not
+   exist, so the 7 days always start from a warning that was sent.
 2. Until `release_at`, the customer can cancel from the app or the email link.
 3. At `release_at` the cron calls the node `compact`, sets
    `release_state = 'running'`, and on later runs reads the node's `compact`
@@ -591,9 +628,18 @@ Rule: compaction never runs immediately on a customer request.
 4. No release is scheduled while the status is `read_only` or `deleted`
    (`409 vault_read_only`).
 
-What the customer is told (app and docs): "Archives you prune stay recoverable
-for 7 days after you ask to release space. If you did not ask for this, cancel
-it."
+What the customer is told (app and docs): "Space release runs 7 days after you
+ask for it. It removes for good every archive pruned up to that moment,
+including archives pruned during those 7 days. If you did not ask for this,
+cancel it."
+
+Known limit, open for the owner (section 16): the 7 days protect against a
+release nobody asked for. They do not protect archives that are pruned after
+a release the owner did ask for. Someone who takes over the customer's server
+on day 6 can prune everything and the compaction on day 7 removes it. Closing
+that needs a copy of the removed data kept on the node for 7 days after each
+compaction (for example a reflink snapshot owned by root), which is not
+designed and not verified.
 
 ## 11. Borg UI app
 
