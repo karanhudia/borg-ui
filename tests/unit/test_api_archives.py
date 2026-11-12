@@ -360,6 +360,51 @@ class TestArchivesSshEnvironment:
             == "backend.errors.restore.repositoryNotFound"
         )
 
+    @pytest.mark.parametrize(
+        "result,expected",
+        [
+            # Another process holds the lock (dashboard 2024cc496c8bcb8f).
+            (
+                {
+                    "success": False,
+                    "return_code": 2,
+                    "stderr": "Failed to create/acquire the lock "
+                    "/home/borg/lock.exclusive (timeout).",
+                },
+                423,
+            ),
+            ({"success": False, "return_code": 73, "stderr": "lock timeout"}, 423),
+            # The lock file cannot be created at all: a permission refusal.
+            (
+                {
+                    "success": False,
+                    "return_code": 72,
+                    "stderr": "Failed to create/acquire the lock /r/lock.exclusive "
+                    "([Errno 13] Permission denied: '/r/lock.exclusive')",
+                },
+                422,
+            ),
+            ({"success": False, "return_code": 2, "stderr": "unexplained"}, 500),
+        ],
+    )
+    def test_get_archive_contents_failure_status(
+        self, test_client: TestClient, admin_headers, test_db, result, expected
+    ):
+        repo = Repository(name="Contents Repo", path="/tmp/contents-repo")
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch(
+            "app.api.archives.borg.list_archive_contents",
+            new=AsyncMock(return_value=result),
+        ):
+            response = test_client.get(
+                f"/api/archives/arch1/contents?repository={repo.path}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == expected
+
     def test_get_archive_contents_nonexistent_repository_returns_404(
         self, test_client: TestClient, admin_headers
     ):

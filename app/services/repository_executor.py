@@ -22,6 +22,7 @@ from app.core.borg_errors import (
     LOCK_CONTENTION_DETAIL_KEY,
     is_lock_contention_exit_code,
     is_repository_exists_failure,
+    repository_failure_status,
 )
 from app.database.models import AgentJob, AgentJobLog, AgentMachine, Repository
 from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
@@ -1005,11 +1006,26 @@ async def wait_for_agent_repository_operation_job(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={"key": "backend.errors.borg.repositoryAlreadyExists"},
                 )
+            lock_contention = lock_contention_for_waiter(agent_job, db)
+            # A refusal the user fixes on the agent's host (no permission on
+            # the repository, a read-only mount) is not a gateway fault
+            # (dashboard fd8a3e653ad160f1). Lock contention keeps its 502,
+            # which the operations runner defers on.
+            refusal = (
+                None
+                if lock_contention
+                else repository_failure_status(
+                    {
+                        "return_code": _failure_result(agent_job).get("return_code"),
+                        "stderr": reason,
+                    }
+                )
+            )
             raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
+                # 422 only: a conflict is inferred for init alone (above)
+                status_code=refusal if refusal == 422 else status.HTTP_502_BAD_GATEWAY,
                 detail=agent_operation_failed_detail(
-                    message,
-                    lock_contention=lock_contention_for_waiter(agent_job, db),
+                    message, lock_contention=lock_contention
                 ),
             )
         # As in the backup and script waiters, release the idle read so

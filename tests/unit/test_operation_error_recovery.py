@@ -26,6 +26,29 @@ from fastapi import HTTPException
             422,
         ),
         ({"return_code": 2, "stderr": "UnicodeDecodeError: 'utf-8' codec"}, 500),
+        # Init where a repository already is (dashboard 2bf3c31b30712233).
+        ({"return_code": 10}, 409),
+        (
+            {"return_code": 2, "stderr": "A repository already exists at ssh://h/./r."},
+            409,
+        ),
+        # A key Borg cannot find or read (a4b2fad0603467e8, ed36651bb055713a).
+        (
+            {"return_code": 2, "stderr": "No key file for repository /r found in /k."},
+            422,
+        ),
+        ({"return_code": 42}, 422),
+        (
+            {
+                "return_code": 2,
+                "stderr": "IsADirectoryError: [Errno 21] Is a directory: "
+                "'/root/.config/borg/keys/borg_keys'",
+            },
+            422,
+        ),
+        # No Borg on the SSH host (859daa3dfb3863ec), bash and dash wording.
+        ({"return_code": 2, "error": "Remote: sh: borg: command not found"}, 422),
+        ({"return_code": 2, "error": "Remote: sh: 1: borg: not found"}, 422),
         ({"return_code": 2, "stderr": "unexplained failure"}, 500),
         ({"return_code": 73, "stderr": "Our lock was killed by another borg"}, 500),
     ],

@@ -126,7 +126,16 @@ def failed_job(db, machine, *, kind="repository.info", code=2, tail=None):
             "Error: the repository already exists check could not run",
             502,
         ),
-        ("repository.init", 2, "Permission denied", 502),
+        # A refusal fixed on the agent's host is not a gateway fault
+        # (dashboard fd8a3e653ad160f1).
+        ("repository.init", 2, "Permission denied", 422),
+        (
+            "repository.list_archives",
+            72,
+            "Failed to create/acquire the lock /mnt/r/lock.exclusive "
+            "([Errno 13] Permission denied: '/mnt/r/lock.exclusive')",
+            422,
+        ),
         ("repository.init", 2, "", 502),
     ],
 )

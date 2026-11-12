@@ -624,7 +624,8 @@ class TestRepositoriesCreate:
                 headers=admin_headers,
             )
 
-        assert response.status_code == 500
+        # no Borg on the SSH host is the user's to fix
+        assert response.status_code == 422
         assert (
             response.json()["detail"]["key"]
             == "backend.errors.repo.failedToInitializeRepository"
@@ -4035,6 +4036,54 @@ class TestRepositoriesUpdate:
         test_db.refresh(repo)
         assert repo.path == "/tmp/init-once-initial"
 
+    def test_update_repository_path_onto_an_existing_repository_is_a_conflict(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        # The check found no repository but init did (dashboard
+        # 2bf3c31b30712233): the user picks another path, not a server fault.
+        repo = Repository(
+            name="Exists Repo",
+            path="/tmp/exists-initial",
+            encryption="repokey",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter.verify_repository",
+                new=AsyncMock(
+                    return_value={
+                        "success": False,
+                        "error": "Repository /tmp/exists-new does not exist.",
+                    }
+                ),
+            ),
+            patch(
+                "app.api.repositories.BorgRouter.initialize_repository",
+                new=AsyncMock(
+                    return_value={
+                        "success": False,
+                        "return_code": 2,
+                        "error": "A repository already exists at /tmp/exists-new.",
+                    }
+                ),
+            ),
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": "/tmp/exists-new"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 409
+        assert "already exists" in response.json()["detail"]["params"]["error"]
+        test_db.refresh(repo)
+        assert repo.path == "/tmp/exists-initial"
+
     @pytest.mark.parametrize(
         "payload",
         [{"encryption": "none"}, {"borg_version": 2}, {"no_such_field": 1}],
@@ -6467,7 +6516,8 @@ async def test_wait_for_agent_job_failure_surfaces_borg_stderr(test_db):
             test_db, job.id, timeout_seconds=1
         )
 
-    assert exc_info.value.status_code == 502
+    # a permission refusal on the agent host is the user's to fix
+    assert exc_info.value.status_code == 422
     assert exc_info.value.detail["key"] == (
         "backend.errors.agents.repositoryOperationFailedWithReason"
     )

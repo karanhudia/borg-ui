@@ -282,8 +282,9 @@ async def _agent_job_result(
             db, agent_job.id, timeout_seconds=timeout_seconds
         )
     except BaseException as exc:
-        # 502: the job failed and is over; anything else left it live
-        if not (isinstance(exc, HTTPException) and exc.status_code == 502):
+        # 502, or a refusal the waiter classified (422): the job failed and is
+        # over; anything else left it live
+        if not (isinstance(exc, HTTPException) and exc.status_code in (422, 502)):
             abandoned = abandon_agent_repository_operation_job(db, agent_job.id)
             if abandoned is not None and abandoned.status == "cancel_requested":
                 await dispatch_agent_cancel_if_connected(abandoned)

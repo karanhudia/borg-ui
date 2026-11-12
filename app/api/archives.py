@@ -16,6 +16,10 @@ from sqlalchemy.orm import Session
 from app.api.archive_download import extract_file_download, resolve_extracted_file_path
 from app.core.borg import borg
 from app.core.borg2 import normalize_repo_info_encryption
+from app.core.borg_errors import (
+    is_lock_contention_exit_code,
+    repository_failure_status,
+)
 from app.core.security import (
     check_repo_access,
     get_current_download_user,
@@ -497,6 +501,17 @@ async def _agent_read_result(
         raise
 
 
+def _archive_contents_failure_status(result: dict) -> int:
+    """423 while another process holds the repository's lock (a backup is
+    running; dashboard 2024cc496c8bcb8f), the classified refusal otherwise."""
+    stderr = str(result.get("stderr") or "").lower()
+    if is_lock_contention_exit_code(result.get("return_code")) or (
+        "failed to create/acquire the lock" in stderr and "(timeout)" in stderr
+    ):
+        return status.HTTP_423_LOCKED
+    return repository_failure_status(result)
+
+
 def _read_succeeded(result: dict) -> bool:
     """A server result says `success`; an agent result carries Borg's
     return code."""
@@ -780,7 +795,7 @@ async def get_archive_contents(
                 cleanup_temp_key_file(temp_key_file)
         if not _read_succeeded(result):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=_archive_contents_failure_status(result),
                 detail=f"Failed to get archive contents: {result.get('stderr', '')}",
             )
 
