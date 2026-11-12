@@ -167,6 +167,11 @@ def bounded_operation_diagnostic(reason: str) -> str:
     return diagnostic
 
 
+# Borg missing on the remote end of an SSH repository: "sh: borg: command not
+# found" (bash), "sh: 1: borg: not found" (dash), or a configured remote path.
+_REMOTE_BORG_MISSING = _re.compile(r"\bborg[\w./-]*: (?:command )?not found")
+
+
 def repository_failure_status(result: dict) -> int:
     """Classify evidenced refusals only; unknown Borg failures remain 500."""
     reason = "\n".join(
@@ -174,7 +179,14 @@ def repository_failure_status(result: dict) -> int:
     ).lower()
     # 422, not 403: the frontend reads 403 as a role refusal and toasts so.
     if (
-        result.get("return_code") == 21
+        result.get("return_code") in (21, 42, 44)
+        # A keyfile repository whose key is not where Borg looks, or a
+        # directory where Borg expects key files (dashboard a4b2fad0603467e8,
+        # ed36651bb055713a).
+        or "no key file for repository" in reason
+        or ("isadirectoryerror" in reason and "/keys/" in reason)
+        # The SSH host has no Borg (dashboard 859daa3dfb3863ec).
+        or _REMOTE_BORG_MISSING.search(reason)
         or "permission denied" in reason
         # A read-only mount is the host's configuration, not a Borg UI fault.
         or "[errno 30] read-only file system" in reason
@@ -185,7 +197,13 @@ def repository_failure_status(result: dict) -> int:
     ):
         return 422
     if (
-        result.get("return_code") == 19
+        result.get("return_code") in (19, REPOSITORY_EXISTS_EXIT_CODE)
+        # Init where a repository already is, e.g. a repository whose path
+        # was edited (dashboard 2bf3c31b30712233).
+        or any(
+            _REPOSITORY_EXISTS_LINE.fullmatch(line.strip())
+            for line in reason.splitlines()
+        )
         or "fileexistserror: [errno 17]" in reason
         # Borg 1's legacy exit code 2 cannot distinguish an occupied target.
         # This exact message is emitted by PathAlreadyExists (borg 1.4.3).
