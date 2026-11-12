@@ -16,6 +16,7 @@ import structlog
 import re
 
 from app.services.storage_usage import format_bytes
+from app.database.database import run_off_loop
 from app.database.models import NotificationSettings, Repository, SystemSettings
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -590,13 +591,23 @@ def _plain(settings, title: str, body: str):
         yield setting, title, body, body
 
 
+# The database work below runs through `run_off_loop`: its threads are not
+# the ones Apprise sends in, so a burst of slow deliveries never queues a
+# commit that would give a connection back, and a cancelled caller waits for
+# the thread before its cleanup touches the session. Each step ends its
+# transaction, so no pooled connection is held while a delivery runs. A
+# commit keeps what the caller had pending, as a sent notification's commit
+# always has.
+
+
 def _still_exists(db: Session, setting_id: int) -> bool:
-    return (
+    found = (
         db.query(NotificationSettings.id)
         .filter(NotificationSettings.id == setting_id)
         .first()
-        is not None
     )
+    db.commit()
+    return found is not None
 
 
 def _record_sent(db: Session, setting_id: int) -> None:
@@ -619,9 +630,13 @@ async def _send_to_service(
 ) -> None:
     """Send one notification: HTML for email services, Markdown for chat.
 
-    Failures are logged, never raised.
+    A setting deleted while an earlier delivery ran is skipped. Failures are
+    logged, never raised.
     """
     try:
+        if not await run_off_loop(_still_exists, db, setting_id):
+            return
+
         apobj = apprise.Apprise()
         apobj.add(service_url)
 
@@ -637,7 +652,7 @@ async def _send_to_service(
         )
 
         if success:
-            await asyncio.to_thread(_record_sent, db, setting_id)
+            await run_off_loop(_record_sent, db, setting_id)
             logger.info("notification_sent", service=service_name, title=title)
         else:
             logger.warning("notification_failed", service=service_name, title=title)
@@ -652,23 +667,25 @@ def _delivered(prepare):
 
     Preparing a notification reads the database: its settings, the
     repository, the timezone, lazy relationships. The generator runs to the
-    end in a worker thread and hands back plain values, so only the delivery
+    end off the loop and hands back plain values, so only the delivery
     awaits on the event loop.
     """
 
-    def messages(*args, **kwargs):
-        return [
+    def messages(db, *args, **kwargs):
+        prepared = [
             (setting.id, setting.name, setting.service_url, title, html, markdown)
             for setting, title, html, markdown in prepare(*args, **kwargs)
         ]
+        if prepared:
+            db.commit()
+        return prepared
 
     @functools.wraps(prepare)
     async def send(*args, **kwargs) -> None:
         db = kwargs["db"] if "db" in kwargs else args[0]
-        for message in await asyncio.to_thread(messages, *args, **kwargs):
-            # An earlier delivery awaits, and the setting can be deleted then
-            if await asyncio.to_thread(_still_exists, db, message[0]):
-                await _send_to_service(db, *message)
+        prepared = await run_off_loop(functools.partial(messages, db, *args, **kwargs))
+        for message in prepared:
+            await _send_to_service(db, *message)
 
     return send
 

@@ -1665,7 +1665,7 @@ async def _notify_agent_job_outcome(db: Session, job: AgentJob) -> None:
     database) must stay inside the boundary and never fail the transport.
     """
     try:
-        backup_job, check_job = await asyncio.to_thread(_jobs_to_notify_for, job, db)
+        backup_job, check_job = await run_off_loop(_jobs_to_notify_for, job, db)
         if backup_job is not None:
             await notify_backup_job_finished(db, backup_job)
         elif check_job is not None:
@@ -1683,7 +1683,7 @@ async def _notify_agent_job_started(db: Session, job: AgentJob) -> None:
     worker thread. Called after the commit, so as in
     `_notify_agent_job_outcome` the lookup must not fail the transport."""
     try:
-        backup_job = await asyncio.to_thread(_get_linked_backup_job, job, db)
+        backup_job = await run_off_loop(_get_linked_backup_job, job, db)
         if backup_job is not None:
             await notify_backup_job_started(db, job, backup_job)
     except Exception as exc:

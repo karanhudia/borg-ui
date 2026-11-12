@@ -7,8 +7,8 @@ REST) and in the agent job reaper - so without an explicit dispatch there,
 configured notifications (backup start/success/warning/failure, check
 success/failure) silently never fire for agent repositories.
 
-The job rows are read in a worker thread, as the notification service reads
-its settings: only the delivery awaits on the event loop.
+The job rows are read through `run_off_loop`, as the notification service
+reads its settings: only the delivery awaits on the event loop.
 
 This module renders the linked job rows into the same notification calls the
 server-side paths make. Callers invoke it after the terminal state has been
@@ -20,7 +20,6 @@ agent protocol.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 from functools import partial
 from typing import Any, Optional
@@ -29,6 +28,7 @@ import structlog
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
+from app.database.database import run_off_loop
 from app.database.models import (
     AgentJob,
     BackupPlan,
@@ -107,7 +107,7 @@ async def notify_backup_job_started(
 ) -> None:
     """Send the backup-start notification for an agent backup job."""
     try:
-        send = await asyncio.to_thread(_backup_start_call, db, agent_job, backup_job)
+        send = await run_off_loop(_backup_start_call, db, agent_job, backup_job)
         await send()
     except Exception as exc:
         logger.warning(
@@ -175,9 +175,7 @@ async def notify_backup_job_finished(db: Session, backup_job) -> None:
     """
     status_value = None
     try:
-        status_value, send = await asyncio.to_thread(
-            _backup_finished_call, db, backup_job
-        )
+        status_value, send = await run_off_loop(_backup_finished_call, db, backup_job)
         if send is not None:
             await send()
     except Exception as exc:
@@ -224,9 +222,7 @@ async def notify_check_job_finished(db: Session, check_job) -> None:
     """
     status_value = None
     try:
-        status_value, send = await asyncio.to_thread(
-            _check_finished_call, db, check_job
-        )
+        status_value, send = await run_off_loop(_check_finished_call, db, check_job)
         if send is not None:
             await send()
     except Exception as exc:
