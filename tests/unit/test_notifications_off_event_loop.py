@@ -242,3 +242,28 @@ async def test_a_burst_of_slow_deliveries_holds_no_connection(tmp_path, apprise)
         engine.dispose()
 
     assert len(delivered) == burst
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_notification_called_with_db_by_keyword_is_sent(test_db, apprise):
+    """The check services and the agent check path pass `db=` by keyword."""
+    test_db.add(
+        NotificationSettings(
+            name="Chat",
+            service_url="discord://webhook_id/token",
+            enabled=True,
+            notify_on_check_success=True,
+            monitor_all_repositories=True,
+        )
+    )
+    test_db.commit()
+
+    await notification_service.send_check_completion(
+        db=test_db,
+        repository_name="repo",
+        repository_path="/repo",
+        status="completed",
+    )
+
+    assert apprise.notify.call_count == 1

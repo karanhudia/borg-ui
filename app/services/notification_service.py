@@ -671,13 +671,13 @@ def _delivered(prepare):
     awaits on the event loop.
     """
 
-    def messages(db, *args, **kwargs):
+    def messages(session, *args, **kwargs):
         prepared = [
             (setting.id, setting.name, setting.service_url, title, html, markdown)
             for setting, title, html, markdown in prepare(*args, **kwargs)
         ]
         if prepared:
-            db.commit()
+            session.commit()
         return prepared
 
     @functools.wraps(prepare)
