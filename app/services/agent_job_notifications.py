@@ -7,6 +7,9 @@ REST) and in the agent job reaper - so without an explicit dispatch there,
 configured notifications (backup start/success/warning/failure, check
 success/failure) silently never fire for agent repositories.
 
+The job rows are read in a worker thread, as the notification service reads
+its settings: only the delivery awaits on the event loop.
+
 This module renders the linked job rows into the same notification calls the
 server-side paths make. Callers invoke it after the terminal state has been
 committed; the entire dispatch - including every ORM attribute read, which can
@@ -17,7 +20,9 @@ agent protocol.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
+from functools import partial
 from typing import Any, Optional
 
 import structlog
@@ -78,33 +83,89 @@ def backup_job_label(db: Session, backup_job) -> Optional[str]:
     return None
 
 
+def _backup_start_call(db: Session, agent_job: AgentJob, backup_job):
+    payload = agent_job.payload or {}
+    backup_payload = payload.get("backup") if isinstance(payload, dict) else None
+    source_paths = None
+    if isinstance(backup_payload, dict):
+        raw_paths = backup_payload.get("source_paths")
+        if isinstance(raw_paths, list):
+            source_paths = [str(path) for path in raw_paths]
+    return partial(
+        notification_service.send_backup_start,
+        db,
+        backup_job.repository,
+        backup_job.archive_name or "",
+        source_paths,
+        None,
+        backup_job_label(db, backup_job),
+    )
+
+
 async def notify_backup_job_started(
     db: Session, agent_job: AgentJob, backup_job
 ) -> None:
     """Send the backup-start notification for an agent backup job."""
     try:
-        payload = agent_job.payload or {}
-        backup_payload = payload.get("backup") if isinstance(payload, dict) else None
-        source_paths = None
-        if isinstance(backup_payload, dict):
-            raw_paths = backup_payload.get("source_paths")
-            if isinstance(raw_paths, list):
-                source_paths = [str(path) for path in raw_paths]
-
-        await notification_service.send_backup_start(
-            db,
-            backup_job.repository,
-            backup_job.archive_name or "",
-            source_paths,
-            None,
-            backup_job_label(db, backup_job),
-        )
+        send = await asyncio.to_thread(_backup_start_call, db, agent_job, backup_job)
+        await send()
     except Exception as exc:
         logger.warning(
             "Failed to send agent backup start notification",
             backup_job_id=orm_identity_id(backup_job),
             error=str(exc),
         )
+
+
+def _backup_finished_call(db: Session, backup_job):
+    """The status, and the send for it: none for a status without a
+    server-side notification (e.g. cancelled)."""
+    status_value = backup_job.status
+    if status_value not in ("completed", "completed_with_warnings", "failed"):
+        return status_value, None
+
+    job_name = backup_job_label(db, backup_job)
+    if status_value == "failed":
+        return status_value, partial(
+            notification_service.send_backup_failure,
+            db,
+            backup_job.repository,
+            backup_job.error_message or "Unknown error",
+            backup_job.id,
+            job_name,
+        )
+
+    stats = {
+        "original_size": backup_job.original_size,
+        "compressed_size": backup_job.compressed_size,
+        "deduplicated_size": backup_job.deduplicated_size,
+    }
+    timing = {
+        "started_at": _as_utc(backup_job.started_at),
+        "nfiles": backup_job.nfiles,
+    }
+    if status_value == "completed_with_warnings":
+        return status_value, partial(
+            notification_service.send_backup_warning,
+            db,
+            backup_job.repository,
+            backup_job.archive_name or "",
+            backup_job.error_message or "",
+            stats,
+            _as_utc(backup_job.completed_at),
+            job_name,
+            **timing,
+        )
+    return status_value, partial(
+        notification_service.send_backup_success,
+        db,
+        backup_job.repository,
+        backup_job.archive_name or "",
+        stats,
+        _as_utc(backup_job.completed_at),
+        job_name,
+        **timing,
+    )
 
 
 async def notify_backup_job_finished(db: Session, backup_job) -> None:
@@ -114,49 +175,11 @@ async def notify_backup_job_finished(db: Session, backup_job) -> None:
     """
     status_value = None
     try:
-        status_value = backup_job.status
-        if status_value not in ("completed", "completed_with_warnings", "failed"):
-            return
-
-        job_name = backup_job_label(db, backup_job)
-        if status_value == "failed":
-            await notification_service.send_backup_failure(
-                db,
-                backup_job.repository,
-                backup_job.error_message or "Unknown error",
-                backup_job.id,
-                job_name,
-            )
-            return
-
-        stats = {
-            "original_size": backup_job.original_size,
-            "compressed_size": backup_job.compressed_size,
-            "deduplicated_size": backup_job.deduplicated_size,
-        }
-        if status_value == "completed_with_warnings":
-            await notification_service.send_backup_warning(
-                db,
-                backup_job.repository,
-                backup_job.archive_name or "",
-                backup_job.error_message or "",
-                stats,
-                _as_utc(backup_job.completed_at),
-                job_name,
-                started_at=_as_utc(backup_job.started_at),
-                nfiles=backup_job.nfiles,
-            )
-        else:
-            await notification_service.send_backup_success(
-                db,
-                backup_job.repository,
-                backup_job.archive_name or "",
-                stats,
-                _as_utc(backup_job.completed_at),
-                job_name,
-                started_at=_as_utc(backup_job.started_at),
-                nfiles=backup_job.nfiles,
-            )
+        status_value, send = await asyncio.to_thread(
+            _backup_finished_call, db, backup_job
+        )
+        if send is not None:
+            await send()
     except Exception as exc:
         logger.warning(
             "Failed to send agent backup notification",
@@ -164,6 +187,33 @@ async def notify_backup_job_finished(db: Session, backup_job) -> None:
             status=status_value,
             error=str(exc),
         )
+
+
+def _check_finished_call(db: Session, check_job):
+    status_value = check_job.status
+    if status_value not in ("completed", "completed_with_warnings", "failed"):
+        return status_value, None
+
+    repository = (
+        db.query(Repository).filter(Repository.id == check_job.repository_id).first()
+    )
+    duration_seconds = None
+    started_at = _as_utc(check_job.started_at)
+    completed_at = _as_utc(check_job.completed_at)
+    if started_at and completed_at:
+        duration_seconds = int((completed_at - started_at).total_seconds())
+
+    notified_status = "failed" if status_value == "failed" else "completed"
+    return status_value, partial(
+        notification_service.send_check_completion,
+        db=db,
+        repository_name=repository.name if repository else "Unknown",
+        repository_path=repository.path if repository else "Unknown",
+        status=notified_status,
+        duration_seconds=duration_seconds,
+        error_message=check_job.error_message if notified_status == "failed" else None,
+        check_type="scheduled" if check_job.scheduled_check else "manual",
+    )
 
 
 async def notify_check_job_finished(db: Session, check_job) -> None:
@@ -174,33 +224,11 @@ async def notify_check_job_finished(db: Session, check_job) -> None:
     """
     status_value = None
     try:
-        status_value = check_job.status
-        if status_value not in ("completed", "completed_with_warnings", "failed"):
-            return
-
-        repository = (
-            db.query(Repository)
-            .filter(Repository.id == check_job.repository_id)
-            .first()
+        status_value, send = await asyncio.to_thread(
+            _check_finished_call, db, check_job
         )
-        duration_seconds = None
-        started_at = _as_utc(check_job.started_at)
-        completed_at = _as_utc(check_job.completed_at)
-        if started_at and completed_at:
-            duration_seconds = int((completed_at - started_at).total_seconds())
-
-        notified_status = "failed" if status_value == "failed" else "completed"
-        await notification_service.send_check_completion(
-            db=db,
-            repository_name=repository.name if repository else "Unknown",
-            repository_path=repository.path if repository else "Unknown",
-            status=notified_status,
-            duration_seconds=duration_seconds,
-            error_message=check_job.error_message
-            if notified_status == "failed"
-            else None,
-            check_type="scheduled" if check_job.scheduled_check else "manual",
-        )
+        if send is not None:
+            await send()
     except Exception as exc:
         logger.warning(
             "Failed to send agent check notification",
