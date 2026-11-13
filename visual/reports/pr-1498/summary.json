@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-11-13T04:37:49.337Z",
+  "generatedAt": "2026-11-13T11:54:47.642Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1498 visual report",
     "commitSha": "27243b7a891e",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43366686337"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43420660431"
   },
   "totals": {
     "baseline": 1256,
-    "actual": 1278,
+    "actual": 1294,
     "compared": 1256,
-    "changed": 7,
-    "added": 22,
+    "changed": 8,
+    "added": 38,
     "removed": 0,
-    "unchanged": 1249
+    "unchanged": 1248
   },
   "changed": [
     {
@@ -125,13 +125,31 @@
       }
     },
     {
+      "fileName": "pages-cloudstorage--editing-remote--mobile.png",
+      "baselinePath": "images/baseline/pages-cloudstorage--editing-remote--mobile.png",
+      "actualPath": "images/actual/pages-cloudstorage--editing-remote--mobile.png",
+      "diffPath": "images/diff/pages-cloudstorage--editing-remote--mobile.png",
+      "diffPixels": 1927,
+      "totalPixels": 329160,
+      "diffRatio": 0.005854295783205736,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 516,
+      "diffPixels": 428,
       "totalPixels": 329160,
-      "diffRatio": 0.0015676266861100983,
+      "diffRatio": 0.0013002794993316321,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -175,6 +193,14 @@
     {
       "fileName": "remote-machines-addkeydialog--generate.png",
       "actualPath": "images/actual/remote-machines-addkeydialog--generate.png"
+    },
+    {
+      "fileName": "remote-machines-addkeydialog--import-from-path--mobile.png",
+      "actualPath": "images/actual/remote-machines-addkeydialog--import-from-path--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-addkeydialog--import-from-path.png",
+      "actualPath": "images/actual/remote-machines-addkeydialog--import-from-path.png"
     },
     {
       "fileName": "remote-machines-addkeydialog--pending--mobile.png",
@@ -225,12 +251,68 @@
       "actualPath": "images/actual/remote-machines-extrakeyscard--empty.png"
     },
     {
+      "fileName": "remote-machines-extrakeyscard--fingerprint-revealed--mobile.png",
+      "actualPath": "images/actual/remote-machines-extrakeyscard--fingerprint-revealed--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-extrakeyscard--fingerprint-revealed.png",
+      "actualPath": "images/actual/remote-machines-extrakeyscard--fingerprint-revealed.png"
+    },
+    {
       "fileName": "remote-machines-extrakeyscard--with-keys--mobile.png",
       "actualPath": "images/actual/remote-machines-extrakeyscard--with-keys--mobile.png"
     },
     {
       "fileName": "remote-machines-extrakeyscard--with-keys.png",
       "actualPath": "images/actual/remote-machines-extrakeyscard--with-keys.png"
+    },
+    {
+      "fileName": "remote-machines-sshpageheader--no-key-yet--mobile.png",
+      "actualPath": "images/actual/remote-machines-sshpageheader--no-key-yet--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-sshpageheader--no-key-yet.png",
+      "actualPath": "images/actual/remote-machines-sshpageheader--no-key-yet.png"
+    },
+    {
+      "fileName": "remote-machines-sshpageheader--with-actions--mobile.png",
+      "actualPath": "images/actual/remote-machines-sshpageheader--with-actions--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-sshpageheader--with-actions.png",
+      "actualPath": "images/actual/remote-machines-sshpageheader--with-actions.png"
+    },
+    {
+      "fileName": "remote-machines-systemkeycard--no-key--mobile.png",
+      "actualPath": "images/actual/remote-machines-systemkeycard--no-key--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-systemkeycard--no-key.png",
+      "actualPath": "images/actual/remote-machines-systemkeycard--no-key.png"
+    },
+    {
+      "fileName": "remote-machines-systemkeycard--with-key--mobile.png",
+      "actualPath": "images/actual/remote-machines-systemkeycard--with-key--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-systemkeycard--with-key.png",
+      "actualPath": "images/actual/remote-machines-systemkeycard--with-key.png"
+    },
+    {
+      "fileName": "remote-machines-testconnectiondialog--system-key-only--mobile.png",
+      "actualPath": "images/actual/remote-machines-testconnectiondialog--system-key-only--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-testconnectiondialog--system-key-only.png",
+      "actualPath": "images/actual/remote-machines-testconnectiondialog--system-key-only.png"
+    },
+    {
+      "fileName": "remote-machines-testconnectiondialog--with-key-picker--mobile.png",
+      "actualPath": "images/actual/remote-machines-testconnectiondialog--with-key-picker--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-testconnectiondialog--with-key-picker.png",
+      "actualPath": "images/actual/remote-machines-testconnectiondialog--with-key-picker.png"
     }
   ],
   "removed": [],
@@ -3366,9 +3448,6 @@
     },
     {
       "fileName": "pages-cloudstorage--delete-confirmation.png"
-    },
-    {
-      "fileName": "pages-cloudstorage--editing-remote--mobile.png"
     },
     {
       "fileName": "pages-cloudstorage--editing-remote.png"
