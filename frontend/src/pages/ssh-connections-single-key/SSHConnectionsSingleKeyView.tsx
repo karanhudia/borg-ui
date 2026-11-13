@@ -179,7 +179,12 @@ export function SSHConnectionsSingleKeyView({
 
   return (
     <Box>
-      <SSHPageHeader t={t} />
+      <SSHPageHeader
+        t={t}
+        showActions={!!keyExists}
+        onDeploy={() => setDeployDialogOpen(true)}
+        onAddManual={() => setTestConnectionDialogOpen(true)}
+      />
       <SystemKeyCard
         t={t}
         theme={theme}
@@ -192,8 +197,6 @@ export function SSHConnectionsSingleKeyView({
         setFingerprintVisible={setFingerprintVisible}
         setGenerateDialogOpen={setGenerateDialogOpen}
         setImportDialogOpen={setImportDialogOpen}
-        setDeployDialogOpen={setDeployDialogOpen}
-        setTestConnectionDialogOpen={setTestConnectionDialogOpen}
         setDeleteKeyDialogOpen={setDeleteKeyDialogOpen}
         onCopyPublicKey={handleCopyPublicKey}
       />

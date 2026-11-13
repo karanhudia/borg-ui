@@ -2830,7 +2830,7 @@
       "title": "Manuelle Verbindung hinzufügen",
       "instructions": {
         "title": "Vor dem Hinzufügen dieser Verbindung:",
-        "step1": "Öffentlichen Schlüssel von oben kopieren",
+        "step1": "Öffentlichen Schlüssel des verwendeten SSH-Schlüssels kopieren (Kopier-Schaltfläche auf seiner Schlüsselkarte)",
         "step2": "Per SSH auf deinen Server verbinden",
         "step3": "Zu ~/.ssh/authorized_keys hinzufügen"
       },
@@ -6149,6 +6149,7 @@
         "failedGenerateKey": "SSH-Schlüssel konnte nicht generiert werden: {{error}}",
         "invalidKeyType": "Ungültiger Schlüsseltyp. Muss einer der folgenden sein: {{types}}",
         "invalidPrivateKeyFormat": "Ungültiges Format des privaten Schlüssels",
+        "privateKeyPassphraseNotSupported": "Dieser Schlüssel ist mit einer Passphrase geschützt. Entfernen Sie die Passphrase (ssh-keygen -p) und fügen Sie ihn erneut ein.",
         "invalidPublicKeyFormat": "Ungültiges Format des öffentlichen Schlüssels",
         "keyDeployFailed": "SSH-Schlüssel konnte nicht bereitgestellt werden: {{error}}",
         "keyGeneratedButDeployFailed": "SSH-Schlüssel generiert, aber Bereitstellung fehlgeschlagen: {{error}}",

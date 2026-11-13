@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import { KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import PathSelectorField from '../../../components/shared/PathSelectorField'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
 
 export type AddKeyInput =
@@ -139,22 +140,25 @@ export function AddKeyDialog({ open, pending = false, onClose, onSubmit }: AddKe
           )}
           {mode === 'import' && (
             <>
-              <TextField
+              <PathSelectorField
                 label={t('sshConnections.extraKeys.addDialog.privateKeyPath')}
                 value={privateKeyPath}
-                onChange={(event) => setPrivateKeyPath(event.target.value)}
+                onChange={setPrivateKeyPath}
                 placeholder="/root/.ssh/id_ed25519"
                 helperText={t('sshConnections.extraKeys.addDialog.privateKeyPathHelper')}
+                selectMode="files"
+                size="medium"
                 required
-                fullWidth
                 disabled={pending}
               />
-              <TextField
+              <PathSelectorField
                 label={t('sshConnections.extraKeys.addDialog.publicKeyPath')}
                 value={publicKeyPath}
-                onChange={(event) => setPublicKeyPath(event.target.value)}
+                onChange={setPublicKeyPath}
+                placeholder="/root/.ssh/id_ed25519.pub"
                 helperText={t('sshConnections.extraKeys.addDialog.publicKeyPathHelper')}
-                fullWidth
+                selectMode="files"
+                size="medium"
                 disabled={pending}
               />
             </>

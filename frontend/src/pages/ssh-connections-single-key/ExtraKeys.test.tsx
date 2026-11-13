@@ -4,7 +4,8 @@ import { renderWithProviders, screen, userEvent } from '../../test/test-utils'
 import { AddKeyDialog } from './dialogs/AddKeyDialog'
 import { DeleteExtraKeyDialog } from './dialogs/DeleteExtraKeyDialog'
 import { EditConnectionDialog } from './dialogs/EditConnectionDialog'
-import { createEditConnectionForm } from './formDefaults'
+import { TestConnectionDialog } from './dialogs/TestConnectionDialog'
+import { createEditConnectionForm, createTestConnectionForm } from './formDefaults'
 import type { SSHConnection, SSHKeySummary } from './types'
 import { ExtraKeysCard } from './view/ExtraKeysCard'
 
@@ -66,6 +67,25 @@ describe('ExtraKeysCard', () => {
     expect(onDelete).toHaveBeenCalledWith(extraKey)
   })
 
+  it('hides each fingerprint until revealed', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <ExtraKeysCard
+        keys={[extraKey]}
+        onAdd={vi.fn()}
+        onCopyPublicKey={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('SHA256:abc123')).toHaveStyle({ filter: 'blur(4px)' })
+    await user.click(screen.getByRole('button', { name: /Reveal fingerprint: borgserver-repo1/ }))
+    expect(screen.getByText('SHA256:abc123')).toHaveStyle({ filter: 'none' })
+    expect(
+      screen.getByRole('button', { name: /Hide fingerprint: borgserver-repo1/ })
+    ).toBeInTheDocument()
+  })
+
   it('says so when there are no additional keys', () => {
     renderWithProviders(
       <ExtraKeysCard keys={[]} onAdd={vi.fn()} onCopyPublicKey={vi.fn()} onDelete={vi.fn()} />
@@ -94,6 +114,7 @@ describe('AddKeyDialog', () => {
     renderWithProviders(<AddKeyDialog open onClose={vi.fn()} onSubmit={onSubmit} />)
 
     await user.click(screen.getByRole('tab', { name: 'Import from path' }))
+    expect(screen.getAllByRole('button', { name: 'Browse filesystem' })).toHaveLength(2)
     await user.type(screen.getByLabelText(/Key Name/), 'borgmatic')
     await user.type(screen.getByLabelText(/Private Key Path/), '/root/.ssh/id_ed25519')
     await user.click(screen.getByRole('button', { name: 'Add Key' }))
@@ -179,5 +200,33 @@ describe('EditConnectionDialog key picker', () => {
     expect(
       screen.getByText(/Changing the key marks the connection as untested/)
     ).toBeInTheDocument()
+  })
+})
+
+describe('TestConnectionDialog key picker', () => {
+  const renderDialog = (sshKeys: SSHKeySummary[]) =>
+    renderWithProviders(
+      <TestConnectionDialog
+        t={i18n.t.bind(i18n)}
+        open
+        setOpen={vi.fn()}
+        sshKeys={sshKeys}
+        systemKeyId={1}
+        testConnectionForm={createTestConnectionForm()}
+        setTestConnectionForm={vi.fn()}
+        setHostError={vi.fn()}
+        pending={false}
+        onTest={vi.fn()}
+      />
+    )
+
+  it('is hidden while there is only the system key', () => {
+    renderDialog([systemKey])
+    expect(screen.queryByText('SSH key')).not.toBeInTheDocument()
+  })
+
+  it('shows once there is a second key', () => {
+    renderDialog([systemKey, extraKey])
+    expect(screen.getAllByText('SSH key').length).toBeGreaterThan(0)
   })
 })

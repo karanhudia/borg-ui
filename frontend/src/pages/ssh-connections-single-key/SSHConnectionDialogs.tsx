@@ -172,6 +172,8 @@ export function SSHConnectionDialogs({
         t={t}
         open={testConnectionDialogOpen}
         setOpen={setTestConnectionDialogOpen}
+        sshKeys={sshKeys}
+        systemKeyId={systemKey?.id}
         testConnectionForm={testConnectionForm}
         setTestConnectionForm={setTestConnectionForm}
         hostError={testConnectionHostError}

@@ -52,6 +52,7 @@ const { track, toastSuccess, toastError, mockState } = vi.hoisted(() => ({
   toastError: vi.fn(),
   mockState: {
     canManageSsh: true,
+    sshKeysResponse: { data: { ssh_keys: [] as unknown[] } },
     systemKeyResponse: {
       data: {
         exists: true,
@@ -159,6 +160,7 @@ vi.mock('../../services/api', () => ({
   sshKeysAPI: {
     getSystemKey: vi.fn(() => Promise.resolve(mockState.systemKeyResponse)),
     getSSHConnections: vi.fn(() => Promise.resolve(mockState.connectionsResponse)),
+    getSSHKeys: vi.fn(() => Promise.resolve(mockState.sshKeysResponse)),
     generateSSHKey: vi.fn(() => Promise.resolve({ data: {} })),
     importSSHKey: vi.fn(() => Promise.resolve({ data: {} })),
     deploySSHKey: vi.fn(() => Promise.resolve({ data: {} })),
@@ -204,6 +206,7 @@ describe('SSHConnectionsSingleKey', () => {
     await i18n.changeLanguage('en')
     vi.clearAllMocks()
     mockState.canManageSsh = true
+    mockState.sshKeysResponse = { data: { ssh_keys: [] } }
     mockState.systemKeyResponse = {
       data: {
         exists: true,
@@ -824,5 +827,52 @@ describe('SSHConnectionsSingleKey', () => {
       mount_point: 'branch-office',
     })
     await rtlWaitFor(() => expect(sshKeysAPI.testExistingConnection).toHaveBeenCalledWith(3))
+  }, 30000)
+
+  it('adds a manual connection with the chosen extra key', async () => {
+    const { sshKeysAPI } = await import('../../services/api')
+    mockState.sshKeysResponse = {
+      data: {
+        ssh_keys: [
+          {
+            id: 7,
+            name: 'System SSH Key',
+            key_type: 'ed25519',
+            is_system_key: true,
+            connection_count: 1,
+          },
+          {
+            id: 9,
+            name: 'borgserver-repo1',
+            key_type: 'ed25519',
+            is_system_key: false,
+            connection_count: 0,
+          },
+        ],
+      },
+    }
+    const user = userEvent.setup()
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    await screen.findByText('borgserver-repo1')
+    await user.click(
+      screen.getByRole('button', { name: /add a connection for a manually deployed ssh key/i })
+    )
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('combobox', { name: /ssh key/i }))
+    await user.click(await screen.findByRole('option', { name: /borgserver-repo1/ }))
+    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+      target: { value: 'repo1.example' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^username$/i), { target: { value: 'borg' } })
+    await user.click(within(dialog).getByRole('button', { name: /test & add connection/i }))
+
+    await rtlWaitFor(() => expect(sshKeysAPI.testSSHConnection).toHaveBeenCalledTimes(1))
+    expect(sshKeysAPI.testSSHConnection).toHaveBeenCalledWith(9, {
+      host: 'repo1.example',
+      username: 'borg',
+      port: 22,
+    })
   }, 30000)
 })

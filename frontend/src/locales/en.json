@@ -2830,7 +2830,7 @@
       "title": "Add Manual Connection",
       "instructions": {
         "title": "Before adding this connection:",
-        "step1": "Copy the public key from above",
+        "step1": "Copy the public key of the SSH key you use (copy button on its key card)",
         "step2": "SSH into your server",
         "step3": "Add it to ~/.ssh/authorized_keys"
       },
@@ -6149,6 +6149,7 @@
         "failedGenerateKey": "Failed to generate SSH key: {{error}}",
         "invalidKeyType": "Invalid key type. Must be one of: {{types}}",
         "invalidPrivateKeyFormat": "Invalid private key format",
+        "privateKeyPassphraseNotSupported": "This key is protected with a passphrase. Remove the passphrase (ssh-keygen -p) and paste it again.",
         "invalidPublicKeyFormat": "Invalid public key format",
         "keyDeployFailed": "Failed to deploy SSH key: {{error}}",
         "keyGeneratedButDeployFailed": "SSH key generated but deployment failed: {{error}}",

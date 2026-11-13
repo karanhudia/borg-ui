@@ -72,6 +72,7 @@ export interface DeployConnectionPayload extends Record<string, unknown> {
 }
 
 export interface TestConnectionPayload extends Record<string, unknown> {
+  ssh_key_id?: number
   host: string
   username: string
   port: number

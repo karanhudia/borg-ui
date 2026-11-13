@@ -42,8 +42,9 @@ repository path, or a provider that issues restricted keys.
    Keys protected with a passphrase are not supported.
 3. Deploy the new public key to the server, or add it to the server's
    `authorized_keys` yourself.
-4. Pick the key in the connection dialog when you add or edit a connection.
-   The picker only appears once there is more than one key.
+4. Pick the key in the connection dialog when you deploy, add a manual
+   connection, or edit a connection. The picker only appears once there is more
+   than one key.
 
 Changing a connection's key marks it as untested, because the new key may not be
 authorised on the server yet. Deploy the key, then test the connection.
@@ -58,10 +59,11 @@ to the `~/.ssh` folder.
 
 1. Go to Remote Machines.
 2. Generate or import the system key.
-3. Add a remote machine.
+3. Choose **Deploy to Server** at the top of the page to install the key with
+   the server password, or **Add Manual Connection** if you already added the
+   public key to the server's `authorized_keys`.
 4. Enter host, port, username, and optional default path.
-5. Deploy the public key or copy it manually.
-6. Test the connection.
+5. Test the connection.
 
 Example:
 

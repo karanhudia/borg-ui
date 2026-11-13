@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { fn } from 'storybook/test'
+import { fn, screen } from 'storybook/test'
 import { AddKeyDialog } from './AddKeyDialog'
 
 const meta = {
@@ -16,3 +16,10 @@ type Story = StoryObj<typeof meta>
 export const Generate: Story = {}
 
 export const Pending: Story = { args: { pending: true } }
+
+/** Both path fields browse the Borg UI host for a key file. */
+export const ImportFromPath: Story = {
+  play: async ({ userEvent }) => {
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import from path' }))
+  },
+}

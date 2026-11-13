@@ -2830,7 +2830,7 @@
       "title": "Agregar conexión manual",
       "instructions": {
         "title": "Antes de agregar esta conexión:",
-        "step1": "Copia la clave pública de arriba",
+        "step1": "Copia la clave pública de la clave SSH que usas (botón de copiar en su tarjeta)",
         "step2": "Conéctate por SSH a tu servidor",
         "step3": "Agrégala a ~/.ssh/authorized_keys"
       },
@@ -6149,6 +6149,7 @@
         "failedGenerateKey": "Error al generar clave SSH: {{error}}",
         "invalidKeyType": "Tipo de clave no válido. Debe ser uno de: {{types}}",
         "invalidPrivateKeyFormat": "Formato de clave privada no válido",
+        "privateKeyPassphraseNotSupported": "Esta clave está protegida con una frase de contraseña. Quite la frase de contraseña (ssh-keygen -p) y péguela de nuevo.",
         "invalidPublicKeyFormat": "Formato de clave pública no válido",
         "keyDeployFailed": "Error al desplegar la clave SSH: {{error}}",
         "keyGeneratedButDeployFailed": "Clave SSH generada pero el despliegue falló: {{error}}",

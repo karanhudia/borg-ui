@@ -45,3 +45,12 @@ type Story = StoryObj<typeof meta>
 export const Empty: Story = { args: { keys: [], ...handlers } }
 
 export const WithKeys: Story = { args: { keys, ...handlers } }
+
+export const FingerprintRevealed: Story = {
+  args: { keys, ...handlers },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      canvas.getByRole('button', { name: /Reveal fingerprint: borgserver-repo1/ })
+    )
+  },
+}

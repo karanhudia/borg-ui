@@ -207,3 +207,43 @@ def test_delete_system_key_in_use_keeps_connections(
     test_db.refresh(conn)
     assert conn.ssh_key_id is None
     assert conn.status == "failed"
+
+
+def test_paste_passphrase_key_says_so(test_client: TestClient, admin_headers, tmp_path):
+    key_path = tmp_path / "locked"
+    subprocess.run(
+        ["ssh-keygen", "-t", "ed25519", "-N", "secret", "-q", "-f", str(key_path)],
+        check=True,
+    )
+
+    response = test_client.post(
+        "/api/ssh-keys",
+        json={"name": "locked", "private_key": key_path.read_text()},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.ssh.privateKeyPassphraseNotSupported"
+    )
+
+
+def test_import_expands_tilde_in_paths(
+    test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+):
+    _add_key(test_db, "system", system=True)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _keygen(tmp_path, "id_ed25519")
+
+    response = test_client.post(
+        "/api/ssh-keys/import",
+        json={
+            "name": "tilde",
+            "private_key_path": "~/id_ed25519",
+            "system_key": False,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.json()

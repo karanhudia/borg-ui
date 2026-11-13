@@ -483,6 +483,11 @@ def _derive_public_key(private_key: str) -> str:
             timeout=10,
         )
     if result.returncode != 0 or not result.stdout.strip():
+        if "passphrase" in result.stderr:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.ssh.privateKeyPassphraseNotSupported"},
+            )
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.ssh.invalidPrivateKeyFormat"},
@@ -795,7 +800,7 @@ async def import_ssh_key(
         _ensure_key_name_free(db, key_data.name)
 
         # Read private key from filesystem
-        private_key_path = key_data.private_key_path
+        private_key_path = os.path.expanduser(key_data.private_key_path)
         if not os.path.exists(private_key_path):
             raise HTTPException(
                 status_code=404,
@@ -826,7 +831,7 @@ async def import_ssh_key(
 
         # Determine public key path
         if key_data.public_key_path:
-            public_key_path = key_data.public_key_path
+            public_key_path = os.path.expanduser(key_data.public_key_path)
         else:
             public_key_path = f"{private_key_path}.pub"
 

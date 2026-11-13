@@ -484,9 +484,11 @@ export default function SSHConnectionsSingleKey() {
       return
     }
     setTestConnectionHostError(undefined)
+    // The chosen key goes in the URL, so keep it out of the body.
+    const { ssh_key_id: chosenKeyId, ...connectionBody } = testConnectionForm
     testConnectionMutation.mutate({
-      keyId: systemKey.id,
-      connectionData: { ...testConnectionForm, host: normalizedHost.host },
+      keyId: chosenKeyId ?? systemKey.id,
+      connectionData: { ...connectionBody, host: normalizedHost.host },
     })
     setTestConnectionDialogOpen(false)
     setTestConnectionForm(createTestConnectionForm())
