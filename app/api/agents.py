@@ -1644,6 +1644,17 @@ def _lock_failure_is_deferred(job: Any, db: Session) -> bool:
     return operation is None or deferral_count(operation) < MAX_DEFERRALS
 
 
+def _jobs_to_notify_for(job: AgentJob, db: Session) -> tuple[Any, Any]:
+    """The linked backup job, or else the linked check job, of `job`."""
+    backup_job = _get_linked_backup_job(job, db)
+    if backup_job is not None:
+        return backup_job, None
+    operation_job = _get_repository_operation_job(job, db)
+    if _maintenance_kind(operation_job) == "check":
+        return None, operation_job
+    return None, None
+
+
 async def _notify_agent_job_outcome(db: Session, job: AgentJob) -> None:
     """Send user-facing notifications for a finished agent job's linked jobs.
 
@@ -1654,13 +1665,11 @@ async def _notify_agent_job_outcome(db: Session, job: AgentJob) -> None:
     database) must stay inside the boundary and never fail the transport.
     """
     try:
-        backup_job = _get_linked_backup_job(job, db)
+        backup_job, check_job = await run_off_loop(_jobs_to_notify_for, job, db)
         if backup_job is not None:
             await notify_backup_job_finished(db, backup_job)
-            return
-        operation_job = _get_repository_operation_job(job, db)
-        if _maintenance_kind(operation_job) == "check":
-            await notify_check_job_finished(db, operation_job)
+        elif check_job is not None:
+            await notify_check_job_finished(db, check_job)
     except Exception as exc:
         logger.warning(
             "Failed to dispatch agent job notification",
@@ -1674,7 +1683,7 @@ async def _notify_agent_job_started(db: Session, job: AgentJob) -> None:
     worker thread. Called after the commit, so as in
     `_notify_agent_job_outcome` the lookup must not fail the transport."""
     try:
-        backup_job = await asyncio.to_thread(_get_linked_backup_job, job, db)
+        backup_job = await run_off_loop(_get_linked_backup_job, job, db)
         if backup_job is not None:
             await notify_backup_job_started(db, job, backup_job)
     except Exception as exc:
