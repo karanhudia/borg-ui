@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-11-13T11:54:47.642Z",
+  "generatedAt": "2026-11-13T16:46:25.897Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1498 visual report",
     "commitSha": "27243b7a891e",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43420660431"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43465864060"
   },
   "totals": {
     "baseline": 1256,
-    "actual": 1294,
+    "actual": 1296,
     "compared": 1256,
-    "changed": 8,
-    "added": 38,
+    "changed": 5,
+    "added": 40,
     "removed": 0,
-    "unchanged": 1248
+    "unchanged": 1251
   },
   "changed": [
     {
@@ -71,24 +71,6 @@
       }
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "diffPixels": 59730,
-      "totalPixels": 329160,
-      "diffRatio": 0.18146190302588408,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
@@ -107,49 +89,13 @@
       }
     },
     {
-      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "diffPixels": 171690,
-      "totalPixels": 1024000,
-      "diffRatio": 0.167666015625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "pages-cloudstorage--editing-remote--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--editing-remote--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--editing-remote--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--editing-remote--mobile.png",
-      "diffPixels": 1927,
-      "totalPixels": 329160,
-      "diffRatio": 0.005854295783205736,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 428,
+      "diffPixels": 362,
       "totalPixels": 329160,
-      "diffRatio": 0.0013002794993316321,
+      "diffRatio": 0.0010997691092477823,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -265,6 +211,14 @@
     {
       "fileName": "remote-machines-extrakeyscard--with-keys.png",
       "actualPath": "images/actual/remote-machines-extrakeyscard--with-keys.png"
+    },
+    {
+      "fileName": "remote-machines-redeploykeydialog--connection-key--mobile.png",
+      "actualPath": "images/actual/remote-machines-redeploykeydialog--connection-key--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-redeploykeydialog--connection-key.png",
+      "actualPath": "images/actual/remote-machines-redeploykeydialog--connection-key.png"
     },
     {
       "fileName": "remote-machines-sshpageheader--no-key-yet--mobile.png",
@@ -2925,6 +2879,9 @@
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing.png"
     },
     {
+      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png"
+    },
+    {
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
     },
     {
@@ -3435,6 +3392,9 @@
       "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
     },
     {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
+    },
+    {
       "fileName": "pages-cloudstorage--add-guided-remote.png"
     },
     {
@@ -3448,6 +3408,9 @@
     },
     {
       "fileName": "pages-cloudstorage--delete-confirmation.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--editing-remote--mobile.png"
     },
     {
       "fileName": "pages-cloudstorage--editing-remote.png"
