@@ -280,6 +280,7 @@ export interface RcloneOAuthSession {
   config?: Record<string, unknown> | null
   token_status?: RcloneOAuthTokenStatus | null
   error?: string | null
+  error_detail?: { key: string; params?: Record<string, unknown> } | null
 }
 
 export interface RepositoryStorageResponse {

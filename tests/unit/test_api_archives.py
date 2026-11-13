@@ -360,6 +360,88 @@ class TestArchivesSshEnvironment:
             == "backend.errors.restore.repositoryNotFound"
         )
 
+    @pytest.mark.parametrize(
+        "result,expected",
+        [
+            # Another process holds the lock (dashboard 2024cc496c8bcb8f).
+            (
+                {
+                    "success": False,
+                    "return_code": 2,
+                    "stderr": "Failed to create/acquire the lock "
+                    "/home/borg/lock.exclusive (timeout).",
+                },
+                423,
+            ),
+            ({"success": False, "return_code": 73, "stderr": "lock timeout"}, 423),
+            # Our own lock was killed: a failed run, not a held repository.
+            (
+                {
+                    "success": False,
+                    "return_code": 73,
+                    "stderr": "Our lock was killed by another borg process",
+                },
+                500,
+            ),
+            # The lock file cannot be created at all: a permission refusal.
+            (
+                {
+                    "success": False,
+                    "return_code": 72,
+                    "stderr": "Failed to create/acquire the lock /r/lock.exclusive "
+                    "([Errno 13] Permission denied: '/r/lock.exclusive')",
+                },
+                422,
+            ),
+            ({"success": False, "return_code": 2, "stderr": "unexplained"}, 500),
+        ],
+    )
+    def test_get_archive_contents_failure_status(
+        self, test_client: TestClient, admin_headers, test_db, result, expected
+    ):
+        repo = Repository(name="Contents Repo", path="/tmp/contents-repo")
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch(
+            "app.api.archives.borg.list_archive_contents",
+            new=AsyncMock(return_value=result),
+        ):
+            response = test_client.get(
+                f"/api/archives/arch1/contents?repository={repo.path}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == expected
+
+    @pytest.mark.parametrize("contention,expected", [(True, 423), (False, 502)])
+    def test_get_archive_contents_agent_lock_contention_is_423(
+        self, test_client: TestClient, admin_headers, test_db, contention, expected
+    ):
+        from app.services.repository_executor import agent_operation_failed_detail
+
+        repo = Repository(name="Agent Contents", path="/tmp/agent-contents")
+        test_db.add(repo)
+        test_db.commit()
+        failure = HTTPException(
+            status_code=502,
+            detail=agent_operation_failed_detail("locked", lock_contention=contention),
+        )
+
+        with (
+            patch("app.api.archives.is_agent_executor", return_value=True),
+            patch(
+                "app.api.archives._agent_read_result",
+                new=AsyncMock(side_effect=failure),
+            ),
+        ):
+            response = test_client.get(
+                f"/api/archives/arch1/contents?repository={repo.path}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == expected
+
     def test_get_archive_contents_nonexistent_repository_returns_404(
         self, test_client: TestClient, admin_headers
     ):

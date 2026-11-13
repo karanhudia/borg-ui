@@ -237,6 +237,21 @@ def ensure_schema() -> None:
             )
             return
 
+        # A prior interrupted baseline can have an empty revision and tables
+        # whose CREATE occurs late in the baseline. Detect it before any DDL:
+        # waiting until CREATE collides would already have changed the database.
+        try:
+            state = _alembic_state(url)
+        except RuntimeError:
+            # An active concurrent builder temporarily has exactly this shape.
+            # Let it finish before deciding that initialization was interrupted.
+            if _await_head(engine):
+                log.info("schema was built by another process")
+                return
+            raise
+        if state == "head":
+            return
+
         log.info("no schema found at %s, building it", _safe_url(url))
         try:
             _upgrade_to_head(url, engine)
@@ -248,6 +263,8 @@ def ensure_schema() -> None:
             if _await_head(engine):
                 log.info("schema was built by another process")
                 return
+            # Preserve this build's original capacity/I/O failure. If its DDL
+            # was partially persisted, the next startup's preflight refuses it.
             raise
     finally:
         engine.dispose()
@@ -308,14 +325,30 @@ def _snapshot_sqlite(source: Path, dest: Path) -> None:
     """
     import sqlite3
 
-    src = sqlite3.connect(str(source))
-    dst = sqlite3.connect(str(dest))
+    src = dst = None
     try:
-        with dst:
-            src.backup(dst)
-    finally:
+        src = sqlite3.connect(str(source))
+        dst = sqlite3.connect(str(dest))
+        # SQLite's backup API manages the copy transaction itself. A connection
+        # context manager could mask the backup error with a rollback error.
+        src.backup(dst)
         dst.close()
+        dst = None
         src.close()
+        src = None
+    except BaseException:
+        # Cleanup must not replace the capacity/I/O error that caused the failure.
+        for conn in (dst, src):
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    log.warning("failed to close snapshot connection", exc_info=True)
+        try:
+            _remove_sqlite(dest)
+        except Exception:
+            log.warning("failed to remove incomplete snapshot %s", dest, exc_info=True)
+        raise
 
 
 def _remove_sqlite(path: Path) -> None:
@@ -517,6 +550,20 @@ def _alembic_state(url: str) -> str | None:
         with engine.connect() as conn:
             if not inspect(conn).has_table("alembic_version"):
                 return None
+            revision = conn.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar()
+            if not revision and set(inspect(conn).get_table_names()) - {
+                "alembic_version"
+            }:
+                raise RuntimeError(
+                    "Incomplete Alembic initialization: tables exist without a recorded "
+                    "revision. The database was left untouched; stop Borg UI, back up "
+                    "the database and any SQLite WAL/SHM files, then restore a verified "
+                    "pre-upgrade backup or contact support for schema recovery. Do not "
+                    "stamp a revision or delete existing tables. See the database "
+                    "migration recovery section in docs/troubleshooting.md."
+                )
         return "head" if _is_at_head(engine) else "behind"
     finally:
         engine.dispose()
@@ -531,7 +578,9 @@ def _transfer(source: Engine, target: Engine) -> UpgradeReport:
 
     log.info("transferring rows")
     reflected = MetaData()
-    reflected.reflect(bind=source)
+    # Legacy FK metadata can reference tables that no longer exist. Only source
+    # columns/types are needed here; target_meta owns the transfer's FK policy.
+    reflected.reflect(bind=source, resolve_fks=False)
     # The target's own schema, not the models': the target stands on
     # PRE_COLLAPSE_REVISION, which still has the legacy job tables the models
     # no longer declare, and those rows are exactly what must come across.
@@ -688,6 +737,17 @@ def _orphan_values(src, table, common: list[str], dropped: dict[str, set]) -> di
                         f'SELECT DISTINCT c."{col}" FROM "{table.name}" c '
                         f'LEFT JOIN "{parent_table}" p ON p."{parent_col}" = c."{col}" '
                         f'WHERE c."{col}" IS NOT NULL AND p."{parent_col}" IS NULL'
+                    )
+                ).scalars()
+            )
+        else:
+            # With no parent table every non-null reference is missing, even
+            # though there is nothing to LEFT JOIN against.
+            values |= set(
+                src.execute(
+                    text(
+                        f'SELECT DISTINCT "{col}" FROM "{table.name}" '
+                        f'WHERE "{col}" IS NOT NULL'
                     )
                 ).scalars()
             )

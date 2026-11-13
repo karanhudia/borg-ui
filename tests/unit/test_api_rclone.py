@@ -832,12 +832,16 @@ def test_borg_ui_oauth_callback_validates_state_and_exchanges_code(
     assert bad_state_response.status_code == 400
     assert rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["status"] == "awaiting_callback"
 
+    rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["error_detail"] = {
+        "key": "backend.errors.rclone.oauthCodeExchangeFailed"
+    }
     callback_response = test_client.get(
         "/api/rclone/oauth/callback/drive",
         params={"state": state, "code": "provider-code"},
     )
 
     assert callback_response.status_code == 200
+    assert rclone_api._oauth_session_response(session_id).get("error_detail") is None
     assert "Authorization complete" in callback_response.text
     poll_response = test_client.get(
         f"/api/rclone/oauth/sessions/{session_id}",
@@ -5528,3 +5532,347 @@ def test_update_ssh_cloud_mirror_remote_change_rolls_back_on_preflight_failure(
     assert storage.rclone_remote_path == "borg-ui/repositories/app"
     assert storage.cache_path is None
     assert storage.sync_direction == "sshfs_mount_to_remote"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "stderr,expired",
+    [
+        ('oauth2: "invalid_grant" "Token has been expired or revoked."', True),
+        ("couldn't fetch token: invalid_grant: maybe token expired?", True),
+        ('provider response: {"error": "invalid_grant"}', True),
+        ("directory /invalid_grant: directory not found", False),
+        ("permission denied opening /invalid_grant/file.txt", False),
+        ("provider description mentions invalid_grant but error is unknown", False),
+        ("invalid_grantish provider failure", False),
+        ("network timeout", False),
+        ("permission denied", False),
+    ],
+)
+def test_browse_remote_authorization_recovery_from_command_result(
+    test_client, admin_headers, test_db, monkeypatch, tmp_path, stderr, expired
+):
+    from app.api import rclone as rclone_api
+
+    config_file = tmp_path / "rclone.conf"
+    saved_config = '[cloud]\ntype = drive\ntoken = {"refresh_token":"saved-refresh"}\n'
+    config_file.write_text(saved_config)
+    remote = RcloneRemote(
+        name="cloud",
+        provider="drive",
+        config_source="managed",
+        config_path=str(config_file),
+    )
+    test_db.add(remote)
+    test_db.commit()
+    original_config = remote.config_source
+    monkeypatch.setattr(
+        rclone_api.rclone_service,
+        "execute",
+        AsyncMock(
+            return_value=RcloneCommandResult(
+                False, 1, "", stderr, ["rclone", "lsjson"], "rclone lsjson"
+            )
+        ),
+    )
+    if expired:
+        response = test_client.get(
+            f"/api/rclone/remotes/{remote.id}/browse", headers=admin_headers
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"] == {
+            "key": "backend.errors.rclone.authorizationRequired"
+        }
+    else:
+        # Preserve the existing generic failure contract.
+        with pytest.raises(RuntimeError, match=stderr):
+            test_client.get(
+                f"/api/rclone/remotes/{remote.id}/browse", headers=admin_headers
+            )
+    test_db.refresh(remote)
+    assert remote.config_source == original_config
+    assert config_file.read_text() == saved_config
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        (
+            {
+                "error": "invalid_grant",
+                "error_description": "secret-code",
+                "access_token": "secret-token",
+                "client_secret": "secret-client",
+            },
+            "invalid_grant",
+        ),
+        ({"error": "invalid_client"}, "invalid_client"),
+        ({"error": "secret-unknown", "error_description": "invalid_grant"}, None),
+        ({"error": ["invalid_grant"]}, None),
+        (["invalid_grant"], None),
+        (None, None),
+    ],
+)
+async def test_oauth_exchange_error_exposes_only_safe_diagnostics(
+    test_db, monkeypatch, body, expected
+):
+    from app.api import rclone as rclone_api
+
+    _store_oauth_credentials(test_db, "drive", "client-id", "secret-client")
+
+    class Response:
+        status_code = 400
+        headers = {"Authorization": "secret-header"}
+
+        def json(self):
+            if body is None:
+                raise ValueError("secret-malformed")
+            return body
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, *args, **kwargs):
+            return Response()
+
+    monkeypatch.setattr(rclone_api.httpx, "AsyncClient", Client)
+    with pytest.raises(HTTPException) as error:
+        await rclone_api._exchange_borg_ui_oauth_code(
+            "drive", "secret-code", "https://example.com/callback", test_db
+        )
+    params = {"http_status": 400}
+    if expected:
+        params["provider_error"] = expected
+    assert error.value.status_code == 502
+    key = (
+        "oauthCodeExchangeRejected" if expected else "oauthCodeExchangeRejectedUnknown"
+    )
+    assert error.value.detail == {
+        "key": f"backend.errors.rclone.{key}",
+        "params": params,
+    }
+    assert "secret" not in str(error.value.detail)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "diagnostics,session_message",
+    [
+        (
+            {"http_status": 400, "provider_error": "invalid_grant"},
+            "HTTP 400: invalid_grant",
+        ),
+        (
+            {"http_status": 401, "provider_error": "invalid_client"},
+            "HTTP 401: invalid_client",
+        ),
+        (
+            {"http_status": "secret-code", "provider_error": "secret-token"},
+            "Authorization failed.",
+        ),
+    ],
+)
+def test_oauth_callback_exchange_failure_is_safe_and_retryable(
+    test_client,
+    admin_headers,
+    test_db,
+    monkeypatch,
+    tmp_path,
+    diagnostics,
+    session_message,
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        rclone_api.settings, "public_base_url", "https://backups.example.com"
+    )
+    _store_oauth_credentials(test_db, "drive", "client-id", "secret-client")
+    config_file = tmp_path / "rclone.conf"
+    saved_config = (
+        '[existing-cloud]\ntype = drive\ntoken = {"refresh_token":"saved-refresh"}\n'
+    )
+    config_file.write_text(saved_config)
+    remote = RcloneRemote(
+        name="existing-cloud",
+        provider="drive",
+        config_source="managed",
+        config_path=str(config_file),
+    )
+    test_db.add(remote)
+    test_db.commit()
+
+    async def failed_exchange(*args, **kwargs):
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "key": "backend.errors.rclone.oauthCodeExchangeRejected",
+                "params": diagnostics,
+            },
+        )
+
+    monkeypatch.setattr(rclone_api, "_exchange_borg_ui_oauth_code", failed_exchange)
+    started = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "drive", "mode": "borg_ui"},
+    ).json()
+    session = rclone_api.RCLONE_OAUTH_SESSIONS[started["session_id"]]
+    response = test_client.get(
+        "/api/rclone/oauth/callback/drive",
+        params={"state": session["state"], "code": "secret-code"},
+    )
+    assert response.status_code == 502
+    polled = test_client.get(
+        f"/api/rclone/oauth/sessions/{started['session_id']}", headers=admin_headers
+    ).json()
+    assert polled["status"] == "failed"
+    assert "again" in polled["error"]
+    assert session_message in polled["error"]
+    if type(diagnostics.get("http_status")) is int:
+        assert polled["error_detail"] == {
+            "key": "backend.errors.rclone.oauthCodeExchangeRejected",
+            "params": diagnostics,
+        }
+    else:
+        assert polled["error_detail"] == {
+            "key": "backend.errors.rclone.oauthCodeExchangeFailed"
+        }
+
+    assert "secret" not in str(polled)
+    assert polled["config"] is None
+    test_db.refresh(remote)
+    assert remote.config_source == "managed"
+    assert config_file.read_text() == saved_config
+    assert (
+        decrypt_secret(
+            test_db.query(SystemSettings)
+            .first()
+            .google_drive_oauth_client_secret_encrypted
+        )
+        == "secret-client"
+    )
+    retried = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "drive", "mode": "borg_ui"},
+    )
+    assert retried.status_code == 201
+    assert retried.json()["status"] == "awaiting_callback"
+    assert retried.json().get("error_detail") is None
+    assert retried.json()["session_id"] != started["session_id"]
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_type", ["connect", "timeout"])
+async def test_oauth_exchange_transport_error_has_no_trusted_provider_diagnostics(
+    test_db, monkeypatch, failure_type
+):
+    from app.api import rclone as rclone_api
+
+    _store_oauth_credentials(test_db, "drive", "client-id", "secret-client")
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, *args, **kwargs):
+            failure = (
+                rclone_api.httpx.ConnectError
+                if failure_type == "connect"
+                else rclone_api.httpx.ReadTimeout
+            )
+            raise failure("invalid_grant secret-client secret-code secret-token")
+
+    monkeypatch.setattr(rclone_api.httpx, "AsyncClient", Client)
+    with pytest.raises(HTTPException) as error:
+        await rclone_api._exchange_borg_ui_oauth_code(
+            "drive", "secret-code", "https://example.com/callback", test_db
+        )
+    assert error.value.status_code == 502
+    assert error.value.detail == {
+        "key": "backend.errors.rclone.oauthCodeExchangeFailed"
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "detail,expected",
+    [
+        (
+            {"key": ["secret-key"], "params": {}},
+            {"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        ),
+        (
+            {"key": {"secret-key": "secret"}, "params": {}},
+            {"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        ),
+        (
+            {
+                "key": "backend.errors.rclone.oauthCodeExchangeRejected",
+                "params": {
+                    "http_status": 400,
+                    "provider_error": "invalid_grant",
+                    "error_description": "secret-description",
+                    "access_token": "secret-token",
+                },
+            },
+            {
+                "key": "backend.errors.rclone.oauthCodeExchangeRejected",
+                "params": {"http_status": 400, "provider_error": "invalid_grant"},
+            },
+        ),
+        (
+            {
+                "key": "backend.errors.rclone.oauthCodeExchangeRejected",
+                "params": {"http_status": 400, "provider_error": "secret-reason"},
+            },
+            {
+                "key": "backend.errors.rclone.oauthCodeExchangeRejectedUnknown",
+                "params": {"http_status": 400},
+            },
+        ),
+        (
+            {
+                "key": "secret-key",
+                "params": {"http_status": "secret-status", "body": "secret-body"},
+            },
+            {"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        ),
+    ],
+)
+def test_oauth_session_error_detail_serialization_is_allowlisted(detail, expected):
+    from app.api import rclone as rclone_api
+
+    session_id = "safe-detail-test"
+    rclone_api.RCLONE_OAUTH_SESSIONS[session_id] = {
+        "provider": "drive",
+        "status": "failed",
+        "flow": "rclone_loopback",
+        "error": "Safe legacy fallback",
+        "error_detail": detail,
+        "config": None,
+    }
+    try:
+        response = rclone_api._oauth_session_response(session_id)
+        assert response["error_detail"] == expected
+        assert "secret" not in str(response)
+    finally:
+        rclone_api.RCLONE_OAUTH_SESSIONS.pop(session_id, None)

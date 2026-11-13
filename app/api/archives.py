@@ -16,6 +16,11 @@ from sqlalchemy.orm import Session
 from app.api.archive_download import extract_file_download, resolve_extracted_file_path
 from app.core.borg import borg
 from app.core.borg2 import normalize_repo_info_encryption
+from app.core.borg_errors import (
+    LOCK_CONTENTION_DETAIL_KEY,
+    is_lock_contention_exit_code,
+    repository_failure_status,
+)
 from app.core.security import (
     check_repo_access,
     get_current_download_user,
@@ -497,6 +502,21 @@ async def _agent_read_result(
         raise
 
 
+def _archive_contents_failure_status(result: dict) -> int:
+    """423 while another process holds the repository's lock (a backup is
+    running; dashboard 2024cc496c8bcb8f), the classified refusal otherwise."""
+    stderr = str(result.get("stderr") or "").lower()
+    # Borg 2 also answers 73 when another process killed our own lock: that
+    # run failed, the repository is not held by anyone.
+    lost_our_lock = "our lock was killed by another borg" in stderr
+    if not lost_our_lock and (
+        is_lock_contention_exit_code(result.get("return_code"))
+        or ("failed to create/acquire the lock" in stderr and "(timeout)" in stderr)
+    ):
+        return status.HTTP_423_LOCKED
+    return repository_failure_status(result)
+
+
 def _read_succeeded(result: dict) -> bool:
     """A server result says `success`; an agent result carries Borg's
     return code."""
@@ -754,16 +774,27 @@ async def get_archive_contents(
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
         if is_agent_executor(repo):
-            result = await _agent_read_result(
-                db,
-                repo,
-                "repository.list_archive_contents",
-                operation={
-                    "archive": _archive_extract_selector(archive_id, repo),
-                    "path": path,
-                },
-                timeout_key="list_timeout",
-            )
+            try:
+                result = await _agent_read_result(
+                    db,
+                    repo,
+                    "repository.list_archive_contents",
+                    operation={
+                        "archive": _archive_extract_selector(archive_id, repo),
+                        "path": path,
+                    },
+                    timeout_key="list_timeout",
+                )
+            except HTTPException as exc:
+                # The waiter's lock-contention 502 (kept for the operations
+                # runner, which defers on it) is the 423 a server repository
+                # answers here.
+                detail = exc.detail if isinstance(exc.detail, dict) else {}
+                if detail.get(LOCK_CONTENTION_DETAIL_KEY) is True:
+                    raise HTTPException(
+                        status_code=status.HTTP_423_LOCKED, detail=exc.detail
+                    ) from exc
+                raise
         else:
             env, temp_key_file = _build_repo_env(repo, db)
             try:
@@ -780,7 +811,7 @@ async def get_archive_contents(
                 cleanup_temp_key_file(temp_key_file)
         if not _read_succeeded(result):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=_archive_contents_failure_status(result),
                 detail=f"Failed to get archive contents: {result.get('stderr', '')}",
             )
 

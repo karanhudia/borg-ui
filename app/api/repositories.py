@@ -771,7 +771,17 @@ async def _run_repository_command_with_retries(
                     )
 
                 logger.error(failure_key, repo_id=repo_id, error=error_msg)
-                raise HTTPException(status_code=500, detail={"key": failure_key})
+                reason = bounded_operation_diagnostic(error_msg)
+                raise HTTPException(
+                    status_code=repository_failure_status(
+                        {"return_code": returncode, "stderr": error_msg}
+                    ),
+                    detail={
+                        "key": failure_key,
+                        "message": reason,
+                        "params": {"error": reason},
+                    },
+                )
 
             return stdout
         except HTTPException:
@@ -809,7 +819,15 @@ async def _run_repository_command_with_retries(
                 error=error_msg,
                 failure_key=failure_key,
             )
-            raise HTTPException(status_code=500, detail={"key": failure_key})
+            reason = bounded_operation_diagnostic(error_msg)
+            raise HTTPException(
+                status_code=repository_failure_status({"error": error_msg}),
+                detail={
+                    "key": failure_key,
+                    "message": reason,
+                    "params": {"error": reason},
+                },
+            )
 
 
 def _parse_agent_json_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -6998,9 +7016,14 @@ async def get_repository_info(
             )
         except Exception as e:
             logger.error("Failed to get repository info", error=str(e))
+            reason = bounded_operation_diagnostic(str(e) or type(e).__name__)
             raise HTTPException(
                 status_code=500,
-                detail={"key": "backend.errors.repo.failedToGetRepositoryInfo"},
+                detail={
+                    "key": "backend.errors.repo.failedToGetRepositoryInfo",
+                    "message": reason,
+                    "params": {"error": reason},
+                },
             )
 
     return await run_serialized_repository_command(repo_id, _operation)
@@ -7041,18 +7064,30 @@ async def break_repository_lock(
             )
             return {"success": True, "message": "backend.success.repo.lockBroken"}
         else:
-            error_msg = result.get("stderr", "Unknown error")
+            error_msg = _borg_result_error(result, for_display=False) or "Unknown error"
             logger.error("Failed to break lock", repo_id=repo_id, error=error_msg)
+            reason = bounded_operation_diagnostic(error_msg)
             raise HTTPException(
-                status_code=500, detail={"key": "backend.errors.repo.failedToBreakLock"}
+                status_code=repository_failure_status(result),
+                detail={
+                    "key": "backend.errors.repo.failedToBreakLock",
+                    "message": reason,
+                    "params": {"error": reason},
+                },
             )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Error breaking repository lock", repo_id=repo_id, error=str(e))
+        reason = bounded_operation_diagnostic(str(e) or type(e).__name__)
         raise HTTPException(
-            status_code=500, detail={"key": "backend.errors.repo.failedToBreakLock"}
+            status_code=repository_failure_status({"error": str(e)}),
+            detail={
+                "key": "backend.errors.repo.failedToBreakLock",
+                "message": reason,
+                "params": {"error": reason},
+            },
         )
 
 

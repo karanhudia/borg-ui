@@ -129,15 +129,47 @@ class RestoreRefused(Exception):
         self.detail = detail
 
 
+_CRASH_WRAPPERS = ("Local Exception", "Remote Exception")
+_TRACEBACK_HEADER = "Traceback (most recent call last):"
+
+
+def lead_with_cause(diagnostic: str, *, lock_contention: bool = False) -> str:
+    """Put a Borg crash's cause on the first line.
+
+    A crash is Borg's wrapper ("Local Exception") and a traceback, sometimes
+    after interpreter noise ("Exception ignored in: <function
+    Repository.__del__ ...>" and a traceback of its own), so a message cut to
+    its first lines named no cause, or the wrong one. The cause is read from
+    Borg's own traceback; the full diagnostic still follows it.
+    """
+    lines = [line.strip() for line in diagnostic.splitlines()]
+    start = next((i for i, line in enumerate(lines) if line in _CRASH_WRAPPERS), None)
+    if start is None:
+        if not lines or lines[0] != _TRACEBACK_HEADER:
+            return diagnostic
+        start = 0
+    from app.services.repository_executor import _tail_reason_line
+
+    cause = _tail_reason_line(
+        "\n".join(diagnostic.splitlines()[start:]), lock_contention=lock_contention
+    )
+    return f"{cause}\n{diagnostic}" if cause else diagnostic
+
+
 def bounded_operation_diagnostic(reason: str) -> str:
     """Redact before bounding so a truncated secret cannot escape masking."""
     from app.utils.redaction import redact_secrets
 
-    diagnostic = redact_secrets(str(reason)).strip()
+    diagnostic = lead_with_cause(redact_secrets(str(reason)).strip())
     if len(diagnostic) > 2000:
         marker = "\n... [truncated] ...\n"
         diagnostic = diagnostic[:400] + marker + diagnostic[-(1600 - len(marker)) :]
     return diagnostic
+
+
+# Borg missing on the remote end of an SSH repository: "sh: borg: command not
+# found" (bash), "sh: 1: borg: not found" (dash), or a configured remote path.
+_REMOTE_BORG_MISSING = _re.compile(r"\bborg[\w./-]*: (?:command )?not found")
 
 
 def repository_failure_status(result: dict) -> int:
@@ -146,10 +178,32 @@ def repository_failure_status(result: dict) -> int:
         str(result.get(key) or "") for key in ("error", "stderr")
     ).lower()
     # 422, not 403: the frontend reads 403 as a role refusal and toasts so.
-    if result.get("return_code") == 21 or "permission denied" in reason:
+    if (
+        result.get("return_code") in (21, 42, 44)
+        # A keyfile repository whose key is not where Borg looks, or a
+        # directory where Borg expects key files (dashboard a4b2fad0603467e8,
+        # ed36651bb055713a).
+        or "no key file for repository" in reason
+        or ("isadirectoryerror" in reason and "/keys/" in reason)
+        # The SSH host has no Borg (dashboard 859daa3dfb3863ec).
+        or _REMOTE_BORG_MISSING.search(reason)
+        or "permission denied" in reason
+        # A read-only mount is the host's configuration, not a Borg UI fault.
+        or "[errno 30] read-only file system" in reason
+        # Borg crashed decoding the repository's `config`: the path holds a
+        # file of that name that is not a Borg config, so it is not a
+        # repository (dashboard f60df0963ec9494f).
+        or ("unicodedecodeerror" in reason and "borg/repository.py" in reason)
+    ):
         return 422
     if (
-        result.get("return_code") == 19
+        result.get("return_code") in (19, REPOSITORY_EXISTS_EXIT_CODE)
+        # Init where a repository already is, e.g. a repository whose path
+        # was edited (dashboard 2bf3c31b30712233).
+        or any(
+            _REPOSITORY_EXISTS_LINE.fullmatch(line.strip())
+            for line in reason.splitlines()
+        )
         or "fileexistserror: [errno 17]" in reason
         # Borg 1's legacy exit code 2 cannot distinguish an occupied target.
         # This exact message is emitted by PathAlreadyExists (borg 1.4.3).
@@ -182,6 +236,9 @@ class ArchiveListingError(Exception):
             # Redact before truncation: cutting a quoted secret first could
             # leave part of its value outside the redactor's match.
             diagnostic = redact_secrets(str(reason)).strip()
+            diagnostic = lead_with_cause(
+                diagnostic, lock_contention=self.is_lock_contention
+            )
             if len(diagnostic) > 2000:
                 # The last exception follows the frames; keeping only the
                 # start can turn a useful error into an unexplained traceback.

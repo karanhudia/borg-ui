@@ -6,16 +6,17 @@ Handles sending notifications for backup/restore events.
 
 import apprise
 from html import escape
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.exc import ObjectDeletedError
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import asyncio
+import functools
 import structlog
 import re
 
 from app.services.storage_usage import format_bytes
+from app.database.database import run_off_loop
 from app.database.models import NotificationSettings, Repository, SystemSettings
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -584,32 +585,124 @@ def _append_json_to_body(
     return body
 
 
-def _existing(settings):
-    """Yield settings whose row still exists.
-
-    Delivery awaits off the event loop, so a setting can be deleted while an
-    earlier one is sending; the commit after that send expires the rest.
-    """
+def _plain(settings, title: str, body: str):
+    """A plain-text body for every setting, the same for email and chat."""
     for setting in settings:
-        try:
-            setting.id
-        except ObjectDeletedError:
-            continue
-        yield setting
+        yield setting, title, body, body
+
+
+# The database work below runs through `run_off_loop`: its threads are not
+# the ones Apprise sends in, so a burst of slow deliveries never queues a
+# commit that would give a connection back, and a cancelled caller waits for
+# the thread before its cleanup touches the session. Each step ends its
+# transaction, so no pooled connection is held while a delivery runs. A
+# commit keeps what the caller had pending, as a sent notification's commit
+# always has.
+
+
+def _still_exists(db: Session, setting_id: int) -> bool:
+    found = (
+        db.query(NotificationSettings.id)
+        .filter(NotificationSettings.id == setting_id)
+        .first()
+    )
+    db.commit()
+    return found is not None
+
+
+def _record_sent(db: Session, setting_id: int) -> None:
+    # Conditional update: a deleted row matches nothing instead of raising
+    # StaleDataError and rolling back the caller's session
+    db.query(NotificationSettings).filter(NotificationSettings.id == setting_id).update(
+        {"last_used_at": datetime.utcnow()}, synchronize_session=False
+    )
+    db.commit()
+
+
+async def _send_to_service(
+    db: Session,
+    setting_id: int,
+    service_name: str,
+    service_url: str,
+    title: str,
+    html_body: str,
+    markdown_body: str,
+) -> None:
+    """Send one notification: HTML for email services, Markdown for chat.
+
+    A setting deleted while an earlier delivery ran is skipped. Failures are
+    logged, never raised.
+    """
+    try:
+        if not await run_off_loop(_still_exists, db, setting_id):
+            return
+
+        apobj = apprise.Apprise()
+        apobj.add(service_url)
+
+        if _is_email_service(service_url):
+            body, body_format = html_body, apprise.NotifyFormat.HTML
+        else:
+            body, body_format = markdown_body, apprise.NotifyFormat.MARKDOWN
+
+        # Apprise blocks on network I/O; keep it off the event loop.
+        # Slow endpoints can raise the per-URL read timeout with ?rto=<seconds>.
+        success = await asyncio.to_thread(
+            apobj.notify, title=title, body=body, body_format=body_format
+        )
+
+        if success:
+            await run_off_loop(_record_sent, db, setting_id)
+            logger.info("notification_sent", service=service_name, title=title)
+        else:
+            logger.warning("notification_failed", service=service_name, title=title)
+
+    except Exception as e:
+        logger.error("notification_error", service=service_name, error=str(e))
+
+
+def _delivered(prepare):
+    """Turn a generator of ``(setting, title, html_body, markdown_body)`` into
+    the async send.
+
+    Preparing a notification reads the database: its settings, the
+    repository, the timezone, lazy relationships. The generator runs to the
+    end off the loop and hands back plain values, so only the delivery
+    awaits on the event loop.
+    """
+
+    def messages(session, *args, **kwargs):
+        prepared = [
+            (setting.id, setting.name, setting.service_url, title, html, markdown)
+            for setting, title, html, markdown in prepare(*args, **kwargs)
+        ]
+        if prepared:
+            session.commit()
+        return prepared
+
+    @functools.wraps(prepare)
+    async def send(*args, **kwargs) -> None:
+        db = kwargs["db"] if "db" in kwargs else args[0]
+        prepared = await run_off_loop(functools.partial(messages, db, *args, **kwargs))
+        for message in prepared:
+            await _send_to_service(db, *message)
+
+    return send
 
 
 class NotificationService:
     """Service for sending notifications via Apprise."""
 
     @staticmethod
-    async def send_backup_start(
+    @_delivered
+    def send_backup_start(
         db: Session,
         repository_name: str,
         archive_name: str,
         source_directories: Optional[list] = None,
         expected_size: Optional[int] = None,
         job_name: Optional[str] = None,
-    ) -> None:
+    ):
         """
         Send notification when backup starts.
 
@@ -687,7 +780,7 @@ class NotificationService:
         )
 
         # Send to all enabled services with this event trigger
-        for setting in _existing(settings):
+        for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -730,12 +823,11 @@ class NotificationService:
                     service_url=setting.service_url,
                 )
 
-            await NotificationService._send_to_service(
-                db, setting, title, final_html_body, final_markdown_body
-            )
+            yield setting, title, final_html_body, final_markdown_body
 
     @staticmethod
-    async def send_backup_success(
+    @_delivered
+    def send_backup_success(
         db: Session,
         repository_name: str,
         archive_name: str,
@@ -744,7 +836,7 @@ class NotificationService:
         job_name: Optional[str] = None,
         started_at: Optional[datetime] = None,
         nfiles: Optional[int] = None,
-    ) -> None:
+    ):
         """
         Send notification for successful backup.
 
@@ -921,7 +1013,7 @@ class NotificationService:
             title=markdown_title, content_blocks=markdown_blocks, footer=footer
         )
 
-        for setting in _existing(settings):
+        for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -963,18 +1055,17 @@ class NotificationService:
                     service_url=setting.service_url,
                 )
 
-            await NotificationService._send_to_service(
-                db, setting, title, final_html_body, final_markdown_body
-            )
+            yield setting, title, final_html_body, final_markdown_body
 
     @staticmethod
-    async def send_backup_failure(
+    @_delivered
+    def send_backup_failure(
         db: Session,
         repository_name: str,
         error_message: str,
         job_id: Optional[int] = None,
         job_name: Optional[str] = None,
-    ) -> None:
+    ):
         """
         Send notification for failed backup.
 
@@ -1065,7 +1156,7 @@ class NotificationService:
             footer=f"Failed at {timestamp_str}",
         )
 
-        for setting in _existing(settings):
+        for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1107,12 +1198,11 @@ class NotificationService:
                     service_url=setting.service_url,
                 )
 
-            await NotificationService._send_to_service(
-                db, setting, title, final_html_body, final_markdown_body
-            )
+            yield setting, title, final_html_body, final_markdown_body
 
     @staticmethod
-    async def send_backup_warning(
+    @_delivered
+    def send_backup_warning(
         db: Session,
         repository_name: str,
         archive_name: str,
@@ -1122,7 +1212,7 @@ class NotificationService:
         job_name: Optional[str] = None,
         started_at: Optional[datetime] = None,
         nfiles: Optional[int] = None,
-    ) -> None:
+    ):
         """
         Send notification for backup completed with warnings.
 
@@ -1310,7 +1400,7 @@ class NotificationService:
             title=markdown_title, content_blocks=markdown_blocks, footer=footer
         )
 
-        for setting in _existing(settings):
+        for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1355,19 +1445,18 @@ class NotificationService:
                     service_url=setting.service_url,
                 )
 
-            await NotificationService._send_to_service(
-                db, setting, title, final_html_body, final_markdown_body
-            )
+            yield setting, title, final_html_body, final_markdown_body
 
     @staticmethod
-    async def send_restore_success(
+    @_delivered
+    def send_restore_success(
         db: Session,
         repository_name: str,
         archive_name: str,
         target_path: str,
         completion_time: Optional[datetime] = None,
         job_name: Optional[str] = None,
-    ) -> None:
+    ):
         """
         Send notification for successful restore.
 
@@ -1434,7 +1523,7 @@ class NotificationService:
             footer=f"Completed at {timestamp_str}",
         )
 
-        for setting in _existing(settings):
+        for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1476,18 +1565,17 @@ class NotificationService:
                     service_url=setting.service_url,
                 )
 
-            await NotificationService._send_to_service(
-                db, setting, title, final_html_body, final_markdown_body
-            )
+            yield setting, title, final_html_body, final_markdown_body
 
     @staticmethod
-    async def send_restore_failure(
+    @_delivered
+    def send_restore_failure(
         db: Session,
         repository_name: str,
         archive_name: str,
         error_message: str,
         job_name: Optional[str] = None,
-    ) -> None:
+    ):
         """
         Send notification for failed restore.
 
@@ -1575,7 +1663,7 @@ class NotificationService:
             footer=f"Failed at {timestamp_str}",
         )
 
-        for setting in _existing(settings):
+        for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1617,14 +1705,13 @@ class NotificationService:
                     service_url=setting.service_url,
                 )
 
-            await NotificationService._send_to_service(
-                db, setting, title, final_html_body, final_markdown_body
-            )
+            yield setting, title, final_html_body, final_markdown_body
 
     @staticmethod
-    async def send_schedule_failure(
+    @_delivered
+    def send_schedule_failure(
         db: Session, schedule_name: str, repository_name: str, error_message: str
-    ) -> None:
+    ):
         """
         Send notification for failed scheduled backup.
 
@@ -1703,7 +1790,7 @@ class NotificationService:
             footer=f"Failed at {timestamp_str}",
         )
 
-        for setting in _existing(settings):
+        for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -1744,9 +1831,7 @@ class NotificationService:
                     service_url=setting.service_url,
                 )
 
-            await NotificationService._send_to_service(
-                db, setting, title, final_html_body, final_markdown_body
-            )
+            yield setting, title, final_html_body, final_markdown_body
 
     @staticmethod
     async def test_notification(service_url: str) -> dict:
@@ -1812,80 +1897,10 @@ class NotificationService:
             return {"success": False, "message": f"Error: {str(e)}"}
 
     @staticmethod
-    async def _send_to_service(
-        db: Session,
-        setting: NotificationSettings,
-        title: str,
-        html_body: str,
-        markdown_body: str,
-    ) -> None:
-        """
-        Send notification to a single service.
-
-        Automatically chooses the appropriate format based on service type:
-        - Email services: HTML format
-        - Chat services (Slack, Discord, Telegram, etc.): Markdown format
-
-        Args:
-            db: Database session
-            setting: Notification setting
-            title: Notification title
-            html_body: HTML formatted body (for email)
-            markdown_body: Markdown formatted body (for chat services)
-        """
-        # Read before the await: the row can be deleted while delivery runs
-        setting_id = setting.id
-        service_name = setting.name
-        try:
-            apobj = apprise.Apprise()
-            apobj.add(setting.service_url)
-
-            # Choose format based on service type: HTML for email, Markdown for chat
-            if _is_email_service(setting.service_url):
-                body, body_format = html_body, apprise.NotifyFormat.HTML
-            else:
-                body, body_format = markdown_body, apprise.NotifyFormat.MARKDOWN
-
-            # Apprise blocks on network I/O; keep it off the event loop.
-            # Slow endpoints can raise the per-URL read timeout with ?rto=<seconds>.
-            success = await asyncio.to_thread(
-                apobj.notify, title=title, body=body, body_format=body_format
-            )
-
-            if success:
-                # Conditional update: a deleted row matches nothing instead of
-                # raising StaleDataError and rolling back the caller's session
-                db.query(NotificationSettings).filter(
-                    NotificationSettings.id == setting_id
-                ).update({"last_used_at": datetime.utcnow()}, synchronize_session=False)
-                db.commit()
-                logger.info("notification_sent", service=service_name, title=title)
-            else:
-                logger.warning("notification_failed", service=service_name, title=title)
-
-        except Exception as e:
-            logger.error("notification_error", service=service_name, error=str(e))
-
-    @staticmethod
-    async def _send_to_services(
-        db: Session, settings: List[NotificationSettings], title: str, body: str
-    ) -> None:
-        """
-        Send plain-text notification body to multiple services (legacy).
-
-        Args:
-            db: Database session
-            settings: List of notification settings
-            title: Notification title
-            body: Notification body
-        """
-        for setting in _existing(settings):
-            await NotificationService._send_to_service(db, setting, title, body, body)
-
-    @staticmethod
-    async def send_stale_backup_alert(
+    @_delivered
+    def send_stale_backup_alert(
         db: Session, stale_repositories: list, stale_after_days: int
-    ) -> None:
+    ):
         """Send a system alert when repositories have stale or missing backups."""
         settings = (
             db.query(NotificationSettings)
@@ -1920,12 +1935,11 @@ class NotificationService:
                 f"- {repository.name} ({repository.mode}): {freshness} - {repository.path}"
             )
 
-        await NotificationService._send_to_services(
-            db, settings, title, "\n".join(lines)
-        )
+        yield from _plain(settings, title, "\n".join(lines))
 
     @staticmethod
-    async def send_backup_report(db: Session, title: str, body: str) -> None:
+    @_delivered
+    def send_backup_report(db: Session, title: str, body: str):
         """Send a scheduled or manual backup report through Apprise services."""
         settings = (
             db.query(NotificationSettings)
@@ -1939,10 +1953,11 @@ class NotificationService:
         if not settings:
             return
 
-        await NotificationService._send_to_services(db, settings, title, body)
+        yield from _plain(settings, title, body)
 
     @staticmethod
-    async def send_restore_check_completion(
+    @_delivered
+    def send_restore_check_completion(
         db: Session,
         repository_name: str,
         repository_path: str,
@@ -1955,7 +1970,7 @@ class NotificationService:
         job_name: Optional[str] = None,
         probe_paths: Optional[list[str]] = None,
         full_archive: bool = False,
-    ) -> None:
+    ):
         """
         Send notification for restore verification completion.
 
@@ -2069,7 +2084,7 @@ class NotificationService:
             footer=f"Completed at {timestamp_str}",
         )
 
-        for setting in _existing(settings):
+        for setting in settings:
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
 
@@ -2114,12 +2129,11 @@ class NotificationService:
                     service_url=setting.service_url,
                 )
 
-            await NotificationService._send_to_service(
-                db, setting, title, final_html_body, final_markdown_body
-            )
+            yield setting, title, final_html_body, final_markdown_body
 
     @staticmethod
-    async def send_check_completion(
+    @_delivered
+    def send_check_completion(
         db: Session,
         repository_name: str,
         repository_path: str,
@@ -2128,7 +2142,7 @@ class NotificationService:
         error_message: Optional[str] = None,
         check_type: str = "manual",  # "manual" or "scheduled"
         job_name: Optional[str] = None,
-    ) -> None:
+    ):
         """
         Send notification for check completion (success or failure).
 
@@ -2228,7 +2242,7 @@ class NotificationService:
         )
 
         # Send to all enabled services with this event trigger
-        for setting in _existing(settings):
+        for setting in settings:
             # Check if this notification applies to this repository
             if not _notification_applies_to_repository(db, setting, repository_name):
                 continue
@@ -2273,9 +2287,7 @@ class NotificationService:
                     service_url=setting.service_url,
                 )
 
-            await NotificationService._send_to_service(
-                db, setting, title, final_html_body, final_markdown_body
-            )
+            yield setting, title, final_html_body, final_markdown_body
 
 
 # Global instance

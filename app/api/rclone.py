@@ -40,7 +40,11 @@ from app.database.models import (
     User,
 )
 from app.services.rclone_repository_service import normalize_rclone_relative_path
-from app.services.rclone_service import RcloneUnavailable, rclone_service
+from app.services.rclone_service import (
+    RcloneAuthorizationRequired,
+    RcloneUnavailable,
+    rclone_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1499,6 +1503,21 @@ def _oauth_token_status_from_config_values(
     return _oauth_token_status_from_value((values or {}).get("token"))
 
 
+OAUTH_EXCHANGE_ERROR_CODES = frozenset(
+    {
+        "invalid_request",
+        "invalid_client",
+        "invalid_grant",
+        "unauthorized_client",
+        "unsupported_grant_type",
+        "invalid_scope",
+        "access_denied",
+        "server_error",
+        "temporarily_unavailable",
+    }
+)
+
+
 async def _exchange_borg_ui_oauth_code(
     provider: str,
     code: str,
@@ -1536,9 +1555,30 @@ async def _exchange_borg_ui_oauth_code(
             detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
         ) from exc
     if response.status_code >= 400:
+        # Provider response bodies may echo credentials. Trust only known OAuth
+        # error codes, never descriptions, arbitrary fields, or response headers.
+        params: dict[str, Any] = {"http_status": response.status_code}
+        try:
+            rejected = response.json()
+        except ValueError:
+            rejected = None
+        provider_error = rejected.get("error") if isinstance(rejected, dict) else None
+        if (
+            isinstance(provider_error, str)
+            and provider_error in OAUTH_EXCHANGE_ERROR_CODES
+        ):
+            params["provider_error"] = provider_error
+        rejection_key = (
+            "oauthCodeExchangeRejected"
+            if "provider_error" in params
+            else "oauthCodeExchangeRejectedUnknown"
+        )
         raise HTTPException(
             status_code=502,
-            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+            detail={
+                "key": f"backend.errors.rclone.{rejection_key}",
+                "params": params,
+            },
         )
     try:
         parsed = response.json()
@@ -1703,6 +1743,35 @@ def _session_token_status(session: dict[str, Any]) -> dict[str, Any] | None:
     return _oauth_token_status_from_config_values(session["provider"], config)
 
 
+def _safe_oauth_session_error_detail(detail: Any) -> dict[str, Any] | None:
+    if detail is None:
+        return None
+    fallback = {"key": "backend.errors.rclone.oauthCodeExchangeFailed"}
+    if not isinstance(detail, dict) or not isinstance(detail.get("key"), str):
+        return fallback
+    if detail["key"] not in {
+        "backend.errors.rclone.oauthCodeExchangeRejected",
+        "backend.errors.rclone.oauthCodeExchangeRejectedUnknown",
+    }:
+        return fallback
+    params = detail.get("params")
+    if not isinstance(params, dict):
+        return fallback
+    http_status = params.get("http_status")
+    if type(http_status) is not int or not 400 <= http_status <= 599:
+        return fallback
+    safe_params: dict[str, Any] = {"http_status": http_status}
+    provider_error = params.get("provider_error")
+    if isinstance(provider_error, str) and provider_error in OAUTH_EXCHANGE_ERROR_CODES:
+        safe_params["provider_error"] = provider_error
+    rejection_key = (
+        "oauthCodeExchangeRejected"
+        if "provider_error" in safe_params
+        else "oauthCodeExchangeRejectedUnknown"
+    )
+    return {"key": f"backend.errors.rclone.{rejection_key}", "params": safe_params}
+
+
 def _oauth_session_response(session_id: str) -> dict[str, Any]:
     session = RCLONE_OAUTH_SESSIONS[session_id]
     RCLONE_OAUTH_SESSIONS.move_to_end(session_id)
@@ -1720,6 +1789,7 @@ def _oauth_session_response(session_id: str) -> dict[str, Any]:
         "config": config,
         "token_status": _session_token_status(session),
         "error": session.get("error"),
+        "error_detail": _safe_oauth_session_error_detail(session.get("error_detail")),
     }
 
 
@@ -1797,6 +1867,7 @@ async def _start_borg_ui_oauth_session(
         "base_config": base_config,
         "config": None,
         "error": None,
+        "error_detail": None,
         "output": [],
         "created_at": now,
         "updated_at": now,
@@ -1831,6 +1902,7 @@ async def _consume_oauth_process(session_id: str, process) -> None:
                 session["status"] = "authorized"
                 session["config"] = {"type": session["provider"], "token": token}
                 session["error"] = None
+                session["error_detail"] = None
                 ready_event.set()
         return_code = await process.wait()
         if session["status"] != "authorized":
@@ -2456,6 +2528,7 @@ async def start_oauth_session(
         "local_authorization_url": None,
         "config": None,
         "error": None,
+        "error_detail": None,
         "output": [],
         "created_at": now,
         "updated_at": now,
@@ -2570,6 +2643,7 @@ async def complete_borg_ui_oauth_callback(
             status_code=400, detail={"key": "backend.errors.rclone.oauthStateInvalid"}
         )
 
+    session["error_detail"] = None
     if error:
         session["status"] = "failed"
         session["error"] = error_description or error
@@ -2594,9 +2668,32 @@ async def complete_borg_ui_oauth_callback(
         exchange_kwargs["callback_params"] = callback_params
     if provider == "zoho":
         exchange_kwargs["config"] = base_config
-    token_response = await _exchange_borg_ui_oauth_code(
-        provider, code, session["redirect_uri"], db, **exchange_kwargs
-    )
+    try:
+        token_response = await _exchange_borg_ui_oauth_code(
+            provider, code, session["redirect_uri"], db, **exchange_kwargs
+        )
+    except HTTPException as exc:
+        session["status"] = "failed"
+        message = "Authorization failed."
+        detail = _safe_oauth_session_error_detail(exc.detail)
+        session["error_detail"] = detail
+        params = (detail or {}).get("params")
+        if isinstance(params, dict):
+            http_status = params.get("http_status")
+            provider_error = params.get("provider_error")
+            if type(http_status) is int and 400 <= http_status <= 599:
+                diagnostic = f"HTTP {http_status}"
+                if (
+                    isinstance(provider_error, str)
+                    and provider_error in OAUTH_EXCHANGE_ERROR_CODES
+                ):
+                    diagnostic += f": {provider_error}"
+                message = f"Authorization failed ({diagnostic})."
+        session["error"] = (
+            message + " Check provider settings or start authorization again."
+        )
+        session["updated_at"] = _utc_now()
+        raise
     config = dict(base_config)
     if (
         provider == "onedrive"
@@ -2624,6 +2721,7 @@ async def complete_borg_ui_oauth_callback(
     session["status"] = "authorized"
     session["config"] = config
     session["error"] = None
+    session["error_detail"] = None
     session["updated_at"] = _utc_now()
     RCLONE_OAUTH_SESSIONS.move_to_end(session_id)
     return HTMLResponse(
@@ -2938,7 +3036,13 @@ async def browse_remote(
         )
     relative_path = normalize_rclone_relative_path(path) if path else ""
     target = f"{remote.name}:{relative_path}" if relative_path else f"{remote.name}:"
-    entries = await rclone_service.lsjson(target)
+    try:
+        entries = await rclone_service.lsjson(target)
+    except RcloneAuthorizationRequired as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.rclone.authorizationRequired"},
+        ) from exc
     return {
         "remote_id": remote.id,
         "path": relative_path,

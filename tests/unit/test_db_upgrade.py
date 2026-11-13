@@ -775,3 +775,281 @@ def test_a_batch_rebuild_after_the_transfer_keeps_the_rows_that_cascade(tmp_path
     assert [(l.backup_plan_id, l.repository_id, l.enabled) for l in links] == [
         (1, 1, True)
     ]
+
+
+@pytest.mark.unit
+def test_transfer_with_missing_users_keeps_optional_references_and_drops_required(
+    tmp_path,
+):
+    from app.database.models import AgentEnrollmentToken, ApiToken
+
+    db = tmp_path / "borg.db"
+
+    def populate(session):
+        session.add(Repository(id=1, name="keep", path="/srv/keep"))
+        session.add(
+            AgentEnrollmentToken(
+                id=1,
+                name="keep",
+                token_hash="hash",
+                token_prefix="prefix",
+                created_by_user_id=99,
+            )
+        )
+        session.add(
+            ApiToken(
+                id=1,
+                user_id=99,
+                name="orphan",
+                token_hash="hash",
+                prefix="prefix",
+            )
+        )
+
+    _legacy_db(db, populate)
+    with create_engine(f"sqlite:///{db}").begin() as conn:
+        conn.execute(text("DROP TABLE users"))
+    original = db.read_bytes()
+
+    report = alembic_init(db)
+
+    by_name = {table.name: table for table in report.tables}
+    assert by_name["agent_enrollment_tokens"].orphans_cleared == {
+        "created_by_user_id": 1
+    }
+    assert by_name["api_tokens"].orphans_dropped == 1
+    session = _open(db)
+    assert session.query(Repository).one().name == "keep"
+    assert session.query(AgentEnrollmentToken).one().created_by_user_id is None
+    assert session.query(ApiToken).count() == 0
+    session.close()
+    assert report.source_kept_at.read_bytes() == original
+
+
+@pytest.mark.unit
+def test_interrupted_baseline_refuses_to_modify_durable_tables(tmp_path):
+    # The state a baseline interrupted on 2.4.8 or older left behind, when
+    # SQLite DDL was committed statement by statement: the version table
+    # without a revision, and the first tables. (A baseline interrupted now
+    # rolls back whole; see the next-boot assertions in
+    # test_ensure_schema_preserves_initial_build_failure_and_leaves_nothing.)
+    db = tmp_path / "borg.db"
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(
+            text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+        )
+        conn.execute(
+            text("CREATE TABLE agent_machines (id INTEGER PRIMARY KEY, name VARCHAR)")
+        )
+        conn.execute(text("INSERT INTO agent_machines VALUES (7, 'preserve me')"))
+    engine.dispose()
+    original = db.read_bytes()
+
+    with pytest.raises(RuntimeError, match="[Ii]ncomplete.*restore"):
+        alembic_init(db)
+
+    assert db.read_bytes() == original
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["borg.db"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "failure_stage",
+    [
+        "source_connect",
+        "dest_connect",
+        "dest_close",
+        "source_close",
+        "backup",
+        "backup_close",
+        "backup_rollback",
+        "backup_unlink",
+    ],
+)
+def test_failed_snapshot_closes_connections_removes_partial_and_preserves_source(
+    tmp_path,
+    monkeypatch,
+    failure_stage,
+):
+    import sqlite3
+    from app.database.db_upgrade import _snapshot_sqlite
+
+    source = tmp_path / "source.db"
+    dest = tmp_path / "snapshot.db"
+    with sqlite3.connect(source) as conn:
+        conn.execute("CREATE TABLE data (value TEXT)")
+        conn.execute("INSERT INTO data VALUES ('preserve me')")
+    original = source.read_bytes()
+    real_connect = sqlite3.connect
+    failure = sqlite3.OperationalError("database or disk is full")
+    opened = []
+
+    class Connection(sqlite3.Connection):
+        def backup(self, target):
+            if failure_stage.startswith("backup"):
+                target.execute("CREATE TABLE partial (id INTEGER)")
+                raise failure
+            return super().backup(target)
+
+        def __exit__(self, *args):
+            if failure_stage == "backup_rollback":
+                raise OSError("secondary rollback failure")
+            return super().__exit__(*args)
+
+        def close(self):
+            super().close()
+            if failure_stage == "backup_close":
+                raise OSError("secondary close failure")
+            if failure_stage == "dest_close" and self is opened[1]:
+                raise failure
+            if failure_stage == "source_close" and self is opened[0]:
+                raise failure
+
+    def connect(path):
+        if failure_stage == "source_connect" and path == str(source):
+            raise failure
+        if failure_stage == "dest_connect" and path == str(dest):
+            dest.touch()
+            raise failure
+        conn = real_connect(path, factory=Connection)
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    if failure_stage == "backup_unlink":
+        real_unlink = type(dest).unlink
+
+        def unlink(path, *args, **kwargs):
+            if path == dest:
+                raise OSError("secondary unlink failure")
+            return real_unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(type(dest), "unlink", unlink)
+    with pytest.raises(sqlite3.OperationalError) as caught:
+        _snapshot_sqlite(source, dest)
+
+    assert caught.value is failure
+    assert source.read_bytes() == original
+    assert dest.exists() is (failure_stage == "backup_unlink")
+    for conn in opened:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            conn.execute("SELECT 1")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("existing_table", ["agent_machines", "users"])
+def test_ensure_schema_reports_incomplete_baseline_after_concurrent_build_wait(
+    tmp_path, monkeypatch, existing_table
+):
+    from app.database import db_upgrade
+
+    db = tmp_path / "borg.db"
+    with create_engine(f"sqlite:///{db}").begin() as conn:
+        conn.execute(
+            text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+        )
+        conn.execute(text(f"CREATE TABLE {existing_table} (id INTEGER PRIMARY KEY)"))
+        conn.execute(text(f"INSERT INTO {existing_table} VALUES (7)"))
+    original = db.read_bytes()
+    monkeypatch.setattr(db_upgrade.settings, "database_url", f"sqlite:///{db}")
+    monkeypatch.setattr(db_upgrade, "_await_head", lambda engine: False)
+
+    with pytest.raises(RuntimeError, match="[Ii]ncomplete.*restore"):
+        db_upgrade.ensure_schema()
+
+    assert db.read_bytes() == original
+    with create_engine(f"sqlite:///{db}").connect() as conn:
+        assert set(inspect(conn).get_table_names()) == {
+            "alembic_version",
+            existing_table,
+        }
+
+
+@pytest.mark.unit
+def test_ensure_schema_waits_for_an_in_progress_initialization_before_writing(
+    tmp_path, monkeypatch
+):
+    from app.database import db_upgrade
+
+    db = tmp_path / "borg.db"
+    with create_engine(f"sqlite:///{db}").begin() as conn:
+        conn.execute(
+            text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+        )
+        conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY)"))
+    original = db.read_bytes()
+    monkeypatch.setattr(db_upgrade.settings, "database_url", f"sqlite:///{db}")
+    monkeypatch.setattr(db_upgrade, "_await_head", lambda engine: True)
+
+    db_upgrade.ensure_schema()
+
+    assert db.read_bytes() == original
+    with create_engine(f"sqlite:///{db}").connect() as conn:
+        assert set(inspect(conn).get_table_names()) == {"alembic_version", "users"}
+
+
+@pytest.mark.unit
+def test_ensure_schema_preserves_initial_build_failure_and_leaves_nothing(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    from sqlalchemy import event
+    from sqlalchemy.exc import OperationalError
+    from app.database import db_upgrade
+
+    db = tmp_path / "borg.db"
+    failure = sqlite3.OperationalError("database or disk is full")
+    upgrade = db_upgrade._upgrade_to_head
+
+    def interrupt_after_first_table(conn, cursor, statement, parameters, context, many):
+        if statement.lstrip().startswith("CREATE TABLE agent_machines"):
+            raise failure
+
+    def build(url, engine):
+        event.listen(engine, "after_cursor_execute", interrupt_after_first_table)
+        try:
+            upgrade(url, engine)
+        finally:
+            event.remove(engine, "after_cursor_execute", interrupt_after_first_table)
+
+    monkeypatch.setattr(db_upgrade.settings, "database_url", f"sqlite:///{db}")
+    monkeypatch.setattr(db_upgrade, "_upgrade_to_head", build)
+    monkeypatch.setattr(db_upgrade, "_await_head", lambda engine: False)
+
+    with pytest.raises(OperationalError) as caught:
+        db_upgrade.ensure_schema()
+
+    assert caught.value.orig is failure
+    # The tables created before the failure went with it, so the next startup
+    # (with room on the disk again) simply builds the schema.
+    with create_engine(f"sqlite:///{db}").connect() as conn:
+        assert "agent_machines" not in inspect(conn).get_table_names()
+    monkeypatch.setattr(db_upgrade, "_upgrade_to_head", upgrade)
+    db_upgrade.ensure_schema()
+    assert db_upgrade._alembic_state(f"sqlite:///{db}") == "head"
+
+
+@pytest.mark.unit
+def test_a_revision_interrupted_after_its_alter_is_finished_on_next_boot(tmp_path):
+    # SQLite DDL is not transactional under Alembic: a boot killed after
+    # 8f2a4c6e1d3b's ALTER but before its version bump keeps the column at the
+    # previous revision. The next boot must finish the upgrade, not fail on the
+    # duplicate column (dashboard e9d33421b6cb1d9b).
+    from app.database.db_upgrade import _sqlite_url, _upgrade_to
+
+    db = tmp_path / "borg.db"
+    _upgrade_to(_sqlite_url(db), "7de0064b0d99")
+    engine = create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(
+            text("ALTER TABLE repositories ADD COLUMN total_size_source VARCHAR")
+        )
+    engine.dispose()
+
+    assert alembic_init(db).action == "migrated"
+    engine = create_engine(f"sqlite:///{db}")
+    columns = {c["name"] for c in inspect(engine).get_columns("repositories")}
+    engine.dispose()
+    assert {"total_size_source", "borg_last_modified"} <= columns
+    assert alembic_init(db).action == "skipped"

@@ -20,10 +20,21 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("licensing_state") as batch_op:
-        batch_op.add_column(
-            sa.Column("license_key_encrypted", sa.String(), nullable=True)
-        )
+    # Alembic does not run SQLite DDL in a transaction: a boot killed after
+    # the ALTER but before the version bump keeps the column, and re-running
+    # this revision must not fail on the duplicate. Self-contained on purpose.
+    existing = {
+        c["name"] for c in sa.inspect(op.get_bind()).get_columns("licensing_state")
+    }
+    missing = [
+        column
+        for column in (sa.Column("license_key_encrypted", sa.String(), nullable=True),)
+        if column.name not in existing
+    ]
+    if missing:
+        with op.batch_alter_table("licensing_state") as batch:
+            for column in missing:
+                batch.add_column(column)
 
 
 def downgrade() -> None:

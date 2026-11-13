@@ -12,7 +12,7 @@ import structlog
 
 from app.api.agent_installer import agent_package_version
 from app.api.agents import FINAL_AGENT_JOB_STATUSES, _cancel_agent_job
-from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
+from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH, mark_agent_online
 from app.core.agent_versions import (
     agent_borg2_version,
     compute_agent_upgrade_status,
@@ -542,9 +542,9 @@ def list_agent_machines(
         if agent.status == "offline" and agent_connection_manager.is_connected(
             agent.id
         ):
-            agent.status = "online"
-            agent.last_seen_at = now
-            agent.updated_at = now
+            # Guarded: a revocation committed after this list was read wins.
+            # Committed either way, so the answer shows the row's real status.
+            mark_agent_online(db, agent.id, now)
             changed = True
     if changed:
         db.commit()

@@ -1,6 +1,7 @@
 """Shared SSH key and command option helpers for remote operations."""
 
 import base64
+from contextlib import suppress
 import os
 import tempfile
 from typing import Optional
@@ -192,10 +193,23 @@ def write_ssh_key_to_tempfile(ssh_key) -> str:
     fd, temp_key_file = tempfile.mkstemp(suffix=".key", text=True)
     try:
         os.chmod(temp_key_file, 0o600)
-        with os.fdopen(fd, "w") as f:
-            f.write(private_key)
+        stream = os.fdopen(fd, "w")
+        fd = None  # The stream now owns and closes the descriptor.
+        try:
+            stream.write(private_key)
+        except Exception:
+            # A flush/close failure must not mask the original write failure.
+            with suppress(Exception):
+                stream.close()
+            raise
+        else:
+            stream.close()
     except Exception:
-        os.close(fd)
+        if fd is not None:
+            with suppress(OSError):
+                os.close(fd)
+        with suppress(OSError):
+            os.unlink(temp_key_file)
         raise
 
     return temp_key_file

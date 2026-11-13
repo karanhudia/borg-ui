@@ -39,6 +39,23 @@ def _require_browse_agent(db: Session, agent_machine_id: int) -> AgentMachine:
     return agent
 
 
+def _browse_path_error(error: Any, path: str) -> HTTPException | None:
+    if not isinstance(error, dict) or not isinstance(error.get("code"), str):
+        return None
+    known = {
+        "missing": (404, "pathNotFound"),
+        "unreadable": (403, "permissionDenied"),
+        "not_directory": (400, "pathNotDirectory"),
+    }.get(error["code"])
+    if known is None:
+        return None
+    code, key = known
+    return HTTPException(
+        status_code=code,
+        detail={"key": f"backend.errors.filesystem.{key}", "params": {"path": path}},
+    )
+
+
 async def browse_agent_filesystem(
     db: Session,
     agent_machine_id: int,
@@ -71,6 +88,9 @@ async def browse_agent_filesystem(
             detail={"key": "backend.errors.agents.filesystemBrowseTimeout"},
         ) from exc
     except AgentCommandError as exc:
+        path_error = _browse_path_error(exc.payload, path or "/")
+        if path_error is not None:
+            raise path_error from exc
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={
@@ -81,6 +101,9 @@ async def browse_agent_filesystem(
 
     if result.get("success") is False:
         error = result.get("error") if isinstance(result.get("error"), dict) else {}
+        path_error = _browse_path_error(error, path or "/")
+        if path_error is not None:
+            raise path_error
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={

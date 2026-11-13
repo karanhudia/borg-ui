@@ -15,6 +15,40 @@ from fastapi import HTTPException
         ({"return_code": 19}, 409),
         ({"return_code": 2, "stderr": "There is already something at /repo."}, 409),
         ({"stderr": "FileExistsError: [Errno 17] File exists: '/repo'"}, 409),
+        # A `config` Borg cannot decode: the path is not a repository
+        # (dashboard f60df0963ec9494f). The same error elsewhere stays a 500.
+        (
+            {
+                "return_code": 2,
+                "stderr": '  File "borg/repository.py", line 494, in open\n'
+                "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd",
+            },
+            422,
+        ),
+        ({"return_code": 2, "stderr": "UnicodeDecodeError: 'utf-8' codec"}, 500),
+        # Init where a repository already is (dashboard 2bf3c31b30712233).
+        ({"return_code": 10}, 409),
+        (
+            {"return_code": 2, "stderr": "A repository already exists at ssh://h/./r."},
+            409,
+        ),
+        # A key Borg cannot find or read (a4b2fad0603467e8, ed36651bb055713a).
+        (
+            {"return_code": 2, "stderr": "No key file for repository /r found in /k."},
+            422,
+        ),
+        ({"return_code": 42}, 422),
+        (
+            {
+                "return_code": 2,
+                "stderr": "IsADirectoryError: [Errno 21] Is a directory: "
+                "'/root/.config/borg/keys/borg_keys'",
+            },
+            422,
+        ),
+        # No Borg on the SSH host (859daa3dfb3863ec), bash and dash wording.
+        ({"return_code": 2, "error": "Remote: sh: borg: command not found"}, 422),
+        ({"return_code": 2, "error": "Remote: sh: 1: borg: not found"}, 422),
         ({"return_code": 2, "stderr": "unexplained failure"}, 500),
         ({"return_code": 73, "stderr": "Our lock was killed by another borg"}, 500),
     ],
@@ -78,6 +112,9 @@ def test_import_failure_preserves_reason(
     [
         "fuse: device not found, try 'modprobe fuse' first",
         "fuse: failed to open /dev/fuse: No such file or directory",
+        "fusermount3: mount failed: Permission denied\nRuntime error: FUSE mount failed",
+        "fusermount: mount failed: Operation not permitted",
+        "fusermount3: mount failed: Operation not permitted",
     ],
 )
 def test_missing_fuse_device_is_unavailable(reason):

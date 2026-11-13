@@ -810,7 +810,7 @@ async def import_ssh_key(
                 private_key = f.read()
         except Exception as e:
             raise HTTPException(
-                status_code=500,
+                status_code=422,
                 detail={
                     "key": "backend.errors.ssh.failedReadPrivateKey",
                     "params": {"error": str(e)},
@@ -845,7 +845,7 @@ async def import_ssh_key(
                 public_key = f.read().strip()
         except Exception as e:
             raise HTTPException(
-                status_code=500,
+                status_code=422,
                 detail={
                     "key": "backend.errors.ssh.failedReadPublicKey",
                     "params": {"error": str(e)},

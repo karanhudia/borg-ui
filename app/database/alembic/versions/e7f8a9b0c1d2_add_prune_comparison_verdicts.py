@@ -15,10 +15,25 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("prune_comparisons") as batch:
-        batch.add_column(sa.Column("verdicts", sa.JSON(), nullable=True))
-        batch.add_column(sa.Column("archive_max_id", sa.Integer(), nullable=True))
-        batch.add_column(sa.Column("archive_seen_at", sa.DateTime(), nullable=True))
+    # Alembic does not run SQLite DDL in a transaction: a boot killed after
+    # the ALTER but before the version bump keeps the column, and re-running
+    # this revision must not fail on the duplicate. Self-contained on purpose.
+    existing = {
+        c["name"] for c in sa.inspect(op.get_bind()).get_columns("prune_comparisons")
+    }
+    missing = [
+        column
+        for column in (
+            sa.Column("verdicts", sa.JSON(), nullable=True),
+            sa.Column("archive_max_id", sa.Integer(), nullable=True),
+            sa.Column("archive_seen_at", sa.DateTime(), nullable=True),
+        )
+        if column.name not in existing
+    ]
+    if missing:
+        with op.batch_alter_table("prune_comparisons") as batch:
+            for column in missing:
+                batch.add_column(column)
 
 
 def downgrade() -> None:

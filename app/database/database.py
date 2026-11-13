@@ -1,6 +1,11 @@
+import asyncio
+import concurrent.futures
+import functools
+import inspect
+
 from sqlalchemy import create_engine, event, MetaData
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import QueuePool
 from app.config import settings
 import os
@@ -147,3 +152,123 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# A request's session holds a pooled connection from its first query until it
+# commits, rolls back or closes; FastAPI closes it after the response. The pool
+# (10 + 20) and the worker threads (30) are both shared. A request that holds a
+# connection while it waits for a worker thread, while the threads wait for
+# connections, waits until the pool timeout. So does the event loop when it
+# waits for a connection: most come back through request cleanup that runs on
+# the loop. The helpers below keep requests and the loop out of those waits.
+
+
+def handler_uses_session_on_loop(request) -> bool:
+    """Whether the request's handler is a coroutine that takes the request's
+    session itself. It queries on the event loop, after its dependencies:
+    the connection the session holds saves it a checkout there. Every other
+    handler runs in a worker thread, or does not use that session."""
+    route = request.scope.get("route")
+    endpoint = getattr(route, "endpoint", None)
+    if endpoint is None or not inspect.iscoroutinefunction(endpoint):
+        return False
+    return any(dependency.call is get_db for dependency in route.dependant.dependencies)
+
+
+def handler_runs_in_worker(request) -> bool:
+    """Whether the request's handler is a plain `def` function. FastAPI runs
+    it in a worker thread, so a query it makes after its dependencies never
+    waits for a connection on the event loop. False when the route is not
+    known."""
+    route = request.scope.get("route")
+    endpoint = getattr(route, "endpoint", None)
+    return endpoint is not None and not inspect.iscoroutinefunction(endpoint)
+
+
+def end_read_keeping_loaded(db: Session, *instances) -> None:
+    """End the session's read transaction and keep `instances` as loaded.
+
+    The rollback gives the connection back to the pool until the session
+    needs one again, as the repository waiter does. A plain rollback expires
+    every loaded instance, and the next attribute read would query again.
+    Taken out of the session for the rollback and added back, the instances
+    keep their values, and the next commit still writes what is changed on
+    them.
+    """
+    for instance in instances:
+        db.expunge(instance)
+    db.rollback()
+    for instance in instances:
+        db.add(instance)
+
+
+def ends_read_on_return(handler):
+    """For a plain `def` handler: end its session's transaction when it
+    returns. FastAPI validates the response of a `def` handler in another
+    shared worker thread and closes the session only after that, so the
+    request would wait for that thread while holding its connection. The
+    handler returns values, not rows that still need the session."""
+
+    @functools.wraps(handler)
+    def wrapper(*args, **kwargs):
+        response = handler(*args, **kwargs)
+        for value in kwargs.values():
+            if isinstance(value, Session):
+                value.rollback()
+        return response
+
+    return wrapper
+
+
+def checkout_can_wait(bind) -> bool:
+    """Whether a checkout from `bind` can wait for a connection. Only a
+    QueuePool makes it wait. The other pools (in tests) share one connection,
+    keep one per thread or open a new one: they never wait, and some must not
+    hand a connection to another thread."""
+    return isinstance(getattr(bind, "pool", None), QueuePool)
+
+
+# Threads of their own for `run_off_loop`; its callers wait for one at a time.
+_OFF_LOOP_THREADS = concurrent.futures.ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="db-off-loop"
+)
+
+
+async def run_off_loop(function, *args):
+    """Run `function` in a thread and return its result, for blocking database
+    work of code on the event loop: on the loop, a wait for a pooled connection
+    holds every request. The thread is not one of AnyIO's worker threads,
+    which the requests holding the connections may wait for. A caller that is
+    cancelled meanwhile still waits for the thread to finish before it goes
+    on, so its cleanup never runs while the thread is still at work."""
+    work = _OFF_LOOP_THREADS.submit(function, *args)
+    try:
+        return await asyncio.shield(asyncio.wrap_future(work))
+    except asyncio.CancelledError:
+        # `work` itself cannot be cancelled once it runs: wait for the thread.
+        while not work.done():
+            try:
+                await asyncio.shield(asyncio.wrap_future(work))
+            except (asyncio.CancelledError, Exception):
+                pass
+        raise
+
+
+async def connect_off_loop(engine):
+    """A connection checked out from `engine` by `run_off_loop`. A session
+    bound to it keeps it across its commits, so none of its statements waits
+    for a checkout on the loop. Closed again if the caller is cancelled while
+    it is checked out."""
+    connection = None
+
+    def connect():
+        nonlocal connection
+        connection = engine.connect()
+
+    try:
+        await run_off_loop(connect)
+    except BaseException:
+        if connection is not None:
+            connection.close()
+        raise
+    return connection

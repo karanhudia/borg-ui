@@ -385,6 +385,52 @@ describe('FileExplorerDialog', () => {
       })
     })
 
+    it('shows Cloud Storage recovery guidance for a remote authorization conflict', async () => {
+      vi.mocked(rcloneAPI.browseRemote).mockRejectedValue({
+        response: {
+          status: 409,
+          data: { detail: { key: 'backend.errors.rclone.authorizationRequired' } },
+        },
+      })
+      renderWithProviders(
+        <FileExplorerDialog
+          open
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="rclone"
+          rcloneRemoteId={10}
+        />
+      )
+      expect(
+        await screen.findByText(
+          'Cloud authorization has expired or been revoked. Open Cloud Storage, edit this remote, and authorize again.'
+        )
+      ).toBeInTheDocument()
+      expect(screen.queryByText('No items found')).not.toBeInTheDocument()
+      expect(screen.queryByText('Empty directory')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Use current/i })).toBeEnabled()
+    })
+
+    it.each([
+      [500, 'backend.errors.rclone.authorizationRequired'],
+      [409, 'backend.errors.rclone.remoteNotFound'],
+      [502, 'backend.errors.rclone.oauthCodeExchangeFailed'],
+    ])('preserves generic cloud browse guidance for status %s and key %s', async (status, key) => {
+      vi.mocked(rcloneAPI.browseRemote).mockRejectedValue({
+        response: { status, data: { detail: { key } } },
+      })
+      renderWithProviders(
+        <FileExplorerDialog
+          open
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="rclone"
+          rcloneRemoteId={10}
+        />
+      )
+      expect(await screen.findByText('Failed to browse rclone remote.')).toBeInTheDocument()
+    })
+
     it('loads rclone remote folders through the shared browser UI', async () => {
       renderWithProviders(
         <FileExplorerDialog

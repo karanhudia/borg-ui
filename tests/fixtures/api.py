@@ -3,6 +3,7 @@ API fixtures for testing
 """
 
 import asyncio
+import shutil
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,13 +13,30 @@ from sqlalchemy.orm import sessionmaker
 # Import app lazily to avoid initialization issues
 from app.database.database import Base, get_db
 from app.database.models import User
-from app.core.security import get_password_hash, create_access_token
+from app.core.security import create_access_token
+
+
+@pytest.fixture(scope="session")
+def api_database_template(tmp_path_factory):
+    """Build an empty schema once; close it before any per-test copies."""
+    # Load the complete application/model registry before freezing its schema.
+    from app.main import app  # noqa: F401
+
+    template_path = tmp_path_factory.mktemp("api-schema") / "empty.db"
+    engine = create_engine(f"sqlite:///{template_path}")
+    try:
+        Base.metadata.create_all(bind=engine)
+    finally:
+        engine.dispose()
+    return template_path
 
 
 @pytest.fixture(scope="function")
-def test_db(tmp_path, monkeypatch):
+def test_db(tmp_path, monkeypatch, api_database_template):
     """Create a test database with shared session"""
-    db_url = f"sqlite:///{tmp_path / 'test.db'}"
+    db_path = tmp_path / "test.db"
+    shutil.copyfile(api_database_template, db_path)
+    db_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("DATABASE_URL", db_url)
 
     from app.config import settings
@@ -63,7 +81,6 @@ def test_db(tmp_path, monkeypatch):
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
-    Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     # Create a single session that will be shared
@@ -141,8 +158,7 @@ def test_db(tmp_path, monkeypatch):
             p.stop()
 
         shared_session.close()
-        # Clean up database tables
-        Base.metadata.drop_all(bind=engine)
+        # pytest owns this test's unique temporary database file.
         engine.dispose()
         application.dependency_overrides.clear()
 
@@ -163,6 +179,31 @@ def test_client(test_db):
             # writes before real shutdown drains tasks and releases its lease:
             # otherwise SQLite's write lock blocks that cleanup until timeout.
             test_db.rollback()
+
+
+@pytest.fixture
+def session_per_request(test_db):
+    """Give every request its own session, as production does.
+
+    The session of `test_db` is shared, so requests running at the same time
+    must not use it. A test of concurrent requests takes this fixture and keeps
+    `test_db` for its own setup and assertions.
+    """
+    from app.main import app
+
+    request_sessions = sessionmaker(
+        autocommit=False, autoflush=False, bind=test_db.get_bind()
+    )
+
+    def override_get_db():
+        db = request_sessions()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield request_sessions
 
 
 class HeldRunner:
@@ -257,11 +298,11 @@ def admin_headers(admin_token):
 
 
 @pytest.fixture
-def operator_user(test_db):
+def operator_user(test_db, fixture_password_hashes):
     """Create an operator user in the database"""
     user = User(
         username="operator",
-        password_hash=get_password_hash("operator123"),
+        password_hash=fixture_password_hashes["operator123"],
         is_active=True,
         role="operator",
     )

@@ -262,3 +262,54 @@ def test_listing_retains_contention_classification_before_truncation(
 ):
     error = ArchiveListingError({"return_code": code, "stderr": diagnostic})
     assert error.is_lock_contention is expected
+
+
+def test_listing_crash_leads_with_borg_cause_not_its_wrapper():
+    # Reported messages are cut to their first lines; a crash used to report
+    # only "Local Exception / Traceback" (dashboard 143549fb550e9920).
+    stderr = (
+        "Local Exception\n"
+        "Traceback (most recent call last):\n"
+        '  File "borg/archiver.py", line 5917, in main\n'
+        "    exit_code = archiver.run(args)\n"
+        "OSError: [Errno 5] Input/output error: '/repo/index.12'\n"
+        "\n"
+        "Platform: Linux host 6.1.0 x86_64\n"
+        "SSH_ORIGINAL_COMMAND: BORG_PASSPHRASE=footer-secret"
+    )
+    message = str(ArchiveListingError({"return_code": 2, "stderr": stderr}))
+
+    assert message.startswith(
+        "listing archives failed (exit code 2): "
+        "OSError: [Errno 5] Input/output error: '/repo/index.12'\nLocal Exception"
+    )
+    assert "footer-secret" not in message
+
+
+def test_diagnostic_leads_with_borg_cause_past_interpreter_noise():
+    # Borg can print an unrelated "Exception ignored in" traceback ahead of
+    # its own crash; the reported reason was that noise, cut before the cause
+    # (dashboard f60df0963ec9494f).
+    from app.core.borg_errors import bounded_operation_diagnostic
+
+    stderr = (
+        "Exception ignored in: <function Repository.__del__ at 0x7f82fc123420>\n"
+        "Traceback (most recent call last):\n"
+        '  File "borg/repository.py", line 207, in __del__\n'
+        "AssertionError: cleanup happened in Repository.__del__\n"
+        "Local Exception\n"
+        "Traceback (most recent call last):\n"
+        '  File "borg/repository.py", line 494, in open\n'
+        '  File "<frozen codecs>", line 322, in decode\n'
+        "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 0\n"
+        "\n"
+        "Platform: Linux host 6.12 x86_64\n"
+    )
+
+    diagnostic = bounded_operation_diagnostic(stderr)
+
+    assert diagnostic.startswith(
+        "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 0\n"
+        "Exception ignored in:"
+    )
+    assert bounded_operation_diagnostic("Permission denied") == "Permission denied"

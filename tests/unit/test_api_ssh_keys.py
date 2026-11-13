@@ -131,6 +131,24 @@ class TestSSHKeysEndpoints:
 
         assert response.status_code == 404
 
+    def test_import_ssh_key_unreadable_file_is_not_a_server_fault(
+        self, test_client: TestClient, admin_headers, tmp_path
+    ):
+        # A key file the server cannot read (wrong owner, a directory, not
+        # text) is for the user to fix (dashboard 4be72cd8f7afd98a). A
+        # directory stands in: it fails the same way for every user, root too.
+        response = test_client.post(
+            "/api/ssh-keys/import",
+            json={"name": "imported-key", "private_key_path": str(tmp_path)},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.ssh.failedReadPrivateKey"
+        )
+
     def test_test_existing_connection_nonexistent(
         self, test_client: TestClient, admin_headers
     ):

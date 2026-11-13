@@ -21,6 +21,8 @@ from app.core.borg_router import BorgRouter
 from app.core.borg_errors import (
     LOCK_CONTENTION_DETAIL_KEY,
     is_lock_contention_exit_code,
+    is_repository_exists_failure,
+    repository_failure_status,
 )
 from app.database.models import AgentJob, AgentJobLog, AgentMachine, Repository
 from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
@@ -758,48 +760,80 @@ def lock_contention_for_waiter(agent_job: Any, db: Session) -> bool:
 
 
 def _tail_reason_line(tail: str, *, lock_contention: bool) -> Optional[str]:
-    """The reason line from the report's tail: the lock line when the run
-    ended on a lock (Borg may go on after it), else the last non-empty
-    line - Borg ends with the sentence that says what was wrong, after any
-    usage block - skipping the `--show-rc` status line, which only repeats
-    the exit code. An error Borg follows with a traceback (and its platform
-    block) is the line before the traceback."""
+    """Prefer Borg's human reason, then the terminal traceback exception.
+
+    Borg's generic wrapper and diagnostic footer describe the crash rather
+    than its cause. Never promote its command/environment footer to a reason.
+    """
     lines = [
-        line.strip()
+        line.rstrip()
         for line in tail.splitlines()
         if line.strip() and not _SHOW_RC_LINE.match(line.strip())
     ]
-    if not lines:
-        return None
     if lock_contention:
         for line in reversed(lines):
             if _LOCK_CONTENTION_LINE.search(line):
-                return line
+                return line.strip()
+    footer_prefixes = (
+        "Platform:",
+        "Borg:",
+        "Python:",
+        "PID:",
+        "CWD:",
+        "sys.argv:",
+        "SSH_ORIGINAL_COMMAND:",
+        "Command line:",
+        "Environment:",
+    )
+    for index, line in enumerate(lines):
+        if line.strip().startswith(footer_prefixes):
+            lines = lines[:index]
+            break
+    wrappers = {
+        "Local Exception",
+        "Remote Exception",
+        "Exception",
+        "Error",
+        "If reporting bugs, please include the following",
+    }
     if _TRACEBACK_HEADER in lines:
-        before = lines[: lines.index(_TRACEBACK_HEADER)]
+        index = lines.index(_TRACEBACK_HEADER)
+        before = [
+            line.strip()
+            for line in lines[:index]
+            if line.strip().rstrip(":") not in wrappers
+        ]
         if before:
             return before[-1]
-    return lines[-1]
+        # Python's terminal exception is an unindented class name, optionally
+        # followed by ':' and a message;
+        # stack frames and source snippets are not diagnostic reasons.
+        exceptions = [
+            line
+            for line in lines[index + 1 :]
+            if re.match(r"^[A-Za-z_][\w.]*(?::|$)", line)
+        ]
+        return exceptions[-1] if exceptions else None
+    meaningful = [
+        line.strip() for line in lines if line.strip().rstrip(":") not in wrappers
+    ]
+    return meaningful[-1] if meaningful else None
 
 
-def _log_reason_line(rows: list, *, stream: Optional[str]) -> Optional[str]:
-    """The reason line from the job's newest log row on `stream` (any stream
-    when it is None), given `rows` ordered newest first.
+def _log_reason_line(
+    rows: list, *, stream: Optional[str], lock_contention: bool = False
+) -> Optional[str]:
+    """Read legacy rows in output order, excluding the command preamble.
 
-    A row's first non-empty line is the reason: borg leads with the human
-    sentence and follows it with a traceback.
-
-    Sequence 0 is the agent's own "Starting <kind>: <command>" preamble, never
-    a reason - it is what the job was about to run, not why it stopped. Below
-    0 is the server's note that the job was requeued, which is not one either.
+    A traceback can arrive in one row or many; parse the same bounded window
+    as a modern report so its final platform/command rows never win.
     """
-    for sequence, row_stream, message in rows:
-        if sequence <= 0 or (stream is not None and row_stream != stream):
-            continue
-        lines = [line.strip() for line in (message or "").splitlines() if line.strip()]
-        if lines:
-            return lines[0]
-    return None
+    messages = [
+        message or ""
+        for sequence, row_stream, message in reversed(rows)
+        if sequence > 0 and (stream is None or row_stream == stream)
+    ]
+    return _tail_reason_line("\n".join(messages), lock_contention=lock_contention)
 
 
 def _agent_job_failure_message(db: Session, agent_job: AgentJob) -> Optional[str]:
@@ -825,16 +859,19 @@ def _agent_job_failure_message(db: Session, agent_job: AgentJob) -> Optional[str
             .limit(FAILURE_LOG_TAIL)
             .all()
         )
-        reason = _log_reason_line(rows, stream="stderr") or _log_reason_line(
-            rows, stream=None
-        )
+        lock_contention = agent_failure_is_lock_contention(agent_job, db)
+        reason = _log_reason_line(
+            rows, stream="stderr", lock_contention=lock_contention
+        ) or _log_reason_line(rows, stream=None, lock_contention=lock_contention)
     # Redacted as a whole: the log rows of an older agent are raw, and the
     # message reaches the operation row and the notifications.
-    if not reason:
-        return redact_secrets(agent_job.error_message)
-    if not agent_job.error_message:
-        return redact_secrets(reason)
-    return redact_secrets(f"{agent_job.error_message}: {reason}")
+    message = (
+        f"{agent_job.error_message}: {reason}"
+        if reason and agent_job.error_message
+        else reason or agent_job.error_message
+    )
+    redacted = redact_secrets(message)
+    return redacted[-FAILURE_TAIL_MAX_CHARS:] if redacted else redacted
 
 
 def agent_operation_failed_detail(
@@ -950,13 +987,50 @@ async def wait_for_agent_repository_operation_job(
             drop_consumed_agent_job_output(db, agent_job)
             return result
         if agent_job.status in TERMINAL_AGENT_STATUSES:
+            message = _agent_job_failure_message(db, agent_job)
+            payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
+            # The modern code is specific; legacy rc 2 needs Borg's complete
+            # AlreadyExists sentence. Never infer a conflict for other jobs.
+            reason = (message or "").removeprefix(f"{agent_job.error_message}: ")
+            if (
+                agent_job.status == "failed"
+                and payload.get("job_kind") == "repository.init"
+                and is_repository_exists_failure(
+                    {
+                        "return_code": _failure_result(agent_job).get("return_code"),
+                        "stderr": reason,
+                    }
+                )
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={"key": "backend.errors.borg.repositoryAlreadyExists"},
+                )
+            lock_contention = lock_contention_for_waiter(agent_job, db)
+            # A refusal the user fixes on the agent's host (no permission on
+            # the repository, a read-only mount) is not a gateway fault
+            # (dashboard fd8a3e653ad160f1). Lock contention keeps its 502,
+            # which the operations runner defers on.
+            refusal = (
+                None
+                if lock_contention
+                else repository_failure_status(
+                    {
+                        "return_code": _failure_result(agent_job).get("return_code"),
+                        "stderr": reason,
+                    }
+                )
+            )
             raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
+                # 422 only: a conflict is inferred for init alone (above)
+                status_code=refusal if refusal == 422 else status.HTTP_502_BAD_GATEWAY,
                 detail=agent_operation_failed_detail(
-                    _agent_job_failure_message(db, agent_job),
-                    lock_contention=lock_contention_for_waiter(agent_job, db),
+                    message, lock_contention=lock_contention
                 ),
             )
+        # As in the backup and script waiters, release the idle read so
+        # the agent's completion report and other requests can use the pool.
+        db.rollback()
         await asyncio.sleep(poll_interval_seconds)
 
     raise HTTPException(

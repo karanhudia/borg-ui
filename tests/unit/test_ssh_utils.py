@@ -12,6 +12,7 @@ Tests cover:
 """
 
 import base64
+import errno
 import os
 import pytest
 from unittest.mock import MagicMock, patch
@@ -331,3 +332,160 @@ class TestWriteSshKeyToTempfile:
         finally:
             if result and os.path.exists(result):
                 os.unlink(result)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "failure_stage", ["chmod", "fdopen", "write", "close", "write_and_close"]
+)
+def test_failed_key_file_is_removed_without_masking_failure(
+    monkeypatch, tmp_path, failure_stage
+):
+    """A failed key write must not leak a secret or double-close its descriptor."""
+    from app.utils import ssh_utils
+
+    failure = OSError(errno.ENOSPC, "No space left on device")
+    real_mkstemp = ssh_utils.tempfile.mkstemp
+    real_fdopen = os.fdopen
+    real_close = os.close
+    created = []
+    streams = []
+    raw_closes = []
+
+    def close_descriptor(fd):
+        raw_closes.append(fd)
+        return real_close(fd)
+
+    def create_key_file(**kwargs):
+        fd, path = real_mkstemp(dir=tmp_path, **kwargs)
+        created.append((fd, path))
+        return fd, path
+
+    class FailingStream:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def __enter__(self):
+            return self
+
+        def write(self, content):
+            if failure_stage in {"write", "write_and_close"}:
+                self.stream.write(content[:10])
+                self.stream.flush()
+                raise failure
+            return self.stream.write(content)
+
+        def close(self):
+            self.stream.close()
+            if failure_stage == "close":
+                raise failure
+            if failure_stage == "write_and_close":
+                raise OSError(errno.EIO, "close failed after write failure")
+
+        def __exit__(self, *args):
+            self.close()
+
+    def open_key_file(fd, mode):
+        if failure_stage == "fdopen":
+            raise failure
+        stream = real_fdopen(fd, mode)
+        streams.append(stream)
+        return FailingStream(stream)
+
+    def fail_chmod(*args):
+        raise failure
+
+    monkeypatch.setattr(ssh_utils.tempfile, "mkstemp", create_key_file)
+    monkeypatch.setattr(ssh_utils, "decrypt_secret", lambda _: "private key")
+    monkeypatch.setattr(ssh_utils.os, "fdopen", open_key_file)
+    monkeypatch.setattr(ssh_utils.os, "close", close_descriptor)
+    if failure_stage == "chmod":
+        monkeypatch.setattr(ssh_utils.os, "chmod", fail_chmod)
+
+    with pytest.raises(OSError) as raised:
+        ssh_utils.write_ssh_key_to_tempfile(SSHKey(id=42, private_key="encrypted"))
+
+    assert raised.value is failure
+    assert len(created) == 1
+    fd, path = created[0]
+    assert not os.path.exists(path)
+    with pytest.raises(OSError) as closed:
+        os.fstat(fd)
+    assert closed.value.errno == errno.EBADF
+    assert all(stream.closed for stream in streams)
+    assert raw_closes == ([fd] if failure_stage in {"chmod", "fdopen"} else [])
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("cleanup_failure", ["close", "unlink"])
+def test_key_file_cleanup_preserves_primary_error(
+    monkeypatch, tmp_path, cleanup_failure
+):
+    """A secondary cleanup error must not replace the original filesystem failure."""
+    from app.utils import ssh_utils
+
+    failure = OSError(errno.ENOSPC, "No space left on device")
+    real_close = os.close
+    real_unlink = os.unlink
+    fd, path = ssh_utils.tempfile.mkstemp(dir=tmp_path)
+
+    def fail_chmod(*args):
+        raise failure
+
+    def fail_close(descriptor):
+        real_close(descriptor)
+        raise OSError(errno.EIO, "close failed")
+
+    def fail_unlink(path):
+        raise OSError(errno.EIO, "unlink failed")
+
+    monkeypatch.setattr(ssh_utils.tempfile, "mkstemp", lambda **_: (fd, path))
+    monkeypatch.setattr(ssh_utils, "decrypt_secret", lambda _: "private key")
+    monkeypatch.setattr(ssh_utils.os, "chmod", fail_chmod)
+    monkeypatch.setattr(
+        ssh_utils.os,
+        cleanup_failure,
+        fail_close if cleanup_failure == "close" else fail_unlink,
+    )
+
+    try:
+        with pytest.raises(OSError) as raised:
+            ssh_utils.write_ssh_key_to_tempfile(SSHKey(id=42, private_key="encrypted"))
+        assert raised.value is failure
+        with pytest.raises(OSError) as closed:
+            os.fstat(fd)
+        assert closed.value.errno == errno.EBADF
+        if cleanup_failure == "close":
+            assert not os.path.exists(path)
+    finally:
+        if os.path.exists(path):
+            real_unlink(path)
+
+
+@pytest.mark.unit
+def test_successful_key_file_closes_descriptor_and_keeps_private_contents(
+    monkeypatch, tmp_path
+):
+    from app.utils import ssh_utils
+
+    real_mkstemp = ssh_utils.tempfile.mkstemp
+    descriptors = []
+
+    def create_key_file(**kwargs):
+        fd, path = real_mkstemp(dir=tmp_path, **kwargs)
+        descriptors.append(fd)
+        return fd, path
+
+    monkeypatch.setattr(ssh_utils.tempfile, "mkstemp", create_key_file)
+    monkeypatch.setattr(ssh_utils, "decrypt_secret", lambda _: "private key")
+
+    path = ssh_utils.write_ssh_key_to_tempfile(SSHKey(id=42, private_key="encrypted"))
+    try:
+        with open(path) as stream:
+            assert stream.read() == "private key\n"
+        assert os.stat(path).st_mode & 0o777 == 0o600
+        with pytest.raises(OSError) as closed:
+            os.fstat(descriptors[0])
+        assert closed.value.errno == errno.EBADF
+    finally:
+        os.unlink(path)

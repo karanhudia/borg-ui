@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import asyncio
 import os
+import re
 import shlex
 import subprocess
 import structlog
@@ -326,9 +327,83 @@ def _remote_path_command_failed(result) -> bool:
     )
 
 
+# How sftp and the remote shell open a line that reports on a remote path.
+# "No such file or directory" counts as a missing path only on such a line:
+# alone it also describes a missing sftp-server binary or a broken connection.
+_MISSING_REMOTE_PATH_PREFIXES = (
+    "stat:",
+    "mkdir:",
+    'remote mkdir "',
+    "remote stat(",
+    "remote readdir(",
+    "couldn't canonicalize:",
+    "couldn't stat remote file",
+    "couldn't create directory:",
+)
+
+
+def _names_missing_remote_path(lowered: str, prefixes: tuple[str, ...]) -> bool:
+    return any(
+        line.strip().startswith(prefixes)
+        and line.rstrip(". ").endswith("no such file or directory")
+        for line in lowered.splitlines()
+    )
+
+
+def _remote_path_missing_error(result) -> bool:
+    """Only remote filesystem diagnostics permit a login-relative retry."""
+    if result.returncode == 255:
+        return False
+    stderr = (result.stderr or "").strip().lower()
+    if any(
+        marker in stderr
+        for marker in (
+            "permission denied",
+            "authentication",
+            "publickey",
+            "host key",
+            "hostkey",
+            "connection ",
+            "timed out",
+            "could not resolve",
+            "subsystem",
+            "sftp-server",
+        )
+    ):
+        return False
+    return _names_missing_remote_path(stderr, _MISSING_REMOTE_PATH_PREFIXES)
+
+
 def _remote_file_exists_error(result) -> bool:
     output = f"{result.stderr or ''}\n{result.stdout or ''}".lower()
     return "file exists" in output
+
+
+# The SSH server refused the login or its host key is not trusted: the user
+# fixes the connection, so this is not a server fault (no 500).
+_SSH_REFUSAL_MARKERS = (
+    "host key verification failed",
+    "remote host identification has changed",
+)
+# OpenSSH's login refusal lists whatever methods the server offers, e.g.
+# "(publickey)", "(password)" or "(publickey,password,keyboard-interactive)".
+_SSH_AUTH_REFUSAL = re.compile(r"permission denied \([a-z0-9@.,-]+\)")
+
+
+def _ssh_failure_status(error_msg: str | None) -> int:
+    lowered = (error_msg or "").lower()
+    if _SSH_AUTH_REFUSAL.search(lowered) or any(
+        m in lowered for m in _SSH_REFUSAL_MARKERS
+    ):
+        return 422
+    # A remote path that is not there (a typed path, or a remembered one since
+    # removed) is not a server fault. "stat remote:" is how the listing itself
+    # reports it (dashboard 898438a9773f9982); it stays out of the shared
+    # prefixes, which also decide the login-relative retry.
+    missing = _names_missing_remote_path(
+        lowered, _MISSING_REMOTE_PATH_PREFIXES + ("stat remote:",)
+    )
+    return 404 if missing else 500
 
 
 @router.get("/browse", response_model=BrowseResponse)
@@ -622,7 +697,12 @@ async def browse_ssh_filesystem(
         result = run_sftp_listing(None if path == "/" else path)
         effective_command_path = "" if path == "/" else path
 
-        if path.startswith("/") and path != "/" and sftp_listing_failed(result):
+        if (
+            path.startswith("/")
+            and path != "/"
+            and sftp_listing_failed(result)
+            and _remote_path_missing_error(result)
+        ):
             relative_path = _login_relative_remote_path_candidate(
                 path, connection_default_path
             )
@@ -634,10 +714,15 @@ async def browse_ssh_filesystem(
                     relative_path=relative_path,
                     stderr=result.stderr[:500] if result.stderr else None,
                 )
-                retry_result = run_sftp_listing(relative_path)
-                if not sftp_listing_failed(retry_result):
-                    effective_command_path = relative_path
-                result = retry_result
+                try:
+                    retry_result = run_sftp_listing(relative_path)
+                except (OSError, subprocess.SubprocessError):
+                    # The compatibility probe must not replace the absolute error.
+                    pass
+                else:
+                    if not sftp_listing_failed(retry_result):
+                        effective_command_path = relative_path
+                        result = retry_result
 
         if sftp_listing_failed(result):
             error_msg = (
@@ -685,7 +770,7 @@ async def browse_ssh_filesystem(
                 stdout=result.stdout[:500] if result.stdout else None,
             )
             raise HTTPException(
-                status_code=500,
+                status_code=_ssh_failure_status(error_msg),
                 detail=f"Failed to list remote directory '{path}': {error_msg or 'Permission denied or path not found'}",
             )
 
@@ -935,11 +1020,19 @@ def validate_path(
                 retry_path = _login_relative_remote_path_candidate(
                     path, connection_default_path
                 )
-                if retry_path and result.returncode != 0:
-                    retry_result = run_ssh_stat(retry_path)
-                    if retry_result.returncode == 0:
-                        command_path = retry_path
-                    result = retry_result
+                if (
+                    retry_path
+                    and result.returncode != 0
+                    and _remote_path_missing_error(result)
+                ):
+                    try:
+                        retry_result = run_ssh_stat(retry_path)
+                    except (OSError, subprocess.SubprocessError):
+                        pass
+                    else:
+                        if retry_result.returncode == 0:
+                            command_path = retry_path
+                            result = retry_result
 
                 # Parse stat output to determine if path exists and is a directory
                 exists = result.returncode == 0
@@ -1136,15 +1229,20 @@ def create_folder(
                 connection_default_path = getattr(ssh_connection, "default_path", None)
                 result = run_sftp_mkdir(full_path)
 
-                if _remote_path_command_failed(
+                if _remote_path_command_failed(result) and _remote_path_missing_error(
                     result
-                ) and not _remote_file_exists_error(result):
+                ):
                     retry_path = _login_relative_remote_path_candidate(
                         full_path, connection_default_path
                     )
                     if retry_path:
-                        retry_result = run_sftp_mkdir(retry_path)
-                        result = retry_result
+                        try:
+                            retry_result = run_sftp_mkdir(retry_path)
+                        except (OSError, subprocess.SubprocessError):
+                            pass
+                        else:
+                            if not _remote_path_command_failed(retry_result):
+                                result = retry_result
 
                 if not _remote_path_command_failed(result):
                     logger.info("Created remote folder", host=host, path=full_path)
@@ -1172,7 +1270,8 @@ def create_folder(
                         stderr=result.stderr[:500] if result.stderr else None,
                     )
                     raise HTTPException(
-                        status_code=500, detail=f"Failed to create folder: {error_msg}"
+                        status_code=_ssh_failure_status(error_msg),
+                        detail=f"Failed to create folder: {error_msg}",
                     )
 
             finally:

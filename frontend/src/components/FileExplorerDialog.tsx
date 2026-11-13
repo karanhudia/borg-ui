@@ -300,7 +300,15 @@ export default function FileExplorerDialog({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         if (useConnectionType === 'rclone') {
-          setError(t('wizard.cloudMirror.browseFailed'))
+          const detail = err.response?.data?.detail
+          const authorizationRequired =
+            err.response?.status === 409 &&
+            detail?.key === 'backend.errors.rclone.authorizationRequired'
+          setError(
+            authorizationRequired
+              ? t('backend.errors.rclone.authorizationRequired')
+              : t('wizard.cloudMirror.browseFailed')
+          )
           setItems([])
           return
         }
@@ -757,7 +765,7 @@ export default function FileExplorerDialog({
                   py: 0,
                 }}
               >
-                {filteredItems.length === 0 ? (
+                {filteredItems.length === 0 && !error ? (
                   <Box
                     sx={{
                       display: 'flex',

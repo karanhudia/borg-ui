@@ -125,12 +125,23 @@ pytest tests/unit --durations=50 --junitxml=test-results/unit.xml -o junit_famil
 python scripts/ci/pytest_durations.py test-results/unit.xml --output test-results/durations.json
 ```
 
-The shared fixed test-user credentials reuse two real bcrypt hashes per session;
+API tests build one empty SQLite schema per pytest process and copy its closed
+database file into a unique temporary file for each test. Every copy gets a fresh
+engine/session, WAL mode and real foreign-key enforcement. Committed data, pending
+writes and schema changes stay in that test's file; the template remains empty.
+Non-API database fixtures and migration/upgrade tests build their schemas normally.
+
+The shared fixed test-user credentials reuse three real bcrypt hashes per session
+(viewer, admin and operator);
 users and databases are still recreated per test. Password-security tests call
 the production hashing code directly and retain the actual work factor.
 The API fixture rolls back uncommitted test writes before real client shutdown,
 so its shared SQLite session cannot block runner lease release. Shutdown still
 waits for task cleanup; committed records remain available.
+
+That session is shared by every request of a test, so requests running at the same
+time must not use it. A test of concurrent requests also takes the `session_per_request`
+fixture, which gives each request its own session, as production does.
 
 New pushes cancel obsolete PR test, security, and screenshot-capture runs. The
 trusted visual publisher keeps its separate serialization and permissions.
