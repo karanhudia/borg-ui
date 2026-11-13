@@ -175,6 +175,16 @@ def handler_uses_session_on_loop(request) -> bool:
     return any(dependency.call is get_db for dependency in route.dependant.dependencies)
 
 
+def handler_runs_in_worker(request) -> bool:
+    """Whether the request's handler is a plain `def` function. FastAPI runs
+    it in a worker thread, so a query it makes after its dependencies never
+    waits for a connection on the event loop. False when the route is not
+    known."""
+    route = request.scope.get("route")
+    endpoint = getattr(route, "endpoint", None)
+    return endpoint is not None and not inspect.iscoroutinefunction(endpoint)
+
+
 def end_read_keeping_loaded(db: Session, *instances) -> None:
     """End the session's read transaction and keep `instances` as loaded.
 

@@ -5,8 +5,11 @@ from jwt.exceptions import PyJWTError as JWTError
 import bcrypt
 from pydantic import AfterValidator
 import hashlib
+from anyio import CapacityLimiter, to_thread
 from fastapi import HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 import structlog
 from cryptography.fernet import Fernet
@@ -20,7 +23,11 @@ from app.core.permissions import (
     default_repository_role_for_global_role,
     normalize_repository_role_for_global_role,
 )
-from app.database.database import get_db
+from app.database.database import (
+    end_read_keeping_loaded,
+    get_db,
+    handler_runs_in_worker,
+)
 from app.database.models import (
     ApiToken,
     Repository,
@@ -198,15 +205,42 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)) -> U
     if cached_user is not None:
         return cached_user
 
+    user = await _look_up_off_loop(_load_current_user, request, db)
+    request.state.current_user = user
+    return user
+
+
+async def _look_up_off_loop(load, request: Request, db: Session) -> User:
+    """Run the user lookup in a worker thread.
+
+    The dependencies stay coroutines: a route has several of them, and as
+    plain functions each would take a worker thread of its own. A request
+    whose session already holds a connection (an earlier dependency has
+    queried, such as a feature check) must not wait for a shared worker
+    thread: the threads may be waiting for that connection. It takes a
+    thread of its own instead, so there are at most as many of those as
+    connections.
+
+    Only a lookup that began the session's transaction may end it: what an
+    earlier dependency wrote and flushed would be rolled back with it.
+    """
+    holds_connection = db is not None and db.in_transaction()
+    limiter = CapacityLimiter(1) if holds_connection else None
+    return await to_thread.run_sync(
+        load, request, db, not holds_connection, limiter=limiter
+    )
+
+
+def _load_current_user(request: Request, db: Session, may_release: bool) -> User:
+    return _authenticate_and_end(_authenticate_user, request, db, may_release)
+
+
+def _authenticate_user(request: Request, db: Session) -> User:
     if settings.allow_insecure_no_auth:
-        user = _get_current_user_insecure_no_auth(db)
-        request.state.current_user = user
-        return user
+        return _get_current_user_insecure_no_auth(db)
 
     if settings.disable_authentication:
-        user = await get_current_user_proxy(request, db)
-        request.state.current_user = user
-        return user
+        return get_current_user_proxy(request, db)
 
     # Use JWT authentication
     credentials_exception = HTTPException(
@@ -223,12 +257,52 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)) -> U
         raise credentials_exception
 
     token = auth_header.split(" ")[1]
-    user = _get_active_user_from_token(token, db, credentials_exception)
-    request.state.current_user = user
+    return _get_active_user_from_token(token, db, credentials_exception)
+
+
+def _authenticate_and_end(
+    authenticate, request: Request, db: Session, may_release: bool
+) -> User:
+    """Authenticate, then end the authentication as `_end_authentication`
+    says. A proxy login or a personal token stamp commits, and a failed
+    stamp rolls back: either ends a transaction an earlier dependency began,
+    so nothing of it is left to keep and the connection may go back."""
+    earlier = db.get_transaction()
+    user = authenticate(request, db)
+    ended = earlier is not None and db.get_transaction() is not earlier
+    return _end_authentication(request, db, user, may_release or ended)
+
+
+def _end_authentication(
+    request: Request, db: Session, user: User, may_release: bool
+) -> User:
+    """Hand the authenticated user to the handler, loaded.
+
+    A commit during authentication (proxy login, personal token stamp)
+    expires the user and gives the connection back. Loaded here, in the
+    lookup's worker thread, a coroutine handler reads the user without a
+    query on the event loop and keeps the connection for its own queries, as
+    with every other login.
+
+    A plain `def` handler runs in a worker thread, so its session can give
+    the connection back now, as the agent authentication does: the request
+    may wait for a worker thread next, and must not hold a connection while
+    it waits. Nothing is given back while the session has unsaved changes,
+    or while a transaction that began before the lookup is still open
+    (`may_release`).
+    """
+    if sa_inspect(user).expired:
+        db.refresh(user)
+    if (
+        may_release
+        and handler_runs_in_worker(request)
+        and not (db.new or db.dirty or db.deleted)
+    ):
+        end_read_keeping_loaded(db, user)
     return user
 
 
-async def get_current_user_proxy(request: Request, db: Session) -> User:
+def get_current_user_proxy(request: Request, db: Session) -> User:
     """
     Get the current authenticated user from reverse proxy headers.
     Used when DISABLE_AUTHENTICATION is enabled.
@@ -257,6 +331,23 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
             detail="Empty username in proxy header",
         )
 
+    user = _resolve_proxy_user(request, db, username)
+    while True:
+        identity = (user.id, user.email)
+        db.add(user)
+        try:
+            db.commit()
+            return user
+        except IntegrityError:
+            # A concurrent login can claim the username or the requested email.
+            # Retry only if re-reading changes the account or the email to save.
+            db.rollback()
+            user = _resolve_proxy_user(request, db, username)
+            if (user.id, user.email) == identity:
+                raise
+
+
+def _resolve_proxy_user(request: Request, db: Session, username: str) -> User:
     proxy_role = _resolve_proxy_global_role(request)
     proxy_all_repositories_role = _resolve_proxy_all_repositories_role(
         request, proxy_role
@@ -271,19 +362,10 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
     if not user:
         logger.info("Auto-creating user from proxy authentication", username=username)
 
-        user_email = proxy_email or f"{username}@proxy.local"
-        if proxy_email and not _proxy_email_is_available(db, proxy_email):
-            logger.warning(
-                "Ignoring proxy email header because the value is already in use",
-                username=username,
-                email=proxy_email,
-            )
-            user_email = f"{username}@proxy.local"
-
         user = User(
             username=username,
             password_hash="",  # No password for proxy auth users
-            email=user_email,
+            email=f"{username}@proxy.local",
             full_name=proxy_full_name,
             role=proxy_role or "viewer",
             all_repositories_role=proxy_all_repositories_role
@@ -291,11 +373,6 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
             is_active=True,
             must_change_password=False,
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-        logger.info("User auto-created successfully", username=username)
 
     # Check if user is active
     if not user.is_active:
@@ -336,8 +413,6 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
     from datetime import timezone
 
     user.last_login = datetime.now(timezone.utc)
-    db.commit()
-
     return user
 
 
@@ -533,11 +608,19 @@ async def get_current_download_user(
     request: Request, db: Session = Depends(get_db)
 ) -> User:
     """Authenticate download endpoints for both JWT and proxy-auth modes."""
+    return await _look_up_off_loop(_load_download_user, request, db)
+
+
+def _load_download_user(request: Request, db: Session, may_release: bool) -> User:
+    return _authenticate_and_end(_authenticate_download_user, request, db, may_release)
+
+
+def _authenticate_download_user(request: Request, db: Session) -> User:
     if settings.allow_insecure_no_auth:
         return _get_current_user_insecure_no_auth(db)
 
     if settings.disable_authentication:
-        return await get_current_user_proxy(request, db)
+        return get_current_user_proxy(request, db)
 
     auth_header = request.headers.get("X-Borg-Authorization") or request.headers.get(
         "Authorization"

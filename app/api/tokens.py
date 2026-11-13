@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import structlog
 
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.database.models import ApiToken
 from app.core.security import get_current_user, get_password_hash
 from app.database.models import User
@@ -52,8 +52,12 @@ def list_tokens(
     return tokens
 
 
+# A plain function: hashing the token and the commit run in a worker thread,
+# not on the event loop, and the read after the commit ends before FastAPI
+# validates the response in another one.
 @router.post("/settings/tokens", response_model=TokenCreatedResponse, status_code=201)
-async def create_token(
+@ends_read_on_return
+def create_token(
     payload: TokenCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
