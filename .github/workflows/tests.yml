@@ -978,6 +978,16 @@ jobs:
           SSH_SMOKE_AUTH_KEYS: /home/borgsmoke/.ssh/authorized_keys
           SSH_SMOKE_REMOTE_REPO: /home/borgsmoke/remote-repo
 
+      - name: Run per-connection SSH key smoke
+        run: |
+          python3 tests/smoke/test_per_connection_ssh_key_smoke.py --url ${{ env.SMOKE_URL }}
+        env:
+          BORG_UI_CONTAINER: false
+          SSH_SMOKE_HOST: 127.0.0.1
+          SSH_SMOKE_PORT: 2222
+          SSH_SMOKE_USER: borgsmoke
+          SSH_SMOKE_AUTH_KEYS: /home/borgsmoke/.ssh/authorized_keys
+
       - name: Run SSHFS busy-unmount smoke
         run: |
           python3 tests/smoke/test_sshfs_busy_unmount_smoke.py --url ${{ env.SMOKE_URL }}

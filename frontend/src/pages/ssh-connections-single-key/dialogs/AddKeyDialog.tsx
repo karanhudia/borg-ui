@@ -147,6 +147,7 @@ export function AddKeyDialog({ open, pending = false, onClose, onSubmit }: AddKe
                 placeholder="/root/.ssh/id_ed25519"
                 helperText={t('sshConnections.extraKeys.addDialog.privateKeyPathHelper')}
                 selectMode="files"
+                showSshMountPoints={false}
                 size="medium"
                 required
                 disabled={pending}
@@ -158,6 +159,7 @@ export function AddKeyDialog({ open, pending = false, onClose, onSubmit }: AddKe
                 placeholder="/root/.ssh/id_ed25519.pub"
                 helperText={t('sshConnections.extraKeys.addDialog.publicKeyPathHelper')}
                 selectMode="files"
+                showSshMountPoints={false}
                 size="medium"
                 disabled={pending}
               />

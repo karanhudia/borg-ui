@@ -57,6 +57,7 @@ export function ImportKeyDialog({
             placeholder={t('sshConnections.importDialog.privateKeyPathPlaceholder')}
             helperText={t('sshConnections.importDialog.privateKeyPathHelper')}
             selectMode="files"
+            showSshMountPoints={false}
             size="medium"
           />
           <PathSelectorField
@@ -66,6 +67,7 @@ export function ImportKeyDialog({
             placeholder={t('sshConnections.importDialog.publicKeyPathPlaceholder')}
             helperText={t('sshConnections.importDialog.publicKeyPathHelper')}
             selectMode="files"
+            showSshMountPoints={false}
             size="medium"
           />
           <TextField

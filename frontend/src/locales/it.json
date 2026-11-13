@@ -2726,7 +2726,7 @@
       "picker": {
         "label": "Chiave SSH",
         "system": "Chiave di sistema",
-        "changeHint": "Cambiando la chiave la connessione risulta non testata. Distribuisci poi la nuova chiave sul server."
+        "changeHint": "La connessione fallisce finché la nuova chiave non è sul server. Dopo il salvataggio usa Distribuisci Chiave sulla connessione."
       },
       "addDialog": {
         "title": "Aggiungi chiave SSH",
@@ -2754,7 +2754,8 @@
       },
       "toasts": {
         "added": "Chiave SSH aggiunta",
-        "addFailed": "Impossibile aggiungere la chiave SSH"
+        "addFailed": "Impossibile aggiungere la chiave SSH",
+        "deleted": "Chiave SSH eliminata"
       }
     },
     "generateDialog": {
@@ -2870,7 +2871,7 @@
     },
     "redeployDialog": {
       "title": "Distribuisci chiave SSH alla connessione",
-      "info": "Questo distribuirà la chiave SSH di sistema corrente a questa connessione. Dovrai fornire la password per autenticarti.",
+      "info": "Questo aggiunge la chiave SSH della connessione ad authorized_keys sul server. Dovrai fornire la password per autenticarti.",
       "passwordPlaceholder": "Inserisci la password SSH",
       "passwordHelper": "La password viene usata per distribuire la chiave pubblica in authorized_keys"
     },

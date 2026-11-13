@@ -41,12 +41,12 @@ export function SSHPageHeader({ t, showActions, onDeploy, onAddManual }: SSHPage
       actions={
         showActions ? (
           <>
-            <Tooltip title={t('sshConnections.systemKey.tooltips.addManual')}>
+            <Tooltip title={t('sshConnections.systemKey.tooltips.addManual')} describeChild>
               <Button variant="outlined" startIcon={<Wifi size={18} />} onClick={onAddManual}>
                 {t('sshConnections.systemKey.actions.addManual')}
               </Button>
             </Tooltip>
-            <Tooltip title={t('sshConnections.systemKey.tooltips.deploy')}>
+            <Tooltip title={t('sshConnections.systemKey.tooltips.deploy')} describeChild>
               <Button variant="contained" startIcon={<Plus size={18} />} onClick={onDeploy}>
                 {t('sshConnections.systemKey.actions.deploy')}
               </Button>

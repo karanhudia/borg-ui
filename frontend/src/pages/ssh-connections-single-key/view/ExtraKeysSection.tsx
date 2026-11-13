@@ -68,7 +68,7 @@ export function ExtraKeysSection({ keys, connections }: ExtraKeysSectionProps) {
   const deleteMutation = useMutation({
     mutationFn: (keyId: number) => sshKeysAPI.deleteSSHKey(keyId),
     onSuccess: async () => {
-      toast.success(t('sshConnections.toasts.keyDeleted'))
+      toast.success(t('sshConnections.extraKeys.toasts.deleted'))
       track(EventCategory.SSH, EventAction.DELETE, { resource: 'key' })
       // The dialog stays open until the list no longer shows the key (#1197).
       await queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })

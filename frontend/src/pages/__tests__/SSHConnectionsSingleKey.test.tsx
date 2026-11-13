@@ -296,7 +296,7 @@ describe('SSHConnectionsSingleKey', () => {
     await screen.findByText('Remote Machines')
     fireEvent.click(
       screen.getByRole('button', {
-        name: /automatically deploy ssh key using password authentication/i,
+        name: /^deploy to server$/i,
       })
     )
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
@@ -628,7 +628,7 @@ describe('SSHConnectionsSingleKey', () => {
     await screen.findByText('Remote Machines')
     fireEvent.click(
       screen.getByRole('button', {
-        name: /add a connection for a manually deployed ssh key/i,
+        name: /^add manual connection$/i,
       })
     )
     const dialog = await screen.findByRole('dialog', { name: /add manual connection/i })
@@ -856,9 +856,7 @@ describe('SSHConnectionsSingleKey', () => {
     renderWithProviders(<SSHConnectionsSingleKey />)
 
     await screen.findByText('borgserver-repo1')
-    await user.click(
-      screen.getByRole('button', { name: /add a connection for a manually deployed ssh key/i })
-    )
+    await user.click(screen.getByRole('button', { name: /^add manual connection$/i }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('combobox', { name: /ssh key/i }))
     await user.click(await screen.findByRole('option', { name: /borgserver-repo1/ }))

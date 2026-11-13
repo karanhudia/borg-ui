@@ -2726,7 +2726,7 @@
       "picker": {
         "label": "Clave SSH",
         "system": "Clave del sistema",
-        "changeHint": "Al cambiar la clave, la conexión pasa a estar sin probar. Despliega después la nueva clave en el servidor."
+        "changeHint": "La conexión fallará hasta que la nueva clave esté en el servidor. Después de guardar, usa Desplegar clave en la conexión."
       },
       "addDialog": {
         "title": "Añadir clave SSH",
@@ -2754,7 +2754,8 @@
       },
       "toasts": {
         "added": "Clave SSH añadida",
-        "addFailed": "No se pudo añadir la clave SSH"
+        "addFailed": "No se pudo añadir la clave SSH",
+        "deleted": "Clave SSH eliminada"
       }
     },
     "generateDialog": {
@@ -2870,7 +2871,7 @@
     },
     "redeployDialog": {
       "title": "Desplegar clave SSH en la conexión",
-      "info": "Esto desplegará tu clave SSH actual del sistema en esta conexión. Deberás proporcionar la contraseña para autenticarte.",
+      "info": "Esto añade la clave SSH de la conexión a authorized_keys en el servidor. Deberás proporcionar la contraseña para autenticarte.",
       "passwordPlaceholder": "Introduce la contraseña SSH",
       "passwordHelper": "La contraseña se usa para desplegar la clave pública en authorized_keys"
     },
