@@ -1,6 +1,8 @@
 import asyncio
+import threading
 import time
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -1824,6 +1826,204 @@ def test_start_clears_stale_tasks_from_a_previous_loop(session_factory, registry
     assert 999 not in runner.running_tasks
 
 
+@pytest.fixture()
+def own_connections(tmp_path):
+    """Sessions with a connection each, on a database with one repository:
+    the runner and a thread that enqueues would share the single connection
+    of `session_factory`, and one could roll back the other's work."""
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'operations.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    with factory() as db:
+        db.add(
+            Repository(name="r", path="/tmp/r", encryption="none", compression="lz4")
+        )
+        db.add(SystemSettings())
+        db.commit()
+    yield factory
+    engine.dispose()
+
+
+@pytest.fixture()
+def polling_runner(own_connections, registry, monkeypatch, tmp_path):
+    """The process's runner, with a poll far beyond any timeout here: only a
+    wake explains work it starts after its first tick."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    runner = OperationRunner(
+        session_factory=own_connections, registry=registry, poll_interval=30.0
+    )
+    monkeypatch.setattr("app.services.operations.runner.operation_runner", runner)
+    runner.ticked = []
+    tick = runner.tick
+
+    async def counted_tick():
+        dispatched = await tick()
+        runner.ticked.append(dispatched)
+        return dispatched
+
+    runner.tick = counted_tick
+    return runner
+
+
+async def _until(condition, seconds: float = 2) -> None:
+    deadline = time.monotonic() + seconds
+    while not condition():
+        assert time.monotonic() < deadline, "the runner never got there"
+        await asyncio.sleep(0.01)
+
+
+async def _started_and_waiting(runner) -> asyncio.Task:
+    ticks = len(runner.ticked)
+    task = asyncio.create_task(runner.start())
+    await _until(lambda: len(runner.ticked) > ticks)
+    return task
+
+
+async def _stopped(runner, task) -> None:
+    runner.stop()
+    runner.wake()
+    await asyncio.wait_for(task, timeout=2)
+
+
+def _enqueue_from_a_thread(session_factory, own_loop: bool = False) -> threading.Thread:
+    """Enqueue once the caller's loop is idle, from a thread that hands
+    nothing back to that loop: only the wake reaches it."""
+
+    def enqueue_stats():
+        time.sleep(0.05)
+        with session_factory() as db:
+            enqueue(db, "stats", repository_id=db.query(Repository).one().id)
+
+    async def on_a_loop_of_its_own():
+        enqueue_stats()
+
+    thread = threading.Thread(
+        target=(lambda: asyncio.run(on_a_loop_of_its_own()))
+        if own_loop
+        else enqueue_stats
+    )
+    thread.start()
+    return thread
+
+
+def _records_its_start(registry) -> asyncio.Event:
+    started = asyncio.Event()
+
+    async def ok(ctx):
+        started.set()
+        return Outcome()
+
+    registry["stats"] = ok
+    return started
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("own_loop", [False, True], ids=["thread", "other loop"])
+async def test_an_enqueue_off_the_runner_loop_wakes_the_runner(
+    own_loop, own_connections, polling_runner, registry
+):
+    started = _records_its_start(registry)
+    task = await _started_and_waiting(polling_runner)
+    thread = _enqueue_from_a_thread(own_connections, own_loop)
+    try:
+        await asyncio.wait_for(started.wait(), timeout=2)
+    finally:
+        thread.join()
+        await _stopped(polling_runner, task)
+
+
+@pytest.mark.unit
+def test_a_restarted_runner_is_woken_on_its_new_loop(
+    own_connections, polling_runner, registry
+):
+    async def one_run():
+        started = _records_its_start(registry)
+        task = await _started_and_waiting(polling_runner)
+        thread = _enqueue_from_a_thread(own_connections)
+        try:
+            await asyncio.wait_for(started.wait(), timeout=2)
+        finally:
+            thread.join()
+            await _stopped(polling_runner, task)
+
+    asyncio.run(one_run())
+    asyncio.run(one_run())
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_wake_on_the_runner_loop_takes_effect_at_once(polling_runner):
+    task = await _started_and_waiting(polling_runner)
+
+    polling_runner.wake()
+
+    assert polling_runner._event().is_set()
+    await _stopped(polling_runner, task)
+
+
+@pytest.mark.unit
+def test_a_wake_left_on_an_earlier_loop_does_not_reach_the_restarted_runner(
+    polling_runner,
+):
+    """A thread wakes the runner, but the runner's loop gets to that wake
+    only after the runner has stopped and started again on another loop."""
+    first = asyncio.new_event_loop()
+    task = first.run_until_complete(_started_and_waiting(polling_runner))
+    left = []
+    with patch.object(first, "call_soon_threadsafe", left.append):
+        polling_runner.wake()
+    (late_wake,) = left
+    first.run_until_complete(_stopped(polling_runner, task))
+
+    def the_first_loop_runs_the_wake():
+        first.call_soon(late_wake)
+        first.run_until_complete(asyncio.sleep(0))
+
+    async def restarted():
+        task = await _started_and_waiting(polling_runner)
+        earlier = threading.Thread(target=the_first_loop_runs_the_wake)
+        earlier.start()
+        earlier.join()  # this loop stands still meanwhile
+        woken = polling_runner._event().is_set()
+        await _stopped(polling_runner, task)
+        return woken
+
+    try:
+        assert asyncio.run(restarted()) is False
+    finally:
+        first.close()
+
+
+@pytest.mark.unit
+def test_a_wake_without_a_running_runner_does_nothing(polling_runner):
+    async def wake_on_a_loop():
+        polling_runner.wake()
+
+    async def one_run():
+        await _stopped(polling_runner, await _started_and_waiting(polling_runner))
+        # stopped, on a loop that is still open
+        polling_runner.wake()
+        await asyncio.to_thread(polling_runner.wake)
+        await asyncio.sleep(0.01)
+        assert not polling_runner._event().is_set()
+
+    for _ in range(2):
+        # never started, then stopped: from a thread and from a loop
+        polling_runner.wake()
+        asyncio.run(wake_on_a_loop())
+        asyncio.run(one_run())
+
+    # a loop closed under a running `start()` never lets it leave
+    closed = asyncio.new_event_loop()
+    closed.close()
+    polling_runner._bound = (closed, asyncio.Event())
+    polling_runner.wake()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("root_status", ["failed", "cancelled"])
 @pytest.mark.parametrize("length", [3, 4])
@@ -1902,15 +2102,18 @@ async def test_repository_busy_defers_instead_of_failing(db, repo, runner, regis
     registry["stats"] = lambda ctx: _done()
     first = enqueue(db, "archive_sync", repository_id=repo.id)
     child = enqueue(db, "stats", repository_id=repo.id, depends_on_id=first.id)
-    await runner.tick()
-    await asyncio.gather(*list(runner.running_tasks.values()), return_exceptions=True)
+    with patch.object(runner, "wake") as wake:
+        await runner.tick()
+        await asyncio.gather(
+            *list(runner.running_tasks.values()), return_exceptions=True
+        )
     db.expire_all()
     first = db.get(Operation, first.id)
     assert first.status == "queued" and first.started_at is None
     assert first.params["deferrals"] == 1 and first.error_message is None
     assert db.get(Operation, child.id).status == "queued"
     # a deferral does not wake the runner: no tight retry loop
-    assert not runner._event().is_set()
+    wake.assert_not_called()
 
     await _drain(runner)
     db.expire_all()

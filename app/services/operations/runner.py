@@ -286,6 +286,9 @@ class OperationRunner:
         # finished, and what they started may outlive them
         self._drain_timed_out = False
         self._wake: Optional[asyncio.Event] = None
+        # The loop `start()` is running on with that loop's wake event, None
+        # outside it: `wake()` reaches the runner through them from any thread
+        self._bound: Optional[tuple[asyncio.AbstractEventLoop, asyncio.Event]] = None
         self._stopped = False
         self.running_tasks: dict[int, asyncio.Task] = {}
         self.cancel_requested: set[int] = set()
@@ -336,11 +339,26 @@ class OperationRunner:
         return self._wake
 
     def wake(self) -> None:
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
+        """End the wait for the next poll. Safe from any thread; a runner
+        that is not running has nothing to wake."""
+        bound = self._bound
+        if bound is None:
             return
-        self._event().set()
+        loop, event = bound
+        try:
+            on_runner_loop = asyncio.get_running_loop() is loop
+        except RuntimeError:
+            on_runner_loop = False
+        if on_runner_loop:
+            event.set()
+            return
+        try:
+            # `event` stays that loop's own: a wake that lands after the
+            # runner left the loop sets an event nothing waits on
+            loop.call_soon_threadsafe(event.set)
+        except RuntimeError:
+            # the loop closed without `start()` returning on it
+            pass
 
     def stop(self) -> None:
         self._stopped = True
@@ -397,6 +415,7 @@ class OperationRunner:
         # a test suite that builds a fresh app (and event loop) per test
         # does, every time.
         self._wake = asyncio.Event()
+        self._bound = (asyncio.get_running_loop(), self._wake)
         # Same reasoning as `_wake`: a task from a previous `start()` belongs
         # to that call's (closed) event loop and can never be gathered by
         # this one's `drain()` anyway. Without this, a task that failed to
@@ -444,6 +463,7 @@ class OperationRunner:
                     pass
                 self._event().clear()
         finally:
+            self._bound = None
             # With tasks still running, `drain()` releases it once they end.
             self._loop_exited = True
             self._release_lease_if_idle()

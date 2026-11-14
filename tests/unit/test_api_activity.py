@@ -3114,7 +3114,9 @@ class TestCancelFromActivity:
         test_db.refresh(repo)
         return repo
 
-    def test_a_queued_check_is_cancelled(self, test_client, test_db, admin_headers):
+    def test_a_queued_check_is_cancelled(
+        self, test_client, test_db, admin_headers, held_runner
+    ):
         from app.services.operations.enqueue import enqueue
 
         op = enqueue(test_db, "check", repository_id=self._repo(test_db).id)
@@ -3128,7 +3130,9 @@ class TestCancelFromActivity:
         test_db.expire_all()
         assert test_db.get(Operation, op.id).status == "cancelled"
 
-    def test_a_running_check_asks_the_runner(self, test_client, test_db, admin_headers):
+    def test_a_running_check_asks_the_runner(
+        self, test_client, test_db, admin_headers, held_runner
+    ):
         from unittest.mock import AsyncMock, patch
 
         from app.services.operations.enqueue import enqueue
@@ -3154,7 +3158,7 @@ class TestCancelFromActivity:
 
     @pytest.mark.parametrize("kind", ["prune", "backup"])
     def test_a_finished_job_is_409_whatever_its_kind(
-        self, test_client, test_db, admin_headers, kind
+        self, test_client, test_db, admin_headers, kind, held_runner
     ):
         from app.services.operations.enqueue import enqueue
 
@@ -3172,7 +3176,7 @@ class TestCancelFromActivity:
         }
 
     def test_a_running_job_that_cannot_be_stopped_is_refused(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A stats run does not watch the cancel flag: it would keep running
         while the runner records it as cancelled."""
@@ -3195,7 +3199,7 @@ class TestCancelFromActivity:
         assert test_db.get(Operation, op.id).status == "running"
 
     def test_a_running_step_the_runner_does_not_run_is_refused(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A prune a backup runs inline has no runner task: the runner's
         flag would reach nothing, so the answer is not `alreadyFinished`."""
@@ -3223,7 +3227,7 @@ class TestCancelFromActivity:
         request_cancel.assert_not_awaited()
 
     def test_a_running_history_index_is_refused(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """It reads the cancel flag per line of Borg's diff, and a diff of
         two large archives can be silent for a long time."""
@@ -3255,7 +3259,7 @@ class TestCancelFromActivity:
         request_cancel.assert_not_awaited()
 
     def test_a_queued_job_of_any_kind_is_taken_off_the_queue(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         from app.services.operations.enqueue import enqueue
 
@@ -3332,7 +3336,7 @@ class TestCancelFromActivity:
         assert test_db.get(Operation, sync.id).status == "running"
 
     def test_cancel_requires_the_operator_role(
-        self, test_client, test_db, auth_headers
+        self, test_client, test_db, auth_headers, held_runner
     ):
         from app.services.operations.enqueue import enqueue
 
@@ -3445,7 +3449,7 @@ class TestCancelFromActivity:
         assert test_db.get(Operation, job.id).status == "cancelled"
 
     def test_an_unknown_job_or_a_mismatched_type_is_404(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         from app.services.operations.enqueue import enqueue
 
@@ -3494,7 +3498,7 @@ class TestCancelFromActivity:
 
     @pytest.mark.parametrize("capabilities", [["repository.check"], None])
     def test_a_running_agent_check_is_refused_when_the_agent_cannot_stop_it(
-        self, test_client, test_db, admin_headers, capabilities
+        self, test_client, test_db, admin_headers, capabilities, held_runner
     ):
         """An agent before 0.1.7 finishes a silent Borg although the job was
         cancelled; the row would say cancelled while the agent runs on."""
@@ -3530,7 +3534,7 @@ class TestCancelFromActivity:
         assert test_db.get(Operation, op.id).status == "running"
 
     def test_a_running_agent_check_is_cancelled_when_the_agent_can_stop_it(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         from unittest.mock import AsyncMock, patch
 
@@ -3603,7 +3607,7 @@ class TestCancelFromActivity:
         return response, request_cancel
 
     def test_a_running_check_whose_agent_job_waits_is_cancelled_on_an_old_agent(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """The runner started the check but no agent took its job (the agent
         is offline): the route takes the job off the queue itself, so an
@@ -3627,7 +3631,7 @@ class TestCancelFromActivity:
         assert test_db.get(AgentJob, job.id).status == "canceled"
 
     def test_an_old_agent_that_took_the_job_first_keeps_it(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         from app.database.models import AgentJob
         from app.services.operations.enqueue import enqueue
@@ -3648,7 +3652,7 @@ class TestCancelFromActivity:
         assert test_db.get(AgentJob, job.id).status == "claimed"
 
     def test_a_restore_waiting_for_an_old_agent_is_found_by_its_job_map(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A restore's agent job carries no link to its operation; the
         restore service's map names it."""
@@ -3813,7 +3817,7 @@ class TestCancelFromActivity:
         dispatch.assert_awaited_once()
 
     def test_a_queued_agent_check_is_cancelled_whatever_the_agent_version(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """Nothing runs yet: the queued row is taken off the queue."""
         from app.services.operations.enqueue import enqueue

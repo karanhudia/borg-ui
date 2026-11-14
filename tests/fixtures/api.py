@@ -207,9 +207,10 @@ def session_per_request(test_db):
 
 
 class HeldRunner:
-    def __init__(self, client, db):
+    def __init__(self, client, db, tick):
         self._client = client
         self._db = db
+        self._tick = tick
 
     def turn(self):
         """Give the runner the turn an enqueue would wake it for, here
@@ -218,12 +219,11 @@ class HeldRunner:
         self._client.portal.call(self._turn)
         self._db.expire_all()
 
-    @staticmethod
-    async def _turn():
+    async def _turn(self):
         from app.services.operations.runner import operation_runner
 
         for _ in range(5):
-            await operation_runner.tick()
+            await self._tick()
             tasks = list(operation_runner.running_tasks.values())
             if not tasks:
                 return
@@ -233,14 +233,25 @@ class HeldRunner:
 @pytest.fixture
 def held_runner(test_client, test_db, monkeypatch):
     """`test_client` runs the app lifespan, which starts the operations
-    runner, and every enqueue wakes it. A test that asserts on work still
-    queued (a refusal while it waits, its status) races that runner: a
-    command on a made-up repository fails in milliseconds. This keeps the
-    runner ticking but starting nothing."""
+    runner, and every enqueue wakes it, from the test's own thread too. A
+    test that asserts on rows it seeded (work still queued, a row it marked
+    running) races that runner: a command on a made-up repository fails in
+    milliseconds, and a tick that starts nothing still requeues a running
+    index row it does not own and skips a kind without an executor. This
+    leaves the runner without a turn of its own; `turn()` gives it one that
+    starts nothing."""
+    from app.services.operations.runner import operation_runner
+
     monkeypatch.setattr(
         "app.services.operations.runner.can_start", lambda *_args: False
     )
-    return HeldRunner(test_client, test_db)
+    tick = operation_runner.tick
+
+    async def no_turn():
+        return 0
+
+    monkeypatch.setattr(operation_runner, "tick", no_turn)
+    return HeldRunner(test_client, test_db, tick)
 
 
 @pytest.fixture

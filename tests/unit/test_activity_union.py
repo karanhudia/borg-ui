@@ -23,7 +23,7 @@ def _repo(test_db):
 @pytest.mark.unit
 class TestActivityUnion:
     def test_index_rows_hidden_by_default_and_shown_with_filter(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         enqueue(test_db, "stats", repository_id=repo.id)
@@ -37,7 +37,9 @@ class TestActivityUnion:
         assert body[0]["status"] == "queued"
         assert body[0]["repository"] == "r"
 
-    def test_two_operations_ordered_by_time(self, test_client, test_db, admin_headers):
+    def test_two_operations_ordered_by_time(
+        self, test_client, test_db, admin_headers, held_runner
+    ):
         repo = _repo(test_db)
         old = enqueue(test_db, "prune", repository_id=repo.id)
         old.status = "completed"
@@ -53,7 +55,9 @@ class TestActivityUnion:
         assert body[1]["trigger"] == "manual"
         assert body[1]["followups"] == []
 
-    def test_collapse_runs_nests_followups(self, test_client, test_db, admin_headers):
+    def test_collapse_runs_nests_followups(
+        self, test_client, test_db, admin_headers, held_runner
+    ):
         repo = _repo(test_db)
         parent = enqueue(
             test_db, "import_connect", repository_id=repo.id, trigger="import"
@@ -80,7 +84,7 @@ class TestActivityUnion:
         assert all(i["followups"] == [] for i in flat)
 
     def test_collapse_runs_folds_a_reconcile_chain_into_one_row(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A reconcile enqueues four index operations in one run. They are
         one row with three steps under it, not four rows an hour."""
@@ -107,7 +111,7 @@ class TestActivityUnion:
         ]
 
     def test_collapse_runs_keeps_separate_runs_apart(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         first = enqueue_chain(
@@ -129,7 +133,7 @@ class TestActivityUnion:
         assert all(len(i["followups"]) == 1 for i in body)
 
     def test_category_filter_keeps_followups_of_visible_parent(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         parent = enqueue(
@@ -153,7 +157,7 @@ class TestActivityUnion:
         assert [f["kind"] for f in body[0]["followups"]] == ["stats"]
 
     def test_status_filter_maps_pending_to_queued(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         enqueue(test_db, "import_connect", repository_id=repo.id, trigger="import")
@@ -163,7 +167,7 @@ class TestActivityUnion:
         assert [i["type"] for i in body] == ["import_connect"]
 
     def test_job_type_filter_matches_operation_kind(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         enqueue(test_db, "stats", repository_id=repo.id)
@@ -174,7 +178,7 @@ class TestActivityUnion:
         assert [i["type"] for i in body] == ["stats"]
 
     def test_trigger_filter_applies_to_every_source(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         scheduled = enqueue(test_db, "prune", repository_id=repo.id, trigger="schedule")
@@ -190,7 +194,7 @@ class TestActivityUnion:
         assert len(body) == 1 and body[0]["trigger"] == "schedule"
 
     def test_recent_hides_operations_for_inaccessible_repositories(
-        self, test_client, test_db, test_user, auth_headers
+        self, test_client, test_db, test_user, auth_headers, held_runner
     ):
         """A viewer granted one repository must not see another's operations."""
         allowed = _repo(test_db)
@@ -215,7 +219,7 @@ class TestActivityUnion:
         assert allowed.id in repo_ids
 
     def test_logs_resolve_operation_kinds(
-        self, test_client, test_db, admin_headers, tmp_path
+        self, test_client, test_db, admin_headers, tmp_path, held_runner
     ):
         repo = _repo(test_db)
         op = enqueue(test_db, "archive_sync", repository_id=repo.id)
@@ -239,7 +243,7 @@ class TestActivityUnion:
         assert b"b" in r.content
 
     def test_download_honours_the_log_visibility_policy(
-        self, test_client, test_db, admin_headers, tmp_path
+        self, test_client, test_db, admin_headers, tmp_path, held_runner
     ):
         """The download route must not serve what the logs route hides, or the
         policy is only advisory."""
@@ -271,7 +275,7 @@ class TestActivityUnion:
         assert r.status_code == 404
 
     def test_delete_operation_row_via_activity(
-        self, test_client, test_db, admin_headers, tmp_path
+        self, test_client, test_db, admin_headers, tmp_path, held_runner
     ):
         repo = _repo(test_db)
         op = enqueue(test_db, "archive_sync", repository_id=repo.id)
@@ -289,7 +293,7 @@ class TestActivityUnion:
         assert not log.exists()
 
     def test_delete_running_operation_refused(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         op = enqueue(test_db, "archive_sync", repository_id=repo.id)
@@ -301,7 +305,7 @@ class TestActivityUnion:
         assert r.status_code == 400
 
     def test_repository_id_filters_every_source(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A repository's own Activity must not depend on how much other work
         the install did meanwhile: the filter runs in SQL, per source, before
@@ -385,7 +389,7 @@ class TestActivityUnion:
         assert scripts[0]["repository"] == "r"
 
     def test_repository_id_drops_rows_with_no_repository(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         enqueue(test_db, "package_install")
@@ -398,7 +402,7 @@ class TestActivityUnion:
         assert [i["type"] for i in body] == ["import_connect"]
 
     def test_repository_id_unknown_repository_is_empty(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         repo = _repo(test_db)
         enqueue(test_db, "import_connect", repository_id=repo.id)
@@ -411,7 +415,7 @@ class TestActivityUnion:
 @pytest.mark.unit
 class TestActivityPagination:
     def test_before_cursor_pages_into_older_runs(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """The before cursor exposes runs older than the first page."""
         repo = _repo(test_db)
@@ -437,7 +441,7 @@ class TestActivityPagination:
         assert len(set(keys)) == 3
 
     def test_rows_sharing_one_timestamp_are_not_stranded(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A page that ends inside a group of equal timestamps must not lose
         the rest of that group: every one of them is reachable by paging."""
@@ -566,7 +570,7 @@ class TestFailedPlanRuns:
         assert body[0]["error_message"] == "ssh key rejected"
 
     def test_failed_plan_run_is_silent_when_its_own_run_failed(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A failed backup row suppresses the less specific plan-run row."""
         _, run = self._plan_run(test_db)
@@ -630,7 +634,7 @@ class TestFailedPlanRuns:
         assert body == []
 
     def test_deleting_a_plan_run_keeps_its_finished_backups(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A run that failed after its backups succeeded is listed, and its
         delete leaves those backups in place, unlinked from the run."""
@@ -708,7 +712,7 @@ class TestFailedPlanRuns:
         assert test_db.query(ScriptExecution).count() == 0
 
     def test_a_plan_run_its_failed_backup_speaks_for_is_not_deleted_here(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """The list shows the failed backup instead of the run; the run goes
         with that backup, not through a row the list never offered."""
@@ -736,7 +740,7 @@ class TestFailedPlanRuns:
         assert test_db.get(BackupPlanRun, run_id) is not None
 
     def test_a_plan_run_with_an_unfinished_operation_is_not_deleted(
-        self, test_client, test_db, admin_headers
+        self, test_client, test_db, admin_headers, held_runner
     ):
         """A run marked failed while one of its operations still waits keeps
         the run that operation will report to."""

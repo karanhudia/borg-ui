@@ -489,6 +489,7 @@ async def test_existing_broad_plan_still_executes(
     operator_headers,
     trigger,
     caller,
+    held_runner,
 ):
     repo = _create_repo(test_db, "Existing run", "/inert/repository")
     grant_operator(test_db, operator_user, repo)

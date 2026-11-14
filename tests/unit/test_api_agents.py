@@ -1223,7 +1223,7 @@ class TestAgentJobTransport:
         assert operation.status == "cancelled"
 
     def test_failed_followup_enqueue_never_fails_the_backup(
-        self, test_client: TestClient, test_db, admin_headers, monkeypatch
+        self, test_client: TestClient, test_db, admin_headers, monkeypatch, held_runner
     ):
         """A flush failure inside the follow-up enqueue (here a colliding
         Operation id, the shape enqueue() produces) is undone in its own

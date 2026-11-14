@@ -1170,7 +1170,7 @@ class TestV2ArchiveRoutes:
         assert op.repository_id == repo.id
 
     def test_delete_archive_rejects_duplicate_running_job(
-        self, test_client: TestClient, admin_headers, test_db
+        self, test_client: TestClient, admin_headers, test_db, held_runner
     ):
         from app.services.operations.enqueue import enqueue
 
