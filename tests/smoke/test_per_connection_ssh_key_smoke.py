@@ -9,7 +9,6 @@ and not the system key in ~/.ssh.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import sys
 from pathlib import Path
 
@@ -70,13 +69,6 @@ def main() -> int:
         bound = next(c for c in listed["connections"] if c["id"] == connection["id"])
         if bound["ssh_key_id"] != extra_id:
             raise SmokeFailure(f"Connection not bound to the extra key: {bound}")
-
-        # borg would create a missing remote_root as the SSH user and lock out
-        # the smokes that later write there as this user, so share it like /tmp.
-        remote_root = Path(args.remote_root)
-        remote_root.mkdir(parents=True, exist_ok=True)
-        with contextlib.suppress(PermissionError):
-            remote_root.chmod(0o1777)
 
         source_root = client.prepare_source_tree(
             "per-key-source", {"per-key.txt": "per-connection key\n"}
