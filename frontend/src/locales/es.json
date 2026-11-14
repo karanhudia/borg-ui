@@ -2721,6 +2721,8 @@
       "connections_one": "{{count}} conexión",
       "connections_other": "{{count}} conexiones",
       "unused": "Sin usar todavía",
+      "mirrors_one": "{{count}} Cloud Mirror",
+      "mirrors_other": "{{count}} Cloud Mirrors",
       "copyPublicKey": "Copiar clave pública",
       "delete": "Eliminar clave",
       "picker": {
@@ -2749,6 +2751,8 @@
         "title": "Eliminar clave SSH",
         "confirm": "¿Eliminar la clave \"{{name}}\"? Esta acción no se puede deshacer.",
         "inUse": "Estas conexiones usan esta clave. Cámbialas primero a otra clave.",
+        "inUseByMirror_one": "Cloud Mirror de {{count}} repositorio usa esta clave. Elige primero otra clave para ese mirror.",
+        "inUseByMirror_other": "Cloud Mirror de {{count}} repositorios usa esta clave. Elige primero otra clave para esos mirrors.",
         "delete": "Eliminar",
         "deleting": "Eliminando..."
       },

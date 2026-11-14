@@ -2721,6 +2721,8 @@
       "connections_one": "{{count}} Verbindung",
       "connections_other": "{{count}} Verbindungen",
       "unused": "Noch nicht verwendet",
+      "mirrors_one": "{{count}} Cloud Mirror",
+      "mirrors_other": "{{count}} Cloud Mirrors",
       "copyPublicKey": "Öffentlichen Schlüssel kopieren",
       "delete": "Schlüssel löschen",
       "picker": {
@@ -2749,6 +2751,8 @@
         "title": "SSH-Schlüssel löschen",
         "confirm": "Schlüssel \"{{name}}\" löschen? Das kann nicht rückgängig gemacht werden.",
         "inUse": "Diese Verbindungen verwenden diesen Schlüssel. Stelle sie zuerst auf einen anderen Schlüssel um.",
+        "inUseByMirror_one": "Cloud Mirror von {{count}} Repository nutzt diesen Schlüssel. Bitte zuerst einen anderen Schlüssel für diesen Mirror auswählen.",
+        "inUseByMirror_other": "Cloud Mirror von {{count}} Repositories nutzt diesen Schlüssel. Bitte zuerst einen anderen Schlüssel für diese Mirrors auswählen.",
         "delete": "Löschen",
         "deleting": "Wird gelöscht..."
       },

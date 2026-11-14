@@ -49,6 +49,8 @@ export interface SSHKeySummary {
   public_key?: string
   is_system_key: boolean
   connection_count: number
+  /** Cloud Mirror repositories that sign in with this key. */
+  sftp_repository_count?: number
 }
 
 export interface ImportKeyPayload extends Record<string, unknown> {

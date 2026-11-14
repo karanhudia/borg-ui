@@ -44,3 +44,8 @@ export const InUse: Story = {
     connectionsUsingKey: [connection(1, 'repo1.borgserver.example'), connection(2, 'nas.example')],
   },
 }
+
+/** A Cloud Mirror signs in with the key, so deleting is blocked even with no connections. */
+export const InUseByCloudMirror: Story = {
+  args: { sshKey: { ...sshKey, connection_count: 0, sftp_repository_count: 2 } },
+}
