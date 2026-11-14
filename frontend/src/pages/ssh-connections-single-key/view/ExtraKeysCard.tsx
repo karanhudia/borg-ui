@@ -115,7 +115,11 @@ export function ExtraKeysCard({ keys, onAdd, onCopyPublicKey, onDelete }: ExtraK
                     >
                       {key.connection_count > 0
                         ? t('sshConnections.extraKeys.connections', { count: key.connection_count })
-                        : t('sshConnections.extraKeys.unused')}
+                        : key.sftp_repository_count
+                          ? t('sshConnections.extraKeys.mirrors', {
+                              count: key.sftp_repository_count,
+                            })
+                          : t('sshConnections.extraKeys.unused')}
                     </Typography>
                   </Stack>
                   {key.fingerprint && (

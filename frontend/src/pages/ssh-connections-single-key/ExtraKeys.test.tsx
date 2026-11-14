@@ -87,6 +87,19 @@ describe('ExtraKeysCard', () => {
     ).toBeInTheDocument()
   })
 
+  it('counts Cloud Mirror use instead of calling the key unused', () => {
+    renderWithProviders(
+      <ExtraKeysCard
+        keys={[{ ...extraKey, sftp_repository_count: 1 }]}
+        onAdd={vi.fn()}
+        onCopyPublicKey={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+    expect(screen.getByText('1 Cloud Mirror')).toBeInTheDocument()
+    expect(screen.queryByText('Not used yet')).not.toBeInTheDocument()
+  })
+
   it('says so when there are no additional keys', () => {
     renderWithProviders(
       <ExtraKeysCard keys={[]} onAdd={vi.fn()} onCopyPublicKey={vi.fn()} onDelete={vi.fn()} />
@@ -169,6 +182,20 @@ describe('DeleteExtraKeyDialog', () => {
     )
 
     expect(screen.getByText('borg@repo1.example:22')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+  })
+
+  it('blocks deleting a key a Cloud Mirror uses', () => {
+    renderWithProviders(
+      <DeleteExtraKeyDialog
+        sshKey={{ ...extraKey, sftp_repository_count: 2 }}
+        connectionsUsingKey={[]}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Cloud Mirror on 2 repositories uses this key/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
   })
 })
