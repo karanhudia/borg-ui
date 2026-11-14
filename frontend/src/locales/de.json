@@ -3498,7 +3498,7 @@
     "maxConcurrentMaintenanceLabel": "Max. gleichzeitige Wartungsvorgänge",
     "maxConcurrentMaintenanceHelper": "Wie viele Prune-, Compact- und Prüfvorgänge gleichzeitig laufen dürfen. 0 bedeutet kein Limit.",
     "maintenanceCountsTowardBackupLimitLabel": "Wartung zählt zum Backup-Limit",
-    "maintenanceCountsTowardBackupLimitHelper": "Prune, Compact und Prüfungen belegen einen Backup-Platz, und ein Backup-Plan behält seinen Platz, bis Prune und Compact fertig sind. Schalte das ein, wenn alle Rechner auf denselben Speicher sichern, damit Wartung nie neben dem nächsten Backup läuft.",
+    "maintenanceCountsTowardBackupLimitHelper": "Prune, Compact und Prüfungen belegen einen Backup-Platz, und ein Backup-Plan behält seinen Platz, bis Prune und Compact fertig sind. Schalte das ein, wenn alle Rechner auf denselben Speicher sichern, damit Wartung das Backup-Limit teilt, statt zusätzlich zu laufen.",
     "statsRefreshDisabled": "Automatische Statistikaktualisierung ist deaktiviert",
     "statsRefreshRangeError": "Muss zwischen 0 und {{max}} Minuten liegen",
     "statsRefreshIntervalHelper": "Repository-Statistiken (Archivanzahl, Größe, letzte Sicherung) werden alle {{interval}} Minuten aktualisiert",

@@ -3498,7 +3498,7 @@
     "maxConcurrentMaintenanceLabel": "Max manutenzioni simultanee",
     "maxConcurrentMaintenanceHelper": "Quante operazioni di prune, compact e verifica possono essere eseguite insieme. 0 significa nessun limite.",
     "maintenanceCountsTowardBackupLimitLabel": "La manutenzione conta nel limite dei backup",
-    "maintenanceCountsTowardBackupLimitHelper": "Prune, compact e verifiche occupano uno slot di backup, e un piano di backup mantiene il suo slot finché prune e compact non terminano. Attivalo quando tutte le macchine eseguono il backup sullo stesso storage, così la manutenzione non si sovrappone mai al backup successivo.",
+    "maintenanceCountsTowardBackupLimitHelper": "Prune, compact e verifiche occupano uno slot di backup, e un piano di backup mantiene il suo slot finché prune e compact non terminano. Attivalo quando tutte le macchine eseguono il backup sullo stesso storage, così la manutenzione condivide il limite dei backup invece di aggiungersi.",
     "statsRefreshDisabled": "Aggiornamento automatico statistiche disabilitato",
     "statsRefreshRangeError": "Deve essere compreso tra 0 e {{max}} minuti",
     "statsRefreshIntervalHelper": "Le statistiche del repository (conteggio archivi, dimensione, ultimo backup) verranno aggiornate ogni {{interval}} minuti",

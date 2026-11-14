@@ -172,12 +172,13 @@ def running_maintenance_count(db: Session, *, outside_plan_runs: bool = False) -
     return q.count()
 
 
-def _plan_backups_in_maintenance(db: Session, triggers: Iterable[str]) -> int:
+def _plan_backups_in_maintenance(db: Session) -> int:
     """Finished plan backups whose repository step is still open: the plan
     runs its post-backup prune, compact and checks inline in that window,
     so the step, not the backup, says when the repository is let go. This
     also covers the moment between the backup ending and its prune
-    starting, which a count of running prunes alone would miss."""
+    starting, which a count of running prunes alone would miss. Counted in
+    every pool, like the maintenance it stands for."""
     return (
         db.query(Operation.id)
         .join(
@@ -187,7 +188,6 @@ def _plan_backups_in_maintenance(db: Session, triggers: Iterable[str]) -> int:
         .filter(
             Operation.kind == "backup",
             Operation.status.notin_(("queued", "running")),
-            Operation.trigger.in_(tuple(triggers)),
             BackupPlanRunRepository.status == "running",
         )
         .count()
@@ -202,10 +202,9 @@ def running_backup_count(
     agent is back it does nothing but wait, so it must not hold up the
     backups of every other machine.
 
-    With `include_maintenance` a plan backup keeps its slot through its
-    post-backup steps, and any other running prune, compact or check takes
-    a slot in every pool: it loads the same storage whichever pool it
-    would belong to."""
+    With `include_maintenance` a plan backup in its post-backup steps, and
+    any other running prune, compact or check, takes a slot in every pool:
+    it loads the same storage whichever pool it would belong to."""
     triggers = tuple(triggers)
     ids = [
         operation_id
@@ -217,7 +216,7 @@ def running_backup_count(
     ]
     count = len(ids) - len(backups_waiting_for_offline_agent(db, ids))
     if include_maintenance:
-        count += _plan_backups_in_maintenance(db, triggers)
+        count += _plan_backups_in_maintenance(db)
         count += running_maintenance_count(db, outside_plan_runs=True)
     return count
 

@@ -285,9 +285,13 @@ def test_shared_limit_keeps_a_plan_backups_slot_through_its_maintenance(
     settings.maintenance_counts_toward_backup_limit = True
     db.commit()
     other = _other_repo(db)
+    settings.max_concurrent_scheduled_backups = 1
+    db.commit()
     _plan_backup_in_maintenance(db, repo)
     backup = enqueue(db, "backup", repository_id=other.id, trigger="plan")
+    scheduled = enqueue(db, "backup", repository_id=other.id, trigger="schedule")
     assert lanes.global_slot_available(db, backup, settings) is False
+    assert lanes.global_slot_available(db, scheduled, settings) is False
 
 
 @pytest.mark.unit
