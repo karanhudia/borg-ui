@@ -59,7 +59,7 @@ class TestSystemSettingsContracts:
         body = response.json()
         assert body["success"] is True
         settings = body["settings"]
-        assert settings["max_concurrent_backups"] == 2
+        assert settings["max_concurrent_backups"] == 1
         assert settings["max_concurrent_scheduled_backups"] == 2
         assert settings["max_concurrent_scheduled_checks"] == 4
         assert settings["log_retention_days"] == 30

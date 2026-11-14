@@ -104,8 +104,12 @@ export const getSystemSettingsValidationError = ({
   if (statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH) {
     return `Stats refresh interval must be between 0 and ${MAX_STATS_REFRESH} minutes (0 = disabled)`
   }
-  if (maxConcurrentBackups < 1 || maxConcurrentBackups > MAX_SCHEDULE_CONCURRENCY) {
-    return `Max concurrent backups must be between 1 and ${MAX_SCHEDULE_CONCURRENCY}`
+  if (
+    !Number.isInteger(maxConcurrentBackups) ||
+    maxConcurrentBackups < 1 ||
+    maxConcurrentBackups > MAX_SCHEDULE_CONCURRENCY
+  ) {
+    return `Max concurrent backups must be a whole number between 1 and ${MAX_SCHEDULE_CONCURRENCY}`
   }
   if (
     maxConcurrentScheduledBackups < 0 ||

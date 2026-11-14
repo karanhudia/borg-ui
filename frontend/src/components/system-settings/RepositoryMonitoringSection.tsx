@@ -226,7 +226,11 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
           type="number"
           value={maxConcurrentBackups}
           onChange={(e) => setMaxConcurrentBackups(Number(e.target.value))}
-          error={maxConcurrentBackups < 1 || maxConcurrentBackups > MAX_SCHEDULE_CONCURRENCY}
+          error={
+            !Number.isInteger(maxConcurrentBackups) ||
+            maxConcurrentBackups < 1 ||
+            maxConcurrentBackups > MAX_SCHEDULE_CONCURRENCY
+          }
           helperText={t('systemSettings.maxConcurrentBackupsHelper')}
           slotProps={{
             htmlInput: { min: 1, max: MAX_SCHEDULE_CONCURRENCY, step: 1 },
