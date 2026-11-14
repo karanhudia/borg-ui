@@ -16,7 +16,11 @@ from app.services.backup_plan_execution_service import backup_plan_execution_ser
 from app.services.notification_service import notification_service
 from app.services.operations.backup_facade import resolve_backup_job
 from app.services.operations.executors import get_executor, load_default_executors
-from tests.unit.test_api_backup_plans import _create_execution_plan, _create_repo
+from tests.unit.test_api_backup_plans import (
+    _create_execution_plan,
+    _create_repo,
+    _plan_backup_seam,
+)
 from tests.unit.test_operations_backup_executor import FakeContext
 from tests.unit.test_plan_post_hooks_on_failure_paths import _hook, _scripts, _Scripts
 
@@ -149,3 +153,36 @@ async def test_a_backup_of_an_ended_run_stands_down(test_db):
     verdict = await backup_plan_execution_service.enter_backup_slot(run.id)
 
     assert verdict.status == "skipped"
+
+
+@pytest.mark.asyncio
+async def test_a_pre_script_that_raises_leaves_no_repository_pending(test_db):
+    repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+    repo_b = _create_repo(test_db, "Secondary", "/repos/secondary")
+    _plan, run = _create_execution_plan(test_db, [repo_a, repo_b])
+
+    async def broken_hooks(run_id, context, *, hook_type, **kwargs):
+        raise RuntimeError("script lookup broke")
+
+    async def no_backup(*args, **kwargs):
+        raise AssertionError("the broken pre-backup script stops the run first")
+
+    with (
+        patch.object(
+            backup_plan_execution_service,
+            "_execute_plan_script_hooks",
+            side_effect=broken_hooks,
+        ),
+        patch(
+            "app.services.operations.backup_facade.wait_for_backup_operation",
+            new=_plan_backup_seam(no_backup),
+        ),
+        patch.object(notification_service, "send_backup_failure", new=AsyncMock()),
+    ):
+        await backup_plan_execution_service.execute_run(run.id)
+
+    test_db.expire_all()
+    stored = test_db.get(BackupPlanRun, run.id)
+    assert stored.status == "failed"
+    assert "script lookup broke" in stored.error_message
+    assert [child.status for child in stored.repositories] == ["failed", "failed"]

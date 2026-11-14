@@ -179,6 +179,10 @@ backups are ahead of it (for example with a concurrency limit of 1), the
 containers keep running while the plan waits. A plan cancelled while it is
 still waiting runs neither its pre-backup nor its post-backup scripts.
 
+This covers the wait before the plan's first backup only. In a plan with
+several repositories, a later repository's backup can still wait for a slot
+after the scripts ran, and the containers stay stopped during that wait.
+
 ## Related
 
 - [Troubleshooting](troubleshooting)

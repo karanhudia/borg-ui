@@ -1282,7 +1282,12 @@ class BackupPlanExecutionService:
             finally:
                 self._pre_hook_gates.pop(run_id, None)
 
-            verdict = await gate.verdict()
+            try:
+                verdict = await gate.verdict()
+            except Exception as exc:
+                # A script that raised stands the run down like one that
+                # failed: the repositories still pending are failed too.
+                verdict = PreHookVerdict(status="failed", message=failure_text(exc))
             if verdict is None:
                 # No backup got a slot (cancelled or failed while queued), so
                 # no pre-backup script ran and no post-backup one has
