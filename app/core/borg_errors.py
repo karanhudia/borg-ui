@@ -168,8 +168,9 @@ def bounded_operation_diagnostic(reason: str) -> str:
 
 
 # Borg missing on the remote end of an SSH repository: "sh: borg: command not
-# found" (bash), "sh: 1: borg: not found" (dash), or a configured remote path.
-_REMOTE_BORG_MISSING = _re.compile(r"\bborg[\w./-]*: (?:command )?not found")
+# found" (bash), "sh: 1: borg: not found" (dash), "sudo: 'borg': command not
+# found" (sudo quotes it), or a configured remote path.
+_REMOTE_BORG_MISSING = _re.compile(r"\bborg[\w./-]*'?: (?:command )?not found")
 
 
 def repository_failure_status(result: dict) -> int:
@@ -213,6 +214,13 @@ def repository_failure_status(result: dict) -> int:
         )
     ):
         return 409
+    if result.get("return_code") == 31 or any(
+        _re.fullmatch(r"archive .+ does not exist\.?", line.strip())
+        for line in reason.splitlines()
+    ):
+        # The archive is gone, e.g. pruned while the page was open
+        # (dashboard 59a11c4953c3d968, 774c24917f83b4cf).
+        return 404
     return 500
 
 

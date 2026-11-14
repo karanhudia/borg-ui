@@ -21,6 +21,7 @@ from pydantic import BaseModel, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.borg_errors import bounded_operation_diagnostic
 from app.config import settings
 from app.core.authorization import authorize_request
 from app.core.features import require_feature
@@ -3042,6 +3043,20 @@ async def browse_remote(
         raise HTTPException(
             status_code=409,
             detail={"key": "backend.errors.rclone.authorizationRequired"},
+        ) from exc
+    except RcloneUnavailable:
+        raise
+    except RuntimeError as exc:
+        # rclone ran and refused the remote: its configuration is the user's
+        # to fix (an SMB password that is not obscured, a host with a port in
+        # it; dashboard 694dc85c47e17eb9, 8341170182a59eca).
+        reason = bounded_operation_diagnostic(str(exc) or "rclone lsjson failed")
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "key": "backend.errors.rclone.browseFailed",
+                "params": {"error": reason},
+            },
         ) from exc
     return {
         "remote_id": remote.id,

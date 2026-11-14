@@ -548,6 +548,12 @@ class RcloneRepositoryService:
         job_id: int | None = None,
     ) -> dict[str, Any]:
         storage = self.get_storage(db, repository.id)
+        if not storage.cache_path:
+            # A mirror of an SSH or agent repository keeps no local copy on
+            # this server to restore into (dashboard 9732c2c8907a30eb).
+            raise ValueError(
+                "this cloud mirror has no local copy on this server to restore into"
+            )
         remote = self.get_remote(db, storage)
         target = self.compose_target(remote, storage.rclone_remote_path)
         # Resolve the job before creating the temp directory: a bad id raises

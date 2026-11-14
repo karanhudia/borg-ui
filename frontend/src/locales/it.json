@@ -6059,6 +6059,7 @@
         "mirrorUnsupportedPrimary": "Il mirror cloud al momento supporta repository primari locali, SSH e managed-agent",
         "remotePathNotVerified": "Questo percorso remoto rclone non è vuoto. Sfoglia e conferma il percorso di destinazione prima della sincronizzazione.",
         "remotePathPreflightFailed": "Impossibile verificare questo percorso remoto rclone",
+        "browseFailed": "Impossibile elencare questo remoto rclone: {{error}}",
         "cachePathServerOwned": "Il percorso cache rclone è gestito dal server",
         "remoteRequired": "Seleziona un remoto rclone",
         "remotePathRequired": "Inserisci un percorso remoto rclone relativo",

@@ -2366,6 +2366,35 @@ def test_test_remote_clears_storage_snapshot_when_about_has_no_size(
 
 
 @pytest.mark.unit
+def test_browse_remote_with_a_broken_remote_config_is_a_refusal(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    # rclone refused the remote's own settings (dashboard 694dc85c47e17eb9).
+    remote = RcloneRemote(name="nas-smb", provider="smb", config_source="managed")
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+    monkeypatch.setattr(
+        "app.api.rclone.rclone_service.lsjson",
+        AsyncMock(
+            side_effect=RuntimeError(
+                "CRITICAL: couldn't connect SMB: input too short when revealing "
+                "password - is it obscured?"
+            )
+        ),
+    )
+
+    response = test_client.get(
+        f"/api/rclone/remotes/{remote.id}/browse", headers=admin_headers
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["key"] == "backend.errors.rclone.browseFailed"
+    assert "is it obscured" in detail["params"]["error"]
+
+
+@pytest.mark.unit
 def test_browse_remote_returns_redacted_entries(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):
@@ -5584,11 +5613,13 @@ def test_browse_remote_authorization_recovery_from_command_result(
             "key": "backend.errors.rclone.authorizationRequired"
         }
     else:
-        # Preserve the existing generic failure contract.
-        with pytest.raises(RuntimeError, match=stderr):
-            test_client.get(
-                f"/api/rclone/remotes/{remote.id}/browse", headers=admin_headers
-            )
+        # Any other refusal is rclone's reason, for the user, not a 500.
+        response = test_client.get(
+            f"/api/rclone/remotes/{remote.id}/browse", headers=admin_headers
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == "backend.errors.rclone.browseFailed"
+        assert stderr in response.json()["detail"]["params"]["error"]
     test_db.refresh(remote)
     assert remote.config_source == original_config
     assert config_file.read_text() == saved_config

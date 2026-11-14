@@ -903,3 +903,29 @@ async def test_sync_repository_records_a_failure_on_the_operation(db_session):
     details = db_session.get(OperationRcloneDetails, op.id)
     assert op.status == "failed"
     assert "remote refused" in (details.error_text or "")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_hydrate_refuses_a_mirror_without_a_local_copy(db_session, tmp_path):
+    # A mirror of an SSH or agent repository has no cache path on this server;
+    # hydrating it crashed on Path(None) (dashboard 9732c2c8907a30eb).
+    remote = RcloneRemote(id=4, name="smb", provider="smb")
+    repository = Repository(id=10, name="Remote", path="ssh://h/r", encryption="none")
+    storage = RepositoryStorage(
+        repository_id=10,
+        backend="rclone",
+        rclone_remote_id=4,
+        rclone_remote_path="borg/r",
+        cache_path=None,
+        sync_policy="after_success",
+        sync_status="pending",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=_SuccessfulRcloneService()
+    )
+
+    with pytest.raises(ValueError, match="no local copy"):
+        await service.hydrate_repository(db_session, repository)
