@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-11-14T05:36:27.222Z",
+  "generatedAt": "2026-11-14T07:16:55.971Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1536 visual report",
-    "commitSha": "27243b7a891e",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43562155440"
+    "commitSha": "1e699f0ed0e4",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43570230516"
   },
   "totals": {
-    "baseline": 1256,
+    "baseline": 1298,
     "actual": 1298,
-    "compared": 1256,
-    "changed": 8,
-    "added": 42,
+    "compared": 1298,
+    "changed": 3,
+    "added": 0,
     "removed": 0,
-    "unchanged": 1248
+    "unchanged": 1295
   },
   "changed": [
     {
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-template-detail.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-template-detail.png",
       "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-template-detail.png",
-      "diffPixels": 6073,
+      "diffPixels": 1636,
       "totalPixels": 1024000,
-      "diffRatio": 0.0059306640625,
+      "diffRatio": 0.00159765625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -32,60 +32,6 @@
       "actual": {
         "width": 1280,
         "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--create-error--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-error--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-error--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-error--mobile.png",
-      "diffPixels": 59711,
-      "totalPixels": 329160,
-      "diffRatio": 0.18140418033782962,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--create-error.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-error.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-error.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-error.png",
-      "diffPixels": 171690,
-      "totalPixels": 1024000,
-      "diffRatio": 0.167666015625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
-      "diffPixels": 59730,
-      "totalPixels": 329160,
-      "diffRatio": 0.18146190302588408,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
       }
     },
     {
@@ -93,45 +39,9 @@
       "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--add-guided-remote--mobile.png",
       "diffPath": "images/diff/pages-cloudstorage--add-guided-remote--mobile.png",
-      "diffPixels": 59730,
+      "diffPixels": 629,
       "totalPixels": 329160,
-      "diffRatio": 0.18146190302588408,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPixels": 2076,
-      "totalPixels": 329160,
-      "diffRatio": 0.006306963179001094,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-cloudstorage--editing-remote--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--editing-remote--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--editing-remote--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--editing-remote--mobile.png",
-      "diffPixels": 1927,
-      "totalPixels": 329160,
-      "diffRatio": 0.005854295783205736,
+      "diffRatio": 0.0019109247782233565,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -147,9 +57,9 @@
       "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 398,
+      "diffPixels": 428,
       "totalPixels": 329160,
-      "diffRatio": 0.0012091384129298821,
+      "diffRatio": 0.0013002794993316321,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -161,176 +71,7 @@
       }
     }
   ],
-  "added": [
-    {
-      "fileName": "components-sshkeyselect--extra-key-selected--mobile.png",
-      "actualPath": "images/actual/components-sshkeyselect--extra-key-selected--mobile.png"
-    },
-    {
-      "fileName": "components-sshkeyselect--extra-key-selected.png",
-      "actualPath": "images/actual/components-sshkeyselect--extra-key-selected.png"
-    },
-    {
-      "fileName": "components-sshkeyselect--narrow-width--mobile.png",
-      "actualPath": "images/actual/components-sshkeyselect--narrow-width--mobile.png"
-    },
-    {
-      "fileName": "components-sshkeyselect--narrow-width.png",
-      "actualPath": "images/actual/components-sshkeyselect--narrow-width.png"
-    },
-    {
-      "fileName": "components-sshkeyselect--system-key-selected--mobile.png",
-      "actualPath": "images/actual/components-sshkeyselect--system-key-selected--mobile.png"
-    },
-    {
-      "fileName": "components-sshkeyselect--system-key-selected.png",
-      "actualPath": "images/actual/components-sshkeyselect--system-key-selected.png"
-    },
-    {
-      "fileName": "remote-machines-addkeydialog--generate--mobile.png",
-      "actualPath": "images/actual/remote-machines-addkeydialog--generate--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-addkeydialog--generate.png",
-      "actualPath": "images/actual/remote-machines-addkeydialog--generate.png"
-    },
-    {
-      "fileName": "remote-machines-addkeydialog--import-from-path--mobile.png",
-      "actualPath": "images/actual/remote-machines-addkeydialog--import-from-path--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-addkeydialog--import-from-path.png",
-      "actualPath": "images/actual/remote-machines-addkeydialog--import-from-path.png"
-    },
-    {
-      "fileName": "remote-machines-addkeydialog--pending--mobile.png",
-      "actualPath": "images/actual/remote-machines-addkeydialog--pending--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-addkeydialog--pending.png",
-      "actualPath": "images/actual/remote-machines-addkeydialog--pending.png"
-    },
-    {
-      "fileName": "remote-machines-deleteextrakeydialog--in-use--mobile.png",
-      "actualPath": "images/actual/remote-machines-deleteextrakeydialog--in-use--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-deleteextrakeydialog--in-use-by-cloud-mirror--mobile.png",
-      "actualPath": "images/actual/remote-machines-deleteextrakeydialog--in-use-by-cloud-mirror--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-deleteextrakeydialog--in-use-by-cloud-mirror.png",
-      "actualPath": "images/actual/remote-machines-deleteextrakeydialog--in-use-by-cloud-mirror.png"
-    },
-    {
-      "fileName": "remote-machines-deleteextrakeydialog--in-use.png",
-      "actualPath": "images/actual/remote-machines-deleteextrakeydialog--in-use.png"
-    },
-    {
-      "fileName": "remote-machines-deleteextrakeydialog--unused--mobile.png",
-      "actualPath": "images/actual/remote-machines-deleteextrakeydialog--unused--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-deleteextrakeydialog--unused.png",
-      "actualPath": "images/actual/remote-machines-deleteextrakeydialog--unused.png"
-    },
-    {
-      "fileName": "remote-machines-deploykeydialog--custom-with-extra-key--mobile.png",
-      "actualPath": "images/actual/remote-machines-deploykeydialog--custom-with-extra-key--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-deploykeydialog--custom-with-extra-key.png",
-      "actualPath": "images/actual/remote-machines-deploykeydialog--custom-with-extra-key.png"
-    },
-    {
-      "fileName": "remote-machines-deploykeydialog--with-key-picker--mobile.png",
-      "actualPath": "images/actual/remote-machines-deploykeydialog--with-key-picker--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-deploykeydialog--with-key-picker.png",
-      "actualPath": "images/actual/remote-machines-deploykeydialog--with-key-picker.png"
-    },
-    {
-      "fileName": "remote-machines-extrakeyscard--empty--mobile.png",
-      "actualPath": "images/actual/remote-machines-extrakeyscard--empty--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-extrakeyscard--empty.png",
-      "actualPath": "images/actual/remote-machines-extrakeyscard--empty.png"
-    },
-    {
-      "fileName": "remote-machines-extrakeyscard--fingerprint-revealed--mobile.png",
-      "actualPath": "images/actual/remote-machines-extrakeyscard--fingerprint-revealed--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-extrakeyscard--fingerprint-revealed.png",
-      "actualPath": "images/actual/remote-machines-extrakeyscard--fingerprint-revealed.png"
-    },
-    {
-      "fileName": "remote-machines-extrakeyscard--with-keys--mobile.png",
-      "actualPath": "images/actual/remote-machines-extrakeyscard--with-keys--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-extrakeyscard--with-keys.png",
-      "actualPath": "images/actual/remote-machines-extrakeyscard--with-keys.png"
-    },
-    {
-      "fileName": "remote-machines-redeploykeydialog--connection-key--mobile.png",
-      "actualPath": "images/actual/remote-machines-redeploykeydialog--connection-key--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-redeploykeydialog--connection-key.png",
-      "actualPath": "images/actual/remote-machines-redeploykeydialog--connection-key.png"
-    },
-    {
-      "fileName": "remote-machines-sshpageheader--no-key-yet--mobile.png",
-      "actualPath": "images/actual/remote-machines-sshpageheader--no-key-yet--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-sshpageheader--no-key-yet.png",
-      "actualPath": "images/actual/remote-machines-sshpageheader--no-key-yet.png"
-    },
-    {
-      "fileName": "remote-machines-sshpageheader--with-actions--mobile.png",
-      "actualPath": "images/actual/remote-machines-sshpageheader--with-actions--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-sshpageheader--with-actions.png",
-      "actualPath": "images/actual/remote-machines-sshpageheader--with-actions.png"
-    },
-    {
-      "fileName": "remote-machines-systemkeycard--no-key--mobile.png",
-      "actualPath": "images/actual/remote-machines-systemkeycard--no-key--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-systemkeycard--no-key.png",
-      "actualPath": "images/actual/remote-machines-systemkeycard--no-key.png"
-    },
-    {
-      "fileName": "remote-machines-systemkeycard--with-key--mobile.png",
-      "actualPath": "images/actual/remote-machines-systemkeycard--with-key--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-systemkeycard--with-key.png",
-      "actualPath": "images/actual/remote-machines-systemkeycard--with-key.png"
-    },
-    {
-      "fileName": "remote-machines-testconnectiondialog--system-key-only--mobile.png",
-      "actualPath": "images/actual/remote-machines-testconnectiondialog--system-key-only--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-testconnectiondialog--system-key-only.png",
-      "actualPath": "images/actual/remote-machines-testconnectiondialog--system-key-only.png"
-    },
-    {
-      "fileName": "remote-machines-testconnectiondialog--with-key-picker--mobile.png",
-      "actualPath": "images/actual/remote-machines-testconnectiondialog--with-key-picker--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-testconnectiondialog--with-key-picker.png",
-      "actualPath": "images/actual/remote-machines-testconnectiondialog--with-key-picker.png"
-    }
-  ],
+  "added": [],
   "removed": [],
   "unchanged": [
     {
@@ -2737,6 +2478,24 @@
       "fileName": "components-sidebarupdatenotice--without-version.png"
     },
     {
+      "fileName": "components-sshkeyselect--extra-key-selected--mobile.png"
+    },
+    {
+      "fileName": "components-sshkeyselect--extra-key-selected.png"
+    },
+    {
+      "fileName": "components-sshkeyselect--narrow-width--mobile.png"
+    },
+    {
+      "fileName": "components-sshkeyselect--narrow-width.png"
+    },
+    {
+      "fileName": "components-sshkeyselect--system-key-selected--mobile.png"
+    },
+    {
+      "fileName": "components-sshkeyselect--system-key-selected.png"
+    },
+    {
       "fileName": "components-statusbadge--completed--mobile.png"
     },
     {
@@ -2939,6 +2698,15 @@
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-error--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-error.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
@@ -3448,6 +3216,9 @@
       "fileName": "pages-backup-plans-content--skipped-repository.png"
     },
     {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png"
+    },
+    {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
     },
     {
@@ -3464,6 +3235,9 @@
     },
     {
       "fileName": "pages-cloudstorage--delete-confirmation.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--editing-remote--mobile.png"
     },
     {
       "fileName": "pages-cloudstorage--editing-remote.png"
@@ -3916,6 +3690,24 @@
       "fileName": "quick-start-steps--what.png"
     },
     {
+      "fileName": "remote-machines-addkeydialog--generate--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-addkeydialog--generate.png"
+    },
+    {
+      "fileName": "remote-machines-addkeydialog--import-from-path--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-addkeydialog--import-from-path.png"
+    },
+    {
+      "fileName": "remote-machines-addkeydialog--pending--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-addkeydialog--pending.png"
+    },
+    {
       "fileName": "remote-machines-connectiondiagnosticsdialog--partial-tcp-failure--mobile.png"
     },
     {
@@ -3934,10 +3726,34 @@
       "fileName": "remote-machines-connectiondiagnosticsdialog--timeout.png"
     },
     {
+      "fileName": "remote-machines-deleteextrakeydialog--in-use--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deleteextrakeydialog--in-use-by-cloud-mirror--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deleteextrakeydialog--in-use-by-cloud-mirror.png"
+    },
+    {
+      "fileName": "remote-machines-deleteextrakeydialog--in-use.png"
+    },
+    {
+      "fileName": "remote-machines-deleteextrakeydialog--unused--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deleteextrakeydialog--unused.png"
+    },
+    {
       "fileName": "remote-machines-deploykeydialog--custom-defaults--mobile.png"
     },
     {
       "fileName": "remote-machines-deploykeydialog--custom-defaults.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--custom-with-extra-key--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--custom-with-extra-key.png"
     },
     {
       "fileName": "remote-machines-deploykeydialog--hetzner-defaults--mobile.png"
@@ -3956,6 +3772,30 @@
     },
     {
       "fileName": "remote-machines-deploykeydialog--rsync-net-defaults.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--with-key-picker--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--with-key-picker.png"
+    },
+    {
+      "fileName": "remote-machines-extrakeyscard--empty--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-extrakeyscard--empty.png"
+    },
+    {
+      "fileName": "remote-machines-extrakeyscard--fingerprint-revealed--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-extrakeyscard--fingerprint-revealed.png"
+    },
+    {
+      "fileName": "remote-machines-extrakeyscard--with-keys--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-extrakeyscard--with-keys.png"
     },
     {
       "fileName": "remote-machines-hostkeydialog--first-connect--mobile.png"
@@ -3986,6 +3826,12 @@
     },
     {
       "fileName": "remote-machines-hostkeydialog--trusted.png"
+    },
+    {
+      "fileName": "remote-machines-redeploykeydialog--connection-key--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-redeploykeydialog--connection-key.png"
     },
     {
       "fileName": "remote-machines-remotemachinecard--host-key-not-verified--mobile.png"
@@ -4028,6 +3874,42 @@
     },
     {
       "fileName": "remote-machines-sshhostfield--invalid-host.png"
+    },
+    {
+      "fileName": "remote-machines-sshpageheader--no-key-yet--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-sshpageheader--no-key-yet.png"
+    },
+    {
+      "fileName": "remote-machines-sshpageheader--with-actions--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-sshpageheader--with-actions.png"
+    },
+    {
+      "fileName": "remote-machines-systemkeycard--no-key--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-systemkeycard--no-key.png"
+    },
+    {
+      "fileName": "remote-machines-systemkeycard--with-key--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-systemkeycard--with-key.png"
+    },
+    {
+      "fileName": "remote-machines-testconnectiondialog--system-key-only--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-testconnectiondialog--system-key-only.png"
+    },
+    {
+      "fileName": "remote-machines-testconnectiondialog--with-key-picker--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-testconnectiondialog--with-key-picker.png"
     },
     {
       "fileName": "repositories-indexmodesettings--archives-only--mobile.png"
