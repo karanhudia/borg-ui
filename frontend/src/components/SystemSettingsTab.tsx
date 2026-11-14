@@ -48,6 +48,9 @@ const SystemSettingsTab: React.FC = () => {
   const [maxConcurrentBackups, setMaxConcurrentBackups] = useState(1)
   const [maxConcurrentScheduledBackups, setMaxConcurrentScheduledBackups] = useState(2)
   const [maxConcurrentScheduledChecks, setMaxConcurrentScheduledChecks] = useState(4)
+  const [maxConcurrentMaintenance, setMaxConcurrentMaintenance] = useState(0)
+  const [maintenanceCountsTowardBackupLimit, setMaintenanceCountsTowardBackupLimit] =
+    useState(false)
   const [statsRefreshInterval, setStatsRefreshInterval] = useState(60)
   const [autoPrunePreview, setAutoPrunePreview] = useState(true)
   const [dashboardBackupWarningDays, setDashboardBackupWarningDays] = useState(3)
@@ -162,6 +165,10 @@ const SystemSettingsTab: React.FC = () => {
       setMaxConcurrentBackups(systemSettings.max_concurrent_backups ?? 1)
       setMaxConcurrentScheduledBackups(systemSettings.max_concurrent_scheduled_backups ?? 2)
       setMaxConcurrentScheduledChecks(systemSettings.max_concurrent_scheduled_checks ?? 4)
+      setMaxConcurrentMaintenance(systemSettings.max_concurrent_maintenance ?? 0)
+      setMaintenanceCountsTowardBackupLimit(
+        systemSettings.maintenance_counts_toward_backup_limit ?? false
+      )
       setStatsRefreshInterval(systemSettings.stats_refresh_interval_minutes ?? 60)
       setAutoPrunePreview(systemSettings.auto_prune_preview ?? true)
       setDashboardBackupWarningDays(systemSettings.dashboard_backup_warning_days ?? 3)
@@ -225,7 +232,10 @@ const SystemSettingsTab: React.FC = () => {
         sourceSizeTimeout !== (systemSettings.source_size_timeout || 3600) ||
         maxConcurrentBackups !== (systemSettings.max_concurrent_backups ?? 1) ||
         maxConcurrentScheduledBackups !== (systemSettings.max_concurrent_scheduled_backups ?? 2) ||
-        maxConcurrentScheduledChecks !== (systemSettings.max_concurrent_scheduled_checks ?? 4)
+        maxConcurrentScheduledChecks !== (systemSettings.max_concurrent_scheduled_checks ?? 4) ||
+        maxConcurrentMaintenance !== (systemSettings.max_concurrent_maintenance ?? 0) ||
+        maintenanceCountsTowardBackupLimit !==
+          (systemSettings.maintenance_counts_toward_backup_limit ?? false)
       const statsRefreshDirty =
         statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60) ||
         autoPrunePreview !== (systemSettings.auto_prune_preview ?? true)
@@ -299,6 +309,8 @@ const SystemSettingsTab: React.FC = () => {
     maxConcurrentBackups,
     maxConcurrentScheduledBackups,
     maxConcurrentScheduledChecks,
+    maxConcurrentMaintenance,
+    maintenanceCountsTowardBackupLimit,
     statsRefreshInterval,
     autoPrunePreview,
     dashboardBackupWarningDays,
@@ -356,6 +368,7 @@ const SystemSettingsTab: React.FC = () => {
     maxConcurrentBackups,
     maxConcurrentScheduledBackups,
     maxConcurrentScheduledChecks,
+    maxConcurrentMaintenance,
     dashboardBackupWarningDays,
     dashboardBackupCriticalDays,
     dashboardCheckWarningDays,
@@ -389,6 +402,8 @@ const SystemSettingsTab: React.FC = () => {
     max_concurrent_backups: maxConcurrentBackups,
     max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
     max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
+    max_concurrent_maintenance: maxConcurrentMaintenance,
+    maintenance_counts_toward_backup_limit: maintenanceCountsTowardBackupLimit,
     stats_refresh_interval_minutes: statsRefreshInterval,
     auto_prune_preview: autoPrunePreview,
     dashboard_backup_warning_days: dashboardBackupWarningDays,
@@ -553,6 +568,8 @@ const SystemSettingsTab: React.FC = () => {
         max_concurrent_backups: maxConcurrentBackups,
         max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
         max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
+        max_concurrent_maintenance: maxConcurrentMaintenance,
+        maintenance_counts_toward_backup_limit: maintenanceCountsTowardBackupLimit,
         stats_refresh_interval_minutes: statsRefreshInterval,
         auto_prune_preview: autoPrunePreview,
         dashboard_backup_warning_days: dashboardBackupWarningDays,
@@ -750,6 +767,8 @@ const SystemSettingsTab: React.FC = () => {
               maxConcurrentBackups={maxConcurrentBackups}
               maxConcurrentScheduledBackups={maxConcurrentScheduledBackups}
               maxConcurrentScheduledChecks={maxConcurrentScheduledChecks}
+              maxConcurrentMaintenance={maxConcurrentMaintenance}
+              maintenanceCountsTowardBackupLimit={maintenanceCountsTowardBackupLimit}
               dashboardBackupWarningDays={dashboardBackupWarningDays}
               dashboardBackupCriticalDays={dashboardBackupCriticalDays}
               dashboardCheckWarningDays={dashboardCheckWarningDays}
@@ -767,6 +786,8 @@ const SystemSettingsTab: React.FC = () => {
               setMaxConcurrentBackups={setMaxConcurrentBackups}
               setMaxConcurrentScheduledBackups={setMaxConcurrentScheduledBackups}
               setMaxConcurrentScheduledChecks={setMaxConcurrentScheduledChecks}
+              setMaxConcurrentMaintenance={setMaxConcurrentMaintenance}
+              setMaintenanceCountsTowardBackupLimit={setMaintenanceCountsTowardBackupLimit}
               setDashboardBackupWarningDays={setDashboardBackupWarningDays}
               setDashboardBackupCriticalDays={setDashboardBackupCriticalDays}
               setDashboardCheckWarningDays={setDashboardCheckWarningDays}

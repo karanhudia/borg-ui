@@ -25,6 +25,8 @@ interface RepositoryMonitoringSectionProps {
   maxConcurrentBackups: number
   maxConcurrentScheduledBackups: number
   maxConcurrentScheduledChecks: number
+  maxConcurrentMaintenance: number
+  maintenanceCountsTowardBackupLimit: boolean
   dashboardBackupWarningDays: number
   dashboardBackupCriticalDays: number
   dashboardCheckWarningDays: number
@@ -42,6 +44,8 @@ interface RepositoryMonitoringSectionProps {
   setMaxConcurrentBackups: (value: number) => void
   setMaxConcurrentScheduledBackups: (value: number) => void
   setMaxConcurrentScheduledChecks: (value: number) => void
+  setMaxConcurrentMaintenance: (value: number) => void
+  setMaintenanceCountsTowardBackupLimit: (value: boolean) => void
   setDashboardBackupWarningDays: (value: number) => void
   setDashboardBackupCriticalDays: (value: number) => void
   setDashboardCheckWarningDays: (value: number) => void
@@ -61,6 +65,8 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
   maxConcurrentBackups,
   maxConcurrentScheduledBackups,
   maxConcurrentScheduledChecks,
+  maxConcurrentMaintenance,
+  maintenanceCountsTowardBackupLimit,
   dashboardBackupWarningDays,
   dashboardBackupCriticalDays,
   dashboardCheckWarningDays,
@@ -78,6 +84,8 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
   setMaxConcurrentBackups,
   setMaxConcurrentScheduledBackups,
   setMaxConcurrentScheduledChecks,
+  setMaxConcurrentMaintenance,
+  setMaintenanceCountsTowardBackupLimit,
   setDashboardBackupWarningDays,
   setDashboardBackupCriticalDays,
   setDashboardCheckWarningDays,
@@ -266,6 +274,42 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
             htmlInput: { min: 0, max: MAX_SCHEDULE_CONCURRENCY, step: 1 },
           }}
         />
+
+        <TextField
+          label={t('systemSettings.maxConcurrentMaintenanceLabel')}
+          type="number"
+          value={maxConcurrentMaintenance}
+          onChange={(e) => setMaxConcurrentMaintenance(Number(e.target.value))}
+          error={
+            maxConcurrentMaintenance < 0 || maxConcurrentMaintenance > MAX_SCHEDULE_CONCURRENCY
+          }
+          helperText={t('systemSettings.maxConcurrentMaintenanceHelper')}
+          slotProps={{
+            htmlInput: { min: 0, max: MAX_SCHEDULE_CONCURRENCY, step: 1 },
+          }}
+        />
+      </Box>
+
+      <Box>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={maintenanceCountsTowardBackupLimit}
+              onChange={(e) => setMaintenanceCountsTowardBackupLimit(e.target.checked)}
+              slotProps={{
+                input: { 'aria-describedby': 'maintenance-counts-toward-backup-limit-helper' },
+              }}
+            />
+          }
+          label={t('systemSettings.maintenanceCountsTowardBackupLimitLabel')}
+        />
+        <Typography
+          id="maintenance-counts-toward-backup-limit-helper"
+          variant="caption"
+          sx={{ display: 'block', color: 'text.secondary', ml: 6 }}
+        >
+          {t('systemSettings.maintenanceCountsTowardBackupLimitHelper')}
+        </Typography>
       </Box>
 
       <Box>

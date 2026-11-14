@@ -5,6 +5,7 @@ from typing import Iterable, Optional
 from sqlalchemy.orm import Session
 
 from app.database.models import (
+    BackupPlanRunRepository,
     Operation,
     OperationBackupDetails,
     Repository,
@@ -30,6 +31,8 @@ _DEFAULTS = {
     "max_concurrent_backups": 1,
     "max_concurrent_scheduled_backups": 2,
     "max_concurrent_scheduled_checks": 4,
+    "max_concurrent_maintenance": None,
+    "maintenance_counts_toward_backup_limit": False,
     "index_workers": 2,
     "paused_stages": [],
     "bypass_lock_on_list": False,
@@ -148,35 +151,132 @@ def running_count(
     return q.count()
 
 
-def running_backup_count(db: Session, *, triggers: Iterable[str]) -> int:
+# The maintenance `max_concurrent_maintenance` caps and
+# `maintenance_counts_toward_backup_limit` puts in the backup slots. A prune
+# preview (trigger `preview`) removes nothing and is not counted.
+MAINTENANCE_SLOT_KINDS = ("prune", "compact", "check")
+
+
+def _is_slot_maintenance(op: Operation) -> bool:
+    return op.kind in MAINTENANCE_SLOT_KINDS and op.trigger != "preview"
+
+
+def running_maintenance_count(db: Session, *, outside_plan_runs: bool = False) -> int:
+    q = db.query(Operation.id).filter(
+        Operation.status == "running",
+        Operation.kind.in_(MAINTENANCE_SLOT_KINDS),
+        Operation.trigger != "preview",
+    )
+    if outside_plan_runs:
+        q = q.filter(Operation.backup_plan_run_id.is_(None))
+    return q.count()
+
+
+def _plan_backups_in_maintenance(db: Session) -> int:
+    """Finished plan backups whose repository step is still open: the plan
+    runs its post-backup prune, compact and checks inline in that window,
+    so the step, not the backup, says when the repository is let go. This
+    also covers the moment between the backup ending and its prune
+    starting, which a count of running prunes alone would miss. Counted in
+    every pool, like the maintenance it stands for."""
+    return (
+        db.query(Operation.id)
+        .join(
+            BackupPlanRunRepository,
+            BackupPlanRunRepository.backup_operation_id == Operation.id,
+        )
+        .filter(
+            Operation.kind == "backup",
+            Operation.status.notin_(("queued", "running")),
+            BackupPlanRunRepository.status == "running",
+        )
+        .count()
+    )
+
+
+def running_backup_count(
+    db: Session, *, triggers: Iterable[str], include_maintenance: bool = False
+) -> int:
     """Running backups that hold a backup slot. One that waits for an agent
     that is away does not (#1331): its work runs on the agent, and until the
     agent is back it does nothing but wait, so it must not hold up the
-    backups of every other machine."""
+    backups of every other machine.
+
+    With `include_maintenance` a plan backup in its post-backup steps, and
+    any other running prune, compact or check, takes a slot in every pool:
+    it loads the same storage whichever pool it would belong to."""
+    triggers = tuple(triggers)
     ids = [
         operation_id
         for (operation_id,) in db.query(Operation.id).filter(
             Operation.status == "running",
             Operation.kind == "backup",
-            Operation.trigger.in_(tuple(triggers)),
+            Operation.trigger.in_(triggers),
         )
     ]
-    return len(ids) - len(backups_waiting_for_offline_agent(db, ids))
+    count = len(ids) - len(backups_waiting_for_offline_agent(db, ids))
+    if include_maintenance:
+        count += _plan_backups_in_maintenance(db)
+        count += running_maintenance_count(db, outside_plan_runs=True)
+    return count
+
+
+_NON_SCHEDULED_BACKUP_TRIGGERS = (
+    "manual",
+    "plan",
+    "import",
+    "retry",
+    "followup",
+    "reconcile",
+)
+
+
+def _maintenance_slot_available(
+    db: Session, op: Operation, settings: Optional[SystemSettings]
+) -> bool:
+    cap = _setting(settings, "max_concurrent_maintenance")
+    if cap and running_maintenance_count(db) >= cap:
+        return False
+    if op.kind == "check" and op.trigger == "schedule":
+        limit = _setting(settings, "max_concurrent_scheduled_checks")
+        if running_count(db, kind="check", trigger="schedule") >= limit:
+            return False
+    if not _setting(settings, "maintenance_counts_toward_backup_limit"):
+        return True
+    # Running maintenance takes a slot in every pool, so it needs room in both.
+    pools = (
+        ("max_concurrent_scheduled_backups", ("schedule",)),
+        ("max_concurrent_backups", _NON_SCHEDULED_BACKUP_TRIGGERS),
+    )
+    return all(
+        running_backup_count(db, triggers=triggers, include_maintenance=True)
+        < _setting(settings, key)
+        for key, triggers in pools
+    )
 
 
 def global_slot_available(
     db: Session, op: Operation, settings: Optional[SystemSettings]
 ) -> bool:
     if op.kind == "backup":
+        shared = bool(_setting(settings, "maintenance_counts_toward_backup_limit"))
         if op.trigger == "schedule":
             limit = _setting(settings, "max_concurrent_scheduled_backups")
-            return running_backup_count(db, triggers=("schedule",)) < limit
+            return (
+                running_backup_count(
+                    db, triggers=("schedule",), include_maintenance=shared
+                )
+                < limit
+            )
         limit = _setting(settings, "max_concurrent_backups")
-        non_scheduled = ("manual", "plan", "import", "retry", "followup", "reconcile")
-        return running_backup_count(db, triggers=non_scheduled) < limit
-    if op.kind == "check" and op.trigger == "schedule":
-        limit = _setting(settings, "max_concurrent_scheduled_checks")
-        return running_count(db, kind="check", trigger="schedule") < limit
+        return (
+            running_backup_count(
+                db, triggers=_NON_SCHEDULED_BACKUP_TRIGGERS, include_maintenance=shared
+            )
+            < limit
+        )
+    if _is_slot_maintenance(op):
+        return _maintenance_slot_available(db, op, settings)
     if op.kind in INDEX_KINDS:
         return running_count(db, kinds=INDEX_KINDS) < _setting(
             settings, "index_workers"

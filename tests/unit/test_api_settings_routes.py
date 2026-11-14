@@ -168,6 +168,36 @@ class TestSystemSettingsContracts:
         readback = test_client.get("/api/settings/system", headers=admin_headers)
         assert readback.json()["settings"]["auto_prune_preview"] is False
 
+    def test_update_system_settings_persists_maintenance_concurrency(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        before = test_client.get("/api/settings/system", headers=admin_headers)
+        assert before.json()["settings"]["max_concurrent_maintenance"] == 0
+        assert (
+            before.json()["settings"]["maintenance_counts_toward_backup_limit"] is False
+        )
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "max_concurrent_maintenance": 2,
+                "maintenance_counts_toward_backup_limit": True,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        row = test_db.query(SystemSettings).first()
+        assert row.max_concurrent_maintenance == 2
+        assert row.maintenance_counts_toward_backup_limit is True
+
+        rejected = test_client.put(
+            "/api/settings/system",
+            json={"max_concurrent_maintenance": -1},
+            headers=admin_headers,
+        )
+        assert rejected.status_code == 400
+
     def test_update_system_settings_rejects_too_small_log_limit(
         self, test_client: TestClient, admin_headers
     ):

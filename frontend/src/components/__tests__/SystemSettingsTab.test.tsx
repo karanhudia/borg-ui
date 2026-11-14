@@ -189,6 +189,32 @@ describe('SystemSettingsTab', () => {
     })
   })
 
+  it('saves the maintenance concurrency limit and the shared backup limit switch', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SystemSettingsTab />, {
+      initialRoute: '/settings/system?section=monitoring',
+    })
+
+    const toggle = await screen.findByLabelText('Maintenance counts toward the backup limit')
+    await waitFor(() => expect(toggle).not.toBeChecked())
+    const limit = screen.getByLabelText('Max Concurrent Maintenance')
+    expect(limit).toHaveValue(0)
+
+    await user.click(toggle)
+    await user.clear(limit)
+    await user.type(limit, '1')
+    await user.click(screen.getByRole('button', { name: /Save Settings/i }))
+
+    await waitFor(() => {
+      expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          max_concurrent_maintenance: 1,
+          maintenance_counts_toward_backup_limit: true,
+        })
+      )
+    })
+  })
+
   it('saves dashboard health thresholds with system settings', async () => {
     const user = userEvent.setup()
     vi.mocked(settingsAPI.getSystemSettings)
