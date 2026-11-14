@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import os
 import subprocess
 import sys
@@ -131,8 +130,13 @@ def replace_authorized_keys(auth_keys_path: Path, content: str) -> str:
     previous = _read_authorized_keys(auth_keys_path)
     try:
         _write_authorized_keys(auth_keys_path, content)
-    except BaseException:
-        with contextlib.suppress(Exception):
+    except BaseException as write_error:
+        try:
             _write_authorized_keys(auth_keys_path, previous)
+        except Exception as restore_error:
+            raise RuntimeError(
+                f"{auth_keys_path} may be truncated: replacing it failed "
+                f"({write_error!r}) and restoring it failed ({restore_error!r})"
+            ) from write_error
         raise
     return previous
