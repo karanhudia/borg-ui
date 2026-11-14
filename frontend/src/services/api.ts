@@ -332,6 +332,7 @@ export interface SystemSettings {
   list_timeout?: number
   init_timeout?: number
   backup_timeout?: number
+  max_concurrent_backups?: number
   max_concurrent_scheduled_backups?: number
   max_concurrent_scheduled_checks?: number
   stats_refresh_interval_minutes?: number

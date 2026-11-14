@@ -9,6 +9,7 @@ const meta = {
   args: {
     statsRefreshInterval: 60,
     autoPrunePreview: true,
+    maxConcurrentBackups: 1,
     maxConcurrentScheduledBackups: 2,
     maxConcurrentScheduledChecks: 4,
     dashboardBackupWarningDays: 3,
@@ -24,6 +25,7 @@ const meta = {
     isRefreshingStats: false,
     setStatsRefreshInterval: noop,
     setAutoPrunePreview: noop,
+    setMaxConcurrentBackups: noop,
     setMaxConcurrentScheduledBackups: noop,
     setMaxConcurrentScheduledChecks: noop,
     setDashboardBackupWarningDays: noop,

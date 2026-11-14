@@ -204,6 +204,22 @@ def test_backup_limits_by_trigger(db, repo, settings):
 
 
 @pytest.mark.unit
+def test_plan_backups_follow_max_concurrent_backups(db, repo, settings):
+    # #1535: plan backups use max_concurrent_backups, not the scheduled limit.
+    settings.max_concurrent_backups = 1
+    settings.max_concurrent_scheduled_backups = 5
+    db.commit()
+    other = _other_repo(db)
+    _running(db, "backup", repo, trigger="plan")
+    plan = enqueue(db, "backup", repository_id=other.id, trigger="plan")
+    assert lanes.global_slot_available(db, plan, settings) is False
+
+    settings.max_concurrent_backups = 2
+    db.commit()
+    assert lanes.global_slot_available(db, plan, settings) is True
+
+
+@pytest.mark.unit
 def test_scheduled_check_limit(db, repo, settings):
     settings.max_concurrent_scheduled_checks = 1
     db.commit()

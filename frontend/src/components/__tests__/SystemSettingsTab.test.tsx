@@ -38,6 +38,7 @@ const defaultSystemSettings = {
   init_timeout: 300,
   backup_timeout: 3600,
   source_size_timeout: 3600,
+  max_concurrent_backups: 2,
   max_concurrent_scheduled_backups: 2,
   max_concurrent_scheduled_checks: 4,
   stats_refresh_interval_minutes: 60,
@@ -164,9 +165,12 @@ describe('SystemSettingsTab', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Repository Monitoring' }))
 
+    const planBackupLimit = screen.getByLabelText('Max Concurrent Backups')
     const backupLimit = screen.getByLabelText('Max Concurrent Scheduled Backups')
     const checkLimit = screen.getByLabelText('Max Concurrent Scheduled Checks')
 
+    await user.clear(planBackupLimit)
+    await user.type(planBackupLimit, '1')
     await user.clear(backupLimit)
     await user.type(backupLimit, '3')
     await user.clear(checkLimit)
@@ -177,6 +181,7 @@ describe('SystemSettingsTab', () => {
     await waitFor(() => {
       expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith(
         expect.objectContaining({
+          max_concurrent_backups: 1,
           max_concurrent_scheduled_backups: 3,
           max_concurrent_scheduled_checks: 5,
         })
