@@ -1087,6 +1087,8 @@ jobs:
       - name: Start Borg UI backend
         run: |
           mkdir -p data logs
+          # ssh-copy-id makes its temp dir under ~/.ssh; the image has one, a fresh runner does not.
+          install -d -m 700 ~/.ssh
           uvicorn app.main:app --host 0.0.0.0 --port 8082 > logs/backend.log 2>&1 &
         env:
           DATA_DIR: ${{ github.workspace }}/data

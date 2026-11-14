@@ -4,6 +4,8 @@
 # Deploy to Server logs in with a password, so this user (and only this user)
 # may use password auth.
 set -euo pipefail
+PS4='+ $(date +%T) '
+set -x
 
 E2E_SSH_USER="${E2E_SSH_USER:-borge2e}"
 E2E_SSH_PASSWORD="${E2E_SSH_PASSWORD:-borg-e2e-password}"
