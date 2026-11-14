@@ -2713,6 +2713,56 @@
         "delete": "Schlüssel löschen"
       }
     },
+    "extraKeys": {
+      "title": "Weitere SSH-Schlüssel",
+      "description": "Gib einer Remote-Maschine einen eigenen Schlüssel, zum Beispiel einen Schlüssel pro Repository auf einem Borgserver. Verbindungen nutzen den Systemschlüssel, solange du keinen anderen wählst.",
+      "add": "Schlüssel hinzufügen",
+      "empty": "Noch keine weiteren Schlüssel.",
+      "connections_one": "{{count}} Verbindung",
+      "connections_other": "{{count}} Verbindungen",
+      "unused": "Noch nicht verwendet",
+      "mirrors_one": "{{count}} Cloud Mirror",
+      "mirrors_other": "{{count}} Cloud Mirrors",
+      "copyPublicKey": "Öffentlichen Schlüssel kopieren",
+      "delete": "Schlüssel löschen",
+      "picker": {
+        "label": "SSH-Schlüssel",
+        "system": "Systemschlüssel",
+        "changeHint": "Die Verbindung schlägt fehl, bis der neue Schlüssel auf dem Server liegt. Nutze nach dem Speichern „Schlüssel bereitstellen“ an der Verbindung."
+      },
+      "addDialog": {
+        "title": "SSH-Schlüssel hinzufügen",
+        "tabGenerate": "Generieren",
+        "tabImport": "Aus Pfad importieren",
+        "tabPaste": "Einfügen",
+        "keyName": "Schlüsselname",
+        "keyNamePlaceholder": "borgserver-repo1",
+        "keyType": "Schlüsseltyp",
+        "privateKeyPath": "Pfad zum privaten Schlüssel",
+        "privateKeyPathHelper": "Absoluter Pfad zur Datei mit dem privaten Schlüssel auf dem Borg-UI-Host",
+        "publicKeyPath": "Pfad zum öffentlichen Schlüssel (optional)",
+        "publicKeyPathHelper": "Leer lassen, um den Pfad des privaten Schlüssels plus .pub zu verwenden",
+        "privateKey": "Privater Schlüssel",
+        "privateKeyHelper": "Füge den privaten Schlüssel ein. Schlüssel mit Passphrase werden nicht unterstützt.",
+        "submit": "Hinzufügen",
+        "submitting": "Wird hinzugefügt..."
+      },
+      "deleteDialog": {
+        "title": "SSH-Schlüssel löschen",
+        "confirm": "Schlüssel \"{{name}}\" löschen? Das kann nicht rückgängig gemacht werden.",
+        "inUse": "Diese Verbindungen verwenden diesen Schlüssel. Stelle sie zuerst auf einen anderen Schlüssel um.",
+        "inUseByMirror_one": "Cloud Mirror von {{count}} Repository nutzt diesen Schlüssel. Nach dem Löschen nutzt dieser Mirror den Schlüssel seiner Verbindung.",
+        "inUseByMirror_other": "Cloud Mirror von {{count}} Repositories nutzt diesen Schlüssel. Nach dem Löschen nutzen diese Mirrors den Schlüssel ihrer Verbindung.",
+        "delete": "Löschen",
+        "deleting": "Wird gelöscht..."
+      },
+      "toasts": {
+        "added": "SSH-Schlüssel hinzugefügt",
+        "addFailed": "SSH-Schlüssel konnte nicht hinzugefügt werden",
+        "deleted": "SSH-Schlüssel gelöscht",
+        "listFailed": "SSH-Schlüssel konnten nicht geladen werden. Bitte die Seite neu laden und erneut versuchen."
+      }
+    },
     "generateDialog": {
       "title": "System-SSH-Schlüssel generieren",
       "info": "Dies erzeugt ein neues SSH-Schlüsselpaar für dein System. Es kann immer nur einen Systemschlüssel geben.",
@@ -2786,7 +2836,7 @@
       "title": "Manuelle Verbindung hinzufügen",
       "instructions": {
         "title": "Vor dem Hinzufügen dieser Verbindung:",
-        "step1": "Öffentlichen Schlüssel von oben kopieren",
+        "step1": "Öffentlichen Schlüssel des verwendeten SSH-Schlüssels kopieren (Kopier-Schaltfläche auf seiner Schlüsselkarte)",
         "step2": "Per SSH auf deinen Server verbinden",
         "step3": "Zu ~/.ssh/authorized_keys hinzufügen"
       },
@@ -2826,7 +2876,7 @@
     },
     "redeployDialog": {
       "title": "SSH-Schlüssel auf Verbindung bereitstellen",
-      "info": "Dies stellt deinen aktuellen System-SSH-Schlüssel auf dieser Verbindung bereit. Du musst das Passwort zur Authentifizierung angeben.",
+      "info": "Dies trägt den SSH-Schlüssel der Verbindung in authorized_keys auf dem Server ein. Du musst das Passwort zur Authentifizierung angeben.",
       "passwordPlaceholder": "SSH-Passwort eingeben",
       "passwordHelper": "Das Passwort wird verwendet, um den öffentlichen Schlüssel in authorized_keys bereitzustellen"
     },
@@ -6109,9 +6159,11 @@
         "failedGenerateKey": "SSH-Schlüssel konnte nicht generiert werden: {{error}}",
         "invalidKeyType": "Ungültiger Schlüsseltyp. Muss einer der folgenden sein: {{types}}",
         "invalidPrivateKeyFormat": "Ungültiges Format des privaten Schlüssels",
+        "privateKeyPassphraseNotSupported": "Dieser Schlüssel ist mit einer Passphrase geschützt. Entfernen Sie die Passphrase (ssh-keygen -p) und fügen Sie ihn erneut ein.",
         "invalidPublicKeyFormat": "Ungültiges Format des öffentlichen Schlüssels",
         "keyDeployFailed": "SSH-Schlüssel konnte nicht bereitgestellt werden: {{error}}",
         "keyGeneratedButDeployFailed": "SSH-Schlüssel generiert, aber Bereitstellung fehlgeschlagen: {{error}}",
+        "keyInUse": "Dieser SSH-Schlüssel wird verwendet von: {{connections}}. Stelle diese Verbindungen zuerst auf einen anderen Schlüssel um.",
         "keyNameAlreadyExists": "SSH-Schlüsselname bereits vorhanden",
         "keyRemoveFailed": "SSH-Schlüssel konnte nicht entfernt werden: {{error}}",
         "noSystemKeyFound": "Kein System-SSH-Schlüssel gefunden",

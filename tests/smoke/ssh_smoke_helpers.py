@@ -90,3 +90,54 @@ if public_key not in existing:
         )
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(f"Unable to update authorized_keys via sudo: {exc}") from exc
+
+
+def _read_authorized_keys(auth_keys_path: Path) -> str:
+    try:
+        return (
+            auth_keys_path.read_text(encoding="utf-8")
+            if auth_keys_path.exists()
+            else ""
+        )
+    except PermissionError:
+        return subprocess.run(
+            ["sudo", "cat", str(auth_keys_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+
+
+def _write_authorized_keys(auth_keys_path: Path, content: str) -> None:
+    try:
+        auth_keys_path.write_text(content, encoding="utf-8")
+    except PermissionError:
+        subprocess.run(
+            ["sudo", "tee", str(auth_keys_path)],
+            input=content,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+
+def replace_authorized_keys(auth_keys_path: Path, content: str) -> str:
+    """Overwrite authorized_keys, using sudo when needed. Returns the old content.
+
+    The old content is read before anything is written, and put back if the
+    write fails. If putting it back also fails, a RuntimeError says the file
+    may be truncated.
+    """
+    previous = _read_authorized_keys(auth_keys_path)
+    try:
+        _write_authorized_keys(auth_keys_path, content)
+    except BaseException as write_error:
+        try:
+            _write_authorized_keys(auth_keys_path, previous)
+        except Exception as restore_error:
+            raise RuntimeError(
+                f"{auth_keys_path} may be truncated: replacing it failed "
+                f"({write_error!r}) and restoring it failed ({restore_error!r})"
+            ) from write_error
+        raise
+    return previous
