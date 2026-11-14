@@ -323,6 +323,20 @@ def test_shared_limit_maintenance_waits_for_a_backup_slot(db, repo, settings):
 
 
 @pytest.mark.unit
+def test_shared_limit_maintenance_needs_room_in_both_pools(db, repo, settings):
+    """A manual compact must not start while a scheduled backup fills the
+    scheduled pool: once running it would count in that pool too."""
+    settings.max_concurrent_backups = 1
+    settings.max_concurrent_scheduled_backups = 1
+    settings.maintenance_counts_toward_backup_limit = True
+    db.commit()
+    other = _other_repo(db)
+    _running(db, "backup", repo, trigger="schedule")
+    compact = enqueue(db, "compact", repository_id=other.id, trigger="manual")
+    assert lanes.global_slot_available(db, compact, settings) is False
+
+
+@pytest.mark.unit
 def test_shared_limit_a_queued_plan_backup_does_not_hold_its_own_slot(
     db, repo, settings
 ):

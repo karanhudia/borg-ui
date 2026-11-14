@@ -243,13 +243,16 @@ def _maintenance_slot_available(
             return False
     if not _setting(settings, "maintenance_counts_toward_backup_limit"):
         return True
-    if op.trigger == "schedule":
-        limit = _setting(settings, "max_concurrent_scheduled_backups")
-        triggers = ("schedule",)
-    else:
-        limit = _setting(settings, "max_concurrent_backups")
-        triggers = _NON_SCHEDULED_BACKUP_TRIGGERS
-    return running_backup_count(db, triggers=triggers, include_maintenance=True) < limit
+    # Running maintenance takes a slot in every pool, so it needs room in both.
+    pools = (
+        ("max_concurrent_scheduled_backups", ("schedule",)),
+        ("max_concurrent_backups", _NON_SCHEDULED_BACKUP_TRIGGERS),
+    )
+    return all(
+        running_backup_count(db, triggers=triggers, include_maintenance=True)
+        < _setting(settings, key)
+        for key, triggers in pools
+    )
 
 
 def global_slot_available(
