@@ -125,7 +125,8 @@ def replace_authorized_keys(auth_keys_path: Path, content: str) -> str:
     """Overwrite authorized_keys, using sudo when needed. Returns the old content.
 
     The old content is read before anything is written, and put back if the
-    write fails part way, so the account is never left with a truncated file.
+    write fails. If putting it back also fails, a RuntimeError says the file
+    may be truncated.
     """
     previous = _read_authorized_keys(auth_keys_path)
     try:
