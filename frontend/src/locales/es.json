@@ -2751,8 +2751,8 @@
         "title": "Eliminar clave SSH",
         "confirm": "¿Eliminar la clave \"{{name}}\"? Esta acción no se puede deshacer.",
         "inUse": "Estas conexiones usan esta clave. Cámbialas primero a otra clave.",
-        "inUseByMirror_one": "Cloud Mirror de {{count}} repositorio usa esta clave. Elige primero otra clave para ese mirror.",
-        "inUseByMirror_other": "Cloud Mirror de {{count}} repositorios usa esta clave. Elige primero otra clave para esos mirrors.",
+        "inUseByMirror_one": "Cloud Mirror de {{count}} repositorio usa esta clave. Al eliminarla, ese mirror pasa a usar la clave de su conexión.",
+        "inUseByMirror_other": "Cloud Mirror de {{count}} repositorios usa esta clave. Al eliminarla, esos mirrors pasan a usar la clave de su conexión.",
         "delete": "Eliminar",
         "deleting": "Eliminando..."
       },
@@ -6160,7 +6160,6 @@
         "keyDeployFailed": "Error al desplegar la clave SSH: {{error}}",
         "keyGeneratedButDeployFailed": "Clave SSH generada pero el despliegue falló: {{error}}",
         "keyInUse": "Esta clave SSH la usan: {{connections}}. Cambia primero esas conexiones a otra clave.",
-        "keyInUseByMirror": "Cloud Mirror de estos repositorios usa esta clave SSH: {{repositories}}. Elige primero otra clave para esos mirrors.",
         "keyNameAlreadyExists": "El nombre de la clave SSH ya existe",
         "keyRemoveFailed": "Error al eliminar la clave SSH: {{error}}",
         "noSystemKeyFound": "No se encontró clave SSH del sistema",

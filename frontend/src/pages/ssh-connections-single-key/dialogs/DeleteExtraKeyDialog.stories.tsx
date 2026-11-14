@@ -45,7 +45,7 @@ export const InUse: Story = {
   },
 }
 
-/** A Cloud Mirror signs in with the key, so deleting is blocked even with no connections. */
+/** A Cloud Mirror signs in with the key; deleting is allowed and the mirror falls back to its connection's key. */
 export const InUseByCloudMirror: Story = {
   args: { sshKey: { ...sshKey, connection_count: 0, sftp_repository_count: 2 } },
 }

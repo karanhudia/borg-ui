@@ -2751,8 +2751,8 @@
         "title": "Elimina chiave SSH",
         "confirm": "Eliminare la chiave \"{{name}}\"? L'operazione non può essere annullata.",
         "inUse": "Queste connessioni usano questa chiave. Passale prima a un'altra chiave.",
-        "inUseByMirror_one": "Cloud Mirror di {{count}} repository usa questa chiave. Scegli prima un'altra chiave per quel mirror.",
-        "inUseByMirror_other": "Cloud Mirror di {{count}} repository usa questa chiave. Scegli prima un'altra chiave per quei mirror.",
+        "inUseByMirror_one": "Cloud Mirror di {{count}} repository usa questa chiave. Eliminandola, quel mirror userà la chiave della sua connessione.",
+        "inUseByMirror_other": "Cloud Mirror di {{count}} repository usa questa chiave. Eliminandola, quei mirror useranno la chiave della loro connessione.",
         "delete": "Elimina",
         "deleting": "Eliminazione..."
       },
@@ -6160,7 +6160,6 @@
         "keyDeployFailed": "Impossibile distribuire la chiave SSH: {{error}}",
         "keyGeneratedButDeployFailed": "Chiave SSH generata ma distribuzione fallita: {{error}}",
         "keyInUse": "Questa chiave SSH è usata da: {{connections}}. Passa prima quelle connessioni a un'altra chiave.",
-        "keyInUseByMirror": "Cloud Mirror di questi repository usa questa chiave SSH: {{repositories}}. Scegli prima un'altra chiave per quei mirror.",
         "keyNameAlreadyExists": "Nome chiave SSH già esistente",
         "keyRemoveFailed": "Impossibile rimuovere la chiave SSH: {{error}}",
         "noSystemKeyFound": "Nessuna chiave SSH di sistema trovata",

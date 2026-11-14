@@ -2751,8 +2751,8 @@
         "title": "Delete SSH Key",
         "confirm": "Delete the key \"{{name}}\"? This cannot be undone.",
         "inUse": "These connections use this key. Switch them to another key first.",
-        "inUseByMirror_one": "Cloud Mirror on {{count}} repository uses this key. Pick another key for that mirror first.",
-        "inUseByMirror_other": "Cloud Mirror on {{count}} repositories uses this key. Pick another key for those mirrors first.",
+        "inUseByMirror_one": "Cloud Mirror on {{count}} repository uses this key. Deleting it switches that mirror to its connection's key.",
+        "inUseByMirror_other": "Cloud Mirror on {{count}} repositories uses this key. Deleting it switches those mirrors to their connection's key.",
         "delete": "Delete",
         "deleting": "Deleting..."
       },
@@ -6160,7 +6160,6 @@
         "keyDeployFailed": "Failed to deploy SSH key: {{error}}",
         "keyGeneratedButDeployFailed": "SSH key generated but deployment failed: {{error}}",
         "keyInUse": "This SSH key is used by: {{connections}}. Switch those connections to another key first.",
-        "keyInUseByMirror": "Cloud Mirror on these repositories uses this SSH key: {{repositories}}. Pick another key for those mirrors first.",
         "keyNameAlreadyExists": "SSH key name already exists",
         "keyRemoveFailed": "Failed to remove SSH key: {{error}}",
         "noSystemKeyFound": "No system SSH key found",
