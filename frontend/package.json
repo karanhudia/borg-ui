@@ -78,7 +78,8 @@
     "check:locales": "node ../scripts/check-locale-parity.js",
     "release": "cd .. && ./scripts/release.sh",
     "start:dev": "cd .. && ./scripts/dev.sh",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:e2e": "playwright test -c playwright.e2e.config.ts"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx,js,jsx,json,css,md}": [

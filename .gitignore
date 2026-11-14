@@ -8,6 +8,7 @@
 /frontend/visual-report
 /frontend/storybook-snapshots
 /frontend/argos-screenshots
+/frontend/e2e-results
 /updates-worker/node_modules
 /updates-worker/.wrangler
 
