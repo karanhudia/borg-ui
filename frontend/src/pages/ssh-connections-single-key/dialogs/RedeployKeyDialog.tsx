@@ -61,6 +61,12 @@ export function RedeployKeyDialog({
               <Typography variant="body2">
                 <strong>{t('sshConnections.deployDialog.port')}:</strong> {selectedConnection.port}
               </Typography>
+              {selectedConnection.ssh_key_name && (
+                <Typography variant="body2">
+                  <strong>{t('sshConnections.extraKeys.picker.label')}:</strong>{' '}
+                  {selectedConnection.ssh_key_name}
+                </Typography>
+              )}
             </Box>
           )}
           <TextField

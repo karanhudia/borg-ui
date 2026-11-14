@@ -200,7 +200,10 @@ export function SSHConnectionsSingleKeyView({
         setDeleteKeyDialogOpen={setDeleteKeyDialogOpen}
         onCopyPublicKey={handleCopyPublicKey}
       />
-      {keyExists && canManageSsh && <ExtraKeysSection keys={sshKeys} connections={connections} />}
+      {/* Extra keys stay manageable after the system key is deleted. */}
+      {canManageSsh && (keyExists || sshKeys.some((key) => !key.is_system_key)) && (
+        <ExtraKeysSection keys={sshKeys} connections={connections} />
+      )}
       <RemoteConnectionsSection
         t={t}
         theme={theme}

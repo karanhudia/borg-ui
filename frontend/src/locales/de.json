@@ -2726,7 +2726,7 @@
       "picker": {
         "label": "SSH-Schlüssel",
         "system": "Systemschlüssel",
-        "changeHint": "Beim Wechsel des Schlüssels gilt die Verbindung als ungetestet. Stelle den neuen Schlüssel danach auf dem Server bereit."
+        "changeHint": "Die Verbindung schlägt fehl, bis der neue Schlüssel auf dem Server liegt. Nutze nach dem Speichern „Schlüssel bereitstellen“ an der Verbindung."
       },
       "addDialog": {
         "title": "SSH-Schlüssel hinzufügen",
@@ -2754,7 +2754,9 @@
       },
       "toasts": {
         "added": "SSH-Schlüssel hinzugefügt",
-        "addFailed": "SSH-Schlüssel konnte nicht hinzugefügt werden"
+        "addFailed": "SSH-Schlüssel konnte nicht hinzugefügt werden",
+        "deleted": "SSH-Schlüssel gelöscht",
+        "listFailed": "SSH-Schlüssel konnten nicht geladen werden. Bitte die Seite neu laden und erneut versuchen."
       }
     },
     "generateDialog": {
@@ -2870,7 +2872,7 @@
     },
     "redeployDialog": {
       "title": "SSH-Schlüssel auf Verbindung bereitstellen",
-      "info": "Dies stellt deinen aktuellen System-SSH-Schlüssel auf dieser Verbindung bereit. Du musst das Passwort zur Authentifizierung angeben.",
+      "info": "Dies trägt den SSH-Schlüssel der Verbindung in authorized_keys auf dem Server ein. Du musst das Passwort zur Authentifizierung angeben.",
       "passwordPlaceholder": "SSH-Passwort eingeben",
       "passwordHelper": "Das Passwort wird verwendet, um den öffentlichen Schlüssel in authorized_keys bereitzustellen"
     },
@@ -6154,6 +6156,7 @@
         "keyDeployFailed": "SSH-Schlüssel konnte nicht bereitgestellt werden: {{error}}",
         "keyGeneratedButDeployFailed": "SSH-Schlüssel generiert, aber Bereitstellung fehlgeschlagen: {{error}}",
         "keyInUse": "Dieser SSH-Schlüssel wird verwendet von: {{connections}}. Stelle diese Verbindungen zuerst auf einen anderen Schlüssel um.",
+        "keyInUseByMirror": "Cloud Mirror dieser Repositories nutzt diesen SSH-Schlüssel: {{repositories}}. Bitte zuerst einen anderen Schlüssel für diese Mirrors auswählen.",
         "keyNameAlreadyExists": "SSH-Schlüsselname bereits vorhanden",
         "keyRemoveFailed": "SSH-Schlüssel konnte nicht entfernt werden: {{error}}",
         "noSystemKeyFound": "Kein System-SSH-Schlüssel gefunden",

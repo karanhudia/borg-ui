@@ -286,6 +286,8 @@ describe('SSHConnectionsSingleKey', () => {
         description: 'System SSH key for all remote connections',
       })
     })
+    // The key list picks up the new system key without waiting for a refetch.
+    await waitFor(() => expect(sshKeysAPI.getSSHKeys).toHaveBeenCalledTimes(2))
   }, 30000)
 
   it('deploys the system key with the expected connection payload', async () => {
@@ -296,7 +298,7 @@ describe('SSHConnectionsSingleKey', () => {
     await screen.findByText('Remote Machines')
     fireEvent.click(
       screen.getByRole('button', {
-        name: /automatically deploy ssh key using password authentication/i,
+        name: /^deploy to server$/i,
       })
     )
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
@@ -628,7 +630,7 @@ describe('SSHConnectionsSingleKey', () => {
     await screen.findByText('Remote Machines')
     fireEvent.click(
       screen.getByRole('button', {
-        name: /add a connection for a manually deployed ssh key/i,
+        name: /^add manual connection$/i,
       })
     )
     const dialog = await screen.findByRole('dialog', { name: /add manual connection/i })
@@ -856,9 +858,7 @@ describe('SSHConnectionsSingleKey', () => {
     renderWithProviders(<SSHConnectionsSingleKey />)
 
     await screen.findByText('borgserver-repo1')
-    await user.click(
-      screen.getByRole('button', { name: /add a connection for a manually deployed ssh key/i })
-    )
+    await user.click(screen.getByRole('button', { name: /^add manual connection$/i }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('combobox', { name: /ssh key/i }))
     await user.click(await screen.findByRole('option', { name: /borgserver-repo1/ }))
@@ -870,6 +870,115 @@ describe('SSHConnectionsSingleKey', () => {
 
     await rtlWaitFor(() => expect(sshKeysAPI.testSSHConnection).toHaveBeenCalledTimes(1))
     expect(sshKeysAPI.testSSHConnection).toHaveBeenCalledWith(9, {
+      host: 'repo1.example',
+      username: 'borg',
+      port: 22,
+    })
+  }, 30000)
+
+  it('keeps extra keys manageable after the system key is deleted', async () => {
+    mockState.systemKeyResponse = { data: { exists: false } }
+    mockState.sshKeysResponse = {
+      data: {
+        ssh_keys: [
+          {
+            id: 9,
+            name: 'borgserver-repo1',
+            key_type: 'ed25519',
+            is_system_key: false,
+            connection_count: 0,
+          },
+        ],
+      },
+    }
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    expect(await screen.findByText('borgserver-repo1')).toBeInTheDocument()
+  })
+
+  it('refuses to add a connection while the key list cannot load', async () => {
+    const { sshKeysAPI } = await import('../../services/api')
+    const { toast } = await import('react-hot-toast')
+    const loadKeys = vi.mocked(sshKeysAPI.getSSHKeys).getMockImplementation()
+    vi.mocked(sshKeysAPI.getSSHKeys).mockRejectedValue(new Error('boom'))
+    try {
+      const user = userEvent.setup()
+
+      renderWithProviders(<SSHConnectionsSingleKey />)
+
+      await rtlWaitFor(() => expect(sshKeysAPI.getSSHKeys).toHaveBeenCalled())
+      await user.click(await screen.findByRole('button', { name: /^add manual connection$/i }))
+      const dialog = await screen.findByRole('dialog')
+      fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+        target: { value: 'repo1.example' },
+      })
+      fireEvent.change(within(dialog).getByLabelText(/^username$/i), { target: { value: 'borg' } })
+      await rtlWaitFor(async () => {
+        await user.click(within(dialog).getByRole('button', { name: /test & add connection/i }))
+        expect(toast.error).toHaveBeenCalledWith(
+          'Could not load SSH keys. Reload the page and try again.'
+        )
+      })
+      expect(sshKeysAPI.testSSHConnection).not.toHaveBeenCalled()
+    } finally {
+      vi.mocked(sshKeysAPI.getSSHKeys).mockImplementation(loadKeys!)
+    }
+  }, 30000)
+
+  it('falls back to the system key when the picked key was deleted', async () => {
+    const { sshKeysAPI } = await import('../../services/api')
+    const systemKeySummary = {
+      id: 7,
+      name: 'System SSH Key',
+      key_type: 'ed25519',
+      is_system_key: true,
+      connection_count: 1,
+    }
+    mockState.sshKeysResponse = {
+      data: {
+        ssh_keys: [
+          systemKeySummary,
+          {
+            id: 9,
+            name: 'borgserver-repo1',
+            key_type: 'ed25519',
+            is_system_key: false,
+            connection_count: 0,
+          },
+        ],
+      },
+    }
+    const user = userEvent.setup()
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    await screen.findByText('borgserver-repo1')
+    await user.click(screen.getByRole('button', { name: /^add manual connection$/i }))
+    let dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('combobox', { name: /ssh key/i }))
+    await user.click(await screen.findByRole('option', { name: /borgserver-repo1/ }))
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }))
+    await rtlWaitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    mockState.sshKeysResponse = { data: { ssh_keys: [systemKeySummary] } }
+    await user.click(screen.getByRole('button', { name: /Delete key: borgserver-repo1/ }))
+    dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: /^delete$/i }))
+    await rtlWaitFor(() => expect(screen.queryByText('borgserver-repo1')).not.toBeInTheDocument())
+    await rtlWaitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /^add manual connection$/i }))
+    dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('combobox', { name: /ssh key/i })).not.toBeInTheDocument()
+    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+      target: { value: 'repo1.example' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^username$/i), { target: { value: 'borg' } })
+    await user.click(within(dialog).getByRole('button', { name: /test & add connection/i }))
+
+    await rtlWaitFor(() => expect(sshKeysAPI.testSSHConnection).toHaveBeenCalledTimes(1))
+    expect(sshKeysAPI.testSSHConnection).toHaveBeenCalledWith(7, {
       host: 'repo1.example',
       username: 'borg',
       port: 22,

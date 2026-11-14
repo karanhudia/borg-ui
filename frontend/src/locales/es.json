@@ -2726,7 +2726,7 @@
       "picker": {
         "label": "Clave SSH",
         "system": "Clave del sistema",
-        "changeHint": "Al cambiar la clave, la conexión pasa a estar sin probar. Despliega después la nueva clave en el servidor."
+        "changeHint": "La conexión fallará hasta que la nueva clave esté en el servidor. Después de guardar, usa Desplegar clave en la conexión."
       },
       "addDialog": {
         "title": "Añadir clave SSH",
@@ -2754,7 +2754,9 @@
       },
       "toasts": {
         "added": "Clave SSH añadida",
-        "addFailed": "No se pudo añadir la clave SSH"
+        "addFailed": "No se pudo añadir la clave SSH",
+        "deleted": "Clave SSH eliminada",
+        "listFailed": "No se pudieron cargar las claves SSH. Recarga la página e inténtalo de nuevo."
       }
     },
     "generateDialog": {
@@ -2870,7 +2872,7 @@
     },
     "redeployDialog": {
       "title": "Desplegar clave SSH en la conexión",
-      "info": "Esto desplegará tu clave SSH actual del sistema en esta conexión. Deberás proporcionar la contraseña para autenticarte.",
+      "info": "Esto añade la clave SSH de la conexión a authorized_keys en el servidor. Deberás proporcionar la contraseña para autenticarte.",
       "passwordPlaceholder": "Introduce la contraseña SSH",
       "passwordHelper": "La contraseña se usa para desplegar la clave pública en authorized_keys"
     },
@@ -6154,6 +6156,7 @@
         "keyDeployFailed": "Error al desplegar la clave SSH: {{error}}",
         "keyGeneratedButDeployFailed": "Clave SSH generada pero el despliegue falló: {{error}}",
         "keyInUse": "Esta clave SSH la usan: {{connections}}. Cambia primero esas conexiones a otra clave.",
+        "keyInUseByMirror": "Cloud Mirror de estos repositorios usa esta clave SSH: {{repositories}}. Elige primero otra clave para esos mirrors.",
         "keyNameAlreadyExists": "El nombre de la clave SSH ya existe",
         "keyRemoveFailed": "Error al eliminar la clave SSH: {{error}}",
         "noSystemKeyFound": "No se encontró clave SSH del sistema",

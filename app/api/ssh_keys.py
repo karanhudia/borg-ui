@@ -2699,6 +2699,25 @@ async def delete_ssh_key(
                 },
             )
 
+        if not ssh_key.is_system_key:
+            mirror_repositories = [
+                name
+                for (name,) in db.query(Repository.name)
+                .join(
+                    RepositoryStorage, RepositoryStorage.repository_id == Repository.id
+                )
+                .filter(RepositoryStorage.sftp_ssh_key_id == key_id)
+                .order_by(Repository.name)
+            ]
+            if mirror_repositories:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "key": "backend.errors.ssh.keyInUseByMirror",
+                        "params": {"repositories": mirror_repositories},
+                    },
+                )
+
         key_name = ssh_key.name
         key_type = ssh_key.key_type
         connection_count = len(ssh_key.connections)
@@ -2738,6 +2757,11 @@ async def delete_ssh_key(
         is_system_key = ssh_key.is_system_key
         db.delete(ssh_key)
         db.commit()
+
+        # Deploy and test leave a decrypted copy per host and username.
+        for deployed in Path(settings.ssh_keys_dir).glob(f"key_{key_id}_*"):
+            with contextlib.suppress(OSError):
+                deployed.unlink()
 
         # Remove key files from filesystem. Only the system key is written
         # there; an extra key sharing its type must not delete those files.

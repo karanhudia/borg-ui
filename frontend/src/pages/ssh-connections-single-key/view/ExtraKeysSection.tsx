@@ -57,7 +57,6 @@ export function ExtraKeysSection({ keys, connections }: ExtraKeysSectionProps) {
       setAddOpen(false)
     },
     onError: (error: unknown) => {
-      console.error('Failed to add SSH key:', error)
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.extraKeys.toasts.addFailed')
@@ -68,14 +67,13 @@ export function ExtraKeysSection({ keys, connections }: ExtraKeysSectionProps) {
   const deleteMutation = useMutation({
     mutationFn: (keyId: number) => sshKeysAPI.deleteSSHKey(keyId),
     onSuccess: async () => {
-      toast.success(t('sshConnections.toasts.keyDeleted'))
+      toast.success(t('sshConnections.extraKeys.toasts.deleted'))
       track(EventCategory.SSH, EventAction.DELETE, { resource: 'key' })
       // The dialog stays open until the list no longer shows the key (#1197).
       await queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })
       setKeyToDelete(null)
     },
     onError: (error: unknown) => {
-      console.error('Failed to delete SSH key:', error)
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) || t('sshConnections.toasts.keyDeleteFailed')
       )

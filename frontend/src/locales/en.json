@@ -2726,7 +2726,7 @@
       "picker": {
         "label": "SSH key",
         "system": "System key",
-        "changeHint": "Changing the key marks the connection as untested. Deploy the new key to the server afterwards."
+        "changeHint": "The connection fails its test until the new key is on the server. Use Deploy Key on the connection after saving."
       },
       "addDialog": {
         "title": "Add SSH Key",
@@ -2754,7 +2754,9 @@
       },
       "toasts": {
         "added": "SSH key added",
-        "addFailed": "Failed to add SSH key"
+        "addFailed": "Failed to add SSH key",
+        "deleted": "SSH key deleted",
+        "listFailed": "Could not load SSH keys. Reload the page and try again."
       }
     },
     "generateDialog": {
@@ -2870,7 +2872,7 @@
     },
     "redeployDialog": {
       "title": "Deploy SSH Key to Connection",
-      "info": "This will deploy your current system SSH key to this connection. You'll need to provide the password to authenticate.",
+      "info": "This adds the connection's SSH key to authorized_keys on the server. You'll need to provide the password to authenticate.",
       "passwordPlaceholder": "Enter SSH password",
       "passwordHelper": "Password is used to deploy the public key to authorized_keys"
     },
@@ -6154,6 +6156,7 @@
         "keyDeployFailed": "Failed to deploy SSH key: {{error}}",
         "keyGeneratedButDeployFailed": "SSH key generated but deployment failed: {{error}}",
         "keyInUse": "This SSH key is used by: {{connections}}. Switch those connections to another key first.",
+        "keyInUseByMirror": "Cloud Mirror on these repositories uses this SSH key: {{repositories}}. Pick another key for those mirrors first.",
         "keyNameAlreadyExists": "SSH key name already exists",
         "keyRemoveFailed": "Failed to remove SSH key: {{error}}",
         "noSystemKeyFound": "No system SSH key found",

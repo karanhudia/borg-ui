@@ -56,7 +56,10 @@ export function EditConnectionDialog({
       <DialogTitle>{t('sshConnections.editConnectionDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          {sshKeys.length > 1 && (
+          {/* Also shown for one key the connection is not on yet, e.g. after
+              its key was deleted, so it can be moved to the remaining key. */}
+          {(sshKeys.length > 1 ||
+            (sshKeys.length === 1 && editConnectionForm.ssh_key_id !== sshKeys[0].id)) && (
             <Box>
               <SshKeySelect
                 value={editConnectionForm.ssh_key_id ?? ''}

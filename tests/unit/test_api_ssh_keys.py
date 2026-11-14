@@ -689,6 +689,39 @@ class TestExtraSSHKeys:
         assert response.status_code == 200, response.json()
         assert system_file.exists()
 
+    def test_delete_key_removes_its_deployed_key_files(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+    ):
+        keys_dir = tmp_path / "ssh_keys"
+        keys_dir.mkdir()
+        monkeypatch.setattr(ssh_keys_api.settings, "ssh_keys_dir", str(keys_dir))
+        monkeypatch.setattr(ssh_keys_api.settings, "ssh_home_dir", str(tmp_path))
+        extra = SSHKey(
+            name="extra",
+            key_type="ed25519",
+            public_key="ssh-ed25519 AAAA",
+            private_key="x",
+        )
+        test_db.add(extra)
+        test_db.commit()
+        # Deploy writes one private and .pub pair per host and username.
+        deployed = [
+            keys_dir / f"key_{extra.id}_aaaa1111",
+            keys_dir / f"key_{extra.id}_bbbb2222",
+        ]
+        for path in deployed:
+            path.write_text("private")
+            path.with_name(path.name + ".pub").write_text("public")
+        other = keys_dir / f"key_{extra.id}0_cccc3333"
+        other.write_text("another key")
+
+        response = test_client.delete(
+            f"/api/ssh-keys/{extra.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200, response.json()
+        assert sorted(p.name for p in keys_dir.iterdir()) == [other.name]
+
 
 class TestRunDfCommand:
     """Test _run_df_command helper function"""

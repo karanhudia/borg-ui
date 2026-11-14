@@ -4,6 +4,7 @@ import { renderWithProviders, screen, userEvent } from '../../test/test-utils'
 import { AddKeyDialog } from './dialogs/AddKeyDialog'
 import { DeleteExtraKeyDialog } from './dialogs/DeleteExtraKeyDialog'
 import { EditConnectionDialog } from './dialogs/EditConnectionDialog'
+import { RedeployKeyDialog } from './dialogs/RedeployKeyDialog'
 import { TestConnectionDialog } from './dialogs/TestConnectionDialog'
 import { createEditConnectionForm, createTestConnectionForm } from './formDefaults'
 import type { SSHConnection, SSHKeySummary } from './types'
@@ -173,7 +174,7 @@ describe('DeleteExtraKeyDialog', () => {
 })
 
 describe('EditConnectionDialog key picker', () => {
-  const renderDialog = (sshKeys: SSHKeySummary[]) =>
+  const renderDialog = (sshKeys: SSHKeySummary[], ssh_key_id: number | undefined = 1) =>
     renderWithProviders(
       <EditConnectionDialog
         t={i18n.t.bind(i18n)}
@@ -181,7 +182,7 @@ describe('EditConnectionDialog key picker', () => {
         setOpen={vi.fn()}
         setSelectedConnection={vi.fn()}
         sshKeys={sshKeys}
-        editConnectionForm={{ ...createEditConnectionForm(), ssh_key_id: 1 }}
+        editConnectionForm={{ ...createEditConnectionForm(), ssh_key_id }}
         setEditConnectionForm={vi.fn()}
         setHostError={vi.fn()}
         pending={false}
@@ -198,8 +199,13 @@ describe('EditConnectionDialog key picker', () => {
     renderDialog([systemKey, extraKey])
     expect(screen.getAllByText('SSH key').length).toBeGreaterThan(0)
     expect(
-      screen.getByText(/Changing the key marks the connection as untested/)
+      screen.getByText(/fails its test until the new key is on the server/)
     ).toBeInTheDocument()
+  })
+
+  it('shows for a connection whose key was deleted, so it can take the remaining key', () => {
+    renderDialog([extraKey], undefined)
+    expect(screen.getAllByText('SSH key').length).toBeGreaterThan(0)
   })
 })
 
@@ -228,5 +234,25 @@ describe('TestConnectionDialog key picker', () => {
   it('shows once there is a second key', () => {
     renderDialog([systemKey, extraKey])
     expect(screen.getAllByText('SSH key').length).toBeGreaterThan(0)
+  })
+})
+
+describe('RedeployKeyDialog', () => {
+  it('names the key the connection uses', () => {
+    renderWithProviders(
+      <RedeployKeyDialog
+        t={i18n.t.bind(i18n)}
+        open
+        setOpen={vi.fn()}
+        selectedConnection={connection}
+        setSelectedConnection={vi.fn()}
+        redeployPassword=""
+        setRedeployPassword={vi.fn()}
+        pending={false}
+        onConfirmRedeploy={vi.fn()}
+      />
+    )
+    expect(screen.getByText('borgserver-repo1')).toBeInTheDocument()
+    expect(screen.queryByText(/system SSH key/)).not.toBeInTheDocument()
   })
 })

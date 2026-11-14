@@ -90,7 +90,21 @@ export default function SSHConnectionsSingleKey() {
     refetchInterval: 30000,
   })
 
-  const { keys: sshKeys } = useSshKeys(canManageSsh)
+  const { keys: sshKeys, isError: sshKeysFailed } = useSshKeys(canManageSsh)
+
+  // A key picked earlier and then deleted must not stay selected: with only the
+  // system key left the picker hides, so the user could not change it.
+  const sshKeyIds = sshKeys.map((key) => key.id).join(',')
+  useEffect(() => {
+    if (!sshKeyIds) return
+    const known = new Set(sshKeyIds.split(',').map(Number))
+    const dropStale = <T extends { ssh_key_id?: number }>(form: T): T =>
+      form.ssh_key_id !== undefined && !known.has(form.ssh_key_id)
+        ? { ...form, ssh_key_id: undefined }
+        : form
+    setConnectionForm(dropStale)
+    setTestConnectionForm(dropStale)
+  }, [sshKeyIds])
 
   const systemKey = systemKeyData?.data?.ssh_key
   const keyExists = systemKeyData?.data?.exists
@@ -103,6 +117,7 @@ export default function SSHConnectionsSingleKey() {
     onSuccess: () => {
       toast.success(t('sshConnections.toasts.keyGenerated'))
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
+      queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })
       setGenerateDialogOpen(false)
       track(EventCategory.SSH, EventAction.CREATE, { resource: 'key' })
     },
@@ -120,6 +135,7 @@ export default function SSHConnectionsSingleKey() {
     onSuccess: () => {
       toast.success(t('sshConnections.toasts.keyImported'))
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
+      queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })
       setImportDialogOpen(false)
       setImportForm(createImportForm())
       track(EventCategory.SSH, EventAction.UPLOAD, { resource: 'key' })
@@ -462,6 +478,12 @@ export default function SSHConnectionsSingleKey() {
 
   const handleDeployKey = () => {
     if (!systemKey) return
+    // Without the key list the picker is hidden; never fall back to the
+    // system key silently when the user may have needed another one.
+    if (sshKeysFailed) {
+      toast.error(t('sshConnections.extraKeys.toasts.listFailed'))
+      return
+    }
     const normalizedHost = normalizeSshHostInput(connectionForm.host)
     if (!normalizedHost.ok) {
       setConnectionHostError(t(normalizedHost.errorKey))
@@ -478,6 +500,12 @@ export default function SSHConnectionsSingleKey() {
 
   const handleTestManualConnection = () => {
     if (!systemKey) return
+    // Without the key list the picker is hidden; never fall back to the
+    // system key silently when the user may have needed another one.
+    if (sshKeysFailed) {
+      toast.error(t('sshConnections.extraKeys.toasts.listFailed'))
+      return
+    }
     const normalizedHost = normalizeSshHostInput(testConnectionForm.host)
     if (!normalizedHost.ok) {
       setTestConnectionHostError(t(normalizedHost.errorKey))

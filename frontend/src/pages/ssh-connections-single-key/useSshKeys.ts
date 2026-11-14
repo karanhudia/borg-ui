@@ -15,5 +15,5 @@ export function useSshKeys(enabled: boolean) {
   const keys: SSHKeySummary[] = [...(query.data?.data?.ssh_keys ?? [])].sort(
     (a, b) => Number(b.is_system_key) - Number(a.is_system_key) || a.name.localeCompare(b.name)
   )
-  return { keys, isLoading: query.isLoading }
+  return { keys, isLoading: query.isLoading, isError: query.isError }
 }
