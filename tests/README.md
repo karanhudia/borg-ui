@@ -146,6 +146,39 @@ python3 tests/manual/test_app.py --output results.json
   - archive contents parity
   - archive directory browsing parity
 
+### 5. Browser E2E (`frontend/e2e/`)
+
+Playwright drives the built UI against a real backend and a real sshd. CI runs it
+in the `E2E / Browser` job and uploads traces when it fails. Each run needs a
+fresh database: the specs build on each other and expect the default
+`admin` / `admin123` login. Never point it at a backend with real data.
+
+Locally, from the repo root:
+
+```bash
+# 1. A throwaway SSH target on 127.0.0.1:2223 (user borge2e, password login allowed)
+docker run -d --name borgui-e2e-sshd -p 127.0.0.1:2223:2222 -v "$PWD/tests/e2e:/e2e:ro" debian:bookworm \
+  bash -c 'apt-get update -qq && apt-get install -y -qq openssh-server && /e2e/setup-sshd.sh && sleep infinity'
+
+# 2. Build the frontend into app/static
+(cd frontend && npm ci && npm run build) && mkdir -p app/static && cp -r frontend/build/* app/static/
+
+# 3. Backend on a fresh data dir. The backend needs sshpass and borg on PATH.
+#    Unset SSH_AUTH_SOCK: ssh-copy-id would offer your agent's keys first and
+#    sshd drops the login with "Too many authentication failures".
+export E2E_DATA=$(mktemp -d)
+env -u SSH_AUTH_SOCK DATA_DIR=$E2E_DATA DATABASE_URL=sqlite:///$E2E_DATA/test.db \
+  SECRET_KEY=e2e-local ACTIVATION_SERVICE_URL= uvicorn app.main:app --port 8082
+
+# 4. In another shell
+cd frontend && npx playwright install chromium && E2E_SSH_PORT=2223 npm run test:e2e
+```
+
+To rerun, start again from step 3 with a new data dir and empty the target's
+`/home/borge2e/.ssh/authorized_keys`. `npx playwright show-trace frontend/e2e-results/<test>/trace.zip`
+opens a failure's trace. On a laptop, keep the machine awake for the run: a
+suspended backend shows up as steps that stall past the 15s assertion timeout.
+
 ## Test Scenarios
 
 ### Scenario 1: Archive Root Directory Bug

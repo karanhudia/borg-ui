@@ -19,6 +19,7 @@ ALWAYS_JOBS = {
     "smoke-borg-core",
     "smoke-borg-extended",
     "smoke-borg-ssh-localhost",
+    "e2e-browser",
 }
 
 
