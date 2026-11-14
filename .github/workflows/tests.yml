@@ -909,6 +909,9 @@ jobs:
           printf 'Match User borgsftp\n  ForceCommand internal-sftp\n' | sudo tee -a /etc/ssh/sshd_config
           # Sources the smoke writes inside the SSH user's home
           sudo install -d -m 0777 /home/borgsmoke/smoke-src
+          # Shared remote root: borg writes repos here as borgsmoke while
+          # other smokes create sources here as the runner.
+          sudo install -d -m 1777 /tmp/borg-ui-ssh-smoke
           # Runner images export XDG_* paths into the runner's home through
           # /etc/environment, which PAM applies to every SSH login. Borg run
           # over SSH as borgsmoke would then write its config there.
