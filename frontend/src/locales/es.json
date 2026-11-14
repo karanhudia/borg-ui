@@ -2713,6 +2713,56 @@
         "delete": "Eliminar clave"
       }
     },
+    "extraKeys": {
+      "title": "Claves SSH adicionales",
+      "description": "Da a una máquina remota su propia clave, por ejemplo una clave por repositorio en un borgserver. Las conexiones usan la clave del sistema salvo que elijas otra.",
+      "add": "Añadir clave",
+      "empty": "Aún no hay claves adicionales.",
+      "connections_one": "{{count}} conexión",
+      "connections_other": "{{count}} conexiones",
+      "unused": "Sin usar todavía",
+      "mirrors_one": "{{count}} Cloud Mirror",
+      "mirrors_other": "{{count}} Cloud Mirrors",
+      "copyPublicKey": "Copiar clave pública",
+      "delete": "Eliminar clave",
+      "picker": {
+        "label": "Clave SSH",
+        "system": "Clave del sistema",
+        "changeHint": "La conexión fallará hasta que la nueva clave esté en el servidor. Después de guardar, usa Desplegar clave en la conexión."
+      },
+      "addDialog": {
+        "title": "Añadir clave SSH",
+        "tabGenerate": "Generar",
+        "tabImport": "Importar desde ruta",
+        "tabPaste": "Pegar",
+        "keyName": "Nombre de la clave",
+        "keyNamePlaceholder": "borgserver-repo1",
+        "keyType": "Tipo de clave",
+        "privateKeyPath": "Ruta de la clave privada",
+        "privateKeyPathHelper": "Ruta absoluta del archivo de la clave privada en el host de Borg UI",
+        "publicKeyPath": "Ruta de la clave pública (opcional)",
+        "publicKeyPathHelper": "Déjalo vacío para usar la ruta de la clave privada más .pub",
+        "privateKey": "Clave privada",
+        "privateKeyHelper": "Pega la clave privada. No se admiten claves protegidas con frase de contraseña.",
+        "submit": "Añadir",
+        "submitting": "Añadiendo..."
+      },
+      "deleteDialog": {
+        "title": "Eliminar clave SSH",
+        "confirm": "¿Eliminar la clave \"{{name}}\"? Esta acción no se puede deshacer.",
+        "inUse": "Estas conexiones usan esta clave. Cámbialas primero a otra clave.",
+        "inUseByMirror_one": "Cloud Mirror de {{count}} repositorio usa esta clave. Al eliminarla, ese mirror pasa a usar la clave de su conexión.",
+        "inUseByMirror_other": "Cloud Mirror de {{count}} repositorios usa esta clave. Al eliminarla, esos mirrors pasan a usar la clave de su conexión.",
+        "delete": "Eliminar",
+        "deleting": "Eliminando..."
+      },
+      "toasts": {
+        "added": "Clave SSH añadida",
+        "addFailed": "No se pudo añadir la clave SSH",
+        "deleted": "Clave SSH eliminada",
+        "listFailed": "No se pudieron cargar las claves SSH. Recarga la página e inténtalo de nuevo."
+      }
+    },
     "generateDialog": {
       "title": "Generar clave SSH del sistema",
       "info": "Esto generará un nuevo par de claves SSH para tu sistema. Solo puedes tener una clave del sistema a la vez.",
@@ -2786,7 +2836,7 @@
       "title": "Agregar conexión manual",
       "instructions": {
         "title": "Antes de agregar esta conexión:",
-        "step1": "Copia la clave pública de arriba",
+        "step1": "Copia la clave pública de la clave SSH que usas (botón de copiar en su tarjeta)",
         "step2": "Conéctate por SSH a tu servidor",
         "step3": "Agrégala a ~/.ssh/authorized_keys"
       },
@@ -2826,7 +2876,7 @@
     },
     "redeployDialog": {
       "title": "Desplegar clave SSH en la conexión",
-      "info": "Esto desplegará tu clave SSH actual del sistema en esta conexión. Deberás proporcionar la contraseña para autenticarte.",
+      "info": "Esto añade la clave SSH de la conexión a authorized_keys en el servidor. Deberás proporcionar la contraseña para autenticarte.",
       "passwordPlaceholder": "Introduce la contraseña SSH",
       "passwordHelper": "La contraseña se usa para desplegar la clave pública en authorized_keys"
     },
@@ -6105,9 +6155,11 @@
         "failedGenerateKey": "Error al generar clave SSH: {{error}}",
         "invalidKeyType": "Tipo de clave no válido. Debe ser uno de: {{types}}",
         "invalidPrivateKeyFormat": "Formato de clave privada no válido",
+        "privateKeyPassphraseNotSupported": "Esta clave está protegida con una frase de contraseña. Quite la frase de contraseña (ssh-keygen -p) y péguela de nuevo.",
         "invalidPublicKeyFormat": "Formato de clave pública no válido",
         "keyDeployFailed": "Error al desplegar la clave SSH: {{error}}",
         "keyGeneratedButDeployFailed": "Clave SSH generada pero el despliegue falló: {{error}}",
+        "keyInUse": "Esta clave SSH la usan: {{connections}}. Cambia primero esas conexiones a otra clave.",
         "keyNameAlreadyExists": "El nombre de la clave SSH ya existe",
         "keyRemoveFailed": "Error al eliminar la clave SSH: {{error}}",
         "noSystemKeyFound": "No se encontró clave SSH del sistema",

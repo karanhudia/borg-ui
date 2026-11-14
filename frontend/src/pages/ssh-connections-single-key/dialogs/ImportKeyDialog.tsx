@@ -10,6 +10,7 @@ import {
   Stack,
   TextField,
 } from '@mui/material'
+import PathSelectorField from '../../../components/shared/PathSelectorField'
 import type { ImportKeyPayload } from '../types'
 
 interface ImportKeyDialogProps {
@@ -48,28 +49,26 @@ export function ImportKeyDialog({
               inputLabel: { shrink: true },
             }}
           />
-          <TextField
+          <PathSelectorField
             label={t('sshConnections.importDialog.privateKeyPath')}
-            fullWidth
             required
             value={importForm.private_key_path}
-            onChange={(e) => setImportForm({ ...importForm, private_key_path: e.target.value })}
+            onChange={(private_key_path) => setImportForm({ ...importForm, private_key_path })}
             placeholder={t('sshConnections.importDialog.privateKeyPathPlaceholder')}
             helperText={t('sshConnections.importDialog.privateKeyPathHelper')}
-            slotProps={{
-              inputLabel: { shrink: true },
-            }}
+            selectMode="files"
+            showSshMountPoints={false}
+            size="medium"
           />
-          <TextField
+          <PathSelectorField
             label={t('sshConnections.importDialog.publicKeyPath')}
-            fullWidth
-            value={importForm.public_key_path}
-            onChange={(e) => setImportForm({ ...importForm, public_key_path: e.target.value })}
+            value={importForm.public_key_path ?? ''}
+            onChange={(public_key_path) => setImportForm({ ...importForm, public_key_path })}
             placeholder={t('sshConnections.importDialog.publicKeyPathPlaceholder')}
             helperText={t('sshConnections.importDialog.publicKeyPathHelper')}
-            slotProps={{
-              inputLabel: { shrink: true },
-            }}
+            selectMode="files"
+            showSshMountPoints={false}
+            size="medium"
           />
           <TextField
             label={t('sshConnections.importDialog.description')}

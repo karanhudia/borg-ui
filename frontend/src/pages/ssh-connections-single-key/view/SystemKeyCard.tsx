@@ -12,7 +12,7 @@ import {
   Typography,
   alpha,
 } from '@mui/material'
-import { CheckCircle, Copy, Eye, EyeOff, Key, Plus, Trash2, Wifi } from 'lucide-react'
+import { CheckCircle, Copy, Eye, EyeOff, Key, Plus, Trash2 } from 'lucide-react'
 import type { SystemSSHKey } from '../types'
 
 interface SystemKeyCardProps {
@@ -27,8 +27,6 @@ interface SystemKeyCardProps {
   setFingerprintVisible: Dispatch<SetStateAction<boolean>>
   setGenerateDialogOpen: Dispatch<SetStateAction<boolean>>
   setImportDialogOpen: Dispatch<SetStateAction<boolean>>
-  setDeployDialogOpen: Dispatch<SetStateAction<boolean>>
-  setTestConnectionDialogOpen: Dispatch<SetStateAction<boolean>>
   setDeleteKeyDialogOpen: Dispatch<SetStateAction<boolean>>
   onCopyPublicKey: () => void
 }
@@ -45,8 +43,6 @@ export function SystemKeyCard({
   setFingerprintVisible,
   setGenerateDialogOpen,
   setImportDialogOpen,
-  setDeployDialogOpen,
-  setTestConnectionDialogOpen,
   setDeleteKeyDialogOpen,
   onCopyPublicKey,
 }: SystemKeyCardProps) {
@@ -104,6 +100,23 @@ export function SystemKeyCard({
               size="small"
               icon={<CheckCircle size={14} />}
             />
+          )}
+          {keyExists && (
+            <Tooltip title={t('sshConnections.systemKey.tooltips.delete')} arrow>
+              <IconButton
+                aria-label={t('sshConnections.systemKey.actions.delete')}
+                onClick={() => setDeleteKeyDialogOpen(true)}
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': {
+                    color: 'error.main',
+                    bgcolor: alpha(theme.palette.error.main, 0.08),
+                  },
+                }}
+              >
+                <Trash2 size={16} />
+              </IconButton>
+            </Tooltip>
           )}
         </Stack>
 
@@ -284,47 +297,6 @@ export function SystemKeyCard({
                   </Box>
                 </Box>
               </Box>
-
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={2}
-                sx={{
-                  flexWrap: 'wrap',
-                }}
-              >
-                <Tooltip title={t('sshConnections.systemKey.tooltips.deploy')}>
-                  <Button
-                    variant="contained"
-                    startIcon={<Plus size={18} />}
-                    onClick={() => setDeployDialogOpen(true)}
-                    fullWidth={false}
-                    sx={{ width: { xs: '100%', sm: 'auto' } }}
-                  >
-                    {t('sshConnections.systemKey.actions.deploy')}
-                  </Button>
-                </Tooltip>
-                <Tooltip title={t('sshConnections.systemKey.tooltips.addManual')}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Wifi size={18} />}
-                    onClick={() => setTestConnectionDialogOpen(true)}
-                    sx={{ width: { xs: '100%', sm: 'auto' } }}
-                  >
-                    {t('sshConnections.systemKey.actions.addManual')}
-                  </Button>
-                </Tooltip>
-                <Tooltip title={t('sshConnections.systemKey.tooltips.delete')}>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<Trash2 size={18} />}
-                    onClick={() => setDeleteKeyDialogOpen(true)}
-                    sx={{ width: { xs: '100%', sm: 'auto' } }}
-                  >
-                    {t('sshConnections.systemKey.actions.delete')}
-                  </Button>
-                </Tooltip>
-              </Stack>
             </Stack>
           </Box>
         )}

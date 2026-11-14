@@ -110,6 +110,7 @@ vi.mock('../../services/api', () => ({
   sshKeysAPI: {
     getSystemKey: vi.fn(() => Promise.resolve(mockState.systemKeyResponse)),
     getSSHConnections: vi.fn(() => Promise.resolve(mockState.connectionsResponse)),
+    getSSHKeys: vi.fn(() => Promise.resolve({ data: { ssh_keys: [] } })),
     deploySSHKey: vi.fn(() => Promise.resolve({ data: {} })),
     testSSHConnection: vi.fn(() => Promise.resolve({ data: { success: true } })),
     updateSSHConnection: vi.fn(() => Promise.resolve({ data: {} })),

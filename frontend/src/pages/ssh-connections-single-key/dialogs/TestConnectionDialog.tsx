@@ -11,13 +11,16 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import type { TestConnectionPayload } from '../types'
+import SshKeySelect from '../../../components/shared/SshKeySelect'
+import type { SSHKeySummary, TestConnectionPayload } from '../types'
 import { SshHostField } from './SshHostField'
 
 interface TestConnectionDialogProps {
   t: TFunction
   open: boolean
   setOpen: Dispatch<SetStateAction<boolean>>
+  sshKeys: SSHKeySummary[]
+  systemKeyId?: number
   testConnectionForm: TestConnectionPayload
   setTestConnectionForm: Dispatch<SetStateAction<TestConnectionPayload>>
   hostError?: string
@@ -30,6 +33,8 @@ export function TestConnectionDialog({
   t,
   open,
   setOpen,
+  sshKeys,
+  systemKeyId,
   testConnectionForm,
   setTestConnectionForm,
   hostError,
@@ -63,6 +68,15 @@ export function TestConnectionDialog({
             </Typography>
           </Alert>
 
+          {sshKeys.length > 1 && (
+            <SshKeySelect
+              value={testConnectionForm.ssh_key_id ?? systemKeyId ?? ''}
+              onChange={(ssh_key_id) =>
+                setTestConnectionForm({ ...testConnectionForm, ssh_key_id })
+              }
+              keys={sshKeys}
+            />
+          )}
           <SshHostField
             label={t('sshConnections.deployDialog.host')}
             value={testConnectionForm.host}

@@ -711,7 +711,7 @@ export default function FileExplorerDialog({
           )}
 
           {/* Mount Point Info */}
-          {currentPath === '/' && activeConnectionType === 'local' && sshConnections.length > 0 && (
+          {getMountPointItems().length > 0 && (
             <Box sx={{ px: 2, pb: 1 }}>
               <Alert severity="info" sx={{ borderRadius: 1, py: 0.5 }}>
                 <Typography variant="caption">{t('fileExplorer.sshInfoAlert')}</Typography>

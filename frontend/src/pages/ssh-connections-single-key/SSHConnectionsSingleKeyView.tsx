@@ -6,11 +6,13 @@ import { SSHConnectionDialogs } from './SSHConnectionDialogs'
 import { SSHConnectionsLoadingSkeleton } from './SSHConnectionsLoadingSkeleton'
 import { RemoteConnectionsSection } from './view/RemoteConnectionsSection'
 import { SSHPageHeader } from './view/SSHPageHeader'
+import { ExtraKeysSection } from './view/ExtraKeysSection'
 import { SystemKeyCard } from './view/SystemKeyCard'
 import type {
   DeployConnectionPayload,
   ImportKeyPayload,
   SSHConnection,
+  SSHKeySummary,
   SystemSSHKey,
   TestConnectionPayload,
   UpdateConnectionPayload,
@@ -24,6 +26,7 @@ interface SSHConnectionsSingleKeyViewProps {
   connectionsLoading: boolean
   keyExists: boolean | undefined
   systemKey: SystemSSHKey | undefined
+  sshKeys: SSHKeySummary[]
   connections: SSHConnection[]
   canManageSsh: boolean
   keyVisible: boolean
@@ -101,6 +104,7 @@ export function SSHConnectionsSingleKeyView({
   connectionsLoading,
   keyExists,
   systemKey,
+  sshKeys,
   connections,
   canManageSsh,
   keyVisible,
@@ -175,7 +179,12 @@ export function SSHConnectionsSingleKeyView({
 
   return (
     <Box>
-      <SSHPageHeader t={t} />
+      <SSHPageHeader
+        t={t}
+        showActions={!!keyExists}
+        onDeploy={() => setDeployDialogOpen(true)}
+        onAddManual={() => setTestConnectionDialogOpen(true)}
+      />
       <SystemKeyCard
         t={t}
         theme={theme}
@@ -188,11 +197,13 @@ export function SSHConnectionsSingleKeyView({
         setFingerprintVisible={setFingerprintVisible}
         setGenerateDialogOpen={setGenerateDialogOpen}
         setImportDialogOpen={setImportDialogOpen}
-        setDeployDialogOpen={setDeployDialogOpen}
-        setTestConnectionDialogOpen={setTestConnectionDialogOpen}
         setDeleteKeyDialogOpen={setDeleteKeyDialogOpen}
         onCopyPublicKey={handleCopyPublicKey}
       />
+      {/* Extra keys stay manageable after the system key is deleted. */}
+      {canManageSsh && (keyExists || sshKeys.some((key) => !key.is_system_key)) && (
+        <ExtraKeysSection keys={sshKeys} connections={connections} />
+      )}
       <RemoteConnectionsSection
         t={t}
         theme={theme}
@@ -212,6 +223,7 @@ export function SSHConnectionsSingleKeyView({
       <SSHConnectionDialogs
         t={t}
         systemKey={systemKey}
+        sshKeys={sshKeys}
         connections={connections}
         selectedConnection={selectedConnection}
         setSelectedConnection={setSelectedConnection}
