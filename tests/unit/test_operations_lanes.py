@@ -2,7 +2,14 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, Repository, SystemSettings
+from app.database.models import (
+    BackupPlan,
+    BackupPlanRun,
+    BackupPlanRunRepository,
+    Base,
+    Repository,
+    SystemSettings,
+)
 from app.services.operations import lanes
 from app.services.operations.details import backup_details
 from app.services.operations.enqueue import enqueue
@@ -213,6 +220,117 @@ def test_scheduled_check_limit(db, repo, settings):
     manual = enqueue(db, "check", repository_id=other.id, trigger="manual")
     assert lanes.global_slot_available(db, scheduled, settings) is False
     assert lanes.global_slot_available(db, manual, settings) is True
+
+
+def _plan_backup_in_maintenance(db, repo):
+    """A plan backup that finished while its repository step stays open:
+    the plan is running the backup's post-backup prune and compact."""
+    plan = BackupPlan(name="p", source_directories="[]")
+    db.add(plan)
+    db.flush()
+    run = BackupPlanRun(backup_plan_id=plan.id, trigger="schedule")
+    db.add(run)
+    db.flush()
+    backup = enqueue(
+        db, "backup", repository_id=repo.id, trigger="plan", backup_plan_run_id=run.id
+    )
+    backup.status = "completed"
+    db.add(
+        BackupPlanRunRepository(
+            backup_plan_run_id=run.id,
+            repository_id=repo.id,
+            backup_operation_id=backup.id,
+            status="running",
+        )
+    )
+    db.commit()
+    return backup
+
+
+@pytest.mark.unit
+def test_maintenance_is_unlimited_and_holds_no_backup_slot_by_default(
+    db, repo, settings
+):
+    settings.max_concurrent_backups = 1
+    db.commit()
+    other = _other_repo(db)
+    _running(db, "prune", repo)
+    _plan_backup_in_maintenance(db, repo)
+    backup = enqueue(db, "backup", repository_id=other.id, trigger="plan")
+    compact = enqueue(db, "compact", repository_id=other.id, trigger="manual")
+    assert lanes.global_slot_available(db, backup, settings) is True
+    assert lanes.global_slot_available(db, compact, settings) is True
+
+
+@pytest.mark.unit
+def test_max_concurrent_maintenance_caps_prune_compact_and_check(db, repo, settings):
+    settings.max_concurrent_maintenance = 1
+    db.commit()
+    other = _other_repo(db)
+    _running(db, "prune", repo)
+    for kind in ("prune", "compact", "check"):
+        op = enqueue(db, kind, repository_id=other.id, trigger="manual")
+        assert lanes.global_slot_available(db, op, settings) is False
+    preview = enqueue(db, "prune", repository_id=other.id, trigger="preview")
+    backup = enqueue(db, "backup", repository_id=other.id, trigger="manual")
+    assert lanes.global_slot_available(db, preview, settings) is True
+    assert lanes.global_slot_available(db, backup, settings) is True
+
+
+@pytest.mark.unit
+def test_shared_limit_keeps_a_plan_backups_slot_through_its_maintenance(
+    db, repo, settings
+):
+    settings.max_concurrent_backups = 1
+    settings.maintenance_counts_toward_backup_limit = True
+    db.commit()
+    other = _other_repo(db)
+    _plan_backup_in_maintenance(db, repo)
+    backup = enqueue(db, "backup", repository_id=other.id, trigger="plan")
+    assert lanes.global_slot_available(db, backup, settings) is False
+
+
+@pytest.mark.unit
+def test_shared_limit_a_running_prune_takes_a_slot_in_every_pool(db, repo, settings):
+    settings.max_concurrent_backups = 1
+    settings.max_concurrent_scheduled_backups = 1
+    settings.maintenance_counts_toward_backup_limit = True
+    db.commit()
+    other = _other_repo(db)
+    _running(db, "compact", repo, trigger="schedule")
+    manual = enqueue(db, "backup", repository_id=other.id, trigger="manual")
+    scheduled = enqueue(db, "backup", repository_id=other.id, trigger="schedule")
+    assert lanes.global_slot_available(db, manual, settings) is False
+    assert lanes.global_slot_available(db, scheduled, settings) is False
+
+
+@pytest.mark.unit
+def test_shared_limit_maintenance_waits_for_a_backup_slot(db, repo, settings):
+    settings.max_concurrent_backups = 1
+    settings.maintenance_counts_toward_backup_limit = True
+    db.commit()
+    other = _other_repo(db)
+    running = _running(db, "backup", repo, trigger="manual")
+    prune = enqueue(db, "prune", repository_id=other.id, trigger="manual")
+    assert lanes.global_slot_available(db, prune, settings) is False
+    running.status = "completed"
+    db.commit()
+    assert lanes.global_slot_available(db, prune, settings) is True
+
+
+@pytest.mark.unit
+def test_shared_limit_a_queued_plan_backup_does_not_hold_its_own_slot(
+    db, repo, settings
+):
+    """The repository step is claimed `running` when the backup is queued;
+    counting that queued backup would keep it from ever starting."""
+    settings.max_concurrent_backups = 1
+    settings.maintenance_counts_toward_backup_limit = True
+    db.commit()
+    backup = _plan_backup_in_maintenance(db, repo)
+    backup.status = "queued"
+    db.commit()
+    assert lanes.global_slot_available(db, backup, settings) is True
 
 
 @pytest.mark.unit

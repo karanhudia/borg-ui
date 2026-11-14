@@ -334,6 +334,8 @@ export interface SystemSettings {
   backup_timeout?: number
   max_concurrent_scheduled_backups?: number
   max_concurrent_scheduled_checks?: number
+  max_concurrent_maintenance?: number
+  maintenance_counts_toward_backup_limit?: boolean
   stats_refresh_interval_minutes?: number
   auto_prune_preview?: boolean
   dashboard_backup_warning_days?: number

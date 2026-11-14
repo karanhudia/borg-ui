@@ -11,6 +11,8 @@ const meta = {
     autoPrunePreview: true,
     maxConcurrentScheduledBackups: 2,
     maxConcurrentScheduledChecks: 4,
+    maxConcurrentMaintenance: 0,
+    maintenanceCountsTowardBackupLimit: false,
     dashboardBackupWarningDays: 3,
     dashboardBackupCriticalDays: 7,
     dashboardCheckWarningDays: 7,
@@ -26,6 +28,8 @@ const meta = {
     setAutoPrunePreview: noop,
     setMaxConcurrentScheduledBackups: noop,
     setMaxConcurrentScheduledChecks: noop,
+    setMaxConcurrentMaintenance: noop,
+    setMaintenanceCountsTowardBackupLimit: noop,
     setDashboardBackupWarningDays: noop,
     setDashboardBackupCriticalDays: noop,
     setDashboardCheckWarningDays: noop,
@@ -47,4 +51,8 @@ export const Default: Story = {}
 
 export const AutomaticPrunePreviewsOff: Story = {
   args: { autoPrunePreview: false },
+}
+
+export const MaintenanceSharesBackupLimit: Story = {
+  args: { maxConcurrentMaintenance: 1, maintenanceCountsTowardBackupLimit: true },
 }

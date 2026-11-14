@@ -1523,6 +1523,13 @@ class SystemSettings(Base):
     max_concurrent_backups = Column(Integer, default=1)
     max_concurrent_scheduled_backups = Column(Integer, default=2)
     max_concurrent_scheduled_checks = Column(Integer, default=4)
+    # NULL or 0: no cap on prune, compact and check the runner starts.
+    max_concurrent_maintenance = Column(Integer, nullable=True)
+    # Prune, compact and check take a backup slot; a plan's backup keeps its
+    # slot until its post-backup steps finish.
+    maintenance_counts_toward_backup_limit = Column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
     log_retention_days = Column(Integer, default=30)
     log_save_policy = Column(
         String, default="failed_and_warnings"

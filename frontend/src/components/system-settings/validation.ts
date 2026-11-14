@@ -25,6 +25,7 @@ interface SystemSettingsValidationParams {
   statsRefreshInterval: number
   maxConcurrentScheduledBackups: number
   maxConcurrentScheduledChecks: number
+  maxConcurrentMaintenance: number
   dashboardBackupWarningDays: number
   dashboardBackupCriticalDays: number
   dashboardCheckWarningDays: number
@@ -60,6 +61,7 @@ export const getSystemSettingsValidationError = ({
   statsRefreshInterval,
   maxConcurrentScheduledBackups,
   maxConcurrentScheduledChecks,
+  maxConcurrentMaintenance,
   dashboardBackupWarningDays,
   dashboardBackupCriticalDays,
   dashboardCheckWarningDays,
@@ -106,7 +108,9 @@ export const getSystemSettingsValidationError = ({
     maxConcurrentScheduledBackups < 0 ||
     maxConcurrentScheduledBackups > MAX_SCHEDULE_CONCURRENCY ||
     maxConcurrentScheduledChecks < 0 ||
-    maxConcurrentScheduledChecks > MAX_SCHEDULE_CONCURRENCY
+    maxConcurrentScheduledChecks > MAX_SCHEDULE_CONCURRENCY ||
+    maxConcurrentMaintenance < 0 ||
+    maxConcurrentMaintenance > MAX_SCHEDULE_CONCURRENCY
   ) {
     return `Scheduler concurrency limits must be between 0 and ${MAX_SCHEDULE_CONCURRENCY}`
   }

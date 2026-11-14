@@ -249,6 +249,8 @@ class SystemSettingsUpdate(BaseModel):
     max_concurrent_backups: Optional[int] = None
     max_concurrent_scheduled_backups: Optional[int] = None
     max_concurrent_scheduled_checks: Optional[int] = None
+    max_concurrent_maintenance: Optional[int] = None
+    maintenance_counts_toward_backup_limit: Optional[bool] = None
     log_retention_days: Optional[int] = None
     log_save_policy: Optional[str] = None
     log_max_total_size_mb: Optional[int] = None
@@ -440,6 +442,11 @@ async def get_system_settings(
                 "max_concurrent_scheduled_checks": settings.max_concurrent_scheduled_checks
                 if settings.max_concurrent_scheduled_checks is not None
                 else 4,
+                # 0: no cap, which a NULL column also means.
+                "max_concurrent_maintenance": settings.max_concurrent_maintenance or 0,
+                "maintenance_counts_toward_backup_limit": bool(
+                    settings.maintenance_counts_toward_backup_limit
+                ),
                 "log_retention_days": settings.log_retention_days,
                 "log_save_policy": settings.log_save_policy,
                 "log_max_total_size_mb": settings.log_max_total_size_mb,
@@ -615,6 +622,7 @@ async def update_system_settings(
             "max_concurrent_backups": settings_update.max_concurrent_backups,
             "max_concurrent_scheduled_backups": settings_update.max_concurrent_scheduled_backups,
             "max_concurrent_scheduled_checks": settings_update.max_concurrent_scheduled_checks,
+            "max_concurrent_maintenance": settings_update.max_concurrent_maintenance,
         }
         for field_name, value in concurrency_fields.items():
             if value is not None and value < 0:
@@ -837,6 +845,14 @@ async def update_system_settings(
         if settings_update.max_concurrent_scheduled_checks is not None:
             settings.max_concurrent_scheduled_checks = (
                 settings_update.max_concurrent_scheduled_checks
+            )
+        if settings_update.max_concurrent_maintenance is not None:
+            settings.max_concurrent_maintenance = (
+                settings_update.max_concurrent_maintenance
+            )
+        if settings_update.maintenance_counts_toward_backup_limit is not None:
+            settings.maintenance_counts_toward_backup_limit = (
+                settings_update.maintenance_counts_toward_backup_limit
             )
         if settings_update.log_retention_days is not None:
             settings.log_retention_days = settings_update.log_retention_days
