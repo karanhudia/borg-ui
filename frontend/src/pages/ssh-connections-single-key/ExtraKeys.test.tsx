@@ -203,7 +203,12 @@ describe('DeleteExtraKeyDialog', () => {
 })
 
 describe('EditConnectionDialog key picker', () => {
-  const renderDialog = (sshKeys: SSHKeySummary[], ssh_key_id: number | undefined = 1) =>
+  // An options object, so a test can pass ssh_key_id: undefined (a default
+  // parameter would silently turn that back into 1).
+  const renderDialog = (
+    sshKeys: SSHKeySummary[],
+    form: { ssh_key_id?: number } = { ssh_key_id: 1 }
+  ) =>
     renderWithProviders(
       <EditConnectionDialog
         t={i18n.t.bind(i18n)}
@@ -211,7 +216,7 @@ describe('EditConnectionDialog key picker', () => {
         setOpen={vi.fn()}
         setSelectedConnection={vi.fn()}
         sshKeys={sshKeys}
-        editConnectionForm={{ ...createEditConnectionForm(), ssh_key_id }}
+        editConnectionForm={{ ...createEditConnectionForm(), ...form }}
         setEditConnectionForm={vi.fn()}
         setHostError={vi.fn()}
         pending={false}
@@ -233,7 +238,7 @@ describe('EditConnectionDialog key picker', () => {
   })
 
   it('shows for a connection whose key was deleted, so it can take the remaining key', () => {
-    renderDialog([extraKey], undefined)
+    renderDialog([extraKey], { ssh_key_id: undefined })
     expect(screen.getAllByText('SSH key').length).toBeGreaterThan(0)
   })
 })

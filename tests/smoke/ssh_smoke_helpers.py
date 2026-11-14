@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import subprocess
 import sys
@@ -92,26 +93,26 @@ if public_key not in existing:
         raise RuntimeError(f"Unable to update authorized_keys via sudo: {exc}") from exc
 
 
-def replace_authorized_keys(auth_keys_path: Path, content: str) -> str:
-    """Overwrite authorized_keys, using sudo when needed. Returns the old content."""
+def _read_authorized_keys(auth_keys_path: Path) -> str:
     try:
-        previous = (
+        return (
             auth_keys_path.read_text(encoding="utf-8")
             if auth_keys_path.exists()
             else ""
         )
-        auth_keys_path.write_text(content, encoding="utf-8")
-        return previous
     except PermissionError:
-        pass
-
-    try:
-        previous = subprocess.run(
+        return subprocess.run(
             ["sudo", "cat", str(auth_keys_path)],
             check=True,
             capture_output=True,
             text=True,
         ).stdout
+
+
+def _write_authorized_keys(auth_keys_path: Path, content: str) -> None:
+    try:
+        auth_keys_path.write_text(content, encoding="utf-8")
+    except PermissionError:
         subprocess.run(
             ["sudo", "tee", str(auth_keys_path)],
             input=content,
@@ -119,8 +120,19 @@ def replace_authorized_keys(auth_keys_path: Path, content: str) -> str:
             capture_output=True,
             text=True,
         )
-        return previous
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            f"Unable to replace authorized_keys via sudo: {exc}"
-        ) from exc
+
+
+def replace_authorized_keys(auth_keys_path: Path, content: str) -> str:
+    """Overwrite authorized_keys, using sudo when needed. Returns the old content.
+
+    The old content is read before anything is written, and put back if the
+    write fails part way, so the account is never left with a truncated file.
+    """
+    previous = _read_authorized_keys(auth_keys_path)
+    try:
+        _write_authorized_keys(auth_keys_path, content)
+    except BaseException:
+        with contextlib.suppress(Exception):
+            _write_authorized_keys(auth_keys_path, previous)
+        raise
+    return previous
