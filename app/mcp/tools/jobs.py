@@ -1,0 +1,431 @@
+"""Jobs and activity tools (spec 5.5, plan Task 10).
+
+Jobs are named the way /api/activity/recent names them: a type and an id
+("backup 412"). Almost every job is an operation, read from
+/api/operations/{id}.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import time
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
+from app.mcp import resolve
+from app.mcp.client import ApiError
+from app.mcp.levels import Level
+from app.mcp.registry import tool
+from app.mcp.render import (
+    LOG_DEFAULT,
+    LOG_MAX,
+    ToolResult,
+    _as_utc,
+    ago,
+    clamp_limit,
+    decode_cursor,
+    duration,
+    more_line,
+    next_cursor,
+    page,
+    when,
+)
+from app.mcp.tools._common import STATUS_GLYPH, NoArgs, job_label, plural
+
+TERMINAL = {"completed", "completed_with_warnings", "failed", "cancelled", "skipped"}
+WAIT_SECONDS, POLL_SECONDS = 45.0, 3.0
+ACTIVITY_FETCH = 200
+EXPLAIN_LOG_LINES = 40
+JOB_FIELDS = (
+    "id",
+    "type",
+    "status",
+    "repository",
+    "repository_id",
+    "started_at",
+    "completed_at",
+    "created_at",
+    "error_message",
+    "skip_reason",
+    "trigger",
+    "triggered_by",
+    "schedule_name",
+    "backup_plan_name",
+    "archive_name",
+    "progress_percent",
+    "progress_message",
+    "has_logs",
+)
+
+_JOB_TYPE = Field(
+    description="Job type as listed by list_activity, such as backup, check, prune.",
+    examples=["backup"],
+)
+_JOB_ID = Field(description="Job id as listed by list_activity.", examples=[412])
+
+
+def _fields(job: dict) -> dict:
+    return {key: job.get(key) for key in JOB_FIELDS}
+
+
+def _took(job: dict) -> Optional[float]:
+    if job.get("started_at") and job.get("completed_at"):
+        return (
+            _as_utc(job["completed_at"]) - _as_utc(job["started_at"])
+        ).total_seconds()
+    return None
+
+
+def _job_line(job: dict) -> str:
+    glyph = STATUS_GLYPH.get(job.get("status"), "·")
+    stamp = job.get("completed_at") or job.get("started_at") or job.get("created_at")
+    where = f" of *{job['repository']}*" if job.get("repository") else ""
+    line = f"{glyph} {job_label(job.get('type'))}{where} {job.get('status')}, {ago(stamp)} ({job.get('type')} {job.get('id')})"
+    if job.get("status") == "running" and job.get("progress_percent") is not None:
+        line += f", {round(job['progress_percent'])}% done"
+    if job.get("status") == "failed" and job.get("error_message"):
+        line += f": {job['error_message']}"
+    return line
+
+
+class ActivityArgs(BaseModel):
+    repository: Optional[str] = Field(
+        None, description="Only this repository (name or id)."
+    )
+    status: Optional[str] = Field(
+        None, description="running, completed, failed or cancelled."
+    )
+    job_type: Optional[str] = Field(
+        None, description="backup, check, prune, compact, restore, ..."
+    )
+    since: Optional[str] = Field(
+        None, description='Only since then: "24h", "7d" or a date like 2026-11-01.'
+    )
+    limit: Optional[int] = Field(
+        None, description="How many to show (default 25, max 200)."
+    )
+    cursor: Optional[str] = Field(
+        None, description="Page marker from the previous answer."
+    )
+
+
+@tool(
+    name="list_activity",
+    title="Show recent activity",
+    description=(
+        "Recent jobs (backups, checks, prunes, restores and more), newest first, "
+        "with their outcome. Filter by repository, status, type or time. Each "
+        "job shows its type and id, which get_job, get_job_log and "
+        "explain_failure take."
+    ),
+    level=Level.READ,
+    routes=("GET /api/repositories/", "GET /api/activity/recent"),
+)
+async def list_activity(ctx, args: ActivityArgs) -> ToolResult:
+    repo = await resolve.repository(ctx, args.repository) if args.repository else None
+    jobs = await ctx.api.get(
+        "/api/activity/recent",
+        limit=ACTIVITY_FETCH,
+        status=args.status,
+        job_type=args.job_type,
+        repository_id=repo["id"] if repo else None,
+    )
+    since = resolve.parse_since(args.since)
+    if since:
+        jobs = [
+            j
+            for j in jobs
+            if (s := j.get("started_at") or j.get("created_at")) and _as_utc(s) >= since
+        ]
+    if not jobs:
+        return ToolResult("No matching activity.", {"jobs": []})
+    shown, cursor = page(jobs, clamp_limit(args.limit), args.cursor)
+    lines = [_job_line(j) for j in shown]
+    more = more_line(len(shown), len(jobs), "jobs", cursor)
+    if more:
+        lines += ["", more]
+    return ToolResult(
+        "\n".join(lines), {"jobs": [_fields(j) for j in shown], "next_cursor": cursor}
+    )
+
+
+@tool(
+    name="list_running_jobs",
+    title="See what's running",
+    description=(
+        "Jobs running right now with their progress, plus what is waiting in "
+        "the queue and whether background work is paused."
+    ),
+    level=Level.READ,
+    routes=("GET /api/activity/recent", "GET /api/operations/queue"),
+)
+async def list_running_jobs(ctx, args: NoArgs) -> ToolResult:
+    running = await ctx.api.get(
+        "/api/activity/recent", status="running", limit=ACTIVITY_FETCH
+    )
+    queue = await ctx.api.get("/api/operations/queue")
+    lines = [_job_line(j) for j in running] or ["Nothing is running right now."]
+    waiting = sum(
+        1
+        for r in queue.get("repositories") or []
+        for op in r.get("operations") or []
+        if op.get("status") == "queued"
+    )
+    if waiting:
+        lines += ["", f"{plural(waiting, 'job')} waiting in the queue."]
+    if queue.get("paused"):
+        lines += ["", "⚠ Background work is paused."]
+    elif queue.get("paused_stages"):
+        lines += ["", f"⚠ Paused: {', '.join(queue['paused_stages'])}."]
+    return ToolResult(
+        "\n".join(lines), {"running": [_fields(j) for j in running], "queue": queue}
+    )
+
+
+class JobRef(BaseModel):
+    job_type: str = _JOB_TYPE
+    job_id: int = _JOB_ID
+
+
+async def _job(ctx, job_type: str, job_id: int) -> dict:
+    try:
+        job = await ctx.api.get(f"/api/operations/{job_id}")
+    except ApiError as exc:
+        if exc.status == 404:
+            raise resolve.NotFound(
+                f"I could not find {job_type} {job_id}. list_activity shows the recent ones."
+            ) from None
+        raise
+    if job.get("type") != job_type:
+        raise resolve.NotFound(
+            f"Job {job_id} is a {job.get('type')}, not a {job_type}. Ask for {job.get('type')} {job_id}."
+        )
+    ctx.target = f"{job_type} {job_id}"
+    return job
+
+
+def _job_text(job: dict) -> str:
+    glyph = STATUS_GLYPH.get(job.get("status"), "·")
+    where = f" of *{job['repository']}*" if job.get("repository") else ""
+    lines = [f"{glyph} {job_label(job.get('type'))}{where}: {job.get('status')}", ""]
+    lines.append(f"Started: {when(job.get('started_at') or job.get('created_at'))}")
+    if job.get("completed_at"):
+        lines.append(
+            f"Finished: {when(job['completed_at'])}, took {duration(_took(job))}"
+        )
+    if job.get("status") == "running":
+        progress = job.get("progress_percent")
+        lines.append(
+            f"Progress: {round(progress)}%"
+            if progress is not None
+            else "Progress: unknown"
+        )
+        if job.get("progress_message"):
+            lines.append(f"Now: {job['progress_message']}")
+    if job.get("archive_name"):
+        lines.append(f"Archive: *{job['archive_name']}*")
+    if job.get("schedule_name") or job.get("backup_plan_name"):
+        lines.append(
+            f"Started by: {job.get('backup_plan_name') or job.get('schedule_name')}"
+        )
+    if job.get("error_message"):
+        lines.append(f"Error: {job['error_message']}")
+    if job.get("skip_reason"):
+        lines.append(f"Skipped: {job['skip_reason']}")
+    return "\n".join(lines)
+
+
+@tool(
+    name="get_job",
+    title="Check on a job",
+    description="The status, timing, progress and error of one job, by type and id.",
+    level=Level.READ,
+    routes=("GET /api/operations/{operation_id}",),
+)
+async def get_job(ctx, args: JobRef) -> ToolResult:
+    job = await _job(ctx, args.job_type, args.job_id)
+    return ToolResult(_job_text(job), {"job": _fields(job)})
+
+
+class LogArgs(JobRef):
+    lines: Optional[int] = Field(
+        None, description="How many lines from the end (default 200, max 1000)."
+    )
+    cursor: Optional[str] = Field(
+        None, description="Page marker for earlier lines, from the previous answer."
+    )
+
+
+async def _tail(
+    ctx, job_type: str, job_id: int, count: int, skip: int = 0
+) -> tuple[list[str], int, int]:
+    """The `count` lines that end `skip` lines before the end of the log."""
+    route = f"/api/activity/{job_type}/{job_id}/logs"
+    total = (await ctx.api.get(route, offset=0, limit=1)).get("total_lines") or 0
+    end = max(0, total - skip)
+    start = max(0, end - count)
+    if end == 0:
+        return [], total, 0
+    chunk = await ctx.api.get(route, offset=start, limit=end - start)
+    return [line.get("content", "") for line in chunk.get("lines") or []], total, start
+
+
+@tool(
+    name="get_job_log",
+    title="Read a job's log",
+    description=(
+        "The end of one job's log (last 200 lines by default). The answer says "
+        "how to read earlier lines when there are more."
+    ),
+    level=Level.READ,
+    routes=(
+        "GET /api/operations/{operation_id}",
+        "GET /api/activity/{job_type}/{job_id}/logs",
+    ),
+)
+async def get_job_log(ctx, args: LogArgs) -> ToolResult:
+    await _job(ctx, args.job_type, args.job_id)
+    count = clamp_limit(args.lines, default=LOG_DEFAULT, max_=LOG_MAX)
+    skip = decode_cursor(args.cursor)
+    try:
+        lines, total, start = await _tail(ctx, args.job_type, args.job_id, count, skip)
+    except ApiError as exc:
+        if exc.key == "backend.errors.activity.noLogsAvailableForJob":
+            return ToolResult(
+                f"{args.job_type} {args.job_id} kept no log (the log policy only keeps some).",
+                {"lines": []},
+            )
+        raise
+    if not lines:
+        return ToolResult(
+            f"The log of {args.job_type} {args.job_id} is empty.", {"lines": []}
+        )
+    head = f"Lines {start + 1} to {start + len(lines)} of {total} from {args.job_type} {args.job_id}:"
+    cursor = next_cursor(skip + len(lines)) if start > 0 else None
+    tail = (
+        ["", f"There are {start} earlier lines. Ask for the next page to read them."]
+        if cursor
+        else []
+    )
+    return ToolResult(
+        "\n".join([head, "```", *lines, "```", *tail]),
+        {
+            "total_lines": total,
+            "first_line": start + 1,
+            "lines": lines,
+            "next_cursor": cursor,
+        },
+    )
+
+
+@tool(
+    name="wait_for_job",
+    title="Wait for a job to finish",
+    description=(
+        "Waits up to 45 seconds for a job to finish and returns its result. If "
+        "it is still running after that, says how far it got; ask again to keep "
+        "waiting."
+    ),
+    level=Level.READ,
+    routes=("GET /api/operations/{operation_id}",),
+)
+async def wait_for_job(ctx, args: JobRef) -> ToolResult:
+    deadline = time.monotonic() + WAIT_SECONDS
+    job = await _job(ctx, args.job_type, args.job_id)
+    while (
+        job.get("status") not in TERMINAL
+        and time.monotonic() + POLL_SECONDS <= deadline
+    ):
+        await asyncio.sleep(POLL_SECONDS)
+        job = await _job(ctx, args.job_type, args.job_id)
+    if job.get("status") in TERMINAL:
+        return ToolResult(_job_text(job), {"job": _fields(job), "finished": True})
+    progress = job.get("progress_percent")
+    done = f"{round(progress)}% done" if progress is not None else "progress unknown"
+    return ToolResult(
+        f"⏳ Still running after 45 seconds ({done}). Ask me again to keep waiting.",
+        {"job": _fields(job), "finished": False},
+    )
+
+
+class ExplainArgs(BaseModel):
+    job_type: Optional[str] = Field(
+        None, description="Job type; leave both empty for the most recent failure."
+    )
+    job_id: Optional[int] = Field(
+        None, description="Job id; leave both empty for the most recent failure."
+    )
+
+
+@tool(
+    name="explain_failure",
+    title="Explain why a job failed",
+    description=(
+        "Gathers what is needed to explain a failed job: what failed, the error, "
+        "the last 40 log lines and similar recent failures on the same "
+        "repository. With no job given it takes the most recent failure. It "
+        "states facts; you reason about the cause."
+    ),
+    level=Level.READ,
+    routes=(
+        "GET /api/activity/recent",
+        "GET /api/operations/{operation_id}",
+        "GET /api/activity/{job_type}/{job_id}/logs",
+    ),
+)
+async def explain_failure(ctx, args: ExplainArgs) -> ToolResult:
+    if args.job_id is None:
+        failed = await ctx.api.get("/api/activity/recent", status="failed", limit=1)
+        if not failed:
+            return ToolResult("✓ Nothing has failed recently.", {"job": None})
+        job_type, job_id = failed[0]["type"], failed[0]["id"]
+    else:
+        job_type, job_id = args.job_type or "backup", args.job_id
+    job = await _job(ctx, job_type, job_id)
+    took = _took(job)
+    stamp = job.get("completed_at") or job.get("started_at")
+    where = f" of *{job['repository']}*" if job.get("repository") else ""
+    lines = [
+        f"✗ {job_label(job_type)}{where} {job.get('status')} {ago(stamp)}"
+        + (f" after {duration(took)}." if took is not None else "."),
+        "",
+    ]
+    lines += [
+        "**What failed**",
+        f"{job_type} {job_id}, started by {job.get('backup_plan_name') or job.get('schedule_name') or job.get('triggered_by') or 'unknown'}.",
+        "",
+    ]
+    lines += [
+        "**Error**",
+        job.get("error_message") or "No error message was recorded.",
+        "",
+    ]
+    try:
+        log, _, _ = await _tail(ctx, job_type, job_id, EXPLAIN_LOG_LINES)
+    except ApiError:
+        log = []
+    lines += [
+        "**Last log lines**",
+        *(["```", *log, "```"] if log else ["No log was kept for this job."]),
+        "",
+    ]
+    similar = []
+    if job.get("repository_id"):
+        recent = await ctx.api.get(
+            "/api/activity/recent",
+            status="failed",
+            limit=6,
+            repository_id=job["repository_id"],
+        )
+        similar = [j for j in recent if j.get("id") != job_id][:5]
+    lines.append("**Similar recent failures**")
+    lines += [_job_line(j) for j in similar] or ["None on this repository recently."]
+    return ToolResult(
+        "\n".join(lines),
+        {
+            "job": _fields(job),
+            "log_tail": log,
+            "similar": [_fields(j) for j in similar],
+        },
+    )

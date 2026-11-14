@@ -7,4 +7,10 @@ describe('features', () => {
     expect(canAccess('community', 'archive_history')).toBe(false)
     expect(canAccess('pro', 'archive_history')).toBe(true)
   })
+
+  it('mcp is a Pro feature', () => {
+    expect(FEATURES.mcp).toBe('pro')
+    expect(canAccess('community', 'mcp')).toBe(false)
+    expect(canAccess('pro', 'mcp')).toBe(true)
+  })
 })

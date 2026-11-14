@@ -5911,7 +5911,9 @@
         "oidcIdentityConflict": "Esta identidad de inicio de sesión único entra en conflicto con una cuenta existente de Borg UI.",
         "oidcEmailAlreadyInUse": "Este correo electrónico de inicio de sesión único ya está siendo usado por otra cuenta de Borg UI.",
         "oidcPendingApproval": "Tu cuenta de inicio de sesión único está esperando la aprobación de un administrador",
-        "oidcTemplateUserNotFound": "No se encontró el usuario plantilla configurado para el inicio de sesión único"
+        "oidcTemplateUserNotFound": "No se encontró el usuario plantilla configurado para el inicio de sesión único",
+        "mcpTokenNotForApi": "Este token es para clientes MCP y no se puede usar con la API.",
+        "notAvailableOverMcp": "Esta acción no está disponible para las conexiones MCP."
       },
       "plan": {
         "featureNotAvailable": "Esta función no está disponible en tu plan actual."
@@ -6400,6 +6402,12 @@
       },
       "operations": {
         "unknownStage": "Etapa en segundo plano desconocida."
+      },
+      "mcp": {
+        "levelAboveCap": "Tu administrador permite conexiones MCP con acceso de hasta {{max}}.",
+        "skipNeedsFull": "Omitir confirmaciones requiere acceso Completo.",
+        "nameRequired": "Ponle un nombre a la conexión.",
+        "connectionNotFound": "No se encontró la conexión MCP."
       }
     },
     "success": {

@@ -5911,7 +5911,9 @@
         "oidcIdentityConflict": "Diese Single-Sign-on-Identität steht im Konflikt mit einem bestehenden Borg-UI-Konto.",
         "oidcEmailAlreadyInUse": "Diese Single-Sign-on-E-Mail wird bereits von einem anderen Borg-UI-Konto verwendet.",
         "oidcPendingApproval": "Dein Single-Sign-on-Konto wartet auf die Freigabe durch einen Administrator",
-        "oidcTemplateUserNotFound": "Der konfigurierte Single-Sign-on-Vorlagenbenutzer wurde nicht gefunden"
+        "oidcTemplateUserNotFound": "Der konfigurierte Single-Sign-on-Vorlagenbenutzer wurde nicht gefunden",
+        "mcpTokenNotForApi": "Dieses Token ist für MCP-Clients und kann nicht mit der API verwendet werden.",
+        "notAvailableOverMcp": "Diese Aktion ist für MCP-Verbindungen nicht verfügbar."
       },
       "plan": {
         "featureNotAvailable": "Diese Funktion ist in deinem aktuellen Plan nicht verfügbar."
@@ -6400,6 +6402,12 @@
       },
       "operations": {
         "unknownStage": "Unbekannte Hintergrundphase."
+      },
+      "mcp": {
+        "levelAboveCap": "Ihr Administrator erlaubt MCP-Verbindungen bis zum Zugriff {{max}}.",
+        "skipNeedsFull": "Bestätigungen überspringen erfordert vollen Zugriff.",
+        "nameRequired": "Geben Sie der Verbindung einen Namen.",
+        "connectionNotFound": "MCP-Verbindung nicht gefunden."
       }
     },
     "success": {
