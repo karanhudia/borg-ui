@@ -613,7 +613,7 @@ Model choices are Claude's call; Karan may change them.
 
 | Phase | Status | Plan file | Branch | Notes |
 | --- | --- | --- | --- | --- |
-| 1 Foundation and read tools | not started | | | |
+| 1 Foundation and read tools | plan approved | `docs/engineering/plans/2026-11-14-mcp-phase-1-foundation.md` | `feat/mcp-phase-1` | Plan drafted 2026-11-14 on Fable 5.2 (the model section 6 names). SDK checked by prototype: `mcp==2.3.0` lowlevel `Server` with stateless Streamable HTTP as one route on the FastAPI app; GET must answer 405 (a stateless GET stream never ends). 36 read tools. Refinements to raise at G1: activity rows survive revocation, pruning on write instead of a daily job, gated installs answer tool calls with a friendly error instead of refusing the connection. Approved at G1 on 2026-11-14 as drafted; all four open questions settled as the plan proposes (voice guide, activity survives revocation, friendly tool error when gated, no script bodies at Read). |
 | 2 Settings UI and docs | not started | | | |
 | 3 Operate | not started | | | |
 | 4 Manage | not started | | | |
