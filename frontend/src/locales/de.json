@@ -2755,7 +2755,8 @@
       "toasts": {
         "added": "SSH-Schlüssel hinzugefügt",
         "addFailed": "SSH-Schlüssel konnte nicht hinzugefügt werden",
-        "deleted": "SSH-Schlüssel gelöscht"
+        "deleted": "SSH-Schlüssel gelöscht",
+        "listFailed": "SSH-Schlüssel konnten nicht geladen werden. Bitte die Seite neu laden und erneut versuchen."
       }
     },
     "generateDialog": {

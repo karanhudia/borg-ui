@@ -2755,7 +2755,8 @@
       "toasts": {
         "added": "Clave SSH añadida",
         "addFailed": "No se pudo añadir la clave SSH",
-        "deleted": "Clave SSH eliminada"
+        "deleted": "Clave SSH eliminada",
+        "listFailed": "No se pudieron cargar las claves SSH. Recarga la página e inténtalo de nuevo."
       }
     },
     "generateDialog": {

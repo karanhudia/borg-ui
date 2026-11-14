@@ -90,7 +90,7 @@ export default function SSHConnectionsSingleKey() {
     refetchInterval: 30000,
   })
 
-  const { keys: sshKeys } = useSshKeys(canManageSsh)
+  const { keys: sshKeys, isError: sshKeysFailed } = useSshKeys(canManageSsh)
 
   // A key picked earlier and then deleted must not stay selected: with only the
   // system key left the picker hides, so the user could not change it.
@@ -476,6 +476,12 @@ export default function SSHConnectionsSingleKey() {
 
   const handleDeployKey = () => {
     if (!systemKey) return
+    // Without the key list the picker is hidden; never fall back to the
+    // system key silently when the user may have needed another one.
+    if (sshKeysFailed) {
+      toast.error(t('sshConnections.extraKeys.toasts.listFailed'))
+      return
+    }
     const normalizedHost = normalizeSshHostInput(connectionForm.host)
     if (!normalizedHost.ok) {
       setConnectionHostError(t(normalizedHost.errorKey))
@@ -492,6 +498,12 @@ export default function SSHConnectionsSingleKey() {
 
   const handleTestManualConnection = () => {
     if (!systemKey) return
+    // Without the key list the picker is hidden; never fall back to the
+    // system key silently when the user may have needed another one.
+    if (sshKeysFailed) {
+      toast.error(t('sshConnections.extraKeys.toasts.listFailed'))
+      return
+    }
     const normalizedHost = normalizeSshHostInput(testConnectionForm.host)
     if (!normalizedHost.ok) {
       setTestConnectionHostError(t(normalizedHost.errorKey))

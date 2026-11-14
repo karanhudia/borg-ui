@@ -874,6 +874,56 @@ describe('SSHConnectionsSingleKey', () => {
     })
   }, 30000)
 
+  it('keeps extra keys manageable after the system key is deleted', async () => {
+    mockState.systemKeyResponse = { data: { exists: false } }
+    mockState.sshKeysResponse = {
+      data: {
+        ssh_keys: [
+          {
+            id: 9,
+            name: 'borgserver-repo1',
+            key_type: 'ed25519',
+            is_system_key: false,
+            connection_count: 0,
+          },
+        ],
+      },
+    }
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    expect(await screen.findByText('borgserver-repo1')).toBeInTheDocument()
+  })
+
+  it('refuses to add a connection while the key list cannot load', async () => {
+    const { sshKeysAPI } = await import('../../services/api')
+    const { toast } = await import('react-hot-toast')
+    const loadKeys = vi.mocked(sshKeysAPI.getSSHKeys).getMockImplementation()
+    vi.mocked(sshKeysAPI.getSSHKeys).mockRejectedValue(new Error('boom'))
+    try {
+      const user = userEvent.setup()
+
+      renderWithProviders(<SSHConnectionsSingleKey />)
+
+      await rtlWaitFor(() => expect(sshKeysAPI.getSSHKeys).toHaveBeenCalled())
+      await user.click(await screen.findByRole('button', { name: /^add manual connection$/i }))
+      const dialog = await screen.findByRole('dialog')
+      fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+        target: { value: 'repo1.example' },
+      })
+      fireEvent.change(within(dialog).getByLabelText(/^username$/i), { target: { value: 'borg' } })
+      await rtlWaitFor(async () => {
+        await user.click(within(dialog).getByRole('button', { name: /test & add connection/i }))
+        expect(toast.error).toHaveBeenCalledWith(
+          'Could not load SSH keys. Reload the page and try again.'
+        )
+      })
+      expect(sshKeysAPI.testSSHConnection).not.toHaveBeenCalled()
+    } finally {
+      vi.mocked(sshKeysAPI.getSSHKeys).mockImplementation(loadKeys!)
+    }
+  }, 30000)
+
   it('falls back to the system key when the picked key was deleted', async () => {
     const { sshKeysAPI } = await import('../../services/api')
     const systemKeySummary = {

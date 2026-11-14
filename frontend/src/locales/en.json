@@ -2755,7 +2755,8 @@
       "toasts": {
         "added": "SSH key added",
         "addFailed": "Failed to add SSH key",
-        "deleted": "SSH key deleted"
+        "deleted": "SSH key deleted",
+        "listFailed": "Could not load SSH keys. Reload the page and try again."
       }
     },
     "generateDialog": {
