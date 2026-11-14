@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-11-14T03:53:12.280Z",
+  "generatedAt": "2026-11-14T04:22:13.710Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1538 visual report",
     "commitSha": "27243b7a891e",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43553765584"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43556197939"
   },
   "totals": {
     "baseline": 1256,
@@ -75,9 +75,9 @@
       "baselinePath": "images/baseline/components-systemsettings-repositorymonitoringsection--automatic-prune-previews-off--mobile.png",
       "actualPath": "images/actual/components-systemsettings-repositorymonitoringsection--automatic-prune-previews-off--mobile.png",
       "diffPath": "images/diff/components-systemsettings-repositorymonitoringsection--automatic-prune-previews-off--mobile.png",
-      "diffPixels": 39890,
+      "diffPixels": 40225,
       "totalPixels": 329160,
-      "diffRatio": 0.12118726455219346,
+      "diffRatio": 0.12220500668367967,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -93,9 +93,9 @@
       "baselinePath": "images/baseline/components-systemsettings-repositorymonitoringsection--automatic-prune-previews-off.png",
       "actualPath": "images/actual/components-systemsettings-repositorymonitoringsection--automatic-prune-previews-off.png",
       "diffPath": "images/diff/components-systemsettings-repositorymonitoringsection--automatic-prune-previews-off.png",
-      "diffPixels": 104074,
+      "diffPixels": 104418,
       "totalPixels": 1024000,
-      "diffRatio": 0.101634765625,
+      "diffRatio": 0.101970703125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -111,9 +111,9 @@
       "baselinePath": "images/baseline/components-systemsettings-repositorymonitoringsection--default--mobile.png",
       "actualPath": "images/actual/components-systemsettings-repositorymonitoringsection--default--mobile.png",
       "diffPath": "images/diff/components-systemsettings-repositorymonitoringsection--default--mobile.png",
-      "diffPixels": 39840,
+      "diffPixels": 40175,
       "totalPixels": 329160,
-      "diffRatio": 0.12103536274152388,
+      "diffRatio": 0.12205310487301009,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -129,9 +129,9 @@
       "baselinePath": "images/baseline/components-systemsettings-repositorymonitoringsection--default.png",
       "actualPath": "images/actual/components-systemsettings-repositorymonitoringsection--default.png",
       "diffPath": "images/diff/components-systemsettings-repositorymonitoringsection--default.png",
-      "diffPixels": 104044,
+      "diffPixels": 104388,
       "totalPixels": 1024000,
-      "diffRatio": 0.10160546875,
+      "diffRatio": 0.10194140625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -140,6 +140,42 @@
       "actual": {
         "width": 1280,
         "height": 800
+      }
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-error--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-error--mobile.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-error--mobile.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-error--mobile.png",
+      "diffPixels": 59711,
+      "totalPixels": 329160,
+      "diffRatio": 0.18140418033782962,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png",
+      "diffPixels": 59730,
+      "totalPixels": 329160,
+      "diffRatio": 0.18146190302588408,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
       }
     },
     {
@@ -161,24 +197,6 @@
       }
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPixels": 59752,
-      "totalPixels": 329160,
-      "diffRatio": 0.1815287398225787,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
       "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png",
       "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
       "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
@@ -197,31 +215,13 @@
       }
     },
     {
-      "fileName": "pages-cloudstorage--add-guided-remote--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote--mobile.png",
-      "diffPixels": 59730,
-      "totalPixels": 329160,
-      "diffRatio": 0.18146190302588408,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
       "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPixels": 59730,
+      "diffPixels": 2076,
       "totalPixels": 329160,
-      "diffRatio": 0.18146190302588408,
+      "diffRatio": 0.006306963179001094,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -255,9 +255,9 @@
       "baselinePath": "images/baseline/pages-cloudstorage--editing-remote--mobile.png",
       "actualPath": "images/actual/pages-cloudstorage--editing-remote--mobile.png",
       "diffPath": "images/diff/pages-cloudstorage--editing-remote--mobile.png",
-      "diffPixels": 59738,
+      "diffPixels": 1927,
       "totalPixels": 329160,
-      "diffRatio": 0.1814862073155912,
+      "diffRatio": 0.005854295783205736,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -291,9 +291,9 @@
       "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 406,
+      "diffPixels": 424,
       "totalPixels": 329160,
-      "diffRatio": 0.0012334427026370154,
+      "diffRatio": 0.0012881273544780654,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -2907,13 +2907,10 @@
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing.png"
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--create-error--mobile.png"
-    },
-    {
       "fileName": "components-wizard-rclone-remote-dialog--create-error.png"
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png"
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png"
@@ -3412,6 +3409,9 @@
     },
     {
       "fileName": "pages-backup-plans-content--skipped-repository.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
