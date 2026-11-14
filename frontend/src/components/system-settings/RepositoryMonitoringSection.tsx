@@ -22,6 +22,7 @@ import {
 interface RepositoryMonitoringSectionProps {
   statsRefreshInterval: number
   autoPrunePreview: boolean
+  maxConcurrentBackups: number
   maxConcurrentScheduledBackups: number
   maxConcurrentScheduledChecks: number
   dashboardBackupWarningDays: number
@@ -38,6 +39,7 @@ interface RepositoryMonitoringSectionProps {
   lastStatsRefresh?: string
   setStatsRefreshInterval: (value: number) => void
   setAutoPrunePreview: (value: boolean) => void
+  setMaxConcurrentBackups: (value: number) => void
   setMaxConcurrentScheduledBackups: (value: number) => void
   setMaxConcurrentScheduledChecks: (value: number) => void
   setDashboardBackupWarningDays: (value: number) => void
@@ -56,6 +58,7 @@ interface RepositoryMonitoringSectionProps {
 const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = ({
   statsRefreshInterval,
   autoPrunePreview,
+  maxConcurrentBackups,
   maxConcurrentScheduledBackups,
   maxConcurrentScheduledChecks,
   dashboardBackupWarningDays,
@@ -72,6 +75,7 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
   lastStatsRefresh,
   setStatsRefreshInterval,
   setAutoPrunePreview,
+  setMaxConcurrentBackups,
   setMaxConcurrentScheduledBackups,
   setMaxConcurrentScheduledChecks,
   setDashboardBackupWarningDays,
@@ -213,10 +217,22 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(240px, 320px))' },
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
           gap: 2,
         }}
       >
+        <TextField
+          label={t('systemSettings.maxConcurrentBackupsLabel')}
+          type="number"
+          value={maxConcurrentBackups}
+          onChange={(e) => setMaxConcurrentBackups(Number(e.target.value))}
+          error={maxConcurrentBackups < 1 || maxConcurrentBackups > MAX_SCHEDULE_CONCURRENCY}
+          helperText={t('systemSettings.maxConcurrentBackupsHelper')}
+          slotProps={{
+            htmlInput: { min: 1, max: MAX_SCHEDULE_CONCURRENCY, step: 1 },
+          }}
+        />
+
         <TextField
           label={t('systemSettings.maxConcurrentScheduledBackupsLabel')}
           type="number"

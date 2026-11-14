@@ -361,7 +361,7 @@ async def get_system_settings(
             # Create default settings - but NOT timeout values
             # Timeout values stay NULL so env vars can be used as fallback
             settings = SystemSettings(
-                max_concurrent_backups=2,
+                max_concurrent_backups=1,
                 max_concurrent_scheduled_backups=2,
                 max_concurrent_scheduled_checks=4,
                 log_retention_days=30,
@@ -1896,7 +1896,7 @@ async def cleanup_system(
             # Create default settings if they don't exist
             settings = SystemSettings(
                 backup_timeout=3600,
-                max_concurrent_backups=2,
+                max_concurrent_backups=1,
                 log_retention_days=30,
                 email_notifications=False,
                 webhook_url="",

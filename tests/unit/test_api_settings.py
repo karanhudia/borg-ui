@@ -24,6 +24,18 @@ class TestSystemSettings:
         # SystemSettings model now exists and endpoint works correctly
         assert response.status_code == 200
 
+    def test_new_settings_row_defaults_to_one_concurrent_backup(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        # #1535: the row GET creates must match the model default.
+        test_db.query(SystemSettings).delete()
+        test_db.commit()
+        response = test_client.get("/api/settings/system", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert response.json()["settings"]["max_concurrent_backups"] == 1
+        assert SystemSettings.__table__.c.max_concurrent_backups.default.arg == 1
+
     def test_get_system_settings_unauthorized(self, test_client: TestClient):
         """Test getting system settings without auth returns 403"""
         response = test_client.get("/api/settings/system")

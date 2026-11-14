@@ -45,6 +45,7 @@ const SystemSettingsTab: React.FC = () => {
   const [initTimeout, setInitTimeout] = useState(300)
   const [backupTimeout, setBackupTimeout] = useState(3600)
   const [sourceSizeTimeout, setSourceSizeTimeout] = useState(3600)
+  const [maxConcurrentBackups, setMaxConcurrentBackups] = useState(1)
   const [maxConcurrentScheduledBackups, setMaxConcurrentScheduledBackups] = useState(2)
   const [maxConcurrentScheduledChecks, setMaxConcurrentScheduledChecks] = useState(4)
   const [statsRefreshInterval, setStatsRefreshInterval] = useState(60)
@@ -158,6 +159,7 @@ const SystemSettingsTab: React.FC = () => {
       setInitTimeout(systemSettings.init_timeout || 300)
       setBackupTimeout(systemSettings.backup_timeout || 3600)
       setSourceSizeTimeout(systemSettings.source_size_timeout || 3600)
+      setMaxConcurrentBackups(systemSettings.max_concurrent_backups ?? 1)
       setMaxConcurrentScheduledBackups(systemSettings.max_concurrent_scheduled_backups ?? 2)
       setMaxConcurrentScheduledChecks(systemSettings.max_concurrent_scheduled_checks ?? 4)
       setStatsRefreshInterval(systemSettings.stats_refresh_interval_minutes ?? 60)
@@ -221,6 +223,7 @@ const SystemSettingsTab: React.FC = () => {
         initTimeout !== (systemSettings.init_timeout || 300) ||
         backupTimeout !== (systemSettings.backup_timeout || 3600) ||
         sourceSizeTimeout !== (systemSettings.source_size_timeout || 3600) ||
+        maxConcurrentBackups !== (systemSettings.max_concurrent_backups ?? 1) ||
         maxConcurrentScheduledBackups !== (systemSettings.max_concurrent_scheduled_backups ?? 2) ||
         maxConcurrentScheduledChecks !== (systemSettings.max_concurrent_scheduled_checks ?? 4)
       const statsRefreshDirty =
@@ -293,6 +296,7 @@ const SystemSettingsTab: React.FC = () => {
     initTimeout,
     backupTimeout,
     sourceSizeTimeout,
+    maxConcurrentBackups,
     maxConcurrentScheduledBackups,
     maxConcurrentScheduledChecks,
     statsRefreshInterval,
@@ -349,6 +353,7 @@ const SystemSettingsTab: React.FC = () => {
     backupTimeout,
     sourceSizeTimeout,
     statsRefreshInterval,
+    maxConcurrentBackups,
     maxConcurrentScheduledBackups,
     maxConcurrentScheduledChecks,
     dashboardBackupWarningDays,
@@ -381,6 +386,7 @@ const SystemSettingsTab: React.FC = () => {
     init_timeout: initTimeout,
     backup_timeout: backupTimeout,
     source_size_timeout: sourceSizeTimeout,
+    max_concurrent_backups: maxConcurrentBackups,
     max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
     max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
     stats_refresh_interval_minutes: statsRefreshInterval,
@@ -544,6 +550,7 @@ const SystemSettingsTab: React.FC = () => {
         init_timeout: initTimeout,
         backup_timeout: backupTimeout,
         source_size_timeout: sourceSizeTimeout,
+        max_concurrent_backups: maxConcurrentBackups,
         max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
         max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
         stats_refresh_interval_minutes: statsRefreshInterval,
@@ -740,6 +747,7 @@ const SystemSettingsTab: React.FC = () => {
             <RepositoryMonitoringSection
               statsRefreshInterval={statsRefreshInterval}
               autoPrunePreview={autoPrunePreview}
+              maxConcurrentBackups={maxConcurrentBackups}
               maxConcurrentScheduledBackups={maxConcurrentScheduledBackups}
               maxConcurrentScheduledChecks={maxConcurrentScheduledChecks}
               dashboardBackupWarningDays={dashboardBackupWarningDays}
@@ -756,6 +764,7 @@ const SystemSettingsTab: React.FC = () => {
               lastStatsRefresh={systemSettings?.last_stats_refresh}
               setStatsRefreshInterval={setStatsRefreshInterval}
               setAutoPrunePreview={setAutoPrunePreview}
+              setMaxConcurrentBackups={setMaxConcurrentBackups}
               setMaxConcurrentScheduledBackups={setMaxConcurrentScheduledBackups}
               setMaxConcurrentScheduledChecks={setMaxConcurrentScheduledChecks}
               setDashboardBackupWarningDays={setDashboardBackupWarningDays}
