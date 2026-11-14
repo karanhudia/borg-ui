@@ -49,6 +49,12 @@ from fastapi import HTTPException
         # No Borg on the SSH host (859daa3dfb3863ec), bash and dash wording.
         ({"return_code": 2, "error": "Remote: sh: borg: command not found"}, 422),
         ({"return_code": 2, "error": "Remote: sh: 1: borg: not found"}, 422),
+        ({"return_code": 2, "error": "Remote: sudo: 'borg': command not found"}, 422),
+        # The archive is gone (59a11c4953c3d968); a path inside one is not.
+        ({"return_code": 31}, 404),
+        ({"return_code": 2, "stderr": "Archive 71 does not exist"}, 404),
+        ({"return_code": 2, "stderr": "Archive daily-1 does not exist.\n"}, 404),
+        ({"return_code": 2, "stderr": "Path /etc/x does not exist in archive"}, 500),
         ({"return_code": 2, "stderr": "unexplained failure"}, 500),
         ({"return_code": 73, "stderr": "Our lock was killed by another borg"}, 500),
     ],

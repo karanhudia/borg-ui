@@ -6059,6 +6059,7 @@
         "mirrorUnsupportedPrimary": "Cloud-Spiegelung unterstützt derzeit lokale, SSH- und Managed-Agent-Primär-Repositories",
         "remotePathNotVerified": "Dieser rclone-Remote-Pfad ist nicht leer. Durchsuche und bestätige den Zielpfad vor der Synchronisierung.",
         "remotePathPreflightFailed": "Dieser rclone-Remote-Pfad konnte nicht verifiziert werden",
+        "browseFailed": "Dieser rclone-Remote konnte nicht aufgelistet werden: {{error}}",
         "cachePathServerOwned": "Der rclone-Cache-Pfad wird vom Server verwaltet",
         "remoteRequired": "Wähle ein rclone-Remote aus",
         "remotePathRequired": "Gib einen relativen rclone-Remote-Pfad ein",

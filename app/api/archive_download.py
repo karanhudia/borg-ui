@@ -4,6 +4,8 @@ import tempfile
 from typing import Awaitable, Callable
 
 from fastapi import HTTPException, status
+
+from app.core.borg_errors import repository_failure_status
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
@@ -36,7 +38,7 @@ async def extract_file_download(
         result = await extract(temp_dir)
         if not result.get("success"):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=repository_failure_status(result),
                 detail={
                     "key": "backend.errors.archives.failedExtractFile",
                     "params": {"error": result.get("stderr", "Unknown error")},

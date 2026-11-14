@@ -6059,6 +6059,7 @@
         "mirrorUnsupportedPrimary": "Cloud mirror is currently supported for local, SSH, and managed-agent primary repositories",
         "remotePathNotVerified": "This rclone remote path is not empty. Browse and confirm the target path before syncing.",
         "remotePathPreflightFailed": "Could not verify this rclone remote path",
+        "browseFailed": "Could not list this rclone remote: {{error}}",
         "cachePathServerOwned": "The rclone cache path is managed by the server",
         "remoteRequired": "Select an rclone remote",
         "remotePathRequired": "Enter a relative rclone remote path",
