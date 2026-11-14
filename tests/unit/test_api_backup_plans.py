@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from types import SimpleNamespace
 import structlog
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -56,6 +57,29 @@ def _plan_backup_seam(fake_execute_backup):
     async def _wait(db, operation_id, **_ignored):
         operation = db.get(Operation, operation_id)
         repository = db.get(Repository, operation.repository_id)
+        # The runner gives the backup its slot and the executor enters the
+        # plan's pre-backup gate before anything else runs.
+        if operation.backup_plan_run_id is not None:
+            from app.services.backup_plan_execution_service import (
+                backup_plan_execution_service,
+            )
+
+            operation.status = "running"
+            operation.started_at = datetime.utcnow()
+            db.commit()
+            run_id = operation.backup_plan_run_id
+            verdict = await backup_plan_execution_service.enter_backup_slot(run_id)
+            if backup_plan_execution_service._is_run_cancelled(run_id):
+                # the runner's cancel flag, raised by `cancel_run`
+                verdict = SimpleNamespace(status="cancelled", message=None)
+            if verdict.status is not None:
+                db.expire_all()
+                operation = db.get(Operation, operation_id)
+                operation.status = verdict.status
+                operation.error_message = verdict.message
+                operation.completed_at = datetime.utcnow()
+                db.commit()
+                return verdict.status
         # `create_backup_operation` drops None so a service default is not
         # shadowed; the fakes were written against `execute_backup`, which
         # received every keyword, so fill the gaps back in.
@@ -69,6 +93,22 @@ def _plan_backup_seam(fake_execute_backup):
         return db.get(Operation, operation_id).status
 
     return _wait
+
+
+async def _unexpected_backup(job_id, *args, **kwargs):
+    raise AssertionError(f"backup {job_id} was not expected to start")
+
+
+@pytest.fixture(autouse=True)
+def _plan_backups_get_a_slot():
+    """No runner runs here: a plan backup a test does not fake would wait
+    for one forever. This one gets its slot at once, so the plan's
+    pre-backup scripts run, and fails the test if the backup itself starts."""
+    with patch(
+        "app.services.operations.backup_facade.wait_for_backup_operation",
+        new=_plan_backup_seam(_unexpected_backup),
+    ):
+        yield
 
 
 from app.services.schedule_availability import AvailabilityDecision
@@ -4554,11 +4594,18 @@ class TestBackupPlanRoutes:
         async def fake_plan_script(run_id, context, *, hook_type, **kwargs):
             return False, error
 
+        async def no_backup(*args, **kwargs):
+            raise AssertionError("the failed pre-backup script stops the backup")
+
         with (
             patch.object(
                 backup_plan_execution_service,
                 "_execute_plan_script",
                 side_effect=patches.get("plan_script", fake_plan_script),
+            ),
+            patch(
+                "app.services.operations.backup_facade.wait_for_backup_operation",
+                new=_plan_backup_seam(no_backup),
             ),
             patch.object(
                 notification_service,
@@ -4709,7 +4756,7 @@ class TestBackupPlanRoutes:
         notify.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_pre_script_failure_of_a_cancelled_run_leaves_no_operation(
+    async def test_pre_script_failure_of_a_cancelled_run_leaves_it_cancelled(
         self, test_db
     ):
         repo = _create_repo(test_db, "Primary", "/repos/primary")
@@ -4730,7 +4777,8 @@ class TestBackupPlanRoutes:
         run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
         assert run.status == "cancelled"
         assert [child.status for child in run.repositories] == ["cancelled"]
-        assert test_db.query(Operation).count() == 0
+        # the backup whose slot the script ran in is cancelled, not failed
+        assert [op.status for op in test_db.query(Operation)] == ["cancelled"]
         notify.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -5694,7 +5742,7 @@ class TestBackupPlanRoutes:
             ),
             patch(
                 "app.services.operations.backup_facade.wait_for_backup_operation",
-                backup_mock,
+                new=_plan_backup_seam(backup_mock),
             ),
         ):
             await backup_plan_execution_service.execute_run(run.id)

@@ -94,7 +94,7 @@ from app.services.operations.backup_facade import (
 )
 from app.services.operations.enqueue import wake_runner
 from app.services.operations.events import broadcast_operation_updated
-from app.services.operations.runner import operation_runner
+from app.services.operations.runner import REPOSITORY_BUSY_KEY, operation_runner
 from app.services.operations.vocab import TERMINAL_STATUSES
 from app.utils.archive_names import build_archive_name
 from app.utils.http_detail import detail_text
@@ -673,12 +673,59 @@ async def _send_plan_required_notice(
         db.close()
 
 
+@dataclass
+class PreHookVerdict:
+    """What a plan run's pre-backup scripts decided for its backups: go
+    ahead (`status` None, with the warning they left, if any), or stand
+    down, `skipped` or `failed`, with `message`."""
+
+    status: Optional[str] = None
+    message: Optional[str] = None
+    warning: Optional[str] = None
+
+
+class _PreHookGate:
+    """A plan run's pre-backup scripts, run once, when the first of its
+    backups has its slot in the queue: the backup executor enters the gate
+    right before `borg create` (`enter_backup_slot`), and every backup of
+    the run that gets there waits for the same scripts. A run that waits in
+    the queue behind other backups does not hold what they stop down while
+    it waits, and one that never gets a slot runs none of them."""
+
+    def __init__(self, work: Callable[[], Awaitable[PreHookVerdict]]) -> None:
+        self._work = work
+        self._task: Optional[asyncio.Future] = None
+
+    async def enter(self) -> PreHookVerdict:
+        if self._task is None:
+            self._task = asyncio.ensure_future(self._work())
+        # one backup's cancel must not stop the scripts the others wait for
+        return await asyncio.shield(self._task)
+
+    async def verdict(self) -> Optional[PreHookVerdict]:
+        """None when no backup of the run got a slot; raises what the
+        scripts raised."""
+        if self._task is None:
+            return None
+        return await asyncio.shield(self._task)
+
+    def stood_down(self) -> bool:
+        """True once the scripts ended and no further backup may start."""
+        if self._task is None or not self._task.done():
+            return False
+        if self._task.cancelled() or self._task.exception() is not None:
+            return True
+        return self._task.result().status is not None
+
+
 class BackupPlanExecutionService:
     def __init__(self) -> None:
         # Runs this process started and is still executing: the startup sweep
         # (`cleanup_orphaned_jobs`) runs once the runner holds its lease and
         # must not fail them as interrupted by the restart (#1398).
         self.live_run_ids: set[int] = set()
+        # The pre-backup gate of each run this process is executing.
+        self._pre_hook_gates: dict[int, _PreHookGate] = {}
 
     @staticmethod
     def _next_plan_run(plan: BackupPlan, now: datetime) -> Optional[datetime]:
@@ -1220,58 +1267,41 @@ class BackupPlanExecutionService:
             if not repositories:
                 self._finalize_run(run_id)
                 return
-            # Its pre-backup scripts do not run under the post-backup hooks
-            # a restart left to run for an earlier backup of one of its
-            # repositories (#1429).
-            from app.services.backup_service import backup_service
-
-            for repository in repositories:
-                await backup_service.wait_for_post_hooks_after_restart(
-                    repository_id=repository.repository_id
-                )
-            (
-                pre_script_ok,
-                pre_script_error,
-                pre_script_skip,
-            ) = await self._execute_plan_script_hooks(
-                run_id,
-                context,
-                hook_type="pre-backup",
+            # The pre-backup scripts run when the first backup has its slot,
+            # not now: a run waiting in the queue must not keep what they
+            # stop down for the backups ahead of it.
+            gate = _PreHookGate(
+                partial(self._run_pre_backup_scripts, run_id, context, repositories)
             )
-            if pre_script_skip:
-                skip_message = pre_script_error or "Skipped by plan pre-backup script"
-                self._mark_pending_repositories_skipped(run_id, skip_message)
-                self._finalize_run(run_id, warning_message=skip_message)
+            self._pre_hook_gates[run_id] = gate
+            try:
+                if context.repository_run_mode == "parallel":
+                    await self._execute_parallel(run_id, context, repositories)
+                else:
+                    await self._execute_series(run_id, context, repositories)
+            finally:
+                self._pre_hook_gates.pop(run_id, None)
+
+            verdict = await gate.verdict()
+            if verdict is None:
+                # No backup got a slot (cancelled or failed while queued), so
+                # no pre-backup script ran and no post-backup one has
+                # anything to undo.
+                self._finalize_run(run_id)
                 return
-            if not pre_script_ok:
-                error_message = pre_script_error or "Plan pre-backup script failed"
+            if verdict.status == "skipped":
+                self._mark_pending_repositories_skipped(run_id, verdict.message)
+                self._finalize_run(run_id, warning_message=verdict.message)
+                return
+            if verdict.status == "failed":
                 await self._fail_pending_repositories_before_backup(
-                    run_id, context, error_message
+                    run_id, context, verdict.message
                 )
-                raise ValueError(error_message)
+                raise ValueError(verdict.message)
             # A successful pre-backup hook can still carry a warning (agent rc==1);
             # keep it so it reaches the final run state alongside post-hook warnings.
-            if pre_script_error:
-                run_warnings.append(pre_script_error)
-
-            source_pre_ok, source_pre_error = await self._execute_source_scripts(
-                run_id,
-                context,
-                hook_type="source-pre-backup",
-            )
-            if not source_pre_ok:
-                error_message = (
-                    source_pre_error or "Database source pre-backup script failed"
-                )
-                await self._fail_pending_repositories_before_backup(
-                    run_id, context, error_message
-                )
-                raise ValueError(error_message)
-
-            if context.repository_run_mode == "parallel":
-                await self._execute_parallel(run_id, context, repositories)
-            else:
-                await self._execute_series(run_id, context, repositories)
+            if verdict.warning:
+                run_warnings.append(verdict.warning)
 
             # A cancelled run is a failure to its post-backup hooks, as a
             # cancelled repository is in `_plan_backup_result` (#1385).
@@ -1318,6 +1348,76 @@ class BackupPlanExecutionService:
                     error=str(hook_exc),
                 )
             self._mark_run_failed(run_id, "; ".join(messages))
+
+    async def enter_backup_slot(self, run_id: int) -> PreHookVerdict:
+        """Called by the backup executor once the runner gave a backup of
+        plan run `run_id` its slot, before anything else of the backup runs.
+        The first call runs the plan's pre-backup scripts; every call waits
+        for them and returns their verdict."""
+        gate = self._pre_hook_gates.get(run_id)
+        if gate is not None:
+            return await gate.enter()
+        db = SessionLocal()
+        try:
+            status = self._run_status(db, run_id)
+        finally:
+            db.close()
+        if status is None or status in TERMINAL_PLAN_RUN_STATUSES:
+            # the run ended (a restart failed it) and waits for no backup
+            return PreHookVerdict(
+                status="skipped", message="The backup plan run has ended"
+            )
+        # ponytail: the run lives in another process (a lease handover), whose
+        # gate this one cannot reach; the backup waits in the queue until
+        # that process has the runner, as for a busy repository.
+        raise HTTPException(
+            status_code=409, detail={"key": REPOSITORY_BUSY_KEY, "run_id": run_id}
+        )
+
+    async def _run_pre_backup_scripts(
+        self,
+        run_id: int,
+        context: PlanRunContext,
+        repositories: list[RepositoryRunContext],
+    ) -> PreHookVerdict:
+        # They do not run under the post-backup hooks a restart left to run
+        # for an earlier backup of one of the run's repositories (#1429).
+        from app.services.backup_service import backup_service
+
+        for repository in repositories:
+            await backup_service.wait_for_post_hooks_after_restart(
+                repository_id=repository.repository_id
+            )
+        (
+            pre_script_ok,
+            pre_script_error,
+            pre_script_skip,
+        ) = await self._execute_plan_script_hooks(
+            run_id,
+            context,
+            hook_type="pre-backup",
+        )
+        if pre_script_skip:
+            return PreHookVerdict(
+                status="skipped",
+                message=pre_script_error or "Skipped by plan pre-backup script",
+            )
+        if not pre_script_ok:
+            return PreHookVerdict(
+                status="failed",
+                message=pre_script_error or "Plan pre-backup script failed",
+            )
+        source_pre_ok, source_pre_error = await self._execute_source_scripts(
+            run_id,
+            context,
+            hook_type="source-pre-backup",
+        )
+        if not source_pre_ok:
+            return PreHookVerdict(
+                status="failed",
+                message=source_pre_error or "Database source pre-backup script failed",
+            )
+        return PreHookVerdict(warning=pre_script_error)
 
     async def _run_post_backup_scripts(
         self,
@@ -2536,6 +2636,11 @@ class BackupPlanExecutionService:
             )
             if not child or not repo:
                 return "failed"
+            gate = self._pre_hook_gates.get(run_id)
+            if gate is not None and gate.stood_down():
+                # the pre-backup scripts stood the run down; it records the
+                # repositories still pending (`execute_run`)
+                return "skipped"
             if await self._skip_if_agent_offline(run_id, repository_context):
                 return "skipped"
 
@@ -2684,7 +2789,17 @@ class BackupPlanExecutionService:
             child.status = final_status
             child.completed_at = backup_job.completed_at or datetime.utcnow()
             child.error_message = backup_job.error_message
+            error_message = child.error_message
             db.commit()
+            if gate is not None and gate.stood_down():
+                # This backup got the slot the pre-backup scripts ran in, and
+                # stood down with them; the run decides for the rest, not
+                # the repository's failure behavior.
+                if final_status == "failed":
+                    await self._notify_backup_failures(
+                        run_id, context, [(operation_id, repo.path)], error_message
+                    )
+                return "skipped"
             return final_status
         except Exception as exc:
             # The failure is written through a session of its own. Whatever

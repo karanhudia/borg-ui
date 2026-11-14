@@ -673,8 +673,9 @@ async def test_failed_cleanup_after_a_skip_fails_the_backup(db_session, monkeypa
 @pytest.mark.asyncio
 async def test_run_whose_backups_the_reaper_skipped_is_skipped(test_db, connected):
     """The agent was there when the run started and went away before it got
-    the backup: the run backed nothing up either, and keeps the plan's
-    post-backup warning."""
+    the backup: the run backed nothing up either. The backup never got its
+    slot, so the plan's pre-backup scripts never ran, nor its post-backup
+    ones."""
     agent = _agent(test_db, "laptop", last_seen_ago=timedelta(seconds=10))
     connected.add(agent.id)
     repo = _repo(test_db, "laptop", agent)
@@ -698,17 +699,15 @@ async def test_run_whose_backups_the_reaper_skipped_is_skipped(test_db, connecte
         patch.object(
             backup_plan_execution_service,
             "_execute_plan_script_hooks",
-            new=AsyncMock(
-                side_effect=[(True, None, False), (False, "cleanup failed", False)]
-            ),
-        ),
+            new=AsyncMock(return_value=(True, None, False)),
+        ) as plan_scripts,
     ):
         await backup_plan_execution_service.execute_run(run.id)
 
     test_db.refresh(run)
     assert run.status == "skipped"
     assert run.skip_reason == "agent_offline"
-    assert "cleanup failed" in run.error_message
+    plan_scripts.assert_not_awaited()
 
 
 @pytest.mark.unit

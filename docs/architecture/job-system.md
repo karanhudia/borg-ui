@@ -88,6 +88,15 @@ Typical flow:
 Steps 5 to 7 happen inside the executor or the calling scheduler exactly as
 they did before the migration.
 
+A backup plan's own pre-backup scripts (plan scripts and source scripts) also
+run at step 2, not when the plan run starts: the first of the run's backups
+the runner dispatches enters the run's gate
+(`BackupPlanExecutionService.enter_backup_slot`), which runs them once while
+that backup holds its slot; the run's other backups wait for the same verdict.
+A run that waits in the queue keeps nothing stopped meanwhile, and a run
+cancelled before any of its backups was dispatched runs neither its pre- nor
+its post-backup scripts.
+
 There are two execution paths. A server backup runs
 `backup_service.execute_backup`, which covers a local source, an SSHFS
 source, and a remote direct backup through `remote_backup_service`. An agent
