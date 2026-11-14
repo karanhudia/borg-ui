@@ -6156,6 +6156,7 @@
         "keyDeployFailed": "Failed to deploy SSH key: {{error}}",
         "keyGeneratedButDeployFailed": "SSH key generated but deployment failed: {{error}}",
         "keyInUse": "This SSH key is used by: {{connections}}. Switch those connections to another key first.",
+        "keyInUseByMirror": "Cloud Mirror on these repositories uses this SSH key: {{repositories}}. Pick another key for those mirrors first.",
         "keyNameAlreadyExists": "SSH key name already exists",
         "keyRemoveFailed": "Failed to remove SSH key: {{error}}",
         "noSystemKeyFound": "No system SSH key found",

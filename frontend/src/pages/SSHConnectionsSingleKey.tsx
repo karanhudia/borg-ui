@@ -117,6 +117,7 @@ export default function SSHConnectionsSingleKey() {
     onSuccess: () => {
       toast.success(t('sshConnections.toasts.keyGenerated'))
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
+      queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })
       setGenerateDialogOpen(false)
       track(EventCategory.SSH, EventAction.CREATE, { resource: 'key' })
     },
@@ -134,6 +135,7 @@ export default function SSHConnectionsSingleKey() {
     onSuccess: () => {
       toast.success(t('sshConnections.toasts.keyImported'))
       queryClient.invalidateQueries({ queryKey: ['system-ssh-key'] })
+      queryClient.invalidateQueries({ queryKey: SSH_KEYS_QUERY_KEY })
       setImportDialogOpen(false)
       setImportForm(createImportForm())
       track(EventCategory.SSH, EventAction.UPLOAD, { resource: 'key' })

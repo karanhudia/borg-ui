@@ -286,6 +286,8 @@ describe('SSHConnectionsSingleKey', () => {
         description: 'System SSH key for all remote connections',
       })
     })
+    // The key list picks up the new system key without waiting for a refetch.
+    await waitFor(() => expect(sshKeysAPI.getSSHKeys).toHaveBeenCalledTimes(2))
   }, 30000)
 
   it('deploys the system key with the expected connection payload', async () => {

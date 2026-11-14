@@ -57,7 +57,6 @@ export function ExtraKeysSection({ keys, connections }: ExtraKeysSectionProps) {
       setAddOpen(false)
     },
     onError: (error: unknown) => {
-      console.error('Failed to add SSH key:', error)
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.extraKeys.toasts.addFailed')
@@ -75,7 +74,6 @@ export function ExtraKeysSection({ keys, connections }: ExtraKeysSectionProps) {
       setKeyToDelete(null)
     },
     onError: (error: unknown) => {
-      console.error('Failed to delete SSH key:', error)
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) || t('sshConnections.toasts.keyDeleteFailed')
       )
