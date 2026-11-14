@@ -7,13 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.api import ssh_keys as ssh_keys_api
 from app.core.security import encrypt_secret
-from app.database.models import (
-    RcloneRemote,
-    Repository,
-    RepositoryStorage,
-    SSHConnection,
-    SSHKey,
-)
+from app.database.models import SSHConnection, SSHKey
 
 
 def _keygen(tmp_path, name="key"):
@@ -198,38 +192,6 @@ def test_delete_extra_key_in_use_is_refused(
         "u@a.example.com:22",
         "u@b.example.com:22",
     ]
-    assert test_db.query(SSHKey).filter(SSHKey.id == extra.id).first() is not None
-
-
-def test_delete_extra_key_used_by_cloud_mirror_is_refused(
-    test_client: TestClient, admin_headers, test_db
-):
-    extra = _add_key(test_db, "extra")
-    remote = RcloneRemote(name="prod-s3", provider="s3")
-    repository = Repository(
-        name="SSH App",
-        path="ssh://borg@storage.example:22/backups/app",
-        encryption="none",
-        repository_type="ssh",
-    )
-    test_db.add_all([remote, repository])
-    test_db.flush()
-    test_db.add(
-        RepositoryStorage(
-            repository_id=repository.id,
-            backend="rclone",
-            rclone_remote_id=remote.id,
-            sftp_ssh_key_id=extra.id,
-        )
-    )
-    test_db.commit()
-
-    response = test_client.delete(f"/api/ssh-keys/{extra.id}", headers=admin_headers)
-
-    assert response.status_code == 409
-    detail = response.json()["detail"]
-    assert detail["key"] == "backend.errors.ssh.keyInUseByMirror"
-    assert detail["params"]["repositories"] == ["SSH App"]
     assert test_db.query(SSHKey).filter(SSHKey.id == extra.id).first() is not None
 
 

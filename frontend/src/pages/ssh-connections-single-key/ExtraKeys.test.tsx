@@ -185,7 +185,7 @@ describe('DeleteExtraKeyDialog', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
   })
 
-  it('blocks deleting a key a Cloud Mirror uses', () => {
+  it('says which Cloud Mirrors fall back before deleting a key they use', () => {
     renderWithProviders(
       <DeleteExtraKeyDialog
         sshKey={{ ...extraKey, sftp_repository_count: 2 }}
@@ -195,8 +195,10 @@ describe('DeleteExtraKeyDialog', () => {
       />
     )
 
-    expect(screen.getByText(/Cloud Mirror on 2 repositories uses this key/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    expect(
+      screen.getByText(/Cloud Mirror on 2 repositories uses this key\. Deleting it switches/)
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled()
   })
 })
 

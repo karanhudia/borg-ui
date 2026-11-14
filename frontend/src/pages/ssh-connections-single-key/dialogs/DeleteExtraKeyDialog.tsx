@@ -31,8 +31,9 @@ export function DeleteExtraKeyDialog({
 }: DeleteExtraKeyDialogProps) {
   const { t } = useTranslation()
   const inUse = connectionsUsingKey.length > 0
+  // Mirrors do not block deletion: their key is optional and they fall back
+  // to the connection's key, but the user should know before deleting.
   const mirrorCount = sshKey?.sftp_repository_count ?? 0
-  const blocked = inUse || mirrorCount > 0
 
   return (
     <ResponsiveDialog
@@ -49,7 +50,7 @@ export function DeleteExtraKeyDialog({
             variant="contained"
             color="error"
             onClick={onDelete}
-            disabled={pending || blocked}
+            disabled={pending || inUse}
             startIcon={pending ? <CircularProgress size={16} color="inherit" /> : undefined}
           >
             {pending
@@ -62,7 +63,7 @@ export function DeleteExtraKeyDialog({
     >
       <DialogTitle>{t('sshConnections.extraKeys.deleteDialog.title')}</DialogTitle>
       <DialogContent>
-        <Typography variant="body2" sx={{ mb: blocked ? 2 : 0 }}>
+        <Typography variant="body2" sx={{ mb: inUse || mirrorCount > 0 ? 2 : 0 }}>
           {t('sshConnections.extraKeys.deleteDialog.confirm', { name: sshKey?.name ?? '' })}
         </Typography>
         {inUse && (
@@ -85,7 +86,7 @@ export function DeleteExtraKeyDialog({
           </Alert>
         )}
         {mirrorCount > 0 && (
-          <Alert severity="warning" sx={{ mt: inUse ? 1.5 : 0 }}>
+          <Alert severity="info" sx={{ mt: inUse ? 1.5 : 0 }}>
             <Typography variant="body2">
               {t('sshConnections.extraKeys.deleteDialog.inUseByMirror', { count: mirrorCount })}
             </Typography>

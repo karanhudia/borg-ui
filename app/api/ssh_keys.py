@@ -2699,25 +2699,6 @@ async def delete_ssh_key(
                 },
             )
 
-        if not ssh_key.is_system_key:
-            mirror_repositories = [
-                name
-                for (name,) in db.query(Repository.name)
-                .join(
-                    RepositoryStorage, RepositoryStorage.repository_id == Repository.id
-                )
-                .filter(RepositoryStorage.sftp_ssh_key_id == key_id)
-                .order_by(Repository.name)
-            ]
-            if mirror_repositories:
-                raise HTTPException(
-                    status_code=409,
-                    detail={
-                        "key": "backend.errors.ssh.keyInUseByMirror",
-                        "params": {"repositories": mirror_repositories},
-                    },
-                )
-
         key_name = ssh_key.name
         key_type = ssh_key.key_type
         connection_count = len(ssh_key.connections)
