@@ -171,6 +171,18 @@ that includes the Docker CLI.
 Use a post-backup hook that runs on failure as well as success if the pre-backup
 hook stops a service.
 
+### When a Backup Plan's pre-backup scripts run
+
+A Backup Plan's pre-backup scripts run when its first backup gets a slot in the
+backup queue, right before Borg starts, not when the schedule fires. If other
+backups are ahead of it (for example with a concurrency limit of 1), the
+containers keep running while the plan waits. A plan cancelled while it is
+still waiting runs neither its pre-backup nor its post-backup scripts.
+
+This covers the wait before the plan's first backup only. In a plan with
+several repositories, a later repository's backup can still wait for a slot
+after the scripts ran, and the containers stay stopped during that wait.
+
 ## Related
 
 - [Troubleshooting](troubleshooting)

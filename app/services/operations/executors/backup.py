@@ -434,6 +434,38 @@ def _sources_refusal(repository, params) -> Optional[str]:
     return json.dumps({"key": route.reason_key, "params": route.display_params})
 
 
+async def _enter_plan_slot(ctx) -> Optional[Outcome]:
+    """A plan's backup runs its plan's pre-backup scripts now that it holds
+    its slot, not when the plan run started, so a run waiting in the queue
+    keeps nothing stopped while it waits. Returns the outcome of a backup
+    the scripts (or a cancel while they ran) stood down, else None."""
+    from app.services.backup_plan_execution_service import (
+        backup_plan_execution_service,
+    )
+
+    run_id = ctx.db.get(Operation, ctx.operation_id).backup_plan_run_id
+    # no transaction held open while the scripts run
+    ctx.db.rollback()
+    verdict = await backup_plan_execution_service.enter_backup_slot(run_id)
+    if ctx.cancelled():
+        # cancelled while the scripts ran: a cancel, whatever they decided
+        ctx.db.expire_all()
+        operation = ctx.db.get(Operation, ctx.operation_id)
+        operation.status = "cancelled"
+        operation.error_message = CANCELLED_BY_USER
+        ctx.db.commit()
+        return Outcome(status="failed", error_message=CANCELLED_BY_USER)
+    if verdict.status == "skipped":
+        return Outcome(
+            status="skipped",
+            skip_reason=verdict.message,
+            error_message=verdict.message,
+        )
+    if verdict.status == "failed":
+        return Outcome(status="failed", error_message=verdict.message)
+    return None
+
+
 async def run_backup(ctx) -> Outcome:
     from app.services.backup_service import backup_service
 
@@ -446,6 +478,11 @@ async def run_backup(ctx) -> Outcome:
         return Outcome(status="skipped", skip_reason="repository_missing")
 
     params = ctx.params
+    operation = ctx.db.get(Operation, ctx.operation_id)
+    if operation.backup_plan_run_id is not None:
+        stood_down = await _enter_plan_slot(ctx)
+        if stood_down is not None:
+            return stood_down
     job = BackupJobFacade(ctx.db, ctx.db.get(Operation, ctx.operation_id))
 
     executor = _backup_executor(ctx, job, repository)

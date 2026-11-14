@@ -831,11 +831,17 @@ async def test_a_plan_run_waits_before_its_pre_scripts(test_db):
     from app.services.backup_plan_execution_service import (
         backup_plan_execution_service,
     )
-    from tests.unit.test_api_backup_plans import _create_execution_plan
+    from tests.unit.test_api_backup_plans import (
+        _create_execution_plan,
+        _plan_backup_seam,
+    )
 
     repository = _repository(test_db)
     _plan, run = _create_execution_plan(test_db, [repository])
     order = []
+
+    async def no_backup(*args, **kwargs):
+        raise AssertionError("the pre-backup scripts stop the run first")
 
     async def wait_for(**kwargs):
         order.append(("wait", kwargs.get("repository_id")))
@@ -854,6 +860,11 @@ async def test_a_plan_run_waits_before_its_pre_scripts(test_db):
             side_effect=pre_hooks,
         ),
         patch.object(notification_service, "send_backup_failure", new=AsyncMock()),
+        # the backup gets its slot, which runs the plan's pre-backup scripts
+        patch(
+            "app.services.operations.backup_facade.wait_for_backup_operation",
+            new=_plan_backup_seam(no_backup),
+        ),
     ):
         await backup_plan_execution_service.execute_run(run.id)
 

@@ -226,6 +226,22 @@ async def test_single_failing_pre_hook_runs_post_hooks_as_failure(test_db):
     ]
 
 
+def _series_breaks_after_the_backup():
+    """The run's backups run (their slot runs the pre-backup scripts), then
+    the run's own handling of them raises."""
+    real_series = backup_plan_execution_service._execute_series
+
+    async def series_then_break(run_id, context, repositories):
+        await real_series(run_id, context, repositories)
+        raise RuntimeError("runner broke")
+
+    return patch.object(
+        backup_plan_execution_service,
+        "_execute_series",
+        side_effect=series_then_break,
+    )
+
+
 @pytest.mark.asyncio
 async def test_error_after_the_pre_hooks_runs_post_hooks_as_failure(test_db):
     run, all_scripts = _plan_with_hooks(test_db)
@@ -235,11 +251,7 @@ async def test_error_after_the_pre_hooks_runs_post_hooks_as_failure(test_db):
         run,
         scripts,
         None,
-        patch.object(
-            backup_plan_execution_service,
-            "_execute_series",
-            side_effect=RuntimeError("runner broke"),
-        ),
+        _series_breaks_after_the_backup(),
     )
 
     assert _post_calls(scripts) == [
@@ -261,11 +273,7 @@ async def test_failing_post_hook_on_the_error_path_is_reported(test_db):
         run,
         scripts,
         None,
-        patch.object(
-            backup_plan_execution_service,
-            "_execute_series",
-            side_effect=RuntimeError("runner broke"),
-        ),
+        _series_breaks_after_the_backup(),
     )
 
     test_db.expire_all()
