@@ -90,7 +90,11 @@ export default function SSHConnectionsSingleKey() {
     refetchInterval: 30000,
   })
 
-  const { keys: sshKeys, isError: sshKeysFailed } = useSshKeys(canManageSsh)
+  const {
+    keys: sshKeys,
+    isLoading: sshKeysLoading,
+    isError: sshKeysFailed,
+  } = useSshKeys(canManageSsh)
 
   // A key picked earlier and then deleted must not stay selected: with only the
   // system key left the picker hides, so the user could not change it.
@@ -665,7 +669,8 @@ export default function SSHConnectionsSingleKey() {
         t={t}
         theme={theme}
         isDark={isDark}
-        keyLoading={keyLoading}
+        // Wait for the key list too, so no dialog submits before its picker exists.
+        keyLoading={keyLoading || sshKeysLoading}
         connectionsLoading={connectionsLoading}
         keyExists={keyExists}
         systemKey={systemKey}

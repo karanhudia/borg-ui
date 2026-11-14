@@ -876,6 +876,24 @@ describe('SSHConnectionsSingleKey', () => {
     })
   }, 30000)
 
+  it('waits for the key list before offering deploy or manual add', async () => {
+    const { sshKeysAPI } = await import('../../services/api')
+    const loadKeys = vi.mocked(sshKeysAPI.getSSHKeys).getMockImplementation()
+    vi.mocked(sshKeysAPI.getSSHKeys).mockImplementation(() => new Promise(() => {}))
+    try {
+      renderWithProviders(<SSHConnectionsSingleKey />)
+
+      await rtlWaitFor(() => expect(sshKeysAPI.getSSHConnections).toHaveBeenCalled())
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(screen.queryByRole('button', { name: /^deploy to server$/i })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /^add manual connection$/i })
+      ).not.toBeInTheDocument()
+    } finally {
+      vi.mocked(sshKeysAPI.getSSHKeys).mockImplementation(loadKeys!)
+    }
+  })
+
   it('keeps extra keys manageable after the system key is deleted', async () => {
     mockState.systemKeyResponse = { data: { exists: false } }
     mockState.sshKeysResponse = {
