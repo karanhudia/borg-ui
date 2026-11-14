@@ -79,7 +79,9 @@ def main() -> int:
             headers=client._headers(json_body=True),
             json={
                 "name": f"Per-Key Smoke Repo {run_id}",
-                "path": f"{args.remote_root}/per-key-repo-{run_id}",
+                # Own root: borg creates missing parents as the SSH user, which
+                # would lock the shared remote_root against later local smokes.
+                "path": f"{args.remote_root}-per-key/repo-{run_id}",
                 "connection_id": connection["id"],
                 "repository_type": "ssh",
                 "encryption": "none",

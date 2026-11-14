@@ -92,6 +92,20 @@ export default function SSHConnectionsSingleKey() {
 
   const { keys: sshKeys } = useSshKeys(canManageSsh)
 
+  // A key picked earlier and then deleted must not stay selected: with only the
+  // system key left the picker hides, so the user could not change it.
+  const sshKeyIds = sshKeys.map((key) => key.id).join(',')
+  useEffect(() => {
+    if (!sshKeyIds) return
+    const known = new Set(sshKeyIds.split(',').map(Number))
+    const dropStale = <T extends { ssh_key_id?: number }>(form: T): T =>
+      form.ssh_key_id !== undefined && !known.has(form.ssh_key_id)
+        ? { ...form, ssh_key_id: undefined }
+        : form
+    setConnectionForm(dropStale)
+    setTestConnectionForm(dropStale)
+  }, [sshKeyIds])
+
   const systemKey = systemKeyData?.data?.ssh_key
   const keyExists = systemKeyData?.data?.exists
   const connections: SSHConnection[] = connectionsData?.data?.connections || []

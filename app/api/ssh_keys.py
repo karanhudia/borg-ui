@@ -2739,6 +2739,11 @@ async def delete_ssh_key(
         db.delete(ssh_key)
         db.commit()
 
+        # Deploy and test leave a decrypted copy per host and username.
+        for deployed in Path(settings.ssh_keys_dir).glob(f"key_{key_id}_*"):
+            with contextlib.suppress(OSError):
+                deployed.unlink()
+
         # Remove key files from filesystem. Only the system key is written
         # there; an extra key sharing its type must not delete those files.
         if is_system_key:
