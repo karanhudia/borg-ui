@@ -16,6 +16,7 @@ from app.mcp.render import (
     decode_cursor,
     duration,
     more_line,
+    next_cursor,
     page,
     when,
 )
@@ -227,15 +228,24 @@ class PlanRunsArgs(PlanRef):
 async def list_plan_runs(ctx, args: PlanRunsArgs) -> ToolResult:
     plan = await resolve.backup_plan(ctx, args.plan)
     limit = clamp_limit(args.limit)
-    # The route cuts at its own limit (20 by default) before answering, so
-    # ask for everything up to this page plus one to know if more exist.
-    wanted = decode_cursor(args.cursor) + limit + 1
-    runs = (
-        await ctx.api.get(f"/api/backup-plans/{plan['id']}/runs", limit=wanted)
-    ).get("runs") or []
-    if not runs:
-        return ToolResult(f"*{plan['name']}* has not run yet.", {"runs": []})
-    shown, cursor = page(runs, limit, args.cursor)
+    # The route returns the newest `limit` runs by id. The cursor is the
+    # last run id shown, so runs that start meanwhile do not shift pages;
+    # ask for more until a page past the boundary fills or history ends.
+    below = decode_cursor(args.cursor) if args.cursor else None
+    fetch = limit + 1
+    while True:
+        runs = (
+            await ctx.api.get(f"/api/backup-plans/{plan['id']}/runs", limit=fetch)
+        ).get("runs") or []
+        older = [r for r in runs if below is None or r["id"] < below]
+        if len(older) > limit or len(runs) < fetch:
+            break
+        fetch *= 2
+    if not older:
+        empty = "No more runs." if args.cursor else f"*{plan['name']}* has not run yet."
+        return ToolResult(empty, {"runs": []})
+    shown = older[:limit]
+    cursor = next_cursor(shown[-1]["id"]) if len(older) > limit else None
     lines = [f"Runs of *{plan['name']}*:", ""]
     for run in shown:
         took = ""
@@ -247,7 +257,7 @@ async def list_plan_runs(ctx, args: PlanRunsArgs) -> ToolResult:
             f"{STATUS_GLYPH.get(run.get('status'), '·')} {run.get('status')} {ago(run.get('started_at') or run.get('created_at'))}{took}"
             + (f": {run['error_message']}" if run.get("error_message") else "")
         )
-    more = more_line(len(shown), len(runs), "runs", cursor)
+    more = more_line(len(shown), None, "runs", cursor)
     if more:
         lines += ["", more]
     keep = (

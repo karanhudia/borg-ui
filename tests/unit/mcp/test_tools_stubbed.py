@@ -404,3 +404,52 @@ def test_agent_browse_deadline_counts_request_time(monkeypatch):
     with pytest.raises(NotFound):
         run("browse_archive", routes, repository="Photos", archive="latest")
     assert len(calls) <= 5  # 40 s at 10 s a look, not 40 sleeps
+
+
+@pytest.mark.unit
+def test_live_log_buffer_is_sliced_to_the_page():
+    buffer = [{"line_number": i, "content": f"live {i}"} for i in range(1, 501)]
+    routes = {
+        "/api/operations/7": {"id": 7, "type": "backup", "status": "running"},
+        # A running local backup's log route ignores offset and limit.
+        "/api/activity/backup/7/logs": {"lines": buffer, "total_lines": 500},
+    }
+    result, _ = run("get_job_log", routes, job_type="backup", job_id=7)
+    assert result.data["first_line"] == 301
+    assert result.data["lines"] == [f"live {i}" for i in range(301, 501)]
+    assert result.text.startswith("Lines 301 to 500 of 500")
+
+
+@pytest.mark.unit
+def test_activity_only_jobs_are_found_past_the_first_page():
+    rows = [
+        {
+            "id": i,
+            "type": "script_execution",
+            "status": "completed",
+            "sort_at": f"2026-11-10T00:{i // 60:02d}:{i % 60:02d}Z",
+        }
+        for i in range(250, 0, -1)
+    ]
+    result, _ = run("get_job", _feed(rows), job_type="script_execution", job_id=1)
+    assert not result.is_error
+
+
+@pytest.mark.unit
+def test_plan_runs_page_by_run_id():
+    runs = [{"id": i, "status": "completed"} for i in (3, 2, 1)]
+    routes = {
+        "/api/backup-plans/": {"backup_plans": [PLAN]},
+        "/api/backup-plans/3/runs": lambda params: {"runs": runs[: params["limit"]]},
+    }
+    first, _ = run("list_plan_runs", routes, plan="Nightly", limit=1)
+    assert [r["id"] for r in first.data["runs"]] == [3]
+    runs.insert(0, {"id": 4, "status": "running"})
+    second, _ = run(
+        "list_plan_runs",
+        routes,
+        plan="Nightly",
+        limit=1,
+        cursor=first.data["next_cursor"],
+    )
+    assert [r["id"] for r in second.data["runs"]] == [2]

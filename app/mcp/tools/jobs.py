@@ -41,6 +41,7 @@ KIND_OF = {"package": "package_install", "rclone_hydrate": "rclone_sync"}
 TERMINAL = {"completed", "completed_with_warnings", "failed", "cancelled", "skipped"}
 WAIT_SECONDS, POLL_SECONDS = 45.0, 3.0
 ACTIVITY_FETCH = 200
+FEED_PAGES = 50
 EXPLAIN_LOG_LINES = 40
 JOB_FIELDS = (
     "id",
@@ -205,17 +206,31 @@ class JobRef(BaseModel):
     job_id: int = _JOB_ID
 
 
+async def _find_in_feed(ctx, job_type: str, job_id: int) -> Optional[dict]:
+    """Walk the activity feed for one row that has no detail route."""
+    before = None
+    # ponytail: at most FEED_PAGES pages (10,000 rows); a detail route for
+    # plan runs and script runs would make this one call.
+    for _ in range(FEED_PAGES):
+        rows = await ctx.api.get(
+            "/api/activity/recent",
+            job_type=job_type,
+            limit=ACTIVITY_FETCH,
+            before=before,
+        )
+        found = next((row for row in rows if row.get("id") == job_id), None)
+        if found or len(rows) < ACTIVITY_FETCH:
+            return found
+        before = _stamp(rows[-1])
+    return None
+
+
 async def _job(ctx, job_type: str, job_id: int) -> dict:
     missing = resolve.NotFound(
         f"I could not find {job_type} {job_id}. list_activity shows the recent ones."
     )
     if job_type in ACTIVITY_ONLY:
-        # ponytail: looks in the newest rows only; add a detail route if
-        # older plan runs or script runs need reading.
-        rows = await ctx.api.get(
-            "/api/activity/recent", job_type=job_type, limit=ACTIVITY_FETCH
-        )
-        job = next((row for row in rows if row.get("id") == job_id), None)
+        job = await _find_in_feed(ctx, job_type, job_id)
         if job is None:
             raise missing
         ctx.target = f"{job_type} {job_id}"
@@ -298,7 +313,14 @@ async def _tail(
     if end == 0:
         return [], total, 0
     chunk = await ctx.api.get(route, offset=start, limit=end - start)
-    return [line.get("content", "") for line in chunk.get("lines") or []], total, start
+    # A running backup's live buffer ignores offset and limit and sends the
+    # whole tail, so keep only this page's line numbers (1-based).
+    lines = [
+        line.get("content", "")
+        for line in chunk.get("lines") or []
+        if start < (line.get("line_number") or start + 1) <= end
+    ]
+    return lines, total, start
 
 
 @tool(
