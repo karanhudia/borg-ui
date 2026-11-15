@@ -162,12 +162,6 @@ def queued_chain_covering(
     return live
 
 
-def followups_already_queued(
-    db, repository_id: Optional[int], kinds: list[str]
-) -> bool:
-    return not kinds or queued_chain_covering(db, repository_id, kinds) is not None
-
-
 def enqueue_followups(
     db,
     operation,

@@ -38,13 +38,6 @@ class ExportRequest(BaseModel):
     include_schedules: bool = True
 
 
-class ImportRequest(BaseModel):
-    """Request model for importing configurations."""
-
-    merge_strategy: str = "skip_duplicates"  # skip_duplicates, replace, rename
-    dry_run: bool = False
-
-
 @router.post("/export/borgmatic")
 async def export_borgmatic_config(
     request: ExportRequest,

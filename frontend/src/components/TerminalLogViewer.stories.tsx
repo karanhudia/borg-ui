@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
-import TerminalLogViewer from './TerminalLogViewer'
+import TerminalLogViewer from './shared/TerminalLogViewer'
 
 const escapedGreekPath = 'local/2026/\\u0391\\u03af\\u03b3\\u03b9\\u03bd\\u03b1/clip-001.MP4'
 const unicodeJsonLog = `{"type":"archive_progress","path":"${escapedGreekPath}","original_size":344287526826,"compressed_size":3428682049350,"finished":false}`

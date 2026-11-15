@@ -1627,7 +1627,7 @@ class SystemSettings(Base):
     # Beta features
     use_new_wizard = Column(
         Boolean, default=False, nullable=False
-    )  # Enable new repository wizard (beta)
+    )  # Unused; kept so the schema does not change
     bypass_lock_on_info = Column(
         Boolean, default=False, nullable=False
     )  # Use --bypass-lock for all borg info commands (beta fix for SSH lock issues)
@@ -1639,7 +1639,7 @@ class SystemSettings(Base):
     )  # Allow user-initiated repository lock breaking
     show_restore_tab = Column(
         Boolean, default=False, nullable=False
-    )  # Show legacy Restore tab in navigation (beta feature)
+    )  # Unused; kept so the schema does not change
     borg2_fast_browse_beta_enabled = Column(
         Boolean, default=False, nullable=False
     )  # Use depth-limited Borg 2 archive browse and hide directory sizes

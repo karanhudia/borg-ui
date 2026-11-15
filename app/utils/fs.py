@@ -11,6 +11,7 @@ import structlog
 from collections.abc import Iterable
 from typing import Optional
 
+from app.utils.ssh_paths import login_relative_remote_path_candidate
 from app.utils.ssh_host_keys import host_key_ssh_opts_for_path
 from app.utils.ssh_host_validation import ssh_destination
 from app.utils.ssh_utils import public_key_only_ssh_args, ssh_key_auth_args
@@ -368,7 +369,7 @@ async def _du_ssh(
     if path_size is not None:
         return path_size
 
-    retry_remote_path = _login_relative_remote_path_candidate(remote_path)
+    retry_remote_path = login_relative_remote_path_candidate(remote_path)
     if login_relative_fallback and retry_remote_path:
         path_size, stderr = await run_remote_du(retry_remote_path)
         if path_size is not None:
@@ -376,15 +377,3 @@ async def _du_ssh(
 
     logger.warning("du failed for SSH path", path=path, stderr=stderr.decode())
     return None
-
-
-def _login_relative_remote_path_candidate(remote_path: str) -> Optional[str]:
-    normalized = (remote_path or "").strip()
-    if not normalized.startswith("/") or normalized == "/":
-        return None
-    if normalized.startswith("/./"):
-        relative_path = normalized.lstrip("/")
-        return relative_path or None
-
-    relative_path = normalized.lstrip("/")
-    return relative_path or None

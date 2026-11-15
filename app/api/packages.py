@@ -47,14 +47,6 @@ class PackageResponse(BaseModel):
         json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
-class PackageInstallResponse(BaseModel):
-    success: bool
-    message: str
-    stdout: Optional[str] = None
-    stderr: Optional[str] = None
-    exit_code: Optional[int] = None
-
-
 @router.get("/", response_model=List[PackageResponse])
 def list_packages(db: Session = Depends(get_db)):
     """List all installed packages"""

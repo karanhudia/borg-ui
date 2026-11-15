@@ -48,6 +48,7 @@ from app.services.operations.enqueue import wake_runner
 from app.services.operations.job_facade import MaintenanceJobFacade
 from app.services.operations.runner import operation_runner
 from app.services.repository_executor import (
+    decode_json_list,
     cancel_agent_backup_job,
     get_agent_job_for_backup,
     is_agent_executor,
@@ -107,18 +108,6 @@ def _get_running_maintenance_job(
     return MaintenanceJobFacade(db, operation) if operation is not None else None
 
 
-def _decode_json_list(value) -> list:
-    if not value:
-        return []
-    if isinstance(value, list):
-        return value
-    try:
-        decoded = json.loads(value)
-    except (TypeError, json.JSONDecodeError):
-        return []
-    return decoded if isinstance(decoded, list) else []
-
-
 def _agent_job_logs_response(db: Session, backup_job, offset: int) -> dict:
     agent_job = get_agent_job_for_backup(db, backup_job)
     if not agent_job:
@@ -158,25 +147,6 @@ def _empty_backup_log_response(job) -> dict[str, Any]:
         "total_lines": 0,
         "has_more": False,
     }
-
-
-def _get_agent_log_messages(db: Session, agent_job_id: int) -> list[str]:
-    logs = (
-        db.query(AgentJobLog)
-        .filter(AgentJobLog.agent_job_id == agent_job_id)
-        .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
-        .all()
-    )
-    return [log.message for log in logs]
-
-
-def _agent_log_rows_exist(db: Session, agent_job_id: int) -> bool:
-    return (
-        db.query(AgentJobLog.id)
-        .filter(AgentJobLog.agent_job_id == agent_job_id)
-        .first()
-        is not None
-    )
 
 
 def _backup_job_has_logs(
@@ -239,9 +209,9 @@ def _backup_retry_request_snapshot(
     retry_job,
     repo: Repository,
 ) -> dict[str, Any]:
-    source_directories = _decode_json_list(repo.source_directories)
-    source_locations = _decode_json_list(repo.source_locations)
-    exclude_patterns = _decode_json_list(repo.exclude_patterns)
+    source_directories = decode_json_list(repo.source_directories)
+    source_locations = decode_json_list(repo.source_locations)
+    exclude_patterns = decode_json_list(repo.exclude_patterns)
     snapshot: dict[str, Any] = {
         "kind": "backup_job_retry",
         "source_job": {

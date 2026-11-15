@@ -102,15 +102,6 @@ def get_global_permissions_for_role(role: str) -> List[str]:
     )
 
 
-def can_repository_role_perform(role: str, action: str) -> bool:
-    required_role = REPOSITORY_ACTION_RULES.get(action)
-    if not required_role:
-        return False
-    return REPOSITORY_ROLE_RANK.get(role, 0) >= REPOSITORY_ROLE_RANK.get(
-        required_role, 0
-    )
-
-
 def serialize_authorization_model() -> dict:
     return {
         "global_roles": GLOBAL_ROLES,

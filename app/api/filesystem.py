@@ -14,6 +14,7 @@ import structlog
 import tempfile
 from datetime import datetime, timezone
 
+from app.utils.ssh_paths import login_relative_remote_path_candidate
 from app.core.security import (
     decrypt_secret,
     get_current_user,
@@ -245,24 +246,6 @@ def _resolve_ssh_target(
             detail={"key": "backend.errors.filesystem.sshConnectionNotSaved"},
         )
     return host, username, connection
-
-
-def _login_relative_remote_path_candidate(
-    remote_path: str, default_path: Optional[str] = None
-) -> Optional[str]:
-    normalized = (remote_path or "").strip()
-    if not normalized.startswith("/") or normalized == "/":
-        return None
-    if normalized.startswith("/./"):
-        relative_path = normalized.lstrip("/")
-        return relative_path or None
-
-    normalized_default_path = (default_path or "").strip()
-    if normalized_default_path not in {"", "/"}:
-        return None
-
-    relative_path = normalized.lstrip("/")
-    return relative_path or None
 
 
 SFTP_PWD_PREFIX = "Remote working directory:"
@@ -703,7 +686,7 @@ async def browse_ssh_filesystem(
             and sftp_listing_failed(result)
             and _remote_path_missing_error(result)
         ):
-            relative_path = _login_relative_remote_path_candidate(
+            relative_path = login_relative_remote_path_candidate(
                 path, connection_default_path
             )
             if relative_path:
@@ -1017,7 +1000,7 @@ def validate_path(
                 connection_default_path = getattr(ssh_connection, "default_path", None)
                 command_path = path
                 result = run_ssh_stat(command_path)
-                retry_path = _login_relative_remote_path_candidate(
+                retry_path = login_relative_remote_path_candidate(
                     path, connection_default_path
                 )
                 if (
@@ -1232,7 +1215,7 @@ def create_folder(
                 if _remote_path_command_failed(result) and _remote_path_missing_error(
                     result
                 ):
-                    retry_path = _login_relative_remote_path_candidate(
+                    retry_path = login_relative_remote_path_candidate(
                         full_path, connection_default_path
                     )
                     if retry_path:

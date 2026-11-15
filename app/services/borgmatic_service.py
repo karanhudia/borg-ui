@@ -236,84 +236,6 @@ class BorgmaticExportService:
 
         return configs
 
-    def export_to_yaml(
-        self, repository_ids: Optional[List[int]] = None, include_schedules: bool = True
-    ) -> str:
-        """
-        Export configurations to YAML string.
-
-        DEPRECATED: Use export_all_repositories() instead for proper multi-repo support.
-        This method exports a single merged config which is incorrect for repositories
-        with different settings.
-
-        Args:
-            repository_ids: Repository IDs to export
-            include_schedules: Include schedules
-
-        Returns:
-            YAML string in borgmatic-compatible format
-        """
-        configs = self.export_all_repositories(repository_ids, include_schedules)
-
-        if not configs:
-            return ""
-
-        # Extract just the config dicts from tuples (name, config)
-        config_dicts = [config for _, config in configs]
-
-        # For single repository, return as-is
-        if len(config_dicts) == 1:
-            return yaml.dump(config_dicts[0], default_flow_style=False, sort_keys=False)
-
-        # For multiple repositories, this is deprecated - should use separate files
-        # But for backwards compatibility, merge them
-        merged_config = self._merge_configs_to_borgmatic(config_dicts)
-        return yaml.dump(merged_config, default_flow_style=False, sort_keys=False)
-
-    def _build_location_section(self, repository: Repository) -> Dict[str, Any]:
-        """Build borgmatic location section."""
-        location = {}
-
-        # Source directories
-        if repository.source_directories:
-            try:
-                source_dirs = json.loads(repository.source_directories)
-                location["source_directories"] = source_dirs
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        # Repository path
-        repo_path = self._build_repository_path(repository)
-        if repo_path:
-            location["repositories"] = [repo_path]
-
-        # Exclude patterns
-        if repository.exclude_patterns:
-            try:
-                exclude_patterns = json.loads(repository.exclude_patterns)
-                location["exclude_patterns"] = exclude_patterns
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        return location
-
-    def _build_storage_section(self, repository: Repository) -> Dict[str, Any]:
-        """Build borgmatic storage section."""
-        storage = {}
-
-        # Compression
-        if repository.compression:
-            storage["compression"] = repository.compression
-
-        # Encryption passphrase
-        if repository.passphrase:
-            storage["encryption_passphrase"] = repository.passphrase
-
-        # Note: SSH keys in Borg UI are stored encrypted in DB, not as files
-        # Users need to configure SSH authentication separately (ssh-agent, ssh config, etc.)
-
-        return storage
-
     def _build_retention_section(self, scheduled_job: ScheduledJob) -> Dict[str, Any]:
         """Build borgmatic retention section from scheduled job."""
         retention = {}
@@ -335,27 +257,6 @@ class BorgmaticExportService:
             retention["keep_within"] = scheduled_job.prune_keep_within
 
         return retention
-
-    def _build_consistency_section(self, repository: Repository) -> Dict[str, Any]:
-        """Build borgmatic consistency section.
-
-        Note: This method is deprecated as we migrated from interval-based to cron-based scheduling.
-        Cron expressions don't map cleanly to borgmatic's simple frequency format.
-        """
-        # Return empty dict as checks are now configured via cron expressions
-        return {}
-
-    def _build_hooks_section(self, repository: Repository) -> Optional[Dict[str, Any]]:
-        """Build borgmatic hooks section."""
-        hooks = {}
-
-        if repository.pre_backup_script:
-            hooks["before_backup"] = [repository.pre_backup_script]
-
-        if repository.post_backup_script:
-            hooks["after_backup"] = [repository.post_backup_script]
-
-        return hooks if hooks else None
 
     def _repository_entry(self, repository: Repository, repo_path: str) -> Any:
         """A Borg 2 repository is written in the object form with Borg 2's
@@ -424,95 +325,6 @@ class BorgmaticExportService:
             )
 
         return None
-
-    def _merge_configs_to_borgmatic(
-        self, configs: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """
-        Merge multiple repository configs into single borgmatic-compatible format.
-
-        Args:
-            configs: List of individual repository configurations
-
-        Returns:
-            Merged borgmatic configuration (strict borgmatic format)
-        """
-        if not configs:
-            return {}
-
-        # If only one config, return as-is
-        if len(configs) == 1:
-            return configs[0]
-
-        # For multiple repositories, create proper structure
-        merged = {
-            "location": {},
-            "storage": {},
-        }
-
-        # Collect all repositories
-        all_repositories = []
-        all_source_directories = set()
-        all_exclude_patterns = set()
-
-        # Merge location sections
-        for config in configs:
-            location = config.get("location", {})
-
-            # Add repository paths
-            repos = location.get("repositories", [])
-            all_repositories.extend(repos)
-
-            # Merge source directories
-            source_dirs = location.get("source_directories", [])
-            all_source_directories.update(source_dirs)
-
-            # Merge exclude patterns
-            exclude_patterns = location.get("exclude_patterns", [])
-            all_exclude_patterns.update(exclude_patterns)
-
-        # Build merged location section
-        if all_source_directories:
-            merged["location"]["source_directories"] = sorted(
-                list(all_source_directories)
-            )
-        merged["location"]["repositories"] = all_repositories
-        if all_exclude_patterns:
-            merged["location"]["exclude_patterns"] = sorted(list(all_exclude_patterns))
-
-        # Use storage settings from first repository
-        if configs:
-            merged["storage"] = configs[0].get("storage", {}).copy()
-
-        # Use retention settings from first repository that has them
-        for config in configs:
-            if "retention" in config:
-                merged["retention"] = config["retention"]
-                break
-
-        # Use consistency settings from first repository that has them
-        for config in configs:
-            if "consistency" in config:
-                merged["consistency"] = config["consistency"]
-                break
-
-        # Merge hooks from all repositories
-        all_before_backup = []
-        all_after_backup = []
-
-        for config in configs:
-            hooks = config.get("hooks", {})
-            all_before_backup.extend(hooks.get("before_backup", []))
-            all_after_backup.extend(hooks.get("after_backup", []))
-
-        if all_before_backup or all_after_backup:
-            merged["hooks"] = {}
-            if all_before_backup:
-                merged["hooks"]["before_backup"] = all_before_backup
-            if all_after_backup:
-                merged["hooks"]["after_backup"] = all_after_backup
-
-        return merged
 
 
 class BorgmaticImportService:

@@ -259,6 +259,22 @@ async def _take_back_streamed_agent_job(db: Session, agent_job_id: int) -> None:
             )
 
 
+async def _agent_download_body(first_chunk, stream, db: Session, agent_job_id: int):
+    """The chunks of a streamed agent download, first one included."""
+    delivered = False
+    try:
+        if first_chunk is not None:
+            yield first_chunk
+        async for chunk in stream:
+            yield chunk
+        delivered = True
+    finally:
+        # After the end of the stream the agent reports its completion;
+        # a cancel then would turn a delivered download into a failure.
+        if not delivered:
+            await _take_back_streamed_agent_job(db, agent_job_id)
+
+
 async def _stream_agent_archive_file(
     db: Session, repo: Repository, archive: str, file_path: str
 ) -> StreamingResponse:
@@ -318,23 +334,9 @@ async def _stream_agent_archive_file(
             detail=agent_operation_failed_detail(str(exc)),
         ) from exc
 
-    async def body():
-        delivered = False
-        try:
-            if first_chunk is not None:
-                yield first_chunk
-            async for chunk in stream:
-                yield chunk
-            delivered = True
-        finally:
-            # After the end of the stream the agent reports its completion;
-            # a cancel then would turn a delivered download into a failure.
-            if not delivered:
-                await _take_back_streamed_agent_job(db, agent_job.id)
-
     filename = os.path.basename(file_path) or "download"
     return _AgentDownloadResponse(
-        body(),
+        _agent_download_body(first_chunk, stream, db, agent_job.id),
         media_type="application/octet-stream",
         headers={"Content-Disposition": _content_disposition_attachment(filename)},
     )
@@ -403,23 +405,9 @@ async def _stream_agent_archive_tar(
             detail=agent_operation_failed_detail(str(exc)),
         ) from exc
 
-    async def body():
-        delivered = False
-        try:
-            if first_chunk is not None:
-                yield first_chunk
-            async for chunk in stream:
-                yield chunk
-            delivered = True
-        finally:
-            # After the end of the stream the agent reports its completion;
-            # a cancel then would turn a delivered download into a failure.
-            if not delivered:
-                await _take_back_streamed_agent_job(db, agent_job.id)
-
     filename = f"{os.path.basename(directory_path.rstrip('/')) or 'archive'}.tar"
     return _AgentDownloadResponse(
-        body(),
+        _agent_download_body(first_chunk, stream, db, agent_job.id),
         media_type="application/x-tar",
         headers={"Content-Disposition": _content_disposition_attachment(filename)},
     )

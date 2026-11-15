@@ -257,17 +257,6 @@ class SSHKeyUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class SSHKeyInfo(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    key_type: str
-    public_key: str
-    is_active: bool
-    created_at: str
-    updated_at: Optional[str]
-
-
 class SSHKeyGenerate(BaseModel):
     name: str
     key_type: str = "rsa"
@@ -373,33 +362,6 @@ class SSHConnectionUpdate(BaseModel):
         if value is None:
             return value
         return normalize_ssh_username(value)
-
-
-class SSHConnectionStorage(BaseModel):
-    total: int
-    total_formatted: str
-    used: int
-    used_formatted: str
-    available: int
-    available_formatted: str
-    percent_used: float
-    last_check: Optional[str]
-
-
-class SSHConnectionInfo(BaseModel):
-    id: int
-    host: str
-    username: str
-    port: int
-    default_path: Optional[str]  # Default starting path for SSH browsing
-    ssh_path_prefix: Optional[str]  # Path prefix for SSH commands
-    mount_point: Optional[str]  # Logical mount point
-    status: str
-    last_test: Optional[str]
-    last_success: Optional[str]
-    error_message: Optional[str]
-    storage: Optional[SSHConnectionStorage]  # Storage information
-    created_at: str
 
 
 class SSHDiagnosticTarget(BaseModel):
