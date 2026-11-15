@@ -70,6 +70,7 @@ def test_audit_installs_cannot_modify_later_security_scan_inputs(
     frontend.mkdir()
     targets = [
         tmp_path / "requirements.txt",
+        tmp_path / "requirements-dev.txt",
         tmp_path / "security" / "pip-audit-known-vulns.json",
         tmp_path / "scripts" / "ci" / "check_security_results.py",
     ]
@@ -173,4 +174,4 @@ def test_audit_installs_cannot_modify_later_security_scan_inputs(
     assert cli.stdout.strip() == "fixture-cli-ready"
     assert [target.read_text() for target in targets] == [
         "original scanner input\n"
-    ] * 3
+    ] * len(targets)

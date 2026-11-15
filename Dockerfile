@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.5-borg2-2.0.0b25-r2
+ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.5-borg2-2.0.0b25-r3
 # The Python the builder stages use — kept in step with runtime-base.env by a
 # guard test; the site-packages COPY paths derive from it.
 ARG PYTHON_VERSION=3.12
@@ -68,10 +68,13 @@ COPY requirements.txt .
 
 # Bootstrap the latest pip/setuptools/wheel for wheel support, then install the
 # pinned application dependencies. The bootstrap trio is intentionally unpinned
-# (DL3013); the app deps are pinned in requirements.txt.
+# (DL3013); the app deps are pinned in requirements.txt. setuptools and wheel
+# are only needed to build, so they are removed before site-packages is copied
+# into the image; pip stays for packages installed from the Packages page.
 # hadolint ignore=DL3013
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip uninstall -y setuptools wheel
 
 # Development stage
 FROM ${BASE_IMAGE} AS development

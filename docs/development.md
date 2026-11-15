@@ -14,7 +14,7 @@ Use the dev script for normal local development. It runs the backend in Docker a
 - Docker
 - Docker Compose
 - Node.js 20.19+
-- Python 3.10+ for local test tooling
+- Python 3.11+ for local test tooling
 
 ## Start
 
@@ -118,6 +118,7 @@ lockfile, which is a repository change, not a local fix.
 Run from the repository root:
 
 ```bash
+pip install -r requirements-dev.txt
 ruff check app tests
 ruff format --check app tests
 pytest

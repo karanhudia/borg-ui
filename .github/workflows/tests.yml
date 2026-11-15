@@ -80,7 +80,7 @@ jobs:
           cache: pip
 
       - name: Install contract dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Backend lint and format
         id: backend-lint
@@ -163,7 +163,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Create test directories
         run: |
@@ -250,7 +250,7 @@ jobs:
       - name: Install coverage dependency
         run: |
           python -m pip install --upgrade pip
-          pip install "$(sed -n '/^coverage\[toml\]==/p' requirements.txt)"
+          pip install "$(sed -n '/^coverage\[toml\]==/p' requirements-dev.txt)"
 
       - name: Download backend unit timing reports
         uses: actions/download-artifact@v8
@@ -370,7 +370,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       # Every matrix entry owns a separate runner, Postgres service and temp
       # directory. Never parallelize tests against one shared migration DB.
@@ -440,7 +440,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Create test directories
         run: |
@@ -647,7 +647,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Download frontend build artifact
         uses: actions/download-artifact@v8
@@ -768,7 +768,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Download frontend build artifact
         uses: actions/download-artifact@v8
@@ -928,7 +928,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Download frontend build artifact
         uses: actions/download-artifact@v8
@@ -1078,7 +1078,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Install Playwright
         working-directory: frontend

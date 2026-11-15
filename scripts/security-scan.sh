@@ -62,11 +62,12 @@ scan_backend_pip_audit() {
 
     cd "$PROJECT_ROOT"
 
-    if pip-audit -r requirements.txt --format json > "$REPORT_DIR/pip-audit.json" 2>&1; then
+    # requirements-dev.txt includes requirements.txt, as in the CI audit.
+    if pip-audit -r requirements-dev.txt --format json > "$REPORT_DIR/pip-audit.json" 2>&1; then
         echo -e "${GREEN}✓ No vulnerabilities found${NC}"
     else
         print_warning "Vulnerabilities found. See $REPORT_DIR/pip-audit.json"
-        pip-audit -r requirements.txt
+        pip-audit -r requirements-dev.txt
     fi
 }
 
@@ -80,11 +81,11 @@ scan_backend_safety() {
 
     cd "$PROJECT_ROOT"
 
-    if safety check -r requirements.txt --json > "$REPORT_DIR/safety-check.json" 2>&1; then
+    if safety check -r requirements.txt -r requirements-dev.txt --json > "$REPORT_DIR/safety-check.json" 2>&1; then
         echo -e "${GREEN}✓ No vulnerabilities found${NC}"
     else
         print_warning "Vulnerabilities found. See $REPORT_DIR/safety-check.json"
-        safety check -r requirements.txt
+        safety check -r requirements.txt -r requirements-dev.txt
     fi
 }
 
@@ -135,7 +136,7 @@ generate_summary() {
 
     echo -e "\n${YELLOW}Recommended Actions:${NC}"
     echo "1. Review reports in $REPORT_DIR/"
-    echo "2. Update vulnerable dependencies in package.json and requirements.txt"
+    echo "2. Update vulnerable dependencies in package.json, requirements.txt and requirements-dev.txt"
     echo "3. Run 'npm audit fix' in frontend/ for auto-fixes"
     echo "4. Run 'pip-audit --fix' for Python auto-fixes (with caution)"
     echo "5. Rebuild Docker images with updated dependencies"

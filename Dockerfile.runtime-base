@@ -53,10 +53,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # that no scheme is missing. NB: posixfs is NOT a pip extra — it is always
 # available — so it must not appear in the brackets. blake3 is not a backend
 # but Borg 2's id-hash dependency (since 2.0.0b23), required by its pyproject.
+# Nothing installs into the Borg 2 venv at runtime, so its pip goes once Borg is
+# in; an outdated pip there would only add scanner findings.
 # hadolint ignore=DL3013,DL3059
 RUN pip install --no-cache-dir pyfuse3 "borgbackup==${BORG1_VERSION}" && \
     python3 -m venv /opt/borg2-venv && \
-    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup==${BORG2_VERSION}" "borgstore[rclone,sftp,rest,s3,blake3]==${BORGSTORE_VERSION}"
+    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup==${BORG2_VERSION}" "borgstore[rclone,sftp,rest,s3,blake3]==${BORGSTORE_VERSION}" && \
+    /opt/borg2-venv/bin/python -m pip uninstall -y pip
 
 # rclone: fetch the official static binary from downloads.rclone.org rather than
 # the Debian package. The distro package lags upstream by years and ships as a
@@ -107,13 +110,17 @@ WORKDIR /app
 
 # Runtime shared libraries Borg links against (the runtime counterparts of the
 # builder's -dev headers) plus the operational tooling. No compilers here.
+# Only what the app, the entrypoint or user hook scripts call: curl, wget,
+# sudo and ping stay for pre/post scripts. iotop-c is the C port of iotop, so
+# it does not pull in Debian's own Python next to the image's. More tools can
+# be added at runtime through the Packages page.
 # OS packages track the base Debian release rather than pinned versions (DL3008).
+# apt-get upgrade first: the python image can lag behind Debian security
+# updates for packages it ships itself (zlib1g), and install alone leaves them.
 # hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    cron \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
     wget \
-    gnupg \
     gosu \
     sudo \
     libacl1 \
@@ -127,12 +134,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     btrfs-progs \
     openssh-client \
     sshfs \
-    htop \
-    iotop \
-    net-tools \
+    iotop-c \
     iputils-ping \
-    tree \
-    ncdu \
     sshpass \
     && rm -rf /var/lib/apt/lists/*
 
@@ -145,8 +148,16 @@ COPY --from=builder /opt/borg2-venv /opt/borg2-venv
 # binary (see the builder for why the distro package is unusable).
 COPY --from=builder /out/rclone /usr/bin/rclone
 
-# Symlink borg2, create the runtime directories, and set up the borg user.
-RUN ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2 && \
+# Bring the system pip up to date (DL3013: intentionally unpinned, like the app
+# image's bootstrap). Jobs that run in this image install with it, and the app
+# image upgrades pip the same way; a stale pip here would otherwise linger next
+# to the app's (two pip versions in one site-packages, the old one flagged by
+# scanners).
+#
+# Then symlink borg2, create the runtime directories, and set up the borg user.
+# hadolint ignore=DL3013
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2 && \
     mkdir -p \
         /data /data/ssh_keys /data/borg_keys /data/logs /data/config \
         /backups /var/log/borg /etc/borg && \
@@ -155,9 +166,9 @@ RUN ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2 && \
     usermod -a -G sudo borg && \
     groupadd -f fuse && \
     usermod -a -G fuse borg && \
-    echo "borg ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/crontab, /usr/bin/apt-get" >> /etc/sudoers && \
+    echo "borg ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/apt-get" >> /etc/sudoers && \
     sed -i 's/^#user_allow_other/user_allow_other/' /etc/fuse.conf && \
-    mkdir -p /home/borg/.ssh /home/borg/.cache/borg /etc/cron.d && \
-    chown -R borg:borg /app /data /backups /var/log/borg /etc/borg /home/borg/.ssh /home/borg/.cache /etc/cron.d && \
+    mkdir -p /home/borg/.ssh /home/borg/.cache/borg && \
+    chown -R borg:borg /app /data /backups /var/log/borg /etc/borg /home/borg/.ssh /home/borg/.cache && \
     chmod -R 755 /app /data /backups /var/log/borg /etc/borg && \
     chmod 700 /home/borg/.ssh /home/borg/.cache/borg
