@@ -490,3 +490,40 @@ def test_feed_search_past_its_cap_says_it_stopped(monkeypatch):
     with pytest.raises(NotFound) as caught:
         run("get_job", _feed(rows), job_type="script_execution", job_id=1)
     assert "searched the newest 400" in caught.value.text
+
+
+@pytest.mark.unit
+def test_agent_browse_never_starts_a_request_it_cannot_finish(monkeypatch):
+    import app.mcp.tools.archives as archives
+
+    now = [0.0]
+    monkeypatch.setattr(archives.time, "monotonic", lambda: now[0])
+
+    async def sleep(seconds):
+        now[0] += seconds
+
+    monkeypatch.setattr(archives.asyncio, "sleep", sleep)
+
+    def slow_pending(params):
+        now[0] += 8  # each request waits on the agent as long as it may
+        return {"status": "pending", "jobId": 9}
+
+    routes = {**repo_routes(AGENT_REPO, [LIVE]), "/api/browse/1/photos-1": slow_pending}
+    with pytest.raises(NotFound):
+        run("browse_archive", routes, repository="Photos", archive="latest")
+    assert now[0] <= archives.BROWSE_WAIT_SECONDS
+
+
+@pytest.mark.unit
+def test_availability_checks_are_not_looked_up_by_id():
+    def recent(params):
+        raise AssertionError("no feed lookup for availability checks")
+
+    with pytest.raises(NotFound) as caught:
+        run(
+            "get_job",
+            {"/api/activity/recent": recent},
+            job_type="availability_check",
+            job_id=5,
+        )
+    assert "list_activity" in caught.value.text

@@ -8,6 +8,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.api.browse import BROWSE_AGENT_WAIT_SECONDS
 from app.mcp import borg_routes, resolve
 from app.mcp.levels import Level
 from app.mcp.registry import tool
@@ -26,6 +27,8 @@ from app.mcp.render import (
 from app.mcp.tools._common import plural
 
 BROWSE_WAIT_SECONDS, BROWSE_POLL_SECONDS = 40.0, 2.0
+# The longest one browse request waits on the agent.
+BROWSE_REQUEST_SECONDS = BROWSE_AGENT_WAIT_SECONDS
 ARCHIVE_FIELDS = (
     "id",
     "borg_id",
@@ -139,7 +142,8 @@ async def _contents(ctx, path: str, params: dict) -> dict:
     deadline = time.monotonic() + BROWSE_WAIT_SECONDS
     found = await ctx.api.get(path, **params)
     while found.get("status") == "pending" and found.get("jobId"):
-        if time.monotonic() >= deadline:
+        # Stop before a sleep plus one more agent wait would cross the budget.
+        if time.monotonic() + BROWSE_POLL_SECONDS + BROWSE_REQUEST_SECONDS > deadline:
             raise resolve.NotFound(
                 "The agent is still listing that folder. Ask again in a moment."
             )

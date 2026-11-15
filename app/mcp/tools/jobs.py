@@ -232,6 +232,13 @@ async def _job(ctx, job_type: str, job_id: int) -> dict:
     missing = resolve.NotFound(
         f"I could not find {job_type} {job_id}. list_activity shows the recent ones."
     )
+    if job_type == "availability_check":
+        # A skip record, written by plan runs and by schedules under ids
+        # that overlap, so an id alone cannot name one; it has no more to it.
+        raise resolve.NotFound(
+            "An availability check is a record of a skipped run, with nothing "
+            "more to show than its line in list_activity."
+        )
     if job_type in ACTIVITY_ONLY:
         job = await _find_in_feed(ctx, job_type, job_id)
         if job is None:
