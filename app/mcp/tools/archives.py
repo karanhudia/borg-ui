@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -133,15 +134,16 @@ def _live_info(raw) -> dict:
 async def _contents(ctx, path: str, params: dict) -> dict:
     """An agent listing answers 202 while the agent works; resume that job
     rather than queueing another."""
+    # Each request can itself wait several seconds on the agent, so the
+    # deadline is wall time, not the sum of our sleeps.
+    deadline = time.monotonic() + BROWSE_WAIT_SECONDS
     found = await ctx.api.get(path, **params)
-    waited = 0.0
     while found.get("status") == "pending" and found.get("jobId"):
-        if waited >= BROWSE_WAIT_SECONDS:
+        if time.monotonic() >= deadline:
             raise resolve.NotFound(
                 "The agent is still listing that folder. Ask again in a moment."
             )
         await asyncio.sleep(BROWSE_POLL_SECONDS)
-        waited += max(BROWSE_POLL_SECONDS, 1.0)
         found = await ctx.api.get(path, **{**params, "job_id": found["jobId"]})
     return found
 

@@ -178,11 +178,13 @@ async def list_problems(ctx, args: NoArgs) -> ToolResult:
         if any(p["kind"] == "failed_job" for p in problems)
         else []
     )
-    if cut and _recent(failed[-1], FAILURE_DAYS):
+    if cut:
+        # The feed is ordered by start time, so a long job that failed today
+        # can sit past the cut whatever the last shown row's age.
         tail += [
             "",
-            f"Showing the {FAILURES_SHOWN} most recent failures. For older ones, "
-            'use list_activity with status "failed" and since "7d".',
+            f"Showing the {FAILURES_SHOWN} most recent failures. For the rest, "
+            'use list_activity with status "failed".',
         ]
     return ToolResult("\n".join([head, "", *lines, *tail]), {"problems": problems})
 

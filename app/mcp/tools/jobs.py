@@ -71,7 +71,8 @@ _JOB_ID = Field(description="Job id as listed by list_activity.", examples=[412]
 
 
 def _stamp(job: dict) -> Optional[str]:
-    return job.get("started_at") or job.get("created_at")
+    """The moment the feed sorts by (plan runs sort by when they finished)."""
+    return job.get("sort_at") or job.get("started_at") or job.get("created_at")
 
 
 def _fields(job: dict) -> dict:
@@ -148,8 +149,14 @@ async def list_activity(ctx, args: ActivityArgs) -> ToolResult:
     if since:
         jobs = [j for j in jobs if (s := _stamp(j)) and _as_utc(s) >= since]
     if not jobs:
-        return ToolResult("No matching activity.", {"jobs": []})
+        empty = "No more activity." if args.cursor else "No matching activity."
+        return ToolResult(empty, {"jobs": []})
+    # Never end a page inside rows that share a moment: the next page starts
+    # strictly before it and would skip the rest of the group.
     shown = jobs[:limit]
+    shown += [j for j in jobs[limit:] if _stamp(j) == _stamp(shown[-1])]
+    # A tie group can swallow the extra row, so more may exist whenever the
+    # feed sent more than a page; the worst case is one empty last page.
     cursor = stamp_cursor(_stamp(shown[-1])) if len(jobs) > limit else None
     lines = [_job_line(j) for j in shown]
     more = more_line(len(shown), None, "jobs", cursor)

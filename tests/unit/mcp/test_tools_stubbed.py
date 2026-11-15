@@ -297,3 +297,110 @@ def test_get_schedule_keeps_targets_from_the_list():
     routes = {"/api/schedule/": {"jobs": [listed]}, "/api/schedule/4": {"job": detail}}
     result, _ = run("get_schedule", routes, schedule="Ids")
     assert result.data["schedule"]["repository_ids"] == [1, 2]
+
+
+@pytest.mark.unit
+def test_list_problems_warns_on_any_cut_even_when_the_last_job_is_old():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    rows = [
+        {
+            "id": i,
+            "type": "backup",
+            "status": "failed",
+            "repository": "Photos",
+            "completed_at": (now - timedelta(hours=i + 1)).isoformat(),
+        }
+        for i in range(9)
+    ] + [
+        {
+            "id": 9 + i,
+            "type": "backup",
+            "status": "failed",
+            "repository": "Photos",
+            "completed_at": (now - timedelta(days=9 + i)).isoformat(),
+        }
+        for i in range(5)
+    ]
+    routes = {
+        "/api/dashboard/overview": {"repository_health": []},
+        "/api/activity/recent": lambda params: rows[: params["limit"]],
+    }
+    result, _ = run("list_problems", routes)
+    assert "Showing the 10 most recent failures" in result.text
+
+
+def _feed(rows):
+    """/api/activity/recent: newest sort_at first, never ending inside a tie."""
+
+    def recent(params):
+        before = params.get("before")
+        fit = [r for r in rows if before is None or r["sort_at"] < before]
+        page = fit[: params["limit"]]
+        if page:
+            page += [r for r in fit[len(page) :] if r["sort_at"] == page[-1]["sort_at"]]
+        return page
+
+    return {"/api/activity/recent": recent}
+
+
+@pytest.mark.unit
+def test_activity_pages_on_sort_at_and_keeps_ties_together():
+    rows = [
+        {
+            "id": 1,
+            "type": "backup_plan_run",
+            "status": "failed",
+            "started_at": "2026-11-01T00:00:00Z",
+            "sort_at": "2026-11-10T05:00:00Z",
+        },
+        {
+            "id": 2,
+            "type": "backup",
+            "status": "completed",
+            "started_at": "2026-11-10T04:00:00Z",
+            "sort_at": "2026-11-10T04:00:00Z",
+        },
+        {
+            "id": 3,
+            "type": "backup",
+            "status": "completed",
+            "started_at": "2026-11-10T04:00:00Z",
+            "sort_at": "2026-11-10T04:00:00Z",
+        },
+        {
+            "id": 4,
+            "type": "backup",
+            "status": "completed",
+            "started_at": "2026-11-10T03:00:00Z",
+            "sort_at": "2026-11-10T03:00:00Z",
+        },
+    ]
+    seen, cursor = [], None
+    for _ in range(4):
+        result, _ = run("list_activity", _feed(rows), limit=2, cursor=cursor)
+        seen += [j["id"] for j in result.data.get("jobs", [])]
+        cursor = result.data.get("next_cursor")
+        if not cursor:
+            break
+    assert seen == [1, 2, 3, 4]
+
+
+@pytest.mark.unit
+def test_agent_browse_deadline_counts_request_time(monkeypatch):
+    import app.mcp.tools.archives as archives
+
+    clock = iter(range(0, 10_000, 10))  # every look at the clock: +10 s
+    monkeypatch.setattr(archives.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(archives, "BROWSE_POLL_SECONDS", 0)
+    calls = []
+
+    def pending(params):
+        calls.append(params)
+        return {"status": "pending", "jobId": 9}
+
+    routes = {**repo_routes(AGENT_REPO, [LIVE]), "/api/browse/1/photos-1": pending}
+    with pytest.raises(NotFound):
+        run("browse_archive", routes, repository="Photos", archive="latest")
+    assert len(calls) <= 5  # 40 s at 10 s a look, not 40 sleeps
