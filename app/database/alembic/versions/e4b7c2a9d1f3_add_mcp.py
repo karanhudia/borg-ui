@@ -94,6 +94,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Without the kind column an MCP token would read as a full-power
+    # personal token after a later upgrade, so revoke them first.
+    op.execute("DELETE FROM api_tokens WHERE kind = 'mcp'")
     op.drop_table("mcp_activity")
     with op.batch_alter_table("system_settings") as batch:
         batch.drop_column("mcp_max_access_level")

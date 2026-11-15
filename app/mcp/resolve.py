@@ -126,7 +126,15 @@ async def archive(ctx: ToolContext, repo: dict, ref: str) -> dict:
             raise NotFound(f"*{repo['name']}* has no archives yet.")
         found = items[0]
     else:
-        found = pick("archive", ref, items)
+        # A Borg id (hex, live rows' `id` or the index's `borg_id`) names one
+        # archive even when Borg 2 lets two archives share a name.
+        text = str(ref).strip()
+        by_id = [
+            a
+            for a in items
+            if text and text in (str(a.get("id")), str(a.get("borg_id")))
+        ]
+        found = by_id[0] if len(by_id) == 1 else pick("archive", ref, items)
     ctx.target = f"archive {found['name']} in {repo['name']}"[:200]
     return found
 

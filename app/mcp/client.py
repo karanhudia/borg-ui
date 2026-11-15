@@ -40,7 +40,11 @@ class ApiError(Exception):
         except (ValueError, AttributeError):
             detail = None
         if isinstance(detail, dict):
-            params = {k: v for k, v in detail.items() if k != "key"}
+            # Routes nest message params under `params` (the frontend reads
+            # them there); plan refusals put their metadata at the top.
+            params = {k: v for k, v in detail.items() if k not in ("key", "params")}
+            if isinstance(detail.get("params"), dict):
+                params.update(detail["params"])
             return cls(response.status_code, detail.get("key"), params)
         if isinstance(detail, str):
             return cls(response.status_code, message=detail)

@@ -45,9 +45,7 @@ def test_list_archives_pages(admin_mcp, seeded):
     first = admin_mcp.call("list_archives", repository="Photos", limit=1)
     assert first["text"].splitlines()[0] == "*Photos* has 2 archives:"
     assert "*photos-2026-11-10*" in first["text"]
-    assert (
-        "Showing 1 of 2 archives. Ask for the next page to see more." in first["text"]
-    )
+    assert "Showing 1 of 2 archives. For more, pass cursor" in first["text"]
     second = admin_mcp.call(
         "list_archives",
         repository="Photos",
@@ -60,14 +58,12 @@ def test_list_archives_pages(admin_mcp, seeded):
 
 @pytest.mark.unit
 def test_unreadable_repository_says_why(admin_mcp, seeded):
-    # No index rows and no repository on disk: Borg's live listing fails.
-    from app.mcp.errors import backend_message
-
+    # No index rows and no repository on disk: Borg's live listing fails,
+    # and the nested `params.error` reaches the sentence.
     result = admin_mcp.call("list_archives", repository="Laptop")
     assert result["is_error"]
-    assert result["text"] == backend_message(
-        "backend.errors.repo.failedToListArchives", {}
-    )
+    assert result["text"].startswith("Failed to list archives: Repository ")
+    assert result["text"].endswith("does not exist.")
 
 
 @pytest.mark.unit
@@ -85,8 +81,9 @@ def test_browse_archive_pages_a_huge_folder(admin_mcp, seeded, fake_browse):
     lines = result["text"].splitlines()
     assert lines[0] == "The top of *photos-2026-11-10* (100001 entries):"
     assert lines[2] == "📁 Documents/"
-    assert result["text"].endswith(
-        "Showing 25 of 100001 entries. Ask for the next page to see more."
+    assert (
+        f'Showing 25 of 100001 entries. For more, pass cursor "{result["data"]["next_cursor"]}".'
+        in result["text"]
     )
     assert len(result["data"]["items"]) == 25
     assert len(result["text"]) < 5000

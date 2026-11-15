@@ -65,7 +65,7 @@ def test_paging_walks_the_list():
 @pytest.mark.unit
 def test_more_line():
     assert more_line(25, 60, "archives", "abc") == (
-        "Showing 25 of 60 archives. Ask for the next page to see more."
+        'Showing 25 of 60 archives. For more, pass cursor "abc".'
     )
     assert more_line(10, 10, "archives", None) == ""
 
@@ -98,3 +98,18 @@ def test_finish_scrubs_secrets():
     )
     assert "hunter2" not in result.content[0].text
     assert result.structured_content["passphrase"] == "[hidden]"
+
+
+@pytest.mark.unit
+def test_text_cap_counts_utf8_bytes():
+    text = "\n".join("é" * 99 for _ in range(1000))  # 99,999 chars, ~199 kB
+    out = finish(ToolResult(text)).content[0].text
+    assert len(out.encode("utf-8")) <= RESULT_CAP
+
+
+@pytest.mark.unit
+def test_more_line_carries_the_cursor_and_trimmed_data_drops_it():
+    assert "abc" in more_line(25, 60, "archives", "abc")
+    huge = {"items": [{"pad": "y" * 500} for _ in range(500)], "next_cursor": "c"}
+    data = finish(ToolResult("ok", huge)).structured_content
+    assert data["truncated"] is True and "next_cursor" not in data

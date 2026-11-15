@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -23,6 +24,7 @@ from app.mcp.render import (
 )
 from app.mcp.tools._common import plural
 
+BROWSE_WAIT_SECONDS, BROWSE_POLL_SECONDS = 40.0, 2.0
 ARCHIVE_FIELDS = (
     "id",
     "borg_id",
@@ -116,6 +118,34 @@ async def list_archives(ctx, args: ListArchivesArgs) -> ToolResult:
     )
 
 
+def _live_info(raw) -> dict:
+    """The info route's shape (`duration`, nested `stats`) as index fields."""
+    if not isinstance(raw, dict):
+        return {}
+    stats = raw.get("stats") or {}
+    info = {k: v for k, v in raw.items() if k != "stats"}
+    info["duration_seconds"] = raw.get("duration")
+    for key in ("nfiles", "original_size", "compressed_size", "deduplicated_size"):
+        info[key] = stats.get(key)
+    return info
+
+
+async def _contents(ctx, path: str, params: dict) -> dict:
+    """An agent listing answers 202 while the agent works; resume that job
+    rather than queueing another."""
+    found = await ctx.api.get(path, **params)
+    waited = 0.0
+    while found.get("status") == "pending" and found.get("jobId"):
+        if waited >= BROWSE_WAIT_SECONDS:
+            raise resolve.NotFound(
+                "The agent is still listing that folder. Ask again in a moment."
+            )
+        await asyncio.sleep(BROWSE_POLL_SECONDS)
+        waited += max(BROWSE_POLL_SECONDS, 1.0)
+        found = await ctx.api.get(path, **{**params, "job_id": found["jobId"]})
+    return found
+
+
 class ArchiveRef(BaseModel):
     repository: str = _REPO
     archive: str = _ARCHIVE
@@ -143,7 +173,10 @@ async def get_archive(ctx, args: ArchiveRef) -> ToolResult:
     info = archive
     if "borg_id" not in archive:  # a live row: the index does not have it
         path, params = borg_routes.archive_info(repo, archive)
-        info = {**archive, **((await ctx.api.get(path, **params)).get("info") or {})}
+        info = {
+            **archive,
+            **_live_info((await ctx.api.get(path, **params)).get("info")),
+        }
     took = info.get("duration_seconds")
     lines = [
         f"*{info['name']}* in *{repo['name']}*",
@@ -197,7 +230,7 @@ async def browse_archive(ctx, args: BrowseArgs) -> ToolResult:
     archive = await resolve.archive(ctx, repo, args.archive)
     folder = args.path.strip("/")
     path, params = borg_routes.archive_contents(repo, archive, folder)
-    items = (await ctx.api.get(path, **params)).get("items") or []
+    items = (await _contents(ctx, path, params)).get("items") or []
     label = f"/{folder}" if folder else "the top"
     if not items:
         parent = folder.rsplit("/", 1)[0] if "/" in folder else ""
@@ -440,7 +473,7 @@ async def compare_archives(ctx, args: CompareArgs) -> ToolResult:
         lines.append("No file changes recorded.")
     cursor = next_cursor(found["next_cursor"]) if found.get("next_cursor") else None
     if cursor:
-        lines += ["", "There are more changes. Ask for the next page to see them."]
+        lines += ["", f'There are more changes. For more, pass cursor "{cursor}".']
     if found.get("incomplete"):
         lines += [
             "",

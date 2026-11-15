@@ -185,7 +185,7 @@ async def on_call_tool(ctx, params) -> types.CallToolResult:
 
     try:
         result = await spec.handler(tool_ctx, args)
-        outcome, error_key = "ok", None
+        outcome, error_key = ("error" if result.is_error else "ok"), None
     except Exception as exc:  # every failure becomes a friendly sentence
         result = render_error(exc, tool=spec.name)
         outcome, error_key = outcome_for(exc)
@@ -244,13 +244,19 @@ def _origin_ok(headers: dict[bytes, bytes]) -> bool:
     return "://" in value and value.split("://", 1)[1].rstrip("/") == host
 
 
-async def _read_body(receive) -> bytes:
-    body = b""
+MAX_BODY = 4 * 1024 * 1024  # the SDK's own limit, enforced while reading
+
+
+async def _read_body(receive) -> Optional[bytes]:
+    """The request body, or None once it passes MAX_BODY."""
+    body = bytearray()
     while True:
         message = await receive()
         body += message.get("body", b"")
+        if len(body) > MAX_BODY:
+            return None
         if not message.get("more_body"):
-            return body
+            return bytes(body)
 
 
 class McpEndpoint:
@@ -297,6 +303,9 @@ class McpEndpoint:
             return
 
         body = await _read_body(receive)
+        if body is None:
+            await _send_plain(send, 413, "That request is too large.")
+            return
         await self._note_client(conn, body)
         scope = {**scope, SCOPE_KEY: conn, "borgui_app": self.app}
         replayed = False

@@ -25,14 +25,19 @@ from app.mcp.render import (
     ago,
     clamp_limit,
     decode_cursor,
+    decode_stamp,
     duration,
     more_line,
     next_cursor,
-    page,
+    stamp_cursor,
     when,
 )
 from app.mcp.tools._common import STATUS_GLYPH, NoArgs, job_label, plural
 
+# Activity rows that are not operations, read from the activity list itself.
+ACTIVITY_ONLY = {"backup_plan_run", "script_execution", "availability_check"}
+# Activity names whose operation kind differs.
+KIND_OF = {"package": "package_install", "rclone_hydrate": "rclone_sync"}
 TERMINAL = {"completed", "completed_with_warnings", "failed", "cancelled", "skipped"}
 WAIT_SECONDS, POLL_SECONDS = 45.0, 3.0
 ACTIVITY_FETCH = 200
@@ -63,6 +68,10 @@ _JOB_TYPE = Field(
     examples=["backup"],
 )
 _JOB_ID = Field(description="Job id as listed by list_activity.", examples=[412])
+
+
+def _stamp(job: dict) -> Optional[str]:
+    return job.get("started_at") or job.get("created_at")
 
 
 def _fields(job: dict) -> dict:
@@ -124,25 +133,26 @@ class ActivityArgs(BaseModel):
 )
 async def list_activity(ctx, args: ActivityArgs) -> ToolResult:
     repo = await resolve.repository(ctx, args.repository) if args.repository else None
+    limit = clamp_limit(args.limit)
+    # New jobs land at the top while someone pages, so the cursor is a
+    # moment ("before this job"), not an offset into a moving list.
     jobs = await ctx.api.get(
         "/api/activity/recent",
-        limit=ACTIVITY_FETCH,
+        limit=limit + 1,
+        before=decode_stamp(args.cursor),
         status=args.status,
         job_type=args.job_type,
         repository_id=repo["id"] if repo else None,
     )
     since = resolve.parse_since(args.since)
     if since:
-        jobs = [
-            j
-            for j in jobs
-            if (s := j.get("started_at") or j.get("created_at")) and _as_utc(s) >= since
-        ]
+        jobs = [j for j in jobs if (s := _stamp(j)) and _as_utc(s) >= since]
     if not jobs:
         return ToolResult("No matching activity.", {"jobs": []})
-    shown, cursor = page(jobs, clamp_limit(args.limit), args.cursor)
+    shown = jobs[:limit]
+    cursor = stamp_cursor(_stamp(shown[-1])) if len(jobs) > limit else None
     lines = [_job_line(j) for j in shown]
-    more = more_line(len(shown), len(jobs), "jobs", cursor)
+    more = more_line(len(shown), None, "jobs", cursor)
     if more:
         lines += ["", more]
     return ToolResult(
@@ -189,15 +199,27 @@ class JobRef(BaseModel):
 
 
 async def _job(ctx, job_type: str, job_id: int) -> dict:
+    missing = resolve.NotFound(
+        f"I could not find {job_type} {job_id}. list_activity shows the recent ones."
+    )
+    if job_type in ACTIVITY_ONLY:
+        # ponytail: looks in the newest rows only; add a detail route if
+        # older plan runs or script runs need reading.
+        rows = await ctx.api.get(
+            "/api/activity/recent", job_type=job_type, limit=ACTIVITY_FETCH
+        )
+        job = next((row for row in rows if row.get("id") == job_id), None)
+        if job is None:
+            raise missing
+        ctx.target = f"{job_type} {job_id}"
+        return job
     try:
         job = await ctx.api.get(f"/api/operations/{job_id}")
     except ApiError as exc:
         if exc.status == 404:
-            raise resolve.NotFound(
-                f"I could not find {job_type} {job_id}. list_activity shows the recent ones."
-            ) from None
+            raise missing from None
         raise
-    if job.get("type") != job_type:
+    if job.get("type") != KIND_OF.get(job_type, job_type):
         raise resolve.NotFound(
             f"Job {job_id} is a {job.get('type')}, not a {job_type}. Ask for {job.get('type')} {job_id}."
         )
@@ -241,7 +263,7 @@ def _job_text(job: dict) -> str:
     title="Check on a job",
     description="The status, timing, progress and error of one job, by type and id.",
     level=Level.READ,
-    routes=("GET /api/operations/{operation_id}",),
+    routes=("GET /api/operations/{operation_id}", "GET /api/activity/recent"),
 )
 async def get_job(ctx, args: JobRef) -> ToolResult:
     job = await _job(ctx, args.job_type, args.job_id)
@@ -258,12 +280,13 @@ class LogArgs(JobRef):
 
 
 async def _tail(
-    ctx, job_type: str, job_id: int, count: int, skip: int = 0
+    ctx, job_type: str, job_id: int, count: int, end: Optional[int] = None
 ) -> tuple[list[str], int, int]:
-    """The `count` lines that end `skip` lines before the end of the log."""
+    """The `count` lines before line `end` (0-based, exclusive), or the last
+    `count` lines. `end` is absolute, so a growing log does not shift pages."""
     route = f"/api/activity/{job_type}/{job_id}/logs"
     total = (await ctx.api.get(route, offset=0, limit=1)).get("total_lines") or 0
-    end = max(0, total - skip)
+    end = total if end is None else min(end, total)
     start = max(0, end - count)
     if end == 0:
         return [], total, 0
@@ -281,15 +304,16 @@ async def _tail(
     level=Level.READ,
     routes=(
         "GET /api/operations/{operation_id}",
+        "GET /api/activity/recent",
         "GET /api/activity/{job_type}/{job_id}/logs",
     ),
 )
 async def get_job_log(ctx, args: LogArgs) -> ToolResult:
     await _job(ctx, args.job_type, args.job_id)
     count = clamp_limit(args.lines, default=LOG_DEFAULT, max_=LOG_MAX)
-    skip = decode_cursor(args.cursor)
+    end = decode_cursor(args.cursor) if args.cursor else None
     try:
-        lines, total, start = await _tail(ctx, args.job_type, args.job_id, count, skip)
+        lines, total, start = await _tail(ctx, args.job_type, args.job_id, count, end)
     except ApiError as exc:
         if exc.key == "backend.errors.activity.noLogsAvailableForJob":
             return ToolResult(
@@ -302,9 +326,9 @@ async def get_job_log(ctx, args: LogArgs) -> ToolResult:
             f"The log of {args.job_type} {args.job_id} is empty.", {"lines": []}
         )
     head = f"Lines {start + 1} to {start + len(lines)} of {total} from {args.job_type} {args.job_id}:"
-    cursor = next_cursor(skip + len(lines)) if start > 0 else None
+    cursor = next_cursor(start) if start > 0 else None
     tail = (
-        ["", f"There are {start} earlier lines. Ask for the next page to read them."]
+        ["", f'There are {start} earlier lines. For them, pass cursor "{cursor}".']
         if cursor
         else []
     )
@@ -328,7 +352,7 @@ async def get_job_log(ctx, args: LogArgs) -> ToolResult:
         "waiting."
     ),
     level=Level.READ,
-    routes=("GET /api/operations/{operation_id}",),
+    routes=("GET /api/operations/{operation_id}", "GET /api/activity/recent"),
 )
 async def wait_for_job(ctx, args: JobRef) -> ToolResult:
     deadline = time.monotonic() + WAIT_SECONDS

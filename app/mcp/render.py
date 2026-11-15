@@ -123,6 +123,23 @@ def decode_cursor(cursor: Optional[str]) -> int:
     return offset
 
 
+def stamp_cursor(stamp: str) -> str:
+    """A cursor that resumes before a moment, for lists that grow at the top."""
+    return base64.urlsafe_b64encode(json.dumps({"b": stamp}).encode()).decode()
+
+
+def decode_stamp(cursor: Optional[str]) -> Optional[str]:
+    if not cursor:
+        return None
+    try:
+        stamp = json.loads(base64.urlsafe_b64decode(cursor.encode()))["b"]
+    except (binascii.Error, ValueError, KeyError, TypeError, UnicodeDecodeError):
+        raise BadCursor() from None
+    if not isinstance(stamp, str):
+        raise BadCursor()
+    return stamp
+
+
 def page(items: list, limit: int, cursor: Optional[str]) -> tuple[list, Optional[str]]:
     offset = decode_cursor(cursor)
     chunk = items[offset : offset + limit]
@@ -140,14 +157,15 @@ def more_line(
     if not next_cursor:
         return ""
     of = f" of {total}" if total is not None else ""
-    return f"Showing {shown}{of} {noun}. Ask for the next page to see more."
+    return f'Showing {shown}{of} {noun}. For more, pass cursor "{next_cursor}".'
 
 
 def _cap_text(text: str) -> str:
-    if len(text) <= RESULT_CAP:
+    encoded = text.encode("utf-8")
+    if len(encoded) <= RESULT_CAP:
         return text
-    room = RESULT_CAP - len(SHORTENED) - 2
-    cut = text[:room]
+    room = RESULT_CAP - len(SHORTENED.encode("utf-8")) - 2
+    cut = encoded[:room].decode("utf-8", errors="ignore")
     if "\n" in cut:
         cut = cut[: cut.rfind("\n")]
     return f"{cut}\n\n{SHORTENED}"
@@ -172,6 +190,9 @@ def _cap_data(data: dict) -> dict:
         return data
     data = json.loads(json.dumps(data, default=str))
     data["truncated"] = True
+    # Trimmed items no longer end where the cursor starts; the text keeps
+    # the page whole and carries the cursor.
+    data.pop("next_cursor", None)
     while len(json.dumps(data)) > RESULT_CAP:
         longest = _longest_list(data)
         if not longest:

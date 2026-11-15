@@ -183,3 +183,32 @@ def test_works_below_a_base_path(test_client, setup):
     for path in ("/borg/mcp", "/mcp"):  # direct, and behind a prefix-stripping proxy
         session = McpSession(wrapped, token, path)
         assert session.call("zz_read_echo", word="hi")["text"] == "✓ hi"
+
+
+@pytest.mark.unit
+def test_oversized_body_is_refused_before_buffering(test_client, setup):
+    _, token = setup()
+    response = test_client.post(
+        "/mcp",
+        content=b"x" * (4 * 1024 * 1024 + 1),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+    )
+    assert response.status_code == 413
+
+
+@pytest.mark.unit
+async def test_read_body_stops_at_the_limit():
+    from app.mcp.server import MAX_BODY, _read_body
+
+    reads = 0
+
+    async def endless():
+        nonlocal reads
+        reads += 1
+        return {"body": b"x" * 65536, "more_body": True}
+
+    assert await _read_body(endless) is None
+    assert reads <= MAX_BODY // 65536 + 1

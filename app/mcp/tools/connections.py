@@ -133,6 +133,8 @@ async def list_ssh_connections(ctx, args: NoArgs) -> ToolResult:
     if not connections:
         return ToolResult("No SSH connections yet.", {"connections": []})
     lines = [f"{plural(len(connections), 'SSH connection')}:", ""]
+    # Free space lives under `storage`, absent until it was measured.
+    connections = [{**c, **(c.get("storage") or {})} for c in connections]
     for c in connections:
         ok = {"connected": "✓", "failed": "✗"}.get(c.get("status"), "·")
         space = (

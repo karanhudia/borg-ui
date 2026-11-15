@@ -106,3 +106,18 @@ def test_explain_failure_picks_the_latest(admin_mcp, logged):
 @pytest.mark.unit
 def test_explain_failure_nothing_failed(admin_mcp):
     assert admin_mcp.call("explain_failure")["text"] == "✓ Nothing has failed recently."
+
+
+@pytest.mark.unit
+def test_log_cursor_survives_a_growing_log(admin_mcp, logged):
+    job_id = logged["failed"].id
+    first = admin_mcp.call("get_job_log", job_type="backup", job_id=job_id)
+    with open(logged["failed"].log_file_path, "a") as log:
+        log.write("\n".join(f"late {i}" for i in range(200)) + "\n")
+    earlier = admin_mcp.call(
+        "get_job_log",
+        job_type="backup",
+        job_id=job_id,
+        cursor=first["data"]["next_cursor"],
+    )
+    assert earlier["text"].startswith("Lines 1101 to 1300 of 1700")

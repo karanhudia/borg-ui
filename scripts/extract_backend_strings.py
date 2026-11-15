@@ -17,7 +17,7 @@ TARGET = ROOT / "app" / "mcp" / "backend_strings.json"
 
 
 def render() -> str:
-    backend = json.loads(SOURCE.read_text())["backend"]
+    backend = json.loads(SOURCE.read_text(encoding="utf-8"))["backend"]
     return json.dumps(backend, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
@@ -28,12 +28,14 @@ def main() -> int:
     args = parser.parse_args()
     expected = render()
     if args.check:
-        current = args.output.read_text() if args.output.exists() else ""
+        current = (
+            args.output.read_text(encoding="utf-8") if args.output.exists() else ""
+        )
         if current != expected:
             print(f"{args.output} is stale: run scripts/extract_backend_strings.py")
             return 1
         return 0
-    args.output.write_text(expected)
+    args.output.write_text(expected, encoding="utf-8")
     return 0
 
 

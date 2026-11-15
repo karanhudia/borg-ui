@@ -108,6 +108,7 @@ def test_level_above_cap_is_refused(test_client, test_db, admin_headers, pro_pla
     )
     assert response.status_code == 422
     assert response.json()["detail"]["key"] == "backend.errors.mcp.levelAboveCap"
+    assert response.json()["detail"]["params"] == {"max": "operate"}
 
 
 @pytest.mark.unit

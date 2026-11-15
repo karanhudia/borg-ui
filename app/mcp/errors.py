@@ -28,7 +28,7 @@ GENERIC = (
 
 @lru_cache(maxsize=1)
 def _strings() -> dict:
-    return json.loads(STRINGS_FILE.read_text())
+    return json.loads(STRINGS_FILE.read_text(encoding="utf-8"))
 
 
 def backend_message(key: str, params: dict) -> Optional[str]:

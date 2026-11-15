@@ -157,3 +157,34 @@ def test_a_failing_record_does_not_fail_the_call(session, monkeypatch):
 
     monkeypatch.setattr(activity, "_insert", broken)
     assert mcp_session.call("zz_read_echo", word="hi")["text"] == "✓ hi"
+
+
+@pytest.mark.unit
+def test_returned_errors_are_recorded_as_errors(session, test_db):
+    @tool(
+        name="zz_soft_fail",
+        title="Fails softly",
+        description="Returns an error without raising. " * 2,
+        level=Level.READ,
+        routes=(),
+    )
+    async def soft_fail(ctx, args: NoArgs) -> ToolResult:
+        return ToolResult("nope", is_error=True)
+
+    _, mcp_session = session
+    assert mcp_session.call("zz_soft_fail")["is_error"]
+    assert _rows(test_db)[-1].outcome == "error"
+
+
+@pytest.mark.unit
+def test_activity_route_pages_by_id(session, test_client, auth_headers):
+    row, mcp_session = session
+    for word in ("a", "b", "c"):
+        mcp_session.call("zz_read_echo", word=word)
+    route = f"/api/settings/mcp/connections/{row['id']}/activity"
+    first = test_client.get(route, params={"limit": 2}, headers=auth_headers).json()
+    rest = test_client.get(
+        route, params={"limit": 2, "before_id": first[-1]["id"]}, headers=auth_headers
+    ).json()
+    assert len(first) == 2 and len(rest) == 1
+    assert rest[0]["id"] < first[-1]["id"]

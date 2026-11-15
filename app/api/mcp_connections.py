@@ -36,7 +36,8 @@ router = APIRouter(
 
 
 def _error(status_code: int, key: str, **params) -> HTTPException:
-    return HTTPException(status_code=status_code, detail={"key": key, **params})
+    detail = {"key": key, "params": params} if params else {"key": key}
+    return HTTPException(status_code=status_code, detail=detail)
 
 
 def _level_name(value: str) -> str:
@@ -274,19 +275,16 @@ def delete_connection(
 def list_activity(
     connection_id: int,
     limit: int = Query(50, ge=1, le=200),
-    before: Optional[datetime] = None,
+    before_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _owned(db, connection_id, current_user)
     query = db.query(McpActivity).filter(McpActivity.connection_id == connection_id)
-    if before is not None:
-        if before.tzinfo is not None:
-            before = before.astimezone(timezone.utc).replace(tzinfo=None)
-        query = query.filter(McpActivity.created_at < before)
-    rows = query.order_by(McpActivity.created_at.desc(), McpActivity.id.desc()).limit(
-        limit
-    )
+    if before_id is not None:
+        # Ids grow with time and never tie, so a page boundary drops nothing.
+        query = query.filter(McpActivity.id < before_id)
+    rows = query.order_by(McpActivity.id.desc()).limit(limit)
     return [
         {
             "id": row.id,

@@ -82,3 +82,23 @@ async def test_a_crashing_route_is_a_500(client_for, monkeypatch):
     with pytest.raises(ApiError) as caught:
         await client_for.get("/api/dashboard/overview")
     assert caught.value.status == 500
+
+
+@pytest.mark.unit
+def test_nested_detail_params_are_flattened():
+    import httpx
+
+    nested = httpx.Response(
+        500,
+        json={
+            "detail": {
+                "key": "backend.errors.schedule.failedToFetch",
+                "params": {"error": "disk full"},
+            }
+        },
+    )
+    flat = httpx.Response(
+        403, json={"detail": {"key": "plan", "feature": "mcp", "required": "pro"}}
+    )
+    assert ApiError.from_response(nested).params == {"error": "disk full"}
+    assert ApiError.from_response(flat).params == {"feature": "mcp", "required": "pro"}

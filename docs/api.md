@@ -60,7 +60,7 @@ the MCP endpoint: the REST API refuses it with 401
 | `POST /api/settings/mcp/connections` | any user | `{name, access_level, skip_routine_confirmations}`; the token is in the response once |
 | `PATCH /api/settings/mcp/connections/{id}` | owner or admin | Rename, change level |
 | `DELETE /api/settings/mcp/connections/{id}` | owner or admin | Revoke |
-| `GET /api/settings/mcp/connections/{id}/activity` | owner or admin | Recent tool calls, `?limit=50&before=<iso>`; arguments are never stored |
+| `GET /api/settings/mcp/connections/{id}/activity` | owner or admin | Recent tool calls, `?limit=50&before_id=<id>` (the last id of the previous page); arguments are never stored |
 
 ### The MCP endpoint
 
