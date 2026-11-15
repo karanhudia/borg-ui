@@ -9,7 +9,16 @@ from pydantic import BaseModel, Field
 from app.mcp import resolve
 from app.mcp.levels import Level
 from app.mcp.registry import tool
-from app.mcp.render import ToolResult, ago, clamp_limit, duration, more_line, page, when
+from app.mcp.render import (
+    ToolResult,
+    ago,
+    clamp_limit,
+    decode_cursor,
+    duration,
+    more_line,
+    page,
+    when,
+)
 from app.mcp.tools._common import STATUS_GLYPH, plural
 from app.mcp.tools.repositories import _retention
 
@@ -24,6 +33,8 @@ PLAN_FIELDS = (
     "compression",
     "cron_expression",
     "timezone",
+    "schedule_mode",
+    "availability_check_interval_minutes",
     "schedule_enabled",
     "next_run",
     "last_run",
@@ -48,6 +59,8 @@ SCHEDULE_FIELDS = (
     "enabled",
     "cron_expression",
     "timezone",
+    "schedule_mode",
+    "availability_check_interval_minutes",
     "next_run",
     "last_run",
     "repository",
@@ -80,13 +93,22 @@ def _sources(plan: dict) -> str:
     return shown + (f" and {len(paths) - 5} more" if len(paths) > 5 else "")
 
 
+def _timing(item: dict) -> str:
+    """How a plan or schedule fires: a cron line, or when its target is up."""
+    if item.get("schedule_mode") == "availability":
+        every = item.get("availability_check_interval_minutes")
+        checked = f", checked every {every} min" if every else ""
+        return f"when the target is reachable{checked}"
+    return f"`{item.get('cron_expression')}` ({item.get('timezone') or 'UTC'})"
+
+
 def _schedule_words(item: dict) -> str:
-    cron = item.get("cron_expression")
-    if not cron or item.get("schedule_enabled") is False:
+    availability = item.get("schedule_mode") == "availability"
+    if item.get("schedule_enabled") is False or not (
+        availability or item.get("cron_expression")
+    ):
         return "not scheduled"
-    return (
-        f"`{cron}` ({item.get('timezone') or 'UTC'}), next {when(item.get('next_run'))}"
-    )
+    return f"{_timing(item)}, next {when(item.get('next_run'))}"
 
 
 @tool(
@@ -204,10 +226,16 @@ class PlanRunsArgs(PlanRef):
 )
 async def list_plan_runs(ctx, args: PlanRunsArgs) -> ToolResult:
     plan = await resolve.backup_plan(ctx, args.plan)
-    runs = (await ctx.api.get(f"/api/backup-plans/{plan['id']}/runs")).get("runs") or []
+    limit = clamp_limit(args.limit)
+    # The route cuts at its own limit (20 by default) before answering, so
+    # ask for everything up to this page plus one to know if more exist.
+    wanted = decode_cursor(args.cursor) + limit + 1
+    runs = (
+        await ctx.api.get(f"/api/backup-plans/{plan['id']}/runs", limit=wanted)
+    ).get("runs") or []
     if not runs:
         return ToolResult(f"*{plan['name']}* has not run yet.", {"runs": []})
-    shown, cursor = page(runs, clamp_limit(args.limit), args.cursor)
+    shown, cursor = page(runs, limit, args.cursor)
     lines = [f"Runs of *{plan['name']}*:", ""]
     for run in shown:
         took = ""
@@ -254,7 +282,7 @@ async def list_schedules(ctx, args: NoArgsList) -> ToolResult:
         state = "" if job.get("enabled", True) else " (off)"
         target = f" for *{job['repository']}*" if job.get("repository") else ""
         lines.append(
-            f"*{job['name']}*{state}{target}: `{job.get('cron_expression')}` ({job.get('timezone') or 'UTC'}), next {when(job.get('next_run'))}"
+            f"*{job['name']}*{state}{target}: {_timing(job)}, next {when(job.get('next_run'))}"
         )
     more = more_line(len(shown), len(jobs), "schedules", cursor)
     if more:
@@ -283,10 +311,14 @@ async def get_schedule(ctx, args: ScheduleRef) -> ToolResult:
     found = await resolve.schedule(ctx, args.schedule)
     job = await ctx.api.get(f"/api/schedule/{found['id']}")
     job = job.get("job", job)
+    # The detail answer leaves out the targets the list carries.
+    for key in ("repository", "repository_id", "repository_ids"):
+        if job.get(key) is None:
+            job[key] = found.get(key)
     lines = [
         f"*{job['name']}*{'' if job.get('enabled', True) else ' (turned off)'}",
         "",
-        f"When: `{job.get('cron_expression')}` ({job.get('timezone') or 'UTC'})",
+        f"When: {_timing(job)}",
         f"Next run: {when(job.get('next_run'))}",
         f"Last run: {when(job.get('last_run'))}",
     ]

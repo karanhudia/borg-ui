@@ -218,3 +218,82 @@ def test_activity_pages_by_time_not_offset():
         cursor=first.data["next_cursor"],
     )
     assert second.data["jobs"][0]["id"] == 2
+
+
+@pytest.mark.unit
+def test_list_problems_says_when_failures_were_cut():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+
+    def failed(params):
+        rows = [
+            {
+                "id": i,
+                "type": "backup",
+                "status": "failed",
+                "repository": "Photos",
+                "completed_at": (now - timedelta(hours=i + 1)).isoformat(),
+            }
+            for i in range(30)
+        ]
+        return rows[: params["limit"]]
+
+    routes = {
+        "/api/dashboard/overview": {"repository_health": []},
+        "/api/activity/recent": failed,
+    }
+    result, _ = run("list_problems", routes)
+    assert "Showing the 10 most recent failures" in result.text
+    assert 'list_activity with status "failed"' in result.text
+
+
+PLAN = {
+    "id": 3,
+    "name": "Nightly",
+    "enabled": True,
+    "schedule_enabled": True,
+    "schedule_mode": "availability",
+    "availability_check_interval_minutes": 15,
+    "cron_expression": None,
+}
+
+
+@pytest.mark.unit
+def test_availability_plans_and_schedules_say_how_they_run():
+    routes = {"/api/backup-plans/": {"backup_plans": [PLAN]}}
+    result, _ = run("list_backup_plans", routes)
+    assert "not scheduled" not in result.text
+    assert "when the target is reachable, checked every 15 min" in result.text
+    assert result.data["backup_plans"][0]["schedule_mode"] == "availability"
+
+    job = {**PLAN, "repository": None}
+    routes = {"/api/schedule/": {"jobs": [job]}, "/api/schedule/3": {"job": job}}
+    listed, _ = run("list_schedules", routes)
+    assert "None" not in listed.text and "checked every 15 min" in listed.text
+    one, _ = run("get_schedule", routes, schedule="Nightly")
+    assert "When: when the target is reachable, checked every 15 min" in one.text
+
+
+@pytest.mark.unit
+def test_plan_runs_ask_for_enough_rows():
+    def runs(params):
+        rows = [{"id": i, "status": "completed"} for i in range(30, 0, -1)]
+        return {"runs": rows[: params.get("limit", 20)]}
+
+    routes = {
+        "/api/backup-plans/": {"backup_plans": [PLAN]},
+        "/api/backup-plans/3/runs": runs,
+    }
+    result, _ = run("list_plan_runs", routes, plan="Nightly", limit=25)
+    assert len(result.data["runs"]) == 25
+    assert result.data["next_cursor"]
+
+
+@pytest.mark.unit
+def test_get_schedule_keeps_targets_from_the_list():
+    listed = {"id": 4, "name": "Ids", "repository": None, "repository_ids": [1, 2]}
+    detail = {"id": 4, "name": "Ids", "cron_expression": "0 2 * * *"}
+    routes = {"/api/schedule/": {"jobs": [listed]}, "/api/schedule/4": {"job": detail}}
+    result, _ = run("get_schedule", routes, schedule="Ids")
+    assert result.data["schedule"]["repository_ids"] == [1, 2]

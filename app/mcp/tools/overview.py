@@ -11,6 +11,7 @@ from app.mcp.tools._common import GLYPH, NoArgs, job_label, plural
 
 _RANK = {"critical": 0, "warning": 1, "healthy": 2}
 FAILURE_DAYS = 7
+FAILURES_SHOWN = 10
 
 
 def _repo_line(repo: dict) -> str:
@@ -118,7 +119,11 @@ def _recent(item: dict, days: int) -> bool:
 )
 async def list_problems(ctx, args: NoArgs) -> ToolResult:
     overview = await ctx.api.get("/api/dashboard/overview")
-    failed = await ctx.api.get("/api/activity/recent", status="failed", limit=10)
+    failed = await ctx.api.get(
+        "/api/activity/recent", status="failed", limit=FAILURES_SHOWN + 1
+    )
+    cut = len(failed or []) > FAILURES_SHOWN
+    failed = (failed or [])[:FAILURES_SHOWN]
     repos = overview.get("repository_health") or []
     problems: list[dict] = []
     lines: list[str] = []
@@ -173,6 +178,12 @@ async def list_problems(ctx, args: NoArgs) -> ToolResult:
         if any(p["kind"] == "failed_job" for p in problems)
         else []
     )
+    if cut and _recent(failed[-1], FAILURE_DAYS):
+        tail += [
+            "",
+            f"Showing the {FAILURES_SHOWN} most recent failures. For older ones, "
+            'use list_activity with status "failed" and since "7d".',
+        ]
     return ToolResult("\n".join([head, "", *lines, *tail]), {"problems": problems})
 
 
