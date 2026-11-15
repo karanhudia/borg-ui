@@ -1147,3 +1147,264 @@ async def test_an_agent_post_backup_check_targets_the_recorded_archive(
     if want_status == "failed":
         assert archive_id in refreshed.error_message
     verification.close()
+
+
+# -- #1534: restore checks of a managed agent's repository ---------------------
+
+
+@pytest.fixture
+def agent_restore_check(db_session):
+    """An agent-run repository with a queued restore check on it."""
+    import json
+
+    from app.core.security import get_password_hash
+    from app.database.models import AgentMachine
+
+    agent = AgentMachine(
+        name="check-agent",
+        agent_id="agt_check",
+        token_hash=get_password_hash("secret"),
+        token_prefix="secret",
+        status="online",
+        capabilities=["repository.list_archives", "repository.restore", "jobs.cancel"],
+    )
+    db_session.add(agent)
+    db_session.commit()
+    repo = Repository(
+        name="Agent Restore Check Repo",
+        path="/agent/restore-check-repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        executor_type="agent",
+        execution_target="agent",
+        agent_machine_id=agent.id,
+        source_directories=json.dumps(["/data"]),
+        restore_check_canary_enabled=True,
+    )
+    db_session.add(repo)
+    db_session.commit()
+    job = seed_job_operation(
+        db_session,
+        "restore_check",
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+    )
+    db_session.commit()
+    return agent, repo, job
+
+
+async def _run_agent_restore_check(session_local, db_session, repo, job, agent_ends):
+    """Run the check while `agent_ends` plays the agent (and the user) on the
+    restore job the check queued. Returns the notification mock."""
+    import asyncio
+    from functools import partial
+
+    from app.database.models import AgentJob
+
+    service = RestoreCheckService()
+    service._agent_list_archives = AsyncMock(
+        return_value=[{"name": "archive-1", "start": "2026-01-02T00:00:00Z"}]
+    )
+    service._await_agent_operation = partial(
+        service._await_agent_operation, poll_interval_seconds=0.02
+    )
+    notify = AsyncMock()
+
+    async def agent_side():
+        while True:
+            await asyncio.sleep(0.02)
+            db_session.expire_all()
+            agent_job = db_session.query(AgentJob).first()
+            if agent_job is not None:
+                await agent_ends(agent_job)
+                db_session.commit()
+                return
+
+    with (
+        patch("app.services.restore_check_service.SessionLocal", session_local),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            AsyncMock(),
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+            AsyncMock(return_value=True),
+        ),
+        patch(
+            "app.services.restore_check_service.NotificationService"
+            ".send_restore_check_completion",
+            notify,
+        ),
+    ):
+        agent = asyncio.create_task(agent_side())
+        try:
+            await asyncio.wait_for(service.execute_restore_check(job.id, repo.id), 10)
+            # a check that ended before it queued a job leaves nothing to find
+            await asyncio.wait_for(agent, 10)
+        finally:
+            agent.cancel()
+            await asyncio.gather(agent, return_exceptions=True)
+    return notify
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("taken", ["queued", "running"])
+async def test_a_cancelled_agent_restore_check_ends_cancelled_and_notifies_nobody(
+    testing_session_local, db_session, agent_restore_check, taken
+):
+    """As on the server path (#1534): a user's cancel is not a failure. The
+    agent job ends `canceled`, off the queue or stopped by the agent, and the
+    check must not record `failed` or send a failure notification."""
+    from app.services.operations.executors.maintenance import (
+        cancel_agent_operation_job,
+    )
+
+    _agent, repo, job = agent_restore_check
+
+    async def user_cancels(agent_job):
+        assert agent_job.payload["operation"]["maintenance_job"]["id"] == job.id
+        if taken == "running":
+            agent_job.status = "running"
+            db_session.commit()
+        # the runner's canceller for an agent-run operation
+        assert await cancel_agent_operation_job(db_session, repo, job.id)
+        db_session.refresh(agent_job)
+        if taken == "running":
+            assert agent_job.status == "cancel_requested"
+            agent_job.status = "canceled"  # the agent stopped Borg and says so
+        assert agent_job.status == "canceled"
+
+    notify = await _run_agent_restore_check(
+        testing_session_local, db_session, repo, job, user_cancels
+    )
+
+    verification = testing_session_local()
+    refreshed = resolve_maintenance_job(verification, job.id, "restore_check")
+    assert refreshed.status == "cancelled"
+    assert refreshed.error_message == "Restore verification cancelled"
+    assert refreshed.completed_at is not None
+    assert Path(refreshed.log_file_path).read_text().splitlines()[-1] == (
+        "Restore verification cancelled"
+    )
+    assert verification.get(Repository, repo.id).last_restore_check is None
+    notify.assert_not_awaited()
+    verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ending", ["failed", "stopped_by_the_server"])
+async def test_an_agent_restore_check_that_failed_still_notifies(
+    testing_session_local, db_session, agent_restore_check, ending
+):
+    """Only a cancel is silent. A failed extract is a failure, and so is the
+    job this service asked the agent to stop when its own wait ended: the
+    agent's `canceled` then confirms that stop, not a user's cancel."""
+    from app.services.operations.executors.maintenance import (
+        AGENT_WAIT_ABANDONED_MESSAGE,
+    )
+
+    _agent, repo, job = agent_restore_check
+
+    async def agent_reports(agent_job):
+        if ending == "failed":
+            agent_job.status = "failed"
+            agent_job.error_message = "borg extract exited with code 2"
+        else:
+            agent_job.status = "canceled"
+            agent_job.error_message = AGENT_WAIT_ABANDONED_MESSAGE
+
+    notify = await _run_agent_restore_check(
+        testing_session_local, db_session, repo, job, agent_reports
+    )
+
+    verification = testing_session_local()
+    refreshed = resolve_maintenance_job(verification, job.id, "restore_check")
+    assert refreshed.status == "failed"
+    assert refreshed.error_message.startswith(
+        "Restore verification failed on the agent"
+    )
+    notify.assert_awaited_once()
+    assert notify.await_args.kwargs["status"] == "failed"
+    verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stages_canary", [True, False])
+async def test_a_missing_canary_names_an_agent_that_does_not_add_it(
+    testing_session_local, db_session, agent_restore_check, stages_canary
+):
+    """Another backup does not help while the agent leaves the canary out of
+    its backups (an agent before `backup.restore_canary`, or one whose
+    Borg 1 is older than 1.4); the verdict says so instead of asking for
+    one."""
+    from app.services.repository_executor import RESTORE_CANARY_CAPABILITY
+
+    agent, repo, job = agent_restore_check
+    if stages_canary:
+        agent.capabilities = [*agent.capabilities, RESTORE_CANARY_CAPABILITY]
+        db_session.commit()
+    agents_message = (
+        "The Borg UI canary file was not found in the latest archive. "
+        "Run a backup while canary mode is enabled, then run this restore "
+        "check again."
+    )
+
+    async def agent_reports(agent_job):
+        assert agent_job.payload["operation"]["verify"]["kind"] == "canary"
+        agent_job.status = "completed"
+        agent_job.result = {
+            "return_code": 1,
+            "warning": True,
+            "verification": {"status": "needs_backup", "message": agents_message},
+        }
+
+    notify = await _run_agent_restore_check(
+        testing_session_local, db_session, repo, job, agent_reports
+    )
+
+    verification = testing_session_local()
+    refreshed = resolve_maintenance_job(verification, job.id, "restore_check")
+    assert refreshed.status == "needs_backup"
+    if stages_canary:
+        assert refreshed.error_message == agents_message
+    else:
+        assert "agent does not add it to backups" in refreshed.error_message
+        assert "Update the agent" in refreshed.error_message
+    notify.assert_awaited_once()
+    verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_archive_listing_waits_for_the_configured_list_timeout(
+    db_session, agent_restore_check
+):
+    """The check's listing has the bound of every other archive listing: a
+    repository whose list takes longer than two minutes is not failed for
+    it."""
+    from app.database.models import SystemSettings
+
+    _agent, repo, _job = agent_restore_check
+    db_session.add(SystemSettings(list_timeout=900))
+    db_session.commit()
+    wait = AsyncMock(return_value={"data": {"archives": [{"name": "archive-1"}]}})
+
+    with (
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            AsyncMock(),
+        ),
+        patch(
+            "app.services.repository_executor.wait_for_agent_repository_operation_job",
+            wait,
+        ),
+    ):
+        archives = await RestoreCheckService()._agent_list_archives(db_session, repo)
+
+    assert archives == [{"name": "archive-1"}]
+    assert wait.await_args.kwargs["timeout_seconds"] == 900

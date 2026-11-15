@@ -39,6 +39,7 @@ from app.services.operations.backup_facade import (
     backup_job_link_columns,
     resolve_backup_job,
 )
+from app.services.restore_check_canary import agent_restore_canary_payload
 from app.utils.borg_arguments import validate_operand, validate_source
 from app.utils.borg_flags import parse_borg_flags
 from app.utils.redaction import redact_secrets
@@ -247,6 +248,30 @@ def _agent_source_paths(
     return decode_json_list(repository.source_directories)
 
 
+# Advertised by an agent that stages the managed restore canary a backup
+# job carries and archives it with the sources. An older one ignores the
+# key, so it is sent only to an agent that reads it.
+RESTORE_CANARY_CAPABILITY = "backup.restore_canary"
+
+
+def agent_stages_restore_canary(
+    agent: Optional[AgentMachine], repository: Repository
+) -> bool:
+    """Whether the agent adds the managed restore canary to this
+    repository's backups: it stages the canary, and its Borg archives the
+    staged files under the canary's own path, which every Borg 2 does and
+    Borg 1 from 1.4 on. A Borg 1 version the agent does not report readably
+    is left to the agent, which asks the Borg it runs."""
+    if agent is None or RESTORE_CANARY_CAPABILITY not in (agent.capabilities or []):
+        return False
+    if is_borg2(repository):
+        return True
+    reported = re.match(
+        r"(\d+)\.(\d+)", agent_borg_version_for_major(agent.borg_versions, 1) or ""
+    )
+    return reported is None or (int(reported[1]), int(reported[2])) >= (1, 4)
+
+
 def build_agent_backup_payload(
     repository: Repository,
     archive_name: str,
@@ -257,6 +282,7 @@ def build_agent_backup_payload(
     compression: Optional[str] = None,
     custom_flags: Optional[str] = None,
     upload_ratelimit_kib: Optional[int] = None,
+    include_restore_canary: bool = False,
 ) -> dict[str, Any]:
     source_paths = _agent_source_paths(
         source_directories=source_directories,
@@ -297,6 +323,11 @@ def build_agent_backup_payload(
     )
     if effective_upload_ratelimit_kib:
         backup_payload["upload_ratelimit_kib"] = effective_upload_ratelimit_kib
+    restore_canary = (
+        agent_restore_canary_payload(repository) if include_restore_canary else None
+    )
+    if restore_canary:
+        backup_payload["restore_canary"] = restore_canary
 
     secrets = {}
     if repository.passphrase:
@@ -1095,6 +1126,7 @@ def queue_agent_backup_job(
             compression=compression,
             custom_flags=custom_flags,
             upload_ratelimit_kib=upload_ratelimit_kib,
+            include_restore_canary=agent_stages_restore_canary(agent, repository),
         ),
         created_at=now,
         updated_at=now,

@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
+import re
 import shlex
+import shutil
 import signal
 import subprocess
+import tempfile
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
@@ -64,6 +70,90 @@ def job_borg_major(repository: dict[str, Any], payload: dict[str, Any]) -> int:
     return major
 
 
+# Advertised to the server: this agent stages the managed restore canary a
+# backup job carries (`backup.restore_canary`) and archives it.
+RESTORE_CANARY_CAPABILITY = "backup.restore_canary"
+
+
+def _canary_relative_path(value: Any) -> str:
+    """A path that stays below the directory it is joined to."""
+    if (
+        not isinstance(value, str)
+        or "\\" in value
+        or "\0" in value
+        or any(part in ("", ".", "..") for part in value.split("/"))
+    ):
+        raise ValueError("backup.create restore_canary paths must be relative")
+    return value
+
+
+@dataclass(frozen=True)
+class RestoreCanary:
+    """The managed restore canary of a backup job: the files to write below a
+    staging directory, and the path below it that Borg archives, under that
+    same relative name."""
+
+    source_path: str
+    files: dict[str, bytes]
+
+    @classmethod
+    def from_job_payload(cls, value: Any) -> Optional["RestoreCanary"]:
+        if value is None:
+            return None
+        if not isinstance(value, dict) or not isinstance(value.get("files"), dict):
+            raise ValueError("backup.create restore_canary requires files")
+        source_path = _canary_relative_path(value.get("source_path"))
+        validate_source(source_path)
+        files: dict[str, bytes] = {}
+        for path, content in value["files"].items():
+            if not _canary_relative_path(path).startswith(f"{source_path}/"):
+                raise ValueError(
+                    "backup.create restore_canary files must be below source_path"
+                )
+            try:
+                files[path] = base64.b64decode(content, validate=True)
+            except (TypeError, ValueError, binascii.Error) as exc:
+                raise ValueError(
+                    "backup.create restore_canary files must be base64"
+                ) from exc
+        if not files:
+            raise ValueError("backup.create restore_canary requires files")
+        return cls(source_path=source_path, files=files)
+
+    def stage(self) -> str:
+        """Write the files below a new directory and return it."""
+        root = tempfile.mkdtemp(prefix="borg-ui-canary-")
+        try:
+            for path, content in self.files.items():
+                target = Path(root, path)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+        except OSError:
+            shutil.rmtree(root, ignore_errors=True)
+            raise
+        return root
+
+
+def _strips_source_prefix(borg_cmd: str, borg_version: int) -> bool:
+    """Whether this Borg archives `/prefix/./path` as `path`: every Borg 2
+    the agent runs, and Borg 1 from 1.4 on. An older Borg 1 would archive
+    the canary under its staging directory."""
+    if borg_version == 2:
+        return True
+    try:
+        result = subprocess.run(
+            [borg_cmd, "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    version = re.search(r"(\d+)\.(\d+)", f"{result.stdout}\n{result.stderr}")
+    return version is not None and (int(version[1]), int(version[2])) >= (1, 4)
+
+
 @dataclass(frozen=True)
 class BackupCreatePayload:
     repository_path: str
@@ -77,6 +167,9 @@ class BackupCreatePayload:
     upload_ratelimit_kib: Optional[int] = None
     remote_path: Optional[str] = None
     environment: dict[str, str] = field(default_factory=dict)
+    restore_canary: Optional[RestoreCanary] = None
+    # the directory `restore_canary` was staged in, once it has been
+    staged_canary_root: Optional[str] = None
 
     @classmethod
     def from_job_payload(cls, payload: dict[str, Any]) -> "BackupCreatePayload":
@@ -154,13 +247,38 @@ class BackupCreatePayload:
             upload_ratelimit_kib=upload_ratelimit_kib,
             remote_path=repository.get("remote_path") or payload.get("remote_path"),
             environment=environment,
+            restore_canary=RestoreCanary.from_job_payload(backup.get("restore_canary")),
+        )
+
+    @property
+    def borg_command(self) -> str:
+        return self.borg_binary or ("borg2" if self.borg_version == 2 else "borg")
+
+    def _staged_canary_arguments(self) -> tuple[list[str], list[str]]:
+        """The pattern option and the source that archive the staged canary.
+
+        `/./` ends the part of a source that Borg leaves out of the archive,
+        so the canary keeps its own relative path while the rest of the
+        command, and where it runs, stay as they are. Borg matches patterns
+        against the whole path, though, and the first match decides: the
+        include goes ahead of the user's excludes, so that one naming the
+        temporary directory (`/tmp`) or a kind of file (`*.json`) does not
+        drop the canary. It matches nothing outside the staging directory.
+        """
+        if self.restore_canary is None or self.staged_canary_root is None:
+            return [], []
+        root = self.staged_canary_root
+        return (
+            [f"--pattern=+pp:{root}"],
+            [f"{root}/./{self.restore_canary.source_path}"],
         )
 
     def build_command(self) -> list[str]:
         validate_operand(self.archive_name, "archive name")
         for source in self.source_paths:
             validate_source(source)
-        borg_cmd = self.borg_binary or ("borg2" if self.borg_version == 2 else "borg")
+        borg_cmd = self.borg_command
+        canary_include, canary_source = self._staged_canary_arguments()
         if self.borg_version == 2:
             cmd = [
                 borg_cmd,
@@ -178,11 +296,13 @@ class BackupCreatePayload:
             # No --upload-ratelimit: Borg 2.0.0b22 removed it (behind rclone the
             # limit is RCLONE_BWLIMIT in the environment instead, #1307). A
             # server before agent 0.1.17 still sends a repository's limit.
+            cmd.extend(canary_include)
             for pattern in self.exclude_patterns:
                 cmd.extend(["--exclude", pattern])
             cmd.extend(self.custom_flags)
             cmd.extend(["--", self.archive_name])
             cmd.extend(self.source_paths)
+            cmd.extend(canary_source)
             return cmd
 
         cmd = [
@@ -201,11 +321,13 @@ class BackupCreatePayload:
             cmd.extend(["--remote-path", self.remote_path])
         if self.upload_ratelimit_kib:
             cmd.extend(["--upload-ratelimit", str(self.upload_ratelimit_kib)])
+        cmd.extend(canary_include)
         for pattern in self.exclude_patterns:
             cmd.extend(["--exclude", pattern])
         cmd.extend(self.custom_flags)
         cmd.extend(["--", f"{self.repository_path}::{self.archive_name}"])
         cmd.extend(self.source_paths)
+        cmd.extend(canary_source)
         return cmd
 
 
@@ -508,6 +630,44 @@ def execute_backup_create_job(
             job_id=job_id, status="failed", message=error_message
         )
 
+    # The canary is staged in a directory of its own, which Borg archives
+    # under the canary's relative path (`_staged_canary_arguments`). A host
+    # that cannot stage it, or whose Borg 1 does not read `/./`, still gets
+    # its backup; the log says why the canary is missing.
+    staging_root = None
+    canary_skipped = None
+    canary = payload.restore_canary
+    if canary is not None:
+        if not _strips_source_prefix(payload.borg_command, payload.borg_version):
+            canary_skipped = "it needs Borg 1.4 or newer"
+        else:
+            try:
+                staging_root = canary.stage()
+            except OSError as exc:
+                canary_skipped = f"could not write it ({exc})"
+    if staging_root is not None:
+        payload = replace(payload, staged_canary_root=staging_root)
+    try:
+        return _run_backup_create(
+            job_id,
+            payload,
+            client,
+            should_cancel=should_cancel,
+            canary_skipped=canary_skipped,
+        )
+    finally:
+        if staging_root is not None:
+            shutil.rmtree(staging_root, ignore_errors=True)
+
+
+def _run_backup_create(
+    job_id: int,
+    payload: BackupCreatePayload,
+    client: AgentClient,
+    *,
+    should_cancel: Optional[Callable[[], bool]],
+    canary_skipped: Optional[str],
+) -> BackupExecutionResult:
     cmd = payload.build_command()
     env = build_borg_env(payload.environment)
     env_with_repository_port(env, payload.repository_path)
@@ -523,6 +683,14 @@ def execute_backup_create_job(
         message=f"Starting backup.create: {shlex.join(cmd)}",
     )
     sequence += 1
+    if canary_skipped:
+        client.send_log(
+            job_id,
+            sequence=sequence,
+            stream="stderr",
+            message=f"Restore canary not added to this backup: {canary_skipped}",
+        )
+        sequence += 1
 
     if cancel_requested(should_cancel):
         # Cancelled between dispatch and start (the log above may have

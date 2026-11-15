@@ -706,6 +706,11 @@ class RestoreCheckService:
             result = await self._await_agent_operation(db, agent_job.id, job=job)
         except HTTPException as exc:
             self._append_agent_logs(db, raw_logs, agent_job.id)
+            if self._agent_job_was_cancelled(db, agent_job.id):
+                # As on the server path: a cancelled check verified nothing
+                # and is not a failure, so no notification goes out for it.
+                self._finish_agent_restore_check_cancelled(db, job, job_id, raw_logs)
+                return
             self._finish_agent_restore_check_failure(
                 db,
                 job,
@@ -725,6 +730,7 @@ class RestoreCheckService:
         await self._send_completion_notification(db=db, repository=repository, job=job)
 
     async def _agent_list_archives(self, db, repository: Repository) -> list:
+        from app.api.repositories import get_operation_timeouts
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
         from app.services.repository_executor import (
             queue_agent_repository_operation_job,
@@ -735,8 +741,11 @@ class RestoreCheckService:
             db, repository, job_kind="repository.list_archives"
         )
         await dispatch_agent_job_best_effort(db, list_job, repository_id=repository.id)
+        # The configured list timeout, as for every other archive listing.
         result = await wait_for_agent_repository_operation_job(
-            db, list_job.id, timeout_seconds=120
+            db,
+            list_job.id,
+            timeout_seconds=get_operation_timeouts(db)["list_timeout"],
         )
         data = result.get("data") if isinstance(result, dict) else None
         archives = (data or {}).get("archives") if isinstance(data, dict) else None
@@ -891,6 +900,35 @@ class RestoreCheckService:
         )
         raw_logs.extend(log.message for log in logs)
 
+    def _agent_job_was_cancelled(self, db, agent_job_id: int) -> bool:
+        """Whether the agent job ended on a cancel: taken off the queue, or
+        stopped by the agent on request. The stop this service asks for when
+        its own wait ends is not one; that check has failed."""
+        from app.database.models import AgentJob
+        from app.services.operations.executors.maintenance import (
+            AGENT_WAIT_ABANDONED_MESSAGE,
+        )
+
+        db.expire_all()
+        agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
+        return (
+            agent_job is not None
+            and agent_job.status == "canceled"
+            and agent_job.error_message != AGENT_WAIT_ABANDONED_MESSAGE
+        )
+
+    def _finish_agent_restore_check_cancelled(
+        self, db, job, job_id: int, raw_logs: list[str]
+    ) -> None:
+        job.status = "cancelled"
+        job.error_message = "Restore verification cancelled"
+        job.progress = 100
+        job.progress_message = job.error_message
+        job.completed_at = datetime.utcnow()
+        raw_logs.append(job.error_message)
+        self._save_job_logs(job, job_id, raw_logs)
+        db.commit()
+
     def _finish_agent_restore_check_failure(
         self,
         db,
@@ -908,6 +946,28 @@ class RestoreCheckService:
         raw_logs.append(message)
         self._save_job_logs(job, job_id, raw_logs)
         db.commit()
+
+    def _agent_without_canary_message(self, db, repository: Repository) -> str | None:
+        """What to tell the user when the canary is missing and the
+        repository's agent does not add it to backups: another backup would
+        not change that."""
+        from app.database.models import AgentMachine
+        from app.services.repository_executor import agent_stages_restore_canary
+
+        agent = (
+            db.get(AgentMachine, repository.agent_machine_id)
+            if repository.agent_machine_id is not None
+            else None
+        )
+        if agent is None or agent_stages_restore_canary(agent, repository):
+            return None
+        return (
+            "The Borg UI canary file was not found in the latest archive, and "
+            "this repository's agent does not add it to backups. That takes a "
+            "current agent and, for a Borg 1 repository, Borg 1.4 or newer on "
+            "the agent's host. Update the agent, run a backup, then run this "
+            "restore check again."
+        )
 
     def _apply_agent_restore_check_result(
         self,
@@ -941,7 +1001,8 @@ class RestoreCheckService:
             elif vstatus == "needs_backup":
                 job.status = "needs_backup"
                 job.error_message = (
-                    verification.get("message")
+                    self._agent_without_canary_message(db, repository)
+                    or verification.get("message")
                     or "Restore verification needs a backup first"
                 )
                 job.progress_message = "Restore verification needs a backup first"
