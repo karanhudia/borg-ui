@@ -126,6 +126,23 @@ def test_skip_confirmations_needs_full(test_client, admin_headers, pro_plan):
 
 
 @pytest.mark.unit
+def test_lowering_full_drops_the_skip(test_client, admin_headers, pro_plan):
+    created = test_client.post(
+        f"{BASE}/connections",
+        json={"name": "x", "access_level": "full", "skip_routine_confirmations": True},
+        headers=admin_headers,
+    ).json()
+    response = test_client.patch(
+        f"{BASE}/connections/{created['id']}",
+        json={"access_level": "read"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["access_level"] == "read"
+    assert response.json()["skip_routine_confirmations"] is False
+
+
+@pytest.mark.unit
 def test_blank_name_and_unknown_level_are_refused(test_client, admin_headers, pro_plan):
     blank = test_client.post(
         f"{BASE}/connections",

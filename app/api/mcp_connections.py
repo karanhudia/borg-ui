@@ -231,16 +231,15 @@ def update_connection(
             raise _error(422, "backend.errors.mcp.nameRequired")
         token.name = payload.name.strip()
     level = payload.access_level or token.access_level
-    skip = (
-        payload.skip_routine_confirmations
-        if payload.skip_routine_confirmations is not None
-        else bool(token.skip_routine_confirmations)
-    )
+    if payload.skip_routine_confirmations is not None:
+        skip = payload.skip_routine_confirmations
+    else:
+        # Leaving Full drops the confirmation shortcut with it.
+        skip = bool(token.skip_routine_confirmations) and (
+            Level.parse(level) == Level.FULL
+        )
     if payload.access_level is not None or payload.skip_routine_confirmations:
         _check_rules(level, skip, cap)
-    if payload.access_level is not None and Level.parse(level) != Level.FULL:
-        # Leaving Full drops the confirmation shortcut with it.
-        skip = False
     token.access_level = level
     token.skip_routine_confirmations = skip
     db.commit()
