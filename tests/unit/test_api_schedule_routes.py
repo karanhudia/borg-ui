@@ -56,6 +56,11 @@ def _create_schedule(
     return schedule
 
 
+def _utc_now() -> datetime:
+    """The current time as the database stores it: naive UTC, whole seconds."""
+    return datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+
+
 def _locked_database() -> OperationalError:
     """The error SQLAlchemy raises for a locked SQLite database."""
     return OperationalError("SELECT operations.id", {}, Exception("database is locked"))
@@ -336,6 +341,201 @@ class TestScheduleRouteContracts:
             .all()
         )
         assert schedule.id not in {job.id for job in due_jobs}
+
+    def test_update_with_unchanged_schedule_keeps_a_due_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        due_at = _utc_now() - timedelta(seconds=30)
+        schedule = _create_schedule(
+            test_db,
+            "Unchanged Cron",
+            repository="/repos/unchanged-cron",
+            timezone="Europe/Berlin",
+            next_run=due_at,
+        )
+
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}",
+            json={
+                "description": "Edited",
+                "cron_expression": "0 2 * * *",
+                "timezone": "Europe/Berlin",
+                "schedule_mode": "cron",
+                "availability_check_interval_minutes": 30,
+                "min_success_interval_minutes": 0,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.description == "Edited"
+        assert schedule.next_run == due_at
+
+    def test_update_with_unchanged_schedule_sets_a_missing_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        schedule = _create_schedule(
+            test_db, "No Next Run", repository="/repos/no-next-run", next_run=None
+        )
+
+        requested_at = _utc_now()
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}",
+            json={"cron_expression": "0 2 * * *", "timezone": "UTC"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.next_run > requested_at
+
+    @pytest.mark.parametrize(
+        ("changed_field", "expected_utc_time"),
+        [
+            ({"cron_expression": "30 4 * * *"}, (4, 30)),
+            ({"timezone": "Asia/Kolkata"}, (20, 30)),
+        ],
+        ids=["cron_expression", "timezone"],
+    )
+    def test_update_with_changed_cron_schedule_recomputes_next_run(
+        self, test_client, admin_headers, test_db, changed_field, expected_utc_time
+    ):
+        due_at = _utc_now() - timedelta(seconds=30)
+        schedule = _create_schedule(
+            test_db,
+            "Changed Cron",
+            repository="/repos/changed-cron",
+            next_run=due_at,
+        )
+
+        requested_at = _utc_now()
+        payload = {"cron_expression": "0 2 * * *", "timezone": "UTC", **changed_field}
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}", json=payload, headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.next_run > requested_at
+        assert (schedule.next_run.hour, schedule.next_run.minute) == expected_utc_time
+
+    def test_update_changing_the_schedule_mode_recomputes_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        next_slot = _utc_now() + timedelta(hours=5)
+        schedule = _create_schedule(
+            test_db,
+            "Changed Mode",
+            repository="/repos/changed-mode",
+            next_run=next_slot,
+        )
+
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}",
+            json={"schedule_mode": "availability"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.schedule_mode == "availability"
+        assert schedule.next_run <= datetime.now(timezone.utc).replace(tzinfo=None)
+
+    def test_update_with_unchanged_availability_schedule_keeps_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        next_check = _utc_now() + timedelta(minutes=20)
+        schedule = _create_schedule(
+            test_db,
+            "Unchanged Availability",
+            cron_expression=None,
+            repository="/repos/unchanged-availability",
+            schedule_mode="availability",
+            availability_check_interval_minutes=30,
+            min_success_interval_minutes=120,
+            next_run=next_check,
+        )
+
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}",
+            json={
+                "description": "Edited",
+                "schedule_mode": "availability",
+                "availability_check_interval_minutes": 30,
+                "min_success_interval_minutes": 120,
+                "timezone": "UTC",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.description == "Edited"
+        assert schedule.next_run == next_check
+
+    @pytest.mark.parametrize(
+        "changed_field",
+        [
+            {"availability_check_interval_minutes": 15},
+            {"min_success_interval_minutes": 60},
+        ],
+        ids=["check_interval", "min_success_interval"],
+    )
+    def test_update_with_changed_availability_interval_recomputes_next_run(
+        self, test_client: TestClient, admin_headers, test_db, changed_field
+    ):
+        next_check = _utc_now() + timedelta(minutes=20)
+        schedule = _create_schedule(
+            test_db,
+            "Changed Availability",
+            cron_expression=None,
+            repository="/repos/changed-availability",
+            schedule_mode="availability",
+            availability_check_interval_minutes=30,
+            min_success_interval_minutes=120,
+            next_run=next_check,
+        )
+
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}",
+            json={
+                "schedule_mode": "availability",
+                "availability_check_interval_minutes": 30,
+                "min_success_interval_minutes": 120,
+                **changed_field,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.next_run <= datetime.now(timezone.utc).replace(tzinfo=None)
+
+    def test_update_enabling_with_unchanged_schedule_recomputes_stale_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        stale_at = _utc_now() - timedelta(days=3)
+        schedule = _create_schedule(
+            test_db,
+            "Enable With Schedule",
+            repository="/repos/enable-with-schedule",
+            next_run=stale_at,
+        )
+        schedule.enabled = False
+        test_db.commit()
+
+        requested_at = _utc_now()
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}",
+            json={"enabled": True, "cron_expression": "0 2 * * *", "timezone": "UTC"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.enabled is True
+        assert schedule.next_run > requested_at
 
     def test_delete_schedule_nulls_backup_job_links(
         self, test_client: TestClient, admin_headers, test_db
