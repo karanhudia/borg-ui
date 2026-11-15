@@ -24,11 +24,32 @@ RATE_LIMIT, RATE_WINDOW_S = 120, 60
 RETENTION_DAYS, RETENTION_ROWS = 30, 20_000
 PRUNE_EVERY_S = 3600.0
 _last_prune = 0.0
+# Calls admitted but not yet recorded, per connection. Rows only land when a
+# call finishes, so without this a burst of overlapping calls all pass.
+# ponytail: per process, fine while gunicorn runs one worker; move to a
+# shared counter if that changes.
+_in_flight: dict[int, int] = {}
+
+
+def reserve(conn: ConnectionContext) -> None:
+    """Call on the event loop, before allow(): no await in between, so the
+    count and the check cannot interleave with another call."""
+    _in_flight[conn.connection_id] = _in_flight.get(conn.connection_id, 0) + 1
+
+
+def release(conn: ConnectionContext) -> None:
+    left = _in_flight.get(conn.connection_id, 0) - 1
+    if left > 0:
+        _in_flight[conn.connection_id] = left
+    else:
+        _in_flight.pop(conn.connection_id, None)
 
 
 def allow(app, conn: ConnectionContext) -> bool:
+    """True when this call (already reserved) fits in the window."""
     # ponytail: counts rows per call; move to a counter table if the query
     # shows up in profiles.
+    running = _in_flight.get(conn.connection_id, 0)
     since = datetime.utcnow() - timedelta(seconds=RATE_WINDOW_S)
     with session_scope(app) as db:
         recent = (
@@ -39,7 +60,7 @@ def allow(app, conn: ConnectionContext) -> bool:
             )
             .count()
         )
-    return recent < RATE_LIMIT
+    return recent + running <= RATE_LIMIT
 
 
 def _insert(app, conn: ConnectionContext, **fields) -> None:

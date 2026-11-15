@@ -164,45 +164,51 @@ async def on_call_tool(ctx, params) -> types.CallToolResult:
         )
         return finish(ToolResult(_level_text(conn, spec, name), is_error=True))
 
-    if not await to_thread.run_sync(activity.allow, app, conn):
-        return finish(
-            ToolResult(
-                "That is a lot of calls in one minute. Give it a moment and try again.",
-                is_error=True,
+    activity.reserve(conn)
+    try:
+        if not await to_thread.run_sync(activity.allow, app, conn):
+            return finish(
+                ToolResult(
+                    "That is a lot of calls in one minute. Give it a moment and try again.",
+                    is_error=True,
+                )
+            )
+
+        try:
+            args = spec.input_model.model_validate(params.arguments or {})
+        except ValidationError as exc:
+            return finish(ToolResult(_validation_text(spec, exc), is_error=True))
+
+        tool_ctx = ToolContext(
+            conn=conn,
+            api=InternalClient(
+                app, user_id=conn.user_id, connection_id=conn.connection_id
+            ),
+        )
+        from app.mcp.errors import outcome_for, render_error
+
+        try:
+            result = await spec.handler(tool_ctx, args)
+            outcome, error_key = ("error" if result.is_error else "ok"), None
+        except Exception as exc:  # every failure becomes a friendly sentence
+            result = render_error(exc, tool=spec.name)
+            outcome, error_key = outcome_for(exc)
+
+        duration_ms = int((time.monotonic() - started) * 1000)
+        await to_thread.run_sync(
+            lambda: activity.record(
+                app,
+                conn,
+                tool=spec.name,
+                outcome=outcome,
+                error_key=error_key,
+                target=tool_ctx.target,
+                duration_ms=duration_ms,
             )
         )
-
-    try:
-        args = spec.input_model.model_validate(params.arguments or {})
-    except ValidationError as exc:
-        return finish(ToolResult(_validation_text(spec, exc), is_error=True))
-
-    tool_ctx = ToolContext(
-        conn=conn,
-        api=InternalClient(app, user_id=conn.user_id, connection_id=conn.connection_id),
-    )
-    from app.mcp.errors import outcome_for, render_error
-
-    try:
-        result = await spec.handler(tool_ctx, args)
-        outcome, error_key = ("error" if result.is_error else "ok"), None
-    except Exception as exc:  # every failure becomes a friendly sentence
-        result = render_error(exc, tool=spec.name)
-        outcome, error_key = outcome_for(exc)
-
-    duration_ms = int((time.monotonic() - started) * 1000)
-    await to_thread.run_sync(
-        lambda: activity.record(
-            app,
-            conn,
-            tool=spec.name,
-            outcome=outcome,
-            error_key=error_key,
-            target=tool_ctx.target,
-            duration_ms=duration_ms,
-        )
-    )
-    return finish(result)
+        return finish(result)
+    finally:
+        activity.release(conn)
 
 
 def build_server() -> Server:

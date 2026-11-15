@@ -97,6 +97,18 @@ def test_rate_limit_refuses_without_recording(session, test_db, test_user):
 
 
 @pytest.mark.unit
+def test_calls_still_running_count_against_the_limit(session, test_db, monkeypatch):
+    row, mcp_session = session
+    monkeypatch.setitem(activity._in_flight, row["id"], activity.RATE_LIMIT)
+    refused = mcp_session.call("zz_read_echo", word="hi")
+    assert refused["is_error"] and "a lot of calls" in refused["text"]
+    assert activity._in_flight[row["id"]] == activity.RATE_LIMIT
+    activity._in_flight[row["id"]] = activity.RATE_LIMIT - 1
+    assert mcp_session.call("zz_read_echo", word="hi")["text"] == "✓ hi"
+    assert activity._in_flight[row["id"]] == activity.RATE_LIMIT - 1
+
+
+@pytest.mark.unit
 def test_prune_keeps_thirty_days_and_newest_rows(test_db, test_user, monkeypatch):
     from app.main import app
 
