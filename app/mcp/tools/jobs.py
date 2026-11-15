@@ -222,7 +222,10 @@ async def _find_in_feed(ctx, job_type: str, job_id: int) -> Optional[dict]:
         if found or len(rows) < ACTIVITY_FETCH:
             return found
         before = _stamp(rows[-1])
-    return None
+    raise resolve.NotFound(
+        f"I searched the newest {FEED_PAGES * ACTIVITY_FETCH} {job_type} rows "
+        f"and {job_id} is not among them, so it is older than that or gone."
+    )
 
 
 async def _job(ctx, job_type: str, job_id: int) -> dict:

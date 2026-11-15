@@ -165,6 +165,20 @@ async def list_problems(ctx, args: NoArgs) -> ToolResult:
                 "error": error,
             }
         )
+    # The feed is ordered by start time, so a long job that failed today
+    # can sit past the cut whatever the shown rows' ages.
+    more = (
+        f"Only the {FAILURES_SHOWN} most recent failures were checked. For the "
+        'rest, use list_activity with status "failed".'
+    )
+    if not lines and cut:
+        return ToolResult(
+            "No repository needs attention, and none of the "
+            f"{FAILURES_SHOWN} most recent failures is from the last "
+            f"{FAILURE_DAYS} days. A long job that failed recently may still be "
+            f"further back.\n\n{more}",
+            {"problems": []},
+        )
     if not lines:
         return ToolResult(
             f"✓ Nothing needs attention. {plural(len(repos), 'repository', 'repositories')}, "
@@ -179,13 +193,7 @@ async def list_problems(ctx, args: NoArgs) -> ToolResult:
         else []
     )
     if cut:
-        # The feed is ordered by start time, so a long job that failed today
-        # can sit past the cut whatever the last shown row's age.
-        tail += [
-            "",
-            f"Showing the {FAILURES_SHOWN} most recent failures. For the rest, "
-            'use list_activity with status "failed".',
-        ]
+        tail += ["", more]
     return ToolResult("\n".join([head, "", *lines, *tail]), {"problems": problems})
 
 

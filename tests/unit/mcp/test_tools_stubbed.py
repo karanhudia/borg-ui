@@ -244,7 +244,7 @@ def test_list_problems_says_when_failures_were_cut():
         "/api/activity/recent": failed,
     }
     result, _ = run("list_problems", routes)
-    assert "Showing the 10 most recent failures" in result.text
+    assert "Only the 10 most recent failures were checked" in result.text
     assert 'list_activity with status "failed"' in result.text
 
 
@@ -328,7 +328,7 @@ def test_list_problems_warns_on_any_cut_even_when_the_last_job_is_old():
         "/api/activity/recent": lambda params: rows[: params["limit"]],
     }
     result, _ = run("list_problems", routes)
-    assert "Showing the 10 most recent failures" in result.text
+    assert "Only the 10 most recent failures were checked" in result.text
 
 
 def _feed(rows):
@@ -453,3 +453,40 @@ def test_plan_runs_page_by_run_id():
         cursor=first.data["next_cursor"],
     )
     assert [r["id"] for r in second.data["runs"]] == [2]
+
+
+@pytest.mark.unit
+def test_list_problems_warns_even_when_nothing_recent_failed():
+    from datetime import datetime, timedelta, timezone
+
+    old = (datetime.now(timezone.utc) - timedelta(days=9)).isoformat()
+    rows = [
+        {"id": i, "type": "backup", "status": "failed", "completed_at": old}
+        for i in range(15)
+    ]
+    routes = {
+        "/api/dashboard/overview": {"repository_health": []},
+        "/api/activity/recent": lambda params: rows[: params["limit"]],
+    }
+    result, _ = run("list_problems", routes)
+    assert "Nothing needs attention" not in result.text
+    assert 'list_activity with status "failed"' in result.text
+
+
+@pytest.mark.unit
+def test_feed_search_past_its_cap_says_it_stopped(monkeypatch):
+    import app.mcp.tools.jobs as jobs
+
+    monkeypatch.setattr(jobs, "FEED_PAGES", 2)
+    rows = [
+        {
+            "id": i,
+            "type": "script_execution",
+            "status": "completed",
+            "sort_at": f"2026-11-10T{i // 3600:02d}:{i // 60 % 60:02d}:{i % 60:02d}Z",
+        }
+        for i in range(500, 0, -1)
+    ]
+    with pytest.raises(NotFound) as caught:
+        run("get_job", _feed(rows), job_type="script_execution", job_id=1)
+    assert "searched the newest 400" in caught.value.text
