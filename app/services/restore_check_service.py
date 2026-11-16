@@ -949,18 +949,34 @@ class RestoreCheckService:
 
     def _agent_without_canary_message(self, db, repository: Repository) -> str | None:
         """What to tell the user when the canary is missing and the
-        repository's agent does not add it to backups: another backup would
-        not change that."""
+        repository's agent does not add it to backups, or may not: another
+        backup would not change that."""
+        from app.core.borg_major import is_borg2
         from app.database.models import AgentMachine
-        from app.services.repository_executor import agent_stages_restore_canary
+        from app.services.repository_executor import (
+            agent_borg1_archives_staged_canary,
+            agent_stages_restore_canary,
+        )
 
         agent = (
             db.get(AgentMachine, repository.agent_machine_id)
             if repository.agent_machine_id is not None
             else None
         )
-        if agent is None or agent_stages_restore_canary(agent, repository):
+        if agent is None:
             return None
+        if agent_stages_restore_canary(agent, repository):
+            if is_borg2(repository) or agent_borg1_archives_staged_canary(agent):
+                return None
+            # The agent finds out at each backup whether its Borg 1 can
+            # archive the canary, and says so only in that backup's log.
+            return (
+                "The Borg UI canary file was not found in the latest archive. "
+                "Run a backup while canary mode is enabled, then run this "
+                "restore check again. If the canary is still missing, the "
+                "agent left it out and the backup's log says why: on a Borg 1 "
+                "repository it needs Borg 1.4 or newer on the agent's host."
+            )
         return (
             "The Borg UI canary file was not found in the latest archive, and "
             "this repository's agent does not add it to backups. That takes a "

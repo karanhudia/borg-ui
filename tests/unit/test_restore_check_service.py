@@ -1334,20 +1334,24 @@ async def test_an_agent_restore_check_that_failed_still_notifies(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-@pytest.mark.parametrize("stages_canary", [True, False])
+@pytest.mark.parametrize("stages_canary", [True, False, None])
 async def test_a_missing_canary_names_an_agent_that_does_not_add_it(
     testing_session_local, db_session, agent_restore_check, stages_canary
 ):
     """Another backup does not help while the agent leaves the canary out of
     its backups (an agent before `backup.restore_canary`, or one whose
     Borg 1 is older than 1.4); the verdict says so instead of asking for
-    one."""
+    one. An agent that does not report its Borg 1 version decides at each
+    backup (`None`): the verdict asks for a backup and names the Borg it
+    takes."""
     from app.services.repository_executor import RESTORE_CANARY_CAPABILITY
 
     agent, repo, job = agent_restore_check
-    if stages_canary:
+    if stages_canary is not False:
         agent.capabilities = [*agent.capabilities, RESTORE_CANARY_CAPABILITY]
-        db_session.commit()
+    if stages_canary:
+        agent.borg_versions = [{"major": 1, "version": "1.4.5"}]
+    db_session.commit()
     agents_message = (
         "The Borg UI canary file was not found in the latest archive. "
         "Run a backup while canary mode is enabled, then run this restore "
@@ -1372,6 +1376,10 @@ async def test_a_missing_canary_names_an_agent_that_does_not_add_it(
     assert refreshed.status == "needs_backup"
     if stages_canary:
         assert refreshed.error_message == agents_message
+    elif stages_canary is None:
+        assert refreshed.error_message.startswith(agents_message)
+        assert "Borg 1.4 or newer" in refreshed.error_message
+        assert "backup's log" in refreshed.error_message
     else:
         assert "agent does not add it to backups" in refreshed.error_message
         assert "Update the agent" in refreshed.error_message

@@ -234,12 +234,16 @@ class _Borg:
         self.cmd = None
         self.kwargs = None
         self.staged = {}
+        self.sources_are_files = []
 
     def __call__(self, cmd, **kwargs):
         self.cmd = cmd
         self.kwargs = kwargs
         root, sep, _path = cmd[-1].partition("/./")
         if sep:
+            self.sources_are_files = [
+                os.path.isfile(arg) for arg in cmd if arg.startswith(f"{root}/./")
+            ]
             self.staged = {
                 path.relative_to(root).as_posix(): path.read_bytes()
                 for path in Path(root).rglob("*")
@@ -253,11 +257,18 @@ class _Borg:
         return root if sep else None
 
 
+def _canary_sources(borg):
+    """The sources that name the staged canary."""
+    return [arg for arg in borg.cmd if arg.startswith(f"{borg.staging_root}/./")]
+
+
 def _without_canary(borg):
     """The command as it would be without the staged canary's arguments."""
     include = f"--pattern=+pp:{borg.staging_root}"
     assert borg.cmd.count(include) == 1
-    return [argument for argument in borg.cmd[:-1] if argument != include]
+    sources = _canary_sources(borg)
+    assert borg.cmd[-len(sources) :] == sources
+    return [arg for arg in borg.cmd[: -len(sources)] if arg != include]
 
 
 def _borg_version(monkeypatch, output):
@@ -309,9 +320,12 @@ def test_the_agent_archives_the_canary_under_its_relative_path(
     )
 
     assert result.status == "completed"
-    # the canary is the last source: `/./` ends the part of the path Borg
-    # leaves out of the archive
-    assert borg.cmd[-1] == f"{borg.staging_root}/./{CANARY_SOURCE}"
+    # the canary's files are the last sources: `/./` ends the part of the
+    # path Borg leaves out of the archive
+    assert _canary_sources(borg) == [
+        f"{borg.staging_root}/./{path}" for path in canary["files"]
+    ]
+    assert all(path.startswith(f"{CANARY_SOURCE}/") for path in canary["files"])
     assert os.path.isabs(borg.staging_root)
     # the rest is the command without the canary, plus the include that
     # keeps the staging directory out of reach of the user's excludes
@@ -370,6 +384,31 @@ def test_the_canary_include_comes_before_every_user_pattern(monkeypatch, borg_ve
     assert len(patterns) == 5 and borg.cmd.count(include) == 1
     # it names the staging directory only, so it includes nothing of the user's
     assert borg.staging_root.rsplit("/", 1)[-1].startswith("borg-ui-canary-")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("borg_version", [1, 2])
+def test_a_tag_file_exclusion_finds_no_canary_directory(monkeypatch, borg_version):
+    """`--exclude-if-present=manifest.json` drops every directory Borg walks
+    that holds such a file, and no pattern keeps it. Borg is handed the
+    canary's files, not their directory, so it walks none of them (measured
+    on Borg 1.4.5 and 2.0.0b25)."""
+    canary = _canary()
+    assert any(path.endswith(f"/{CANARY_MANIFEST}") for path in canary["files"])
+
+    borg, _client, result = _run(
+        monkeypatch,
+        _job_payload(
+            canary,
+            borg_version=borg_version,
+            custom_flags=[f"--exclude-if-present={CANARY_MANIFEST}"],
+        ),
+    )
+
+    assert result.status == "completed"
+    assert f"--exclude-if-present={CANARY_MANIFEST}" in borg.cmd
+    assert len(_canary_sources(borg)) == len(canary["files"])
+    assert borg.sources_are_files == [True] * len(canary["files"])
 
 
 @pytest.mark.unit

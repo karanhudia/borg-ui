@@ -264,12 +264,20 @@ def agent_stages_restore_canary(
     is left to the agent, which asks the Borg it runs."""
     if agent is None or RESTORE_CANARY_CAPABILITY not in (agent.capabilities or []):
         return False
-    if is_borg2(repository):
-        return True
+    return (
+        is_borg2(repository) or agent_borg1_archives_staged_canary(agent) is not False
+    )
+
+
+def agent_borg1_archives_staged_canary(agent: AgentMachine) -> Optional[bool]:
+    """Whether the agent's Borg 1 is 1.4 or newer; None when the agent does
+    not report a version that can be read."""
     reported = re.match(
         r"(\d+)\.(\d+)", agent_borg_version_for_major(agent.borg_versions, 1) or ""
     )
-    return reported is None or (int(reported[1]), int(reported[2])) >= (1, 4)
+    if reported is None:
+        return None
+    return (int(reported[1]), int(reported[2])) >= (1, 4)
 
 
 def build_agent_backup_payload(

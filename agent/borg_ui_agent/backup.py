@@ -255,7 +255,7 @@ class BackupCreatePayload:
         return self.borg_binary or ("borg2" if self.borg_version == 2 else "borg")
 
     def _staged_canary_arguments(self) -> tuple[list[str], list[str]]:
-        """The pattern option and the source that archive the staged canary.
+        """The pattern option and the sources that archive the staged canary.
 
         `/./` ends the part of a source that Borg leaves out of the archive,
         so the canary keeps its own relative path while the rest of the
@@ -264,13 +264,17 @@ class BackupCreatePayload:
         include goes ahead of the user's excludes, so that one naming the
         temporary directory (`/tmp`) or a kind of file (`*.json`) does not
         drop the canary. It matches nothing outside the staging directory.
+
+        Each file is a source of its own: Borg looks for the tag file of
+        `--exclude-if-present` in the directories it walks, and no pattern
+        keeps a directory that holds one (the canary's `manifest.json`, say).
         """
         if self.restore_canary is None or self.staged_canary_root is None:
             return [], []
         root = self.staged_canary_root
         return (
             [f"--pattern=+pp:{root}"],
-            [f"{root}/./{self.restore_canary.source_path}"],
+            [f"{root}/./{path}" for path in self.restore_canary.files],
         )
 
     def build_command(self) -> list[str]:
