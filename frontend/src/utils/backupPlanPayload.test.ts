@@ -147,3 +147,55 @@ describe('backupPlanPayload availability scheduling', () => {
     })
   })
 })
+
+describe('backupPlanPayload snapshot round trip', () => {
+  const planWithSnapshot = (
+    snapshot: NonNullable<BackupPlan['source_locations']>[number]['snapshot']
+  ) =>
+    ({
+      id: 1,
+      name: 'Snapshot plan',
+      enabled: true,
+      source_type: 'local',
+      source_directories: ['/data'],
+      source_locations: [
+        {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          agent_machine_id: null,
+          paths: ['/data'],
+          snapshot,
+        },
+      ],
+      exclude_patterns: [],
+      repository_run_mode: 'series',
+      max_parallel_repositories: 1,
+      failure_behavior: 'continue',
+      schedule_enabled: false,
+      timezone: 'UTC',
+      archive_name_template: '{plan_name}-{repo_name}-{now}',
+      compression: 'lz4',
+      repository_count: 1,
+      repositories: [{ repository_id: 10, enabled: true, execution_order: 1 }],
+    }) as BackupPlan
+
+  it('keeps a btrfs snapshot when an existing plan is loaded and saved', () => {
+    const snapshot = { provider: 'btrfs', staging_path: '/snapshots', recursive: true } as const
+    const state = planToState(planWithSnapshot(snapshot))
+
+    expect(state.sourceLocations?.[0].snapshot).toEqual(snapshot)
+    expect(buildBackupPlanPayload(state).source_locations?.[0].snapshot).toEqual(snapshot)
+  })
+
+  it('keeps a zfs snapshot when an existing plan is loaded and saved', () => {
+    const snapshot = {
+      provider: 'zfs',
+      dataset: 'tank/data',
+      mountpoint: '/data',
+      recursive: false,
+    } as const
+    const state = planToState(planWithSnapshot(snapshot))
+
+    expect(buildBackupPlanPayload(state).source_locations?.[0].snapshot).toEqual(snapshot)
+  })
+})

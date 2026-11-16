@@ -152,7 +152,9 @@ function normalizeUploadRatelimitSchedulePolicies(
     .filter((policy) => policy.label.length > 0 || policy.start_time || policy.end_time)
 }
 
-function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation[] {
+// Shared by the payload builder and by planToState (server plan to wizard
+// state), so a field kept here survives a load and save of an existing plan.
+export function normalizeSourceLocationList(locations?: SourceLocation[] | null): SourceLocation[] {
   const normalizeScriptId = (value?: number | null): number | null => {
     const parsed = Number(value)
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null
@@ -280,9 +282,9 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
     return normalized
   }
 
-  const grouped: SourceLocation[] = (state.sourceLocations || [])
+  return (locations || [])
     .map<SourceLocation | null>((location) => {
-      const paths = location.paths.map((path) => path.trim()).filter(Boolean)
+      const paths = (location.paths || []).map((path) => path.trim()).filter(Boolean)
       if (paths.length === 0) return null
       if (location.source_type === 'remote') {
         const connectionId = location.source_ssh_connection_id
@@ -329,7 +331,10 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
       }
     })
     .filter((location): location is SourceLocation => location !== null)
+}
 
+function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation[] {
+  const grouped = normalizeSourceLocationList(state.sourceLocations)
   if (grouped.length > 0) return grouped
   if (state.sourceDirectories.length === 0) return []
 
