@@ -2,7 +2,7 @@ alembic==1.20.1
 apprise==2.1.0
 bcrypt==5.0.0
 coverage[toml]==7.17.2
-croniter==6.2.4
+croniter==7.0.0
 cryptography==50.0.2
 fastapi==0.162.0
 gunicorn==26.2.0
