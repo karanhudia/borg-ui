@@ -1,7 +1,37 @@
 {
   "version": 1,
-  "generated_at": "2026-11-02T00:00:00Z",
+  "generated_at": "2026-11-16T00:00:00Z",
   "announcements": [
+    {
+      "id": "sale-black-friday-2026",
+      "type": "custom_announcement",
+      "priority": 100,
+      "title": "Black Friday: 20% off Borg UI Lite and Pro",
+      "title_localized": {
+        "es": "Black Friday: 20 % de descuento en Borg UI Lite y Pro",
+        "de": "Black Friday: 20 % Rabatt auf Borg UI Lite und Pro",
+        "it": "Black Friday: 20% di sconto su Borg UI Lite e Pro"
+      },
+      "message": "From 23 November to 1 December, Lite and Pro are 20% off, including lifetime licences. Your Community install keeps working exactly as it does today; this is just a heads-up.",
+      "message_localized": {
+        "es": "Del 23 de noviembre al 1 de diciembre, Lite y Pro tienen un 20 % de descuento, incluidas las licencias de por vida. Tu instalación Community sigue funcionando exactamente igual; esto es solo un aviso.",
+        "de": "Vom 23. November bis zum 1. Dezember gibt es 20 % Rabatt auf Lite und Pro, auch auf lebenslange Lizenzen. Ihre Community-Installation funktioniert weiterhin genau wie bisher; dies ist nur ein Hinweis.",
+        "it": "Dal 23 novembre al 1° dicembre, Lite e Pro sono scontati del 20%, comprese le licenze a vita. La tua installazione Community continua a funzionare esattamente come oggi; è solo un avviso."
+      },
+      "cta_label": "See the offer",
+      "cta_label_localized": {
+        "es": "Ver la oferta",
+        "de": "Angebot ansehen",
+        "it": "Vedi l'offerta"
+      },
+      "cta_url": "https://borgui.com/buy?src=app-black-friday",
+      "dismissible": true,
+      "snooze_days": 2,
+      "starts_at": "2026-11-23T00:00:00Z",
+      "ends_at": "2026-12-01T23:59:59Z",
+      "min_app_version": "2.0.0",
+      "target_plans": ["community"]
+    },
     {
       "id": "update-available-2.4.6",
       "type": "update_available",

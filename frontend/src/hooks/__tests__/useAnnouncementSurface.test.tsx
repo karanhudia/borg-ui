@@ -59,10 +59,13 @@ describe('useAnnouncementSurface runtime inputs', () => {
 
 // The sidebar consumes the same announcement feed and version response after login.
 describe('useUpdateNotice runtime inputs', () => {
+  // The bundled feed also carries sale and release notices; these tests need an update notice.
+  const updateNotice = manifest.announcements.find((a) => a.type === 'update_available')!
+
   it('hides version notices when the installed version is missing', async () => {
     const { useUpdateNotice } = await import('../useUpdateNotice')
     mocks.systemInfo = { plan: 'community' }
-    mocks.announcements = [manifest.announcements[0]]
+    mocks.announcements = [updateNotice]
     const { result } = renderHook(() => useUpdateNotice())
     expect(result.current.notice).toBeNull()
   })
@@ -70,8 +73,8 @@ describe('useUpdateNotice runtime inputs', () => {
   it('skips malformed cached items while preserving valid updates', async () => {
     const { useUpdateNotice } = await import('../useUpdateNotice')
     mocks.systemInfo = { app_version: '2.0.0', plan: 'community' }
-    mocks.announcements = [null, {}, manifest.announcements[0]]
+    mocks.announcements = [null, {}, updateNotice]
     const { result } = renderHook(() => useUpdateNotice())
-    expect(result.current.notice?.id).toBe(manifest.announcements[0].id)
+    expect(result.current.notice?.id).toBe(updateNotice.id)
   })
 })
