@@ -5911,7 +5911,9 @@
         "oidcIdentityConflict": "This single sign-on identity conflicts with an existing Borg UI account.",
         "oidcEmailAlreadyInUse": "This single sign-on email is already used by another Borg UI account.",
         "oidcPendingApproval": "Your single sign-on account is waiting for administrator approval",
-        "oidcTemplateUserNotFound": "The configured single sign-on template user was not found"
+        "oidcTemplateUserNotFound": "The configured single sign-on template user was not found",
+        "mcpTokenNotForApi": "This token is for MCP clients and cannot be used with the API.",
+        "notAvailableOverMcp": "This action is not available to MCP connections."
       },
       "plan": {
         "featureNotAvailable": "This feature is not available on your current plan."
@@ -6400,6 +6402,12 @@
       },
       "operations": {
         "unknownStage": "Unknown background stage."
+      },
+      "mcp": {
+        "levelAboveCap": "Your administrator allows MCP connections up to {{max}} access.",
+        "skipNeedsFull": "Skipping confirmations needs Full access.",
+        "nameRequired": "Give the connection a name.",
+        "connectionNotFound": "MCP connection not found."
       }
     },
     "success": {

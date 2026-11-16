@@ -15,6 +15,8 @@ from sqlalchemy import (
     UniqueConstraint,
     JSON,
     func,
+    false as sa_false,
+    true as sa_true,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
@@ -102,6 +104,16 @@ class ApiToken(Base):
     prefix = Column(String(12), nullable=False)
     created_at = Column(DateTime, default=utc_now, nullable=False)
     last_used_at = Column(DateTime, nullable=True)
+    # "api" is a personal token with the user's full power; "mcp" is an MCP
+    # connection, limited to access_level and refused by the REST API
+    # (spec 2026-11-14-mcp-server, 5.2).
+    kind = Column(String(8), nullable=False, default="api", server_default="api")
+    access_level = Column(String(16), nullable=True)
+    skip_routine_confirmations = Column(
+        Boolean, nullable=False, default=False, server_default=sa_false()
+    )
+    last_client_name = Column(String(100), nullable=True)
+    last_client_version = Column(String(100), nullable=True)
 
 
 class AgentMachine(Base):
@@ -1713,6 +1725,44 @@ class SystemSettings(Base):
     # Deployment profile
     deployment_type = Column(String, default="individual", nullable=False)
     enterprise_name = Column(String, nullable=True)
+
+    # MCP server (spec 2026-11-14-mcp-server, 5.2): the admin switch and the
+    # highest access level a connection may use.
+    mcp_enabled = Column(
+        Boolean, nullable=False, default=True, server_default=sa_true()
+    )
+    mcp_max_access_level = Column(
+        String(16), nullable=False, default="full", server_default="full"
+    )
+
+
+class McpActivity(Base):
+    """One MCP tool call, kept 30 days or 20,000 rows (spec 5.11).
+
+    The connection's name is copied so the history stays readable after the
+    connection is revoked. Arguments are never stored.
+    """
+
+    __tablename__ = "mcp_activity"
+    __table_args__ = (
+        Index("ix_mcp_activity_connection_created", "connection_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    connection_id = Column(
+        Integer, ForeignKey("api_tokens.id", ondelete="SET NULL"), nullable=True
+    )
+    connection_name = Column(String, nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    tool = Column(String(64), nullable=False)
+    effective_level = Column(String(16), nullable=False)
+    outcome = Column(String(32), nullable=False)
+    error_key = Column(String(200), nullable=True)
+    target = Column(String(200), nullable=True)
+    duration_ms = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=utc_now, index=True)
 
 
 class OidcLoginState(Base):

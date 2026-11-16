@@ -28,6 +28,8 @@ ALLOWED = {
     "app/api/filesystem.py",  # local file stat mtimes
     "app/api/source_discovery.py",  # app folder stat mtimes (epoch seconds)
     "app/services/log_manager.py",  # log file stat mtimes
+    "app/mcp/render.py",  # API-serialized times (already offset-aware), not borg output
+    "app/mcp/resolve.py",  # a user's "since" date typed into an MCP tool
 }
 
 

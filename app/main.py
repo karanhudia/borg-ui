@@ -38,6 +38,7 @@ from app.api import (
     mounts,
     metrics,
     tokens,
+    mcp_connections,
     permissions,
     remote_clients,
     agent_installer,
@@ -326,6 +327,7 @@ app.include_router(config.router, prefix="/api")
 app.include_router(mounts.router)  # Mount management API
 
 app.include_router(tokens.router, prefix="/api")
+app.include_router(mcp_connections.router, prefix="/api")
 app.include_router(permissions.router, prefix="/api")
 app.include_router(
     remote_clients.router, prefix="/api/remote-clients", tags=["Remote Clients"]
@@ -340,6 +342,11 @@ app.include_router(
 )
 
 app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
+
+# MCP endpoint for AI clients (Pro). Registered before the SPA catch-all below.
+from app.mcp.server import mount as mount_mcp  # noqa: E402
+
+mount_mcp(app)
 
 
 @app.on_event("startup")

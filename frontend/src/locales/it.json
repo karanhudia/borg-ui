@@ -5911,7 +5911,9 @@
         "oidcIdentityConflict": "Questa identità single sign-on è in conflitto con un account Borg UI esistente.",
         "oidcEmailAlreadyInUse": "Questa email single sign-on è già utilizzata da un altro account Borg UI.",
         "oidcPendingApproval": "Il tuo account single sign-on è in attesa dell'approvazione di un amministratore",
-        "oidcTemplateUserNotFound": "L'utente modello configurato per il single sign-on non è stato trovato"
+        "oidcTemplateUserNotFound": "L'utente modello configurato per il single sign-on non è stato trovato",
+        "mcpTokenNotForApi": "Questo token è per i client MCP e non può essere usato con l'API.",
+        "notAvailableOverMcp": "Questa azione non è disponibile per le connessioni MCP."
       },
       "plan": {
         "featureNotAvailable": "Questa funzionalità non è disponibile nel tuo piano attuale."
@@ -6400,6 +6402,12 @@
       },
       "operations": {
         "unknownStage": "Fase in background sconosciuta."
+      },
+      "mcp": {
+        "levelAboveCap": "Il tuo amministratore consente connessioni MCP fino all'accesso {{max}}.",
+        "skipNeedsFull": "Saltare le conferme richiede l'accesso Completo.",
+        "nameRequired": "Dai un nome alla connessione.",
+        "connectionNotFound": "Connessione MCP non trovata."
       }
     },
     "success": {

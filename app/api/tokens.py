@@ -8,12 +8,12 @@ import structlog
 
 from app.database.database import ends_read_on_return, get_db
 from app.database.models import ApiToken
-from app.core.security import get_current_user, get_password_hash
+from app.core.security import get_current_user, get_password_hash, refuse_mcp_internal
 from app.database.models import User
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
-router = APIRouter(tags=["tokens"])
+router = APIRouter(tags=["tokens"], dependencies=[Depends(refuse_mcp_internal)])
 
 
 class TokenCreate(BaseModel):
@@ -48,7 +48,11 @@ def list_tokens(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    tokens = db.query(ApiToken).filter(ApiToken.user_id == current_user.id).all()
+    tokens = (
+        db.query(ApiToken)
+        .filter(ApiToken.user_id == current_user.id, ApiToken.kind == "api")
+        .all()
+    )
     return tokens
 
 
@@ -102,7 +106,11 @@ def revoke_token(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    token = db.query(ApiToken).filter(ApiToken.id == token_id).first()
+    token = (
+        db.query(ApiToken)
+        .filter(ApiToken.id == token_id, ApiToken.kind == "api")
+        .first()
+    )
     if not token:
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.tokens.notFound"}
