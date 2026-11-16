@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-11-16T08:31:41.558Z",
+  "generatedAt": "2026-11-16T12:22:46.133Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1553 visual report",
-    "commitSha": "b7114f7da804",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43830807132"
+    "commitSha": "a9bfbc78324a",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43865832795"
   },
   "totals": {
     "baseline": 1300,
@@ -17,21 +17,21 @@
   },
   "changed": [
     {
-      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "diffPixels": 171690,
-      "totalPixels": 1024000,
-      "diffRatio": 0.167666015625,
+      "fileName": "components-wizard-rclone-remote-dialog--create-error--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-error--mobile.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-error--mobile.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-error--mobile.png",
+      "diffPixels": 59711,
+      "totalPixels": 329160,
+      "diffRatio": 0.18140418033782962,
       "dimensionsChanged": false,
       "baseline": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       },
       "actual": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       }
     }
   ],
@@ -2673,9 +2673,6 @@
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing.png"
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--create-error--mobile.png"
-    },
-    {
       "fileName": "components-wizard-rclone-remote-dialog--create-error.png"
     },
     {
@@ -3193,6 +3190,9 @@
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
     },
     {
       "fileName": "pages-cloudstorage--add-guided-remote.png"
