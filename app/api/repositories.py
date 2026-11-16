@@ -156,7 +156,7 @@ from app.utils.schedule_time import (
 )
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.ssh_paths import apply_ssh_command_prefix
-from app.utils.repository_paths import build_ssh_repository_path, strip_ssh_url_path
+from app.utils.repository_paths import build_ssh_repository_path
 from app.utils.source_locations import (
     decode_source_locations,
     legacy_source_fields,
@@ -182,18 +182,6 @@ from app.utils.ssh_utils import (
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"], dependencies=[Depends(authorize_request)])
-
-
-def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
-    # BorgRouter routes on executor_type (with the legacy execution_target
-    # fallback). Keep those in the snapshot so the router's agent gate stays
-    # functional even though these endpoints branch on the executor earlier.
-    return SimpleNamespace(
-        id=repository.id,
-        borg_version=repository.borg_version,
-        executor_type=repository.executor_type,
-        execution_target=repository.execution_target,
-    )
 
 
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
@@ -2522,10 +2510,6 @@ def _normalize_repository_executor(
         getattr(repo_data, "executor_type", None),
         execution_target=getattr(repo_data, "execution_target", None),
     )
-
-
-def _strip_ssh_url_path(path: str) -> str:
-    return strip_ssh_url_path(path)
 
 
 def _build_repository_path_from_connection(

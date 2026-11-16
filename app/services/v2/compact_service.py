@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 
+from app.utils.proc_stat import get_process_start_time as _get_process_start_time
 from app.database.models import Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import _get_borg2_binary, ensure_borg2_repository_url
@@ -43,17 +44,6 @@ from app.utils.ssh_utils import (
 )  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
-
-
-def _get_process_start_time(pid: int) -> int:
-    try:
-        with open(f"/proc/{pid}/stat", "r") as f:
-            stat_data = f.read()
-        fields = stat_data.split(")")[1].split()
-        return int(fields[19])
-    except Exception as e:
-        logger.error("Failed to read process start time", pid=pid, error=str(e))
-        return 0
 
 
 class _LogWindow:

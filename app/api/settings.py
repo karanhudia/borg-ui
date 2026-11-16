@@ -259,7 +259,6 @@ class SystemSettingsUpdate(BaseModel):
     webhook_url: Optional[str] = None
     auto_cleanup: Optional[bool] = None
     cleanup_retention_days: Optional[int] = None
-    use_new_wizard: Optional[bool] = None
     bypass_lock_on_info: Optional[bool] = (
         None  # Use --bypass-lock for all borg info commands (beta)
     )
@@ -267,9 +266,6 @@ class SystemSettingsUpdate(BaseModel):
         None  # Use --bypass-lock for all borg list commands (beta)
     )
     lock_breaking_enabled: Optional[bool] = None
-    show_restore_tab: Optional[bool] = (
-        None  # Show legacy Restore tab in navigation (beta)
-    )
     borg2_fast_browse_beta_enabled: Optional[bool] = None
     stats_refresh_interval_minutes: Optional[int] = (
         None  # How often to refresh repository stats (0 = disabled)
@@ -371,8 +367,6 @@ async def get_system_settings(
                 webhook_url="",
                 auto_cleanup=True,
                 cleanup_retention_days=90,
-                use_new_wizard=False,  # Beta features disabled by default
-                show_restore_tab=False,  # Legacy Restore tab hidden by default
                 **DEFAULT_DASHBOARD_HEALTH_THRESHOLDS,
             )
             db.add(settings)
@@ -455,11 +449,9 @@ async def get_system_settings(
                 "webhook_url": settings.webhook_url,
                 "auto_cleanup": settings.auto_cleanup,
                 "cleanup_retention_days": settings.cleanup_retention_days,
-                "use_new_wizard": settings.use_new_wizard,
                 "bypass_lock_on_info": settings.bypass_lock_on_info,
                 "bypass_lock_on_list": settings.bypass_lock_on_list,
                 "lock_breaking_enabled": settings.lock_breaking_enabled,
-                "show_restore_tab": settings.show_restore_tab,
                 "borg2_fast_browse_beta_enabled": settings.borg2_fast_browse_beta_enabled,
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes
                 if settings.stats_refresh_interval_minutes is not None
@@ -870,16 +862,12 @@ async def update_system_settings(
             settings.auto_cleanup = settings_update.auto_cleanup
         if settings_update.cleanup_retention_days is not None:
             settings.cleanup_retention_days = settings_update.cleanup_retention_days
-        if settings_update.use_new_wizard is not None:
-            settings.use_new_wizard = settings_update.use_new_wizard
         if settings_update.bypass_lock_on_info is not None:
             settings.bypass_lock_on_info = settings_update.bypass_lock_on_info
         if settings_update.bypass_lock_on_list is not None:
             settings.bypass_lock_on_list = settings_update.bypass_lock_on_list
         if settings_update.lock_breaking_enabled is not None:
             settings.lock_breaking_enabled = settings_update.lock_breaking_enabled
-        if settings_update.show_restore_tab is not None:
-            settings.show_restore_tab = settings_update.show_restore_tab
         if settings_update.borg2_fast_browse_beta_enabled is not None:
             settings.borg2_fast_browse_beta_enabled = (
                 settings_update.borg2_fast_browse_beta_enabled

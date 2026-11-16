@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '../../test/test-utils'
 import { waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { TerminalLogViewer } from '../TerminalLogViewer'
+import { TerminalLogViewer } from '../shared/TerminalLogViewer'
 
 describe('TerminalLogViewer', () => {
   it('renders Unicode escape sequences in JSON strings as readable characters', async () => {

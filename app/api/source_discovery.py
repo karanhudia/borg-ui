@@ -810,32 +810,6 @@ def _local_path_probe(
         )
 
 
-def _inject_detected_path_into_script(content: str, detected_path: str) -> str:
-    """Prepend a context block to a bash script that names the detected DB
-    instance and exposes its path as BORG_UI_DETECTED_PATH. The injection
-    sits right after `set -euo pipefail` so the variable is available to
-    everything that follows. Scripts that don't use pipefail still get the
-    injection at the top, after any shebang."""
-    safe_path = shlex.quote(detected_path)
-    block = (
-        "\n# Discovered by Borg UI at:\n"
-        f"#   {detected_path}\n"
-        "# Override by exporting BORG_UI_DB_SOURCE_PATH before this script runs.\n"
-        f'BORG_UI_DB_SOURCE_PATH="${{BORG_UI_DB_SOURCE_PATH:-{safe_path}}}"\n'
-        f'BORG_UI_DETECTED_PATH="${{BORG_UI_DETECTED_PATH:-$BORG_UI_DB_SOURCE_PATH}}"\n'
-    )
-
-    pipefail_marker = "set -euo pipefail\n"
-    if pipefail_marker in content:
-        return content.replace(pipefail_marker, pipefail_marker + block, 1)
-
-    # No pipefail line; insert after the shebang if present, else at the top.
-    lines = content.splitlines(keepends=True)
-    if lines and lines[0].startswith("#!"):
-        return lines[0] + block + "".join(lines[1:])
-    return block + content
-
-
 def _path_probe_match_score(template_id: str, probe: PathProbe) -> int:
     if not _path_probe_matches_template(template_id, probe):
         return 0

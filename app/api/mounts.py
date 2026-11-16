@@ -80,12 +80,6 @@ class MountResponse(BaseModel):
     source: str
 
 
-class UnmountRequest(BaseModel):
-    """Request to unmount"""
-
-    force: bool = False
-
-
 class MountListItem(BaseModel):
     """Mount list item"""
 

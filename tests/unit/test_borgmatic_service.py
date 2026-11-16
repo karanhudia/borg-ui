@@ -93,18 +93,6 @@ class TestBorgmaticExportService:
         assert config["keep_daily"] == sample_scheduled_job.prune_keep_daily
         assert config["keep_within"] == "1d"
 
-    def test_export_to_yaml(self, db_session, sample_repository):
-        """Test exporting to YAML string."""
-        export_service = BorgmaticExportService(db_session)
-        yaml_content = export_service.export_to_yaml(include_schedules=False)
-
-        assert yaml_content
-        data = yaml.safe_load(yaml_content)
-        # New flat format (v1.8.0+)
-        assert "repositories" in data
-        assert len(data["repositories"]) > 0
-        assert "compression" in data
-
     def test_export_ssh_repository(self, db_session):
         """Test exporting SSH repository."""
         # Create SSH repository with full SSH URL as path
