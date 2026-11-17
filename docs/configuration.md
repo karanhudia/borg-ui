@@ -208,7 +208,9 @@ Admins can install extra system packages from Settings > System > Packages.
 
 Use this when scripts need tools that are not in the base container, for example the Docker CLI for Docker hook scripts.
 
-Packages are stored in Borg UI state and reinstalled when the container is recreated. Only install packages and commands you trust.
+The image ships the tools Borg UI itself uses, plus `curl`, `wget`, `sudo`, `ping` and `pip`. `cron`, `gnupg`, `htop`, `ncdu`, `net-tools` and `tree` are no longer included; a script that calls one of them needs it added here, for example `sudo apt-get update && sudo apt-get install -y gnupg`.
+
+Packages are stored in Borg UI state and reinstalled when the container is recreated. The reinstall runs in the background a few seconds after the container starts, so a script scheduled right after a restart can run before its packages are back. Only install packages and commands you trust.
 
 ## Authentication
 

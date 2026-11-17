@@ -57,6 +57,7 @@ npm test
 Backend:
 
 ```bash
+pip install -r requirements-dev.txt
 ruff check app tests
 ruff format --check app tests
 pytest

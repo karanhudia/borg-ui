@@ -23,8 +23,8 @@ def test_entrypoint_ensures_borg_cache_volume_is_writable() -> None:
 def test_runtime_base_precreates_documented_borg_cache_dir() -> None:
     dockerfile = (ROOT / "Dockerfile.runtime-base").read_text(encoding="utf-8")
 
-    assert f"/home/borg/.ssh {EXPECTED_CACHE_DIR} /etc/cron.d" in dockerfile
-    assert "/home/borg/.cache /etc/cron.d" in dockerfile
+    assert f"mkdir -p /home/borg/.ssh {EXPECTED_CACHE_DIR} &&" in dockerfile
+    assert "/home/borg/.ssh /home/borg/.cache &&" in dockerfile
     assert f"chmod 700 /home/borg/.ssh {EXPECTED_CACHE_DIR}" in dockerfile
 
 

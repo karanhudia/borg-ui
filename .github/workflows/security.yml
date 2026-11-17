@@ -128,7 +128,8 @@ jobs:
         if: ${{ !cancelled() }}
         id: pip-audit
         run: |
-          # Scan requirements.txt for vulnerabilities
+          # Scan the Python dependencies (requirements-dev.txt includes
+          # requirements.txt) for vulnerabilities
           # Ignore known vulnerabilities with no available fix:
           # - GHSA-wp53-j4wj-2cfg: python-multipart (fix requires Python 3.10+)
           # - GHSA-wj6h-64fc-37mp: ecdsa (no fix available)
@@ -136,7 +137,7 @@ jobs:
           # Tracked no-fix findings under active review:
           # - security/pip-audit-known-vulns.json
           mapfile -t known_no_fix_ignore_args < <(python3 scripts/pip_audit_known_vulns.py ignore-args)
-          pip-audit -r requirements.txt \
+          pip-audit -r requirements-dev.txt \
             --ignore-vuln GHSA-wp53-j4wj-2cfg \
             --ignore-vuln GHSA-wj6h-64fc-37mp \
             --ignore-vuln CVE-2026-4539 \
@@ -145,8 +146,8 @@ jobs:
       - name: Generate pip-audit report
         if: ${{ !cancelled() }}
         run: |
-          pip-audit -r requirements.txt --format json > pip-audit-report.json || true
-          pip-audit -r requirements.txt > pip-audit-report.txt || true
+          pip-audit -r requirements-dev.txt --format json > pip-audit-report.json || true
+          pip-audit -r requirements-dev.txt > pip-audit-report.txt || true
 
       - name: Upload pip-audit report
         if: ${{ !cancelled() }}

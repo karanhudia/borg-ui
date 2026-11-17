@@ -129,7 +129,7 @@ fi
 # Conservative fallback: Borg UI local validation before merge. Keep this
 # scope-sensitive for the PR.
 git diff --check
-if git diff --name-only origin/main...HEAD | rg -q '^(app|tests|requirements.txt|pytest.ini|ruff.toml)(/|$)'; then
+if git diff --name-only origin/main...HEAD | rg -q '^(app|tests|requirements.txt|requirements-dev.txt|pytest.ini|ruff.toml)(/|$)'; then
   ruff check app tests
   ruff format --check app tests
   pytest tests/unit -v

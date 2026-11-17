@@ -65,7 +65,7 @@ branch=$(git branch --show-current)
 git diff --check
 
 # Backend validation for backend changes.
-if git diff --name-only origin/main...HEAD | rg -q '^(app|tests|requirements.txt|pytest.ini|ruff.toml)(/|$)'; then
+if git diff --name-only origin/main...HEAD | rg -q '^(app|tests|requirements.txt|requirements-dev.txt|pytest.ini|ruff.toml)(/|$)'; then
   ruff check app tests
   ruff format --check app tests
   pytest tests/unit -v
