@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Optional
 
 from agent.borg_ui_agent import __version__
-from agent.borg_ui_agent.backup import execute_backup_create_job
+from agent.borg_ui_agent.backup import (
+    RESTORE_CANARY_CAPABILITY,
+    execute_backup_create_job,
+)
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
 from agent.borg_ui_agent.cancel import CANCEL_CAPABILITY
 from agent.borg_ui_agent.client import AgentClient
@@ -32,6 +35,7 @@ DEFAULT_CAPABILITIES = [
     "artifact.upload",
     "backup.create",
     "backup.cancel",
+    RESTORE_CANARY_CAPABILITY,
     "diagnostics.run",
     "filesystem.browse",
     "repository.init",

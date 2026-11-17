@@ -165,7 +165,7 @@ def _apply_check_result(result):
         progress_message="",
         completed_at=None,
     )
-    repository = SimpleNamespace(last_restore_check=None)
+    repository = SimpleNamespace(last_restore_check=None, agent_machine_id=None)
     db = SimpleNamespace(commit=lambda: None)
     service._apply_agent_restore_check_result(
         db, job, 1, repository, result, raw_logs=[]

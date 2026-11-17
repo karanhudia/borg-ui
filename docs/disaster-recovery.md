@@ -116,6 +116,8 @@ Canary mode is the safest default. Borg UI adds a small managed payload to backu
 
 If the latest archive was created before the canary payload existed, the check can fail with a missing canary message. Run a new backup once, then run the restore check again.
 
+For a repository that runs through a managed agent, the agent writes the canary payload into a temporary directory on its host for each backup and removes it afterwards. This takes a current agent and, for a Borg 1 repository, Borg 1.4 or newer on the agent's host. Otherwise the payload is left out, and the check says so instead of asking for another backup.
+
 ### Probe Paths
 
 Probe-path mode restores archive paths you choose.
