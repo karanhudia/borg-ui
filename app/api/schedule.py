@@ -212,6 +212,17 @@ def _next_scheduled_job_run(job: ScheduledJob, now: datetime) -> Optional[dateti
     )
 
 
+def _schedule_state(job: ScheduledJob) -> tuple:
+    if job.schedule_mode == "availability":
+        timing = (
+            job.availability_check_interval_minutes,
+            job.min_success_interval_minutes,
+        )
+    else:
+        timing = (job.cron_expression, job.timezone or DEFAULT_SCHEDULE_TIMEZONE)
+    return (job.schedule_mode, timing)
+
+
 def _raise_invalid_schedule_timezone(exc: InvalidScheduleTimezone) -> NoReturn:
     raise HTTPException(
         status_code=400,
@@ -1218,14 +1229,15 @@ async def update_scheduled_job(
                 )
             job.name = job_data.name
 
-        schedule_definition_changed = (
+        schedule_fields_sent = (
             job_data.cron_expression is not None
             or "timezone" in job_data.model_fields_set
             or job_data.schedule_mode is not None
             or job_data.availability_check_interval_minutes is not None
             or job_data.min_success_interval_minutes is not None
         )
-        if schedule_definition_changed:
+        next_run_recomputed = False
+        if schedule_fields_sent:
             next_schedule_mode = job_data.schedule_mode or job.schedule_mode
             next_check_interval = (
                 job_data.availability_check_interval_minutes
@@ -1284,12 +1296,17 @@ async def update_scheduled_job(
                     },
                 )
 
+            previous_schedule = _schedule_state(job)
             job.cron_expression = next_cron_expression
             job.schedule_mode = next_schedule_mode
             job.availability_check_interval_minutes = next_check_interval
             job.min_success_interval_minutes = next_min_success_interval
             job.timezone = next_schedule_timezone
-            job.next_run = next_run
+            # An unchanged schedule keeps its next_run: recomputing it from now
+            # would skip a run that is already due but not yet dispatched.
+            if job.next_run is None or _schedule_state(job) != previous_schedule:
+                job.next_run = next_run
+                next_run_recomputed = True
 
         if job_data.repository is not None:
             job.repository = job_data.repository
@@ -1298,7 +1315,7 @@ async def update_scheduled_job(
 
         if job_data.enabled is not None:
             job.enabled = job_data.enabled
-            if job.enabled and not was_enabled and not schedule_definition_changed:
+            if job.enabled and not was_enabled and not next_run_recomputed:
                 try:
                     job.next_run = (
                         to_utc_naive(datetime.now(timezone.utc))
