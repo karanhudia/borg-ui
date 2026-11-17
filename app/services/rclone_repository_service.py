@@ -571,11 +571,6 @@ class RcloneRepositoryService:
                 commit=False,
             )
             hydrate_job = RcloneSyncFacade(db, operation)
-        parent = Path(storage.cache_path).parent
-        parent.mkdir(parents=True, exist_ok=True)
-        temp_dir = tempfile.mkdtemp(
-            prefix=f".hydrate-{repository.id}-", dir=str(parent)
-        )
         hydrate_job.direction = "remote_to_cache"
         hydrate_job.operation = "hydrate"
         hydrate_job.status = "running"
@@ -586,7 +581,13 @@ class RcloneRepositoryService:
         storage.sync_status = "hydrating"
         storage.last_sync_error = None
         db.commit()
+        temp_dir = None
         try:
+            parent = Path(storage.cache_path).parent
+            parent.mkdir(parents=True, exist_ok=True)
+            temp_dir = tempfile.mkdtemp(
+                prefix=f".hydrate-{repository.id}-", dir=str(parent)
+            )
             result = await self.service.sync(
                 target,
                 temp_dir,
@@ -594,7 +595,8 @@ class RcloneRepositoryService:
                 extra_flags=storage.extra_flags or [],
             )
         except Exception as exc:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            if temp_dir is not None:
+                shutil.rmtree(temp_dir, ignore_errors=True)
             storage.sync_status = "failed"
             storage.last_sync_error = _exception_message(exc)
             hydrate_job.status = "failed"

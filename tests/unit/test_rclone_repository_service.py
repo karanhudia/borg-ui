@@ -764,6 +764,66 @@ async def test_hydrate_repository_persists_failure_when_rclone_raises(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failure_step", ["parent", "staging"])
+async def test_hydrate_repository_records_staging_failure_without_touching_cache(
+    db_session, tmp_path, monkeypatch, failure_step
+):
+    from app.database.models import Operation, OperationRcloneDetails
+    from app.services.operations.rclone_facade import RcloneSyncFacade
+
+    cache_path = tmp_path / "cache" / "repositories" / "9"
+    cache_path.mkdir(parents=True)
+    sentinel = cache_path / "keep"
+    sentinel.write_text("existing repository")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=str(cache_path), encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=str(cache_path),
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+
+    def refuse_directory(*args, **kwargs):
+        raise PermissionError("cache parent is not writable")
+
+    if failure_step == "parent":
+        monkeypatch.setattr("pathlib.Path.mkdir", refuse_directory)
+    else:
+        monkeypatch.setattr(
+            "app.services.rclone_repository_service.tempfile.mkdtemp", refuse_directory
+        )
+    rclone = _RecordingRcloneService()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=rclone
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    db_session.expire_all()
+    details = db_session.query(OperationRcloneDetails).one()
+    job = RcloneSyncFacade(db_session, db_session.get(Operation, details.operation_id))
+    assert status["sync_status"] == "failed"
+    assert storage.sync_status == "failed"
+    assert storage.last_sync_error == "cache parent is not writable"
+    assert job.status == "failed"
+    assert job.error_text == "cache parent is not writable"
+    assert job.log_text == "cache parent is not writable"
+    assert job.started_at is not None
+    assert job.completed_at is not None
+    assert storage.last_hydrated_at is None
+    assert sentinel.read_text() == "existing repository"
+    assert list(cache_path.parent.glob(".hydrate-*")) == []
+    assert rclone.sync_calls == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_hydrate_repository_leaves_no_temp_dir_for_an_unknown_job(
     db_session, tmp_path
 ):
