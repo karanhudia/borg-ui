@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.models import Operation, Repository
+from app.services.job_admission import lock_repository_scope
 from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import MAINTENANCE_KINDS
 from app.utils.http_detail import detail_text
@@ -58,7 +59,11 @@ def start_maintenance(
 ) -> Operation:
     if kind not in MAINTENANCE_KINDS:
         raise ValueError(f"Not a maintenance kind: {kind!r}")
+    # Two starts of one kind decide one after the other: the second finds the
+    # row the first has queued.
+    lock_repository_scope(db, repository)
     if active_maintenance_operation(db, repository.id, kind, previews=False):
+        db.rollback()
         raise HTTPException(status_code=409, detail={"key": duplicate_error_key})
     # None means "not supplied"; storing it would shadow a service default.
     stored = {key: value for key, value in params.items() if value is not None}
@@ -71,6 +76,30 @@ def start_maintenance(
         triggered_by_user_id=user_id,
         scheduled_job_id=scheduled_job_id,
         backup_plan_run_id=backup_plan_run_id,
+    )
+
+
+def start_archive_delete(
+    db: Session, repository: Repository, archive_name: str, *, user_id: Optional[int]
+) -> Operation:
+    """Queue the delete of one archive, or answer 409 while a delete of the
+    same archive is queued or running."""
+    lock_repository_scope(db, repository)
+    active = active_delete_for_archive(db, repository.id, archive_name)
+    if active:
+        detail = {
+            "key": "backend.errors.archives.deleteAlreadyRunning",
+            "params": {"jobId": active.id},
+        }
+        db.rollback()
+        raise HTTPException(status_code=409, detail=detail)
+    return enqueue(
+        db,
+        "delete_archive",
+        repository_id=repository.id,
+        trigger="manual",
+        params={"archive_name": archive_name},
+        triggered_by_user_id=user_id,
     )
 
 

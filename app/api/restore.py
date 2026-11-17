@@ -7,7 +7,7 @@ import os  # noqa: F401
 from datetime import datetime, timezone
 
 from app.database.models import User, Repository
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.core.borg_errors import (
     get_exit_code_message,
     is_borg_warning_exit_code,
@@ -306,7 +306,8 @@ async def preview_restore(
 
 
 @router.post("/start")
-async def start_restore(
+@ends_read_on_return
+def start_restore(
     restore_request: RestoreRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

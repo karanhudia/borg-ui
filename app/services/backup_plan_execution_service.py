@@ -5,6 +5,8 @@ import json
 import os
 import shlex
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import partial
 from datetime import datetime, timezone, timedelta
@@ -13,7 +15,6 @@ from typing import Any, Awaitable, Callable, Optional
 
 import structlog
 from fastapi import HTTPException
-from sqlalchemy import or_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, joinedload
 
@@ -22,7 +23,7 @@ from app.config import settings
 from app.core.borg_major import is_borg2
 from app.core.borg_router import BorgRouter
 from app.core.security import decrypt_secret
-from app.database.database import SessionLocal
+from app.database.database import SessionLocal, checkout_can_wait, run_off_loop
 from app.database.models import (
     AgentJob,
     AgentMachine,
@@ -66,6 +67,7 @@ from app.services.job_admission import (
     PLAN_BACKUP_READ_WAIT_SECONDS,
     READ_WORK_CANCELLED,
     admit_repository_with_read_work_wait,
+    lock_backup_plan_scope,
 )
 from app.services.repository_executor import (
     TERMINAL_AGENT_STATUSES,
@@ -136,6 +138,10 @@ POST_BACKUP_AGENT_HOOK_TIMEOUT_SECONDS = 3600
 # backup the restart left running has ended.
 AGENT_BACKUP_END_POLL_SECONDS = 5.0
 RESTORE_CHECK_CANCEL_POLL_SECONDS = 2
+
+
+class RunEndedBeforeStart(Exception):
+    """The run reached a final status between its commit and its launch."""
 
 
 @dataclass(frozen=True)
@@ -858,10 +864,8 @@ class BackupPlanExecutionService:
                 continue
             prior_run_id = self._latest_run_id(db, plan.id)
             try:
-                self.start_run(db, plan, trigger="schedule")
-                plan.last_run = now
-                plan.next_run = self._next_plan_run(plan, now)
-                db.commit()
+                if not await self._start_scheduled_run(db, plan, now):
+                    continue
                 dispatched += 1
             except ValueError as exc:
                 logger.error(
@@ -870,7 +874,7 @@ class BackupPlanExecutionService:
                     error=str(exc),
                 )
                 db.rollback()
-                # start_run raises this before inserting a run. A ValueError
+                # create_run raises this before inserting a run. A ValueError
                 # after a committed run leaves next_run due, so a blip retries
                 # on the next minute instead of consuming the slot.
                 if self._latest_run_id(db, plan.id) != prior_run_id:
@@ -895,6 +899,44 @@ class BackupPlanExecutionService:
                 )
                 db.rollback()
         return dispatched
+
+    async def _start_scheduled_run(
+        self, db: Session, plan: BackupPlan, now: datetime
+    ) -> bool:
+        """Start the plan's due run unless one is active, and say whether it
+        did. A start by hand decides in a worker thread, under the plan's
+        lock: so does this one, on what is committed by now.
+
+        The whole transaction runs in a thread, from the lock to the commit.
+        On the loop, the wait for the lock would hold every request; and a
+        lock taken in a thread and kept across a turn of the loop would,
+        where the lock is the database's one write lock, stop whatever
+        writes on the loop next, with nothing left to give it back."""
+
+        def work(created: list[int]) -> bool:
+            lock_backup_plan_scope(db, plan.id)
+            # the plan as it is now: it was read before the lock, and it
+            # may have been changed while this waited for it
+            db.refresh(plan)
+            still_due = (
+                plan.enabled
+                and plan.schedule_enabled
+                and plan.next_run is not None
+                and plan.next_run <= now
+            )
+            if not still_due or self.has_active_run(db, plan.id):
+                db.rollback()
+                return False
+            created.append(self.create_run(db, plan, trigger="schedule"))
+            plan.last_run = now
+            plan.next_run = self._next_plan_run(plan, now)
+            db.commit()
+            return True
+
+        # a pool of the tests keeps its connection in its thread
+        return await self.launch_after(
+            db, work, in_thread=checkout_can_wait(db.get_bind())
+        )
 
     @staticmethod
     def _latest_run_id(db: Session, plan_id: int) -> Optional[int]:
@@ -1011,17 +1053,21 @@ class BackupPlanExecutionService:
         return query.first() is not None
 
     def has_active_run(self, db: Session, plan_id: int) -> bool:
-        active = BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES)
-        if self.live_run_ids:
-            # A cancelled run is still running its post-backup hooks (#1385);
-            # a new run's pre-backup hooks must not start under them.
-            active = or_(active, BackupPlanRun.id.in_(self.live_run_ids))
-        return (
-            db.query(BackupPlanRun)
-            .filter(BackupPlanRun.backup_plan_id == plan_id, active)
-            .first()
-            is not None
+        runs = db.query(BackupPlanRun.id).filter(
+            BackupPlanRun.backup_plan_id == plan_id
         )
+        active = BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES)
+        if runs.filter(active).first() is not None:
+            return True
+        # A cancelled run is still running its post-backup hooks (#1385);
+        # a new run's pre-backup hooks must not start under them. The rows
+        # are read first, then who is live: the startup sweep makes a run
+        # live before its commit shows it finished. A copy: a start in a
+        # worker thread adds to the set meanwhile.
+        live_run_ids = tuple(self.live_run_ids)
+        if not live_run_ids:
+            return False
+        return runs.filter(BackupPlanRun.id.in_(live_run_ids)).first() is not None
 
     async def cancel_run(self, db: Session, run_id: int) -> dict[str, int | bool]:
         run = (
@@ -1090,7 +1136,71 @@ class BackupPlanExecutionService:
             "already_terminal": False,
         }
 
+    def refuse_active_run(self, db: Session, plan_id: int) -> None:
+        """Answer 409 while the plan has an active run. Holds the plan's lock
+        from here to the caller's commit, so of two starts the second finds
+        the run of the first."""
+        lock_backup_plan_scope(db, plan_id)
+        if self.has_active_run(db, plan_id):
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.backupPlans.runAlreadyActive"},
+            )
+
     def start_run(self, db: Session, plan: BackupPlan, *, trigger: str) -> int:
+        run_id = self.create_run(db, plan, trigger=trigger)
+        self._launch(run_id)
+        return run_id
+
+    async def launch_after(
+        self,
+        db: Session,
+        work: Callable[[list[int]], Any],
+        *,
+        in_thread: bool = True,
+    ) -> Any:
+        """Run `work` in a thread and launch, here on the loop, the runs it
+        committed: it appends the id `create_run` or `create_retry_run` gives
+        it to the list it is called with. They are launched as well when
+        `work` fails after the commit or the caller is cancelled meanwhile.
+        The thread has ended by then, and a committed run that nothing
+        launches would stay pending and keep its plan busy until the next
+        restart.
+
+        `work` uses `db`, and work that fails gives the session's locks back
+        before it leaves the thread: the plan's lock is not kept across a
+        turn of the loop (see `_start_scheduled_run`)."""
+        created: list[int] = []
+
+        def in_one_transaction(created: list[int]) -> Any:
+            try:
+                return work(created)
+            except BaseException:
+                db.rollback()
+                raise
+
+        try:
+            if not in_thread:
+                return in_one_transaction(created)
+            return await run_off_loop(in_one_transaction, created)
+        finally:
+            for run_id in created:
+                self._launch(run_id)
+
+    def _commit_as_live(self, db: Session, run_id: int) -> None:
+        """Commit a new run as one this process executes. It counts as live
+        before the commit shows it: the startup sweep fails every active run
+        that is not, and it may run between this commit and the launch."""
+        self.live_run_ids.add(run_id)
+        try:
+            db.commit()
+        except BaseException:
+            self.live_run_ids.discard(run_id)
+            raise
+
+    def create_run(self, db: Session, plan: BackupPlan, *, trigger: str) -> int:
+        """Commit a new run of the plan for `_launch`, which has to follow."""
         enabled_links = [
             link
             for link in sorted(plan.repositories, key=lambda item: item.execution_order)
@@ -1117,17 +1227,25 @@ class BackupPlanExecutionService:
                 )
             )
 
-        db.commit()
-        self._launch(run.id)
-        return run.id
+        # read before the commit expires it: reading it after is a query,
+        # and one that fails would leave the run committed and unlaunched
+        run_id = run.id
+        self._commit_as_live(db, run_id)
+        return run_id
 
     def _launch(self, run_id: int, work: Optional[Awaitable[None]] = None) -> None:
-        task = asyncio.create_task(
-            work if work is not None else self.execute_run(run_id)
-        )
-        if asyncio.isfuture(task):  # not a test's patched create_task
+        try:
+            task = asyncio.create_task(
+                work if work is not None else self.execute_run(run_id)
+            )
+        except BaseException:
+            self.live_run_ids.discard(run_id)
+            raise
+        if asyncio.isfuture(task):
             self.live_run_ids.add(run_id)
             task.add_done_callback(lambda _task: self.live_run_ids.discard(run_id))
+        else:  # a test's patched create_task: nothing runs, nothing ends
+            self.live_run_ids.discard(run_id)
 
     def retry_failed_run(
         self,
@@ -1136,6 +1254,21 @@ class BackupPlanExecutionService:
         *,
         requested_by_user_id: Optional[int],
     ) -> int:
+        run_id = self.create_retry_run(
+            db, source_run, requested_by_user_id=requested_by_user_id
+        )
+        self._launch(run_id)
+        return run_id
+
+    def create_retry_run(
+        self,
+        db: Session,
+        source_run: BackupPlanRun,
+        *,
+        requested_by_user_id: Optional[int],
+    ) -> int:
+        """Commit the retry of a failed run for `_launch`, which has to
+        follow."""
         if source_run.status != "failed":
             raise ValueError("Only failed backup plan runs can be retried")
         if not source_run.backup_plan_id:
@@ -1153,11 +1286,7 @@ class BackupPlanExecutionService:
         )
         if not plan:
             raise ValueError("Backup plan no longer exists")
-        if self.has_active_run(db, plan.id):
-            raise HTTPException(
-                status_code=409,
-                detail={"key": "backend.errors.backupPlans.runAlreadyActive"},
-            )
+        self.refuse_active_run(db, plan.id)
 
         enabled_repository_ids = [
             link.repository_id
@@ -1246,16 +1375,20 @@ class BackupPlanExecutionService:
                 },
             )
         )
-        db.commit()
-        self._launch(retry_run.id)
-        return retry_run.id
+        retry_run_id = retry_run.id  # before the commit, as in `create_run`
+        self._commit_as_live(db, retry_run_id)
+        return retry_run_id
 
     async def execute_run(self, run_id: int) -> None:
         context: Optional[PlanRunContext] = None
         post_hooks_ran = False
         try:
             run_warnings: list[str] = []
-            context, repositories = self._prepare_run(run_id)
+            try:
+                context, repositories = self._prepare_run(run_id)
+            except RunEndedBeforeStart:
+                logger.info("Backup plan run ended before it started", run_id=run_id)
+                return
             # A repository whose agent is away gets no backup, and takes no
             # backup slot (#1331). Decided before the plan's own hooks, so a
             # run left with nothing to back up runs none of them.
@@ -1471,13 +1604,39 @@ class BackupPlanExecutionService:
             warnings.append(f"Plan post-backup scripts failed: {exc}")
         return warnings
 
+    @contextmanager
+    def holding_for_post_hooks(self) -> Iterator[Callable[[list[int]], None]]:
+        """Gives the startup sweep how to hold the runs whose post-backup
+        scripts `recover_post_hooks_after_restart` launches next. They are
+        live from when the sweep knows them, and before its commit shows the
+        interrupted ones finished: a start in a worker thread that reads in
+        between still finds their plans busy. A sweep that fails gives them
+        up again."""
+        held: set[int] = set()
+
+        def hold(run_ids: list[int]) -> None:
+            held.update(run_ids)
+            self.live_run_ids.update(run_ids)
+
+        try:
+            yield hold
+        except BaseException:
+            self.live_run_ids.difference_update(held)
+            raise
+
     def recover_post_hooks_after_restart(self, run_ids: list[int]) -> None:
         """Run the post-backup scripts of the runs a restart interrupted
         after their pre-backup scripts ran (#1385), each in a task of its
         own. A run is live while they run, so no new run of its plan starts
         its pre-backup scripts under them."""
-        for run_id in run_ids:
-            self._launch(run_id, self._run_post_hooks_after_restart(run_id))
+        waiting = list(run_ids)
+        try:
+            while waiting:
+                run_id = waiting.pop(0)
+                self._launch(run_id, self._run_post_hooks_after_restart(run_id))
+        finally:
+            # held for a launch that did not come
+            self.live_run_ids.difference_update(waiting)
 
     async def _run_post_hooks_after_restart(self, run_id: int) -> None:
         """The post-backup scripts of a run the restart interrupted, with the
@@ -1742,6 +1901,10 @@ class BackupPlanExecutionService:
             run = db.query(BackupPlanRun).filter(BackupPlanRun.id == run_id).first()
             if not run:
                 raise ValueError(f"Backup plan run {run_id} not found")
+            # A start commits the run in a thread and launches it afterwards:
+            # a cancel in between is not overwritten here.
+            if run.status in TERMINAL_PLAN_RUN_STATUSES:
+                raise RunEndedBeforeStart(run_id)
             retry_repository_ids = (
                 {
                     child.repository_id

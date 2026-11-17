@@ -3237,7 +3237,7 @@ class TestBackupPlanRoutes:
         with (
             patch.object(
                 backup_plan_execution_service,
-                "start_run",
+                "create_run",
                 side_effect=RuntimeError("database blip"),
             ),
             patch.object(

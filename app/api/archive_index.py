@@ -16,7 +16,7 @@ from app.api.dashboard import resolve_timezone
 from app.api.maintenance_jobs import get_repository_with_access
 from app.core.features import require_feature, require_feature_access
 from app.core.security import get_current_user
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.database.models import (
     Archive,
     ArchiveChange,
@@ -45,7 +45,11 @@ from app.services.operations.followups import (
 from app.services.operations.history_fold import Change, fold_sequence, rows_to_changes
 from app.services.operations.index_mode import filter_kinds
 from app.services.operations.index_mode import mode_of as index_mode_of
-from app.services.operations.reconcile import enqueue_reconcile_run
+from app.services.job_admission import lock_repository_scope
+from app.services.operations.reconcile import (
+    enqueue_reconcile_run,
+    lock_reconcile_scope,
+)
 from app.services.operations.repository_status import repository_status
 from app.services.operations.series import (
     crons_for_repository,
@@ -551,7 +555,8 @@ def prune_comparison_preview(
 
 
 @router.post("/{repo_id}/prune/comparison/refresh")
-async def prune_comparison_refresh(
+@ends_read_on_return
+def prune_comparison_refresh(
     repo_id: int,
     auto: bool = False,
     current_user: User = Depends(get_current_user),
@@ -568,6 +573,9 @@ async def prune_comparison_refresh(
         raise HTTPException(
             status_code=409, detail={"key": "backend.errors.prune.autoPreviewOff"}
         )
+    # Two requests decide one after the other: the second finds the
+    # comparison the first has queued.
+    lock_repository_scope(db, repository)
     pending = (
         db.query(Operation.id)
         .filter(
@@ -812,7 +820,8 @@ async def rebuild(
 
 
 @router.post("/{repo_id}/resync")
-async def resync(
+@ends_read_on_return
+def resync(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -825,6 +834,7 @@ async def resync(
     An `off` repository is listed once here and then goes quiet again, and a
     mode that excludes file history keeps excluding it (spec 6.8)."""
     repository = _repo(db, current_user, repo_id, role="operator")
+    lock_reconcile_scope(db)
     ops = enqueue_reconcile_run(db, repository.id, manual=True)
     return {
         "run_id": ops[0].run_id if ops else None,

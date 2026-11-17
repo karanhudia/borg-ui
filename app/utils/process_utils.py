@@ -5,7 +5,7 @@ Utility functions for process management and orphan detection
 import json
 import os
 import subprocess
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from pathlib import Path
 from typing import Optional
 import structlog
@@ -888,24 +888,37 @@ def _is_remote_repository(repository: Repository, db: Session) -> bool:
 
 
 def cleanup_orphaned_jobs(
-    db: Session, live_plan_run_ids: Collection[int] = ()
+    db: Session,
+    live_plan_run_ids: Collection[int] = (),
+    *,
+    hold_for_post_hooks: Optional[Callable[[list[int]], None]] = None,
 ) -> list[int]:
     """Normalise what a restart leaves behind that the operations runner's
     own recovery (spec 7.6) does not cover: backup rows still in a running
     maintenance state, and backup plan runs left active. `live_plan_run_ids`
-    are plan runs this process is executing; they are not left behind.
+    are plan runs this process is executing; they are not left behind. It is
+    the set the process keeps, not a copy: a start in a worker thread adds to
+    it while this runs.
     Returns the plan runs whose post-backup scripts are still to run (#1385).
+    `hold_for_post_hooks` gets them before this returns, and before the
+    commit that shows the interrupted ones finished, to keep their plans busy
+    until those scripts are launched.
     """
     logger.info("Checking for orphaned jobs...")
 
     now = datetime.utcnow()
     stale_backup_jobs = _mark_stale_backup_maintenance_failed(db, now)
-    active_query = db.query(BackupPlanRun).filter(
-        BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES)
-    )
-    if live_plan_run_ids:
-        active_query = active_query.filter(BackupPlanRun.id.notin_(live_plan_run_ids))
-    active_backup_plan_runs = active_query.all()
+    # A run that a worker thread commits meanwhile counts as live before its
+    # row shows: so the rows are read first, then who is live.
+    active_backup_plan_runs = [
+        run
+        for run in db.query(BackupPlanRun)
+        .filter(BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES))
+        .all()
+        if run.id not in live_plan_run_ids
+    ]
+    # a copy from here on: that thread adds to the set meanwhile
+    live_plan_run_ids = tuple(live_plan_run_ids)
     logger.info(
         "Found interrupted work",
         stale_backup_maintenance_jobs=stale_backup_jobs,
@@ -915,6 +928,8 @@ def cleanup_orphaned_jobs(
     pending_post_hooks = _post_backup_scripts_still_pending(db, live_plan_run_ids)
     if not stale_backup_jobs and not active_backup_plan_runs:
         logger.info("No orphaned jobs found")
+        if hold_for_post_hooks is not None:
+            hold_for_post_hooks(pending_post_hooks)
         return pending_post_hooks
 
     normalized_plan_runs = _normalize_interrupted_backup_plan_runs(
@@ -926,6 +941,10 @@ def cleanup_orphaned_jobs(
             count=normalized_plan_runs,
         )
 
+    # A start in a worker thread may read between this commit and the launch
+    # of the post-backup scripts.
+    if hold_for_post_hooks is not None:
+        hold_for_post_hooks(pending_post_hooks)
     db.commit()
     logger.info("Orphaned job cleanup completed")
     return pending_post_hooks

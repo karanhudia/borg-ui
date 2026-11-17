@@ -163,26 +163,43 @@ def get_db():
 # the loop. The helpers below keep requests and the loop out of those waits.
 
 
+def queries_in_threads(handler):
+    """For a coroutine handler that passes the request's session to
+    `run_off_loop` and never queries on the event loop itself. Its request
+    waits for one of those threads next, so it is treated as a plain `def`
+    handler is: authentication gives the connection back first."""
+    handler.queries_in_threads = True
+    return handler
+
+
 def handler_uses_session_on_loop(request) -> bool:
     """Whether the request's handler is a coroutine that takes the request's
     session itself. It queries on the event loop, after its dependencies:
     the connection the session holds saves it a checkout there. Every other
-    handler runs in a worker thread, or does not use that session."""
+    handler runs in a worker thread, queries in threads only
+    (`queries_in_threads`), or does not use that session."""
     route = request.scope.get("route")
     endpoint = getattr(route, "endpoint", None)
     if endpoint is None or not inspect.iscoroutinefunction(endpoint):
+        return False
+    if getattr(endpoint, "queries_in_threads", False):
         return False
     return any(dependency.call is get_db for dependency in route.dependant.dependencies)
 
 
 def handler_runs_in_worker(request) -> bool:
-    """Whether the request's handler is a plain `def` function. FastAPI runs
-    it in a worker thread, so a query it makes after its dependencies never
+    """Whether the request's handler queries in threads only: a plain `def`
+    function, which FastAPI runs in a worker thread, or a coroutine marked
+    with `queries_in_threads`. A query it makes after its dependencies never
     waits for a connection on the event loop. False when the route is not
     known."""
     route = request.scope.get("route")
     endpoint = getattr(route, "endpoint", None)
-    return endpoint is not None and not inspect.iscoroutinefunction(endpoint)
+    if endpoint is None:
+        return False
+    return not inspect.iscoroutinefunction(endpoint) or getattr(
+        endpoint, "queries_in_threads", False
+    )
 
 
 def end_read_keeping_loaded(db: Session, *instances) -> None:
@@ -207,15 +224,19 @@ def ends_read_on_return(handler):
     returns. FastAPI validates the response of a `def` handler in another
     shared worker thread and closes the session only after that, so the
     request would wait for that thread while holding its connection. The
-    handler returns values, not rows that still need the session."""
+    handler returns values, not rows that still need the session.
+
+    When it raises as well: a lock it took would stay until the session is
+    closed, and the event loop has to take a turn for that."""
 
     @functools.wraps(handler)
     def wrapper(*args, **kwargs):
-        response = handler(*args, **kwargs)
-        for value in kwargs.values():
-            if isinstance(value, Session):
-                value.rollback()
-        return response
+        try:
+            return handler(*args, **kwargs)
+        finally:
+            for value in kwargs.values():
+                if isinstance(value, Session):
+                    value.rollback()
 
     return wrapper
 

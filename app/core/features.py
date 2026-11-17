@@ -92,5 +92,9 @@ def require_feature(feature: str):
 
     def _check(db: Session = Depends(get_db)):
         require_feature_access(db, feature)
+        # The check is over and nothing of it is kept. Its read would leave
+        # the request holding a connection, through the user lookup, while it
+        # waits for the worker thread of a plain `def` handler.
+        db.rollback()
 
     return Depends(_check)

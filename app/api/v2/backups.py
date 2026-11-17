@@ -15,7 +15,7 @@ import structlog
 
 from app.core.security import require_role_dependency
 from app.core.borg_major import is_borg2
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.database.models import (
     User,
     Repository,
@@ -334,7 +334,8 @@ async def _agent_prune_dry_run(
 
 
 @router.post("/compact")
-async def compact_repository(
+@ends_read_on_return
+def compact_repository(
     data: CompactV2Request,
     current_user: User = Depends(
         require_role_dependency(
@@ -380,7 +381,8 @@ async def compact_repository(
 
 
 @router.post("/check")
-async def check_repository(
+@ends_read_on_return
+def check_repository(
     data: CheckV2Request,
     current_user: User = Depends(
         require_role_dependency(

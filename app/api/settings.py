@@ -7,7 +7,7 @@ import secrets
 import structlog
 from croniter import croniter
 
-from app.database.database import get_db
+from app.database.database import get_db, queries_in_threads, run_off_loop
 from app.database.models import User, Repository, SystemSettings
 from app.services import backup_monitoring_service, error_reporter
 from app.core.authorization import authorize_request
@@ -1215,6 +1215,10 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
 
     The refresh is the `stats` and `archive_sync` index chain (spec 8.1, 8.2),
     which the operations runner executes; this only enqueues it."""
+    await run_off_loop(_enqueue_stats_refresh, repo_ids, username)
+
+
+def _enqueue_stats_refresh(repo_ids: list, username: str) -> None:
     from app.database.database import SessionLocal
     from app.services.operations.enqueue import enqueue_chain
 
@@ -1266,6 +1270,7 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
 
 
 @router.post("/refresh-stats")
+@queries_in_threads
 async def refresh_all_stats(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
@@ -1275,11 +1280,19 @@ async def refresh_all_stats(
     Check last_stats_refresh timestamp to know when it completed.
     """
     try:
-        logger.info("Manual stats refresh triggered", user=current_user.username)
+        # The database work runs in a thread; the task starts here, on the
+        # loop it belongs to.
+        def repositories() -> tuple[str, list[int]]:
+            username = current_user.username
+            logger.info("Manual stats refresh triggered", user=username)
 
-        # Get all repository IDs
-        repos = db.query(Repository).all()
-        repo_ids = [r.id for r in repos]
+            # Get all repository IDs
+            repos = db.query(Repository).all()
+            repo_ids = [r.id for r in repos]
+            db.rollback()  # the read is over: the connection goes back
+            return username, repo_ids
+
+        username, repo_ids = await run_off_loop(repositories)
 
         if not repo_ids:
             return {
@@ -1289,9 +1302,7 @@ async def refresh_all_stats(
             }
 
         # Start background task
-        asyncio.create_task(
-            _run_stats_refresh_background(repo_ids, current_user.username)
-        )
+        asyncio.create_task(_run_stats_refresh_background(repo_ids, username))
 
         return {
             "success": True,

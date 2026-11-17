@@ -17,7 +17,7 @@ from app.core.security import (
     repository_role_allows,
     require_any_role,
 )
-from app.database.database import get_db
+from app.database.database import get_db, queries_in_threads
 from app.database.models import (
     AgentJobLog,
     BackupPlan,
@@ -1820,35 +1820,47 @@ async def cancel_backup_plan_run(
 
 
 @router.post("/runs/{run_id}/retry", status_code=status.HTTP_202_ACCEPTED)
+@queries_in_threads
 async def retry_backup_plan_run(
     run_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    run = _load_run_or_404(db, run_id)
-    _require_run_operator_access(db, current_user, run)
-    try:
-        retry_run_id = backup_plan_execution_service.retry_failed_run(
-            db,
-            run,
-            requested_by_user_id=current_user.id,
-        )
-    except HTTPException:
-        raise
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"key": "backend.errors.backupPlans.retryUnsupported"},
-        ) from exc
+    # The database work runs in a thread; the run's task starts on the loop
+    # it belongs to, once the thread is done.
+    def work(created: list[int]) -> dict[str, Any]:
+        run = _load_run_or_404(db, run_id)
+        _require_run_operator_access(db, current_user, run)
+        try:
+            created.append(
+                backup_plan_execution_service.create_retry_run(
+                    db,
+                    run,
+                    requested_by_user_id=current_user.id,
+                )
+            )
+        except HTTPException:
+            raise
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"key": "backend.errors.backupPlans.retryUnsupported"},
+            ) from exc
 
-    retry_run = _load_run_or_404(db, retry_run_id)
-    logger.info(
-        "Backup plan run retry started",
-        source_backup_plan_run_id=run.id,
-        retry_backup_plan_run_id=retry_run.id,
-        user=current_user.username,
-    )
-    return _serialize_plan_run(retry_run, log_save_policy=get_log_save_policy(db))
+        retry_run = _load_run_or_404(db, created[0])
+        logger.info(
+            "Backup plan run retry started",
+            source_backup_plan_run_id=run.id,
+            retry_backup_plan_run_id=retry_run.id,
+            user=current_user.username,
+        )
+        serialized = _serialize_plan_run(
+            retry_run, log_save_policy=get_log_save_policy(db)
+        )
+        db.rollback()  # the read is over: the connection goes back
+        return serialized
+
+    return await backup_plan_execution_service.launch_after(db, work)
 
 
 @router.post("/from-repository/{repo_id}", status_code=status.HTTP_201_CREATED)
@@ -2011,39 +2023,44 @@ async def create_backup_plan(
 
 
 @router.post("/{plan_id}/run", status_code=status.HTTP_202_ACCEPTED)
+@queries_in_threads
 async def run_backup_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    plan = _load_plan_or_404(db, plan_id)
-    _require_plan_operator_access(db, current_user, plan)
-    if not plan.enabled:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"key": "backend.errors.backupPlans.disabled"},
+    # The database work runs in a thread; the run's task starts on the loop
+    # it belongs to, once the thread is done.
+    def work(created: list[int]) -> dict[str, Any]:
+        plan = _load_plan_or_404(db, plan_id)
+        _require_plan_operator_access(db, current_user, plan)
+        if not plan.enabled:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.backupPlans.disabled"},
+            )
+        if not any(link.enabled for link in plan.repositories):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.backupPlans.repositoriesRequired"},
+            )
+        raise_backup_plan_feature_error(evaluate_backup_plan_access(db, plan))
+        backup_plan_execution_service.refuse_active_run(db, plan.id)
+        created.append(
+            backup_plan_execution_service.create_run(db, plan, trigger="manual")
         )
-    if not any(link.enabled for link in plan.repositories):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"key": "backend.errors.backupPlans.repositoriesRequired"},
+        run = _load_run_or_404(db, created[0])
+        logger.info(
+            "Backup plan run started",
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            user=current_user.username,
         )
-    raise_backup_plan_feature_error(evaluate_backup_plan_access(db, plan))
-    if backup_plan_execution_service.has_active_run(db, plan.id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"key": "backend.errors.backupPlans.runAlreadyActive"},
-        )
+        serialized = _serialize_plan_run(run, log_save_policy=get_log_save_policy(db))
+        db.rollback()  # the read is over: the connection goes back
+        return serialized
 
-    run_id = backup_plan_execution_service.start_run(db, plan, trigger="manual")
-    run = _load_run_or_404(db, run_id)
-    logger.info(
-        "Backup plan run started",
-        backup_plan_id=plan.id,
-        backup_plan_run_id=run.id,
-        user=current_user.username,
-    )
-    return _serialize_plan_run(run, log_save_policy=get_log_save_policy(db))
+    return await backup_plan_execution_service.launch_after(db, work)
 
 
 @router.get("/{plan_id}/runs")

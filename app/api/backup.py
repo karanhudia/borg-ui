@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any, Optional
 from datetime import datetime
 
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.database.models import (
     AgentJob,
     AgentJobLog,
@@ -401,7 +401,8 @@ async def run_backup(
 
 
 @router.post("/jobs/{job_id}/retry", status_code=status.HTTP_202_ACCEPTED)
-async def retry_backup_job(
+@ends_read_on_return
+def retry_backup_job(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

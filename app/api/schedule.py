@@ -1,11 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional, Dict, Any, NoReturn
+from functools import partial
+from typing import Any, Callable, Coroutine, Dict, List, NoReturn, Optional
 from datetime import datetime, timedelta, timezone
 import structlog
 import asyncio
 
-from app.database.database import get_db, SessionLocal
+from app.database.database import (
+    SessionLocal,
+    get_db,
+    queries_in_threads,
+    run_off_loop,
+)
 from app.database.models import (
     Operation,
     User,
@@ -1729,13 +1735,20 @@ async def duplicate_scheduled_job(
 
 
 @router.post("/{job_id}/run-now")
+@queries_in_threads
 async def run_scheduled_job_now(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Run a scheduled job immediately"""
-    try:
+    # The database work runs in a thread, which leaves the work it committed
+    # in `to_launch`. The tasks start on the loop they belong to, once the
+    # thread is done: also when it failed after the commit, or this request
+    # was cancelled meanwhile.
+    to_launch: list[Callable[[], Coroutine[Any, Any, None]]] = []
+
+    def prepare() -> dict[str, Any]:
         from app.database.models import Repository
 
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
@@ -1765,7 +1778,7 @@ async def run_scheduled_job_now(
             db.commit()
 
             # Pass job_id instead of job object to avoid session issues
-            asyncio.create_task(execute_multi_repo_schedule_by_id(job_id))
+            to_launch.append(partial(execute_multi_repo_schedule_by_id, job_id))
 
             return {
                 "message": "backend.success.schedule.scheduledJobStartedMulti",
@@ -1815,9 +1828,13 @@ async def run_scheduled_job_now(
             )
 
             # Execute backup with optional prune/compact asynchronously (non-blocking)
-            asyncio.create_task(
-                execute_scheduled_backup_with_maintenance(
-                    backup_job.id, repo.path, job.id, archive_name=archive_name
+            to_launch.append(
+                partial(
+                    execute_scheduled_backup_with_maintenance,
+                    backup_job.id,
+                    repo.path,
+                    job.id,
+                    archive_name=archive_name,
                 )
             )
 
@@ -1833,17 +1850,29 @@ async def run_scheduled_job_now(
                 backup_job_id=backup_job.id,
             )
 
-            return {
+            started = {
                 "job_id": backup_job.id,
                 "status": "pending",
                 "message": "backend.success.schedule.scheduledJobStarted",
             }
+            db.rollback()  # the read is over: the connection goes back
+            return started
         else:
             raise HTTPException(
                 status_code=400,
                 detail={"key": "backend.errors.schedule.noRepositoriesConfigured"},
             )
 
+    def prepare_in_one_transaction() -> dict[str, Any]:
+        try:
+            return prepare()
+        except BaseException:
+            # the admission's lock is not kept across a turn of the loop
+            db.rollback()
+            raise
+
+    try:
+        return await run_off_loop(prepare_in_one_transaction)
     except HTTPException:
         raise
     except Exception as e:
@@ -1855,6 +1884,9 @@ async def run_scheduled_job_now(
                 "params": {"error": str(e)},
             },
         )
+    finally:
+        for work in to_launch:
+            asyncio.create_task(work())
 
 
 @router.post("/validate-cron")

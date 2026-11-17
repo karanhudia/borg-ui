@@ -17,7 +17,7 @@ import shutil
 import uuid
 
 from app.core.borg_major import borg_major, is_borg2
-from app.database.database import get_db, SessionLocal
+from app.database.database import SessionLocal, ends_read_on_return, get_db
 from app.database.models import (
     AgentMachine,
     Archive,
@@ -6268,7 +6268,8 @@ async def permanently_delete_repository(
 
 
 @router.post("/{repo_id}/check")
-async def check_repository(
+@ends_read_on_return
+def check_repository(
     repo_id: int,
     request: dict = None,
     current_user: User = Depends(get_current_user),
@@ -6333,7 +6334,8 @@ async def check_repository(
 
 
 @router.post("/{repo_id}/restore-check")
-async def restore_check_repository(
+@ends_read_on_return
+def restore_check_repository(
     repo_id: int,
     request: dict = None,
     current_user: User = Depends(get_current_user),
@@ -6403,7 +6405,8 @@ async def restore_check_repository(
 
 
 @router.post("/{repo_id}/compact")
-async def compact_repository(
+@ends_read_on_return
+def compact_repository(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
