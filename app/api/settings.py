@@ -7,7 +7,12 @@ import secrets
 import structlog
 from croniter import croniter
 
-from app.database.database import get_db, queries_in_threads, run_off_loop
+from app.database.database import (
+    ends_read_on_return,
+    get_db,
+    queries_in_threads,
+    run_off_loop,
+)
 from app.database.models import User, Repository, SystemSettings
 from app.services import backup_monitoring_service, error_reporter
 from app.core.authorization import authorize_request
@@ -18,6 +23,8 @@ from app.core.security import (
     get_current_admin_user,
     require_any_role,
     get_password_hash,
+    get_password_hash_off_loop,
+    update_user_password,
     verify_password,
 )
 from app.core.user_deletion import detach_user_delete_references
@@ -1416,6 +1423,10 @@ async def create_user(
 ):
     """Create a new user (admin only)"""
     try:
+        # Hashed first: the checks below and the insert then run without a
+        # break.
+        hashed_password = await get_password_hash_off_loop(user_data.password)
+
         # Check user limit by plan
         current_plan = get_current_plan(db)
         user_count = db.query(User).count()
@@ -1458,7 +1469,6 @@ async def create_user(
             )
 
         # Create new user
-        hashed_password = get_password_hash(user_data.password)
         new_user = User(
             username=user_data.username,
             full_name=user_data.full_name,
@@ -1671,7 +1681,8 @@ async def delete_user(
 
 
 @router.post("/users/{user_id}/reset-password")
-async def reset_user_password(
+@ends_read_on_return
+def reset_user_password(
     user_id: int,
     password_data: PasswordReset,
     current_user: User = Depends(get_current_user),
@@ -1679,13 +1690,14 @@ async def reset_user_password(
 ):
     """Reset user password (admin only)"""
     try:
+        hashed_password = get_password_hash(password_data.new_password)
+
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(
                 status_code=404, detail={"key": "backend.errors.settings.userNotFound"}
             )
 
-        hashed_password = get_password_hash(password_data.new_password)
         user.password_hash = hashed_password
         user.updated_at = datetime.utcnow()
         db.commit()
@@ -1709,7 +1721,8 @@ async def reset_user_password(
 
 
 @router.post("/change-password")
-async def change_password(
+@ends_read_on_return
+def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1717,22 +1730,27 @@ async def change_password(
     """Change current user's password"""
     try:
         # Verify current password
-        if not verify_password(
-            password_data.current_password, current_user.password_hash
-        ):
+        checked_hash = current_user.password_hash
+        if not verify_password(password_data.current_password, checked_hash):
             raise HTTPException(
                 status_code=400,
                 detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
             )
 
-        # Update password
-        hashed_password = get_password_hash(password_data.new_password)
-        current_user.password_hash = hashed_password
-        current_user.must_change_password = (
-            False  # Clear the flag after password change
-        )
-        current_user.updated_at = datetime.utcnow()
-        db.commit()
+        # Update password, unless it was changed since the check, and clear
+        # the must_change_password flag with it
+        if not update_user_password(
+            db,
+            current_user.id,
+            checked_hash,
+            get_password_hash(password_data.new_password),
+            must_change_password=False,
+            updated_at=datetime.utcnow(),
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
+            )
 
         logger.info("Password changed", username=current_user.username)
 

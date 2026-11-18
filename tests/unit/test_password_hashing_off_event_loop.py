@@ -1,0 +1,885 @@
+"""Password checks and hashing must not hold the event loop.
+
+A bcrypt comparison or hash takes about 175 ms at the default cost. In a
+coroutine handler it ran on the loop, and every other request of the process
+waited for it.
+
+A stand-in for `verify_password` or `get_password_hash` stops at a gate until
+the test opens it, and /health must answer meanwhile. With the call back on
+the loop, the gate runs out after HOLD_SECONDS and the test fails instead of
+hanging. No test depends on how long anything takes.
+
+The routes write (rate-limit buckets, auth events, users, tokens), so they run
+on SQLite and, with BORG_TEST_POSTGRES_URL set, on PostgreSQL.
+"""
+
+import asyncio
+import json
+import os
+import threading
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from unittest.mock import patch
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+
+import app.api.auth as auth
+import app.api.managed_machines as managed_machines
+import app.api.settings as settings_api
+from app.config import settings
+from app.core import security
+from app.core.security import create_access_token, encrypt_secret
+from app.core.totp import _hotp, generate_totp_secret, hash_recovery_code
+from app.database.database import Base, get_db, register_utc_session_timezone
+from app.database.models import (
+    AgentEnrollmentToken,
+    AuthEvent,
+    AuthRateLimitBucket,
+    LicensingState,
+    User,
+)
+
+POSTGRES_URL = os.getenv("BORG_TEST_POSTGRES_URL")
+PASSWORD = "admin123"
+NEW_PASSWORD = "a-new-password-1"
+RESET_PASSWORD = "a-reset-password-2"
+RECOVERY_CODE = "ABCD-EFGH-JKLM"
+# Long enough for a request to arrive, short enough that a call held on the
+# loop fails the test instead of hanging it.
+HOLD_SECONDS = 5
+
+
+@contextmanager
+def _postgres_sessions():
+    """A schema of its own: the other PostgreSQL tests drop `public`."""
+    schema = f"password_hashing_{uuid.uuid4().hex}"
+    admin = create_engine(POSTGRES_URL)
+    with admin.begin() as conn:
+        conn.execute(text(f"CREATE SCHEMA {schema}"))
+    engine = create_engine(
+        POSTGRES_URL, connect_args={"options": f"-c search_path={schema}"}
+    )
+    register_utc_session_timezone(engine)
+    try:
+        Base.metadata.create_all(engine)
+        yield sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    finally:
+        engine.dispose()
+        with admin.begin() as conn:
+            conn.execute(text(f"DROP SCHEMA {schema} CASCADE"))
+        admin.dispose()
+
+
+@pytest.fixture(
+    params=[
+        "sqlite",
+        pytest.param(
+            "postgresql",
+            marks=pytest.mark.skipif(
+                not POSTGRES_URL, reason="BORG_TEST_POSTGRES_URL is not set"
+            ),
+        ),
+    ]
+)
+def database(request, test_client, session_per_request):
+    """The session factory of the database the requests of this test use: for
+    the test's setup and assertions, one session per request for the app."""
+    if request.param == "sqlite":
+        yield session_per_request
+        return
+
+    from app.main import app
+
+    with _postgres_sessions() as sessions:
+
+        def override_get_db():
+            db = sessions()
+            try:
+                yield db
+            finally:
+                db.close()
+
+        app.dependency_overrides[get_db] = override_get_db
+        with patch("app.database.database.SessionLocal", sessions):
+            yield sessions
+
+
+@pytest.fixture
+def admin(database, fixture_password_hashes):
+    with database() as db:
+        db.add(
+            User(
+                username="admin",
+                email="admin@example.org",
+                password_hash=fixture_password_hashes[PASSWORD],
+                is_active=True,
+                role="admin",
+            )
+        )
+        db.add(
+            User(
+                username="target",
+                email="target@example.org",
+                password_hash=fixture_password_hashes[PASSWORD],
+                is_active=True,
+                role="viewer",
+            )
+        )
+        db.add(
+            LicensingState(
+                instance_id="test-password-hashing", plan="pro", status="active"
+            )
+        )
+        db.commit()
+    return {"Authorization": f"Bearer {create_access_token({'sub': 'admin'})}"}
+
+
+def _patch_everywhere(monkeypatch, name: str, replacement) -> None:
+    """In `security` and in every handler module that imported the name, so
+    that the stand-in is called on the code before this change as well."""
+    for module in (security, auth, settings_api, managed_machines):
+        if hasattr(module, name):
+            monkeypatch.setattr(module, name, replacement)
+
+
+class Gate:
+    """Stops the first call that reaches it until the test opens it."""
+
+    def __init__(self) -> None:
+        self.reached = threading.Event()
+        self.opened_in_time: list[bool] = []
+        self._opened = threading.Event()
+        self._lock = threading.Lock()
+        self._taken = False
+
+    def hold(self) -> None:
+        with self._lock:
+            if self._taken:
+                return
+            self._taken = True
+        self.reached.set()
+        self.opened_in_time.append(self._opened.wait(HOLD_SECONDS))
+
+    def open(self) -> None:
+        self._opened.set()
+
+
+@contextmanager
+def _held_request(gate: Gate, send):
+    """Runs `send` in a thread until it reaches `gate`; the gate is opened
+    and the thread joined again whatever the test does meanwhile."""
+    request = threading.Thread(target=send)
+    request.start()
+    try:
+        assert gate.reached.wait(HOLD_SECONDS), "the request never reached the gate"
+        yield
+    finally:
+        gate.open()
+        request.join(HOLD_SECONDS * 2)
+    assert not request.is_alive()
+
+
+def _enable_totp(database) -> str:
+    secret = generate_totp_secret()
+    with database() as db:
+        user = db.query(User).filter(User.username == "admin").one()
+        user.totp_secret_encrypted = encrypt_secret(secret)
+        user.totp_enabled = True
+        user.totp_recovery_codes_hashes = json.dumps(
+            [hash_recovery_code(RECOVERY_CODE)]
+        )
+        db.commit()
+    return secret
+
+
+def _target_id(database) -> int:
+    with database() as db:
+        return db.query(User).filter(User.username == "target").one().id
+
+
+# (case id, function held, request: path, keyword arguments, status, user
+# whose password is then NEW_PASSWORD)
+ROUTES = [
+    (
+        "login",
+        "verify_password",
+        lambda database: (
+            "/api/auth/login",
+            {"data": {"username": "admin", "password": PASSWORD}},
+            200,
+            None,
+        ),
+    ),
+    (
+        "totp-setup",
+        "verify_password",
+        lambda database: (
+            "/api/auth/totp/setup",
+            {"json": {"current_password": PASSWORD}},
+            200,
+            None,
+        ),
+    ),
+    (
+        "totp-disable",
+        "verify_password",
+        lambda database: (
+            "/api/auth/totp/disable",
+            {
+                "json": {
+                    "current_password": PASSWORD,
+                    "code": _hotp(_enable_totp(database), int(time.time()) // 30),
+                }
+            },
+            200,
+            None,
+        ),
+    ),
+    (
+        "passkey-options",
+        "verify_password",
+        lambda database: (
+            "/api/auth/passkeys/register/options",
+            {"json": {"current_password": PASSWORD}},
+            200,
+            None,
+        ),
+    ),
+    (
+        "auth-change-password-check",
+        "verify_password",
+        lambda database: (
+            "/api/auth/change-password",
+            {"json": {"current_password": PASSWORD, "new_password": NEW_PASSWORD}},
+            200,
+            "admin",
+        ),
+    ),
+    (
+        "auth-change-password-hash",
+        "get_password_hash",
+        lambda database: (
+            "/api/auth/change-password",
+            {"json": {"current_password": PASSWORD, "new_password": NEW_PASSWORD}},
+            200,
+            "admin",
+        ),
+    ),
+    (
+        "auth-create-user",
+        "get_password_hash",
+        lambda database: (
+            "/api/auth/users",
+            {"json": {"username": "created", "password": NEW_PASSWORD}},
+            200,
+            "created",
+        ),
+    ),
+    (
+        "settings-create-user",
+        "get_password_hash",
+        lambda database: (
+            "/api/settings/users",
+            {
+                "json": {
+                    "username": "created",
+                    "password": NEW_PASSWORD,
+                    "email": "created@example.org",
+                }
+            },
+            200,
+            "created",
+        ),
+    ),
+    (
+        "settings-reset-password",
+        "get_password_hash",
+        lambda database: (
+            f"/api/settings/users/{_target_id(database)}/reset-password",
+            {"json": {"new_password": NEW_PASSWORD}},
+            200,
+            "target",
+        ),
+    ),
+    (
+        "settings-change-password-check",
+        "verify_password",
+        lambda database: (
+            "/api/settings/change-password",
+            {"json": {"current_password": PASSWORD, "new_password": NEW_PASSWORD}},
+            200,
+            "admin",
+        ),
+    ),
+    (
+        "settings-change-password-hash",
+        "get_password_hash",
+        lambda database: (
+            "/api/settings/change-password",
+            {"json": {"current_password": PASSWORD, "new_password": NEW_PASSWORD}},
+            200,
+            "admin",
+        ),
+    ),
+    (
+        "enrollment-token",
+        "get_password_hash",
+        lambda database: (
+            "/api/managed-machines/enrollment-tokens",
+            {"json": {"name": "agent", "expires_in_minutes": 60}},
+            201,
+            None,
+        ),
+    ),
+]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("held", "route"),
+    [(held, route) for _, held, route in ROUTES],
+    ids=[case for case, _, _ in ROUTES],
+)
+def test_the_loop_answers_while_a_password_is_checked_or_hashed(
+    test_client, database, admin, monkeypatch, held, route
+):
+    path, request_kwargs, expected_status, changed_user = route(database)
+    gate = Gate()
+    real = getattr(security, held)
+
+    def held_call(*args):
+        gate.hold()
+        return real(*args)
+
+    _patch_everywhere(monkeypatch, held, held_call)
+
+    outcomes: list = []
+
+    def send() -> None:
+        try:
+            response = test_client.post(path, headers=admin, **request_kwargs)
+            outcomes.append(response.status_code)
+        except Exception as exc:
+            outcomes.append(repr(exc))
+
+    with _held_request(gate, send):
+        health = test_client.get("/health")
+
+    assert health.status_code == 200
+    # The call was still held when /health came back: it did not need the
+    # call to end first.
+    assert gate.opened_in_time == [True]
+    assert outcomes == [expected_status]
+    if changed_user is not None:
+        with database() as db:
+            user = db.query(User).filter(User.username == changed_user).one()
+            assert security.verify_password(NEW_PASSWORD, user.password_hash)
+
+
+@pytest.mark.unit
+def test_a_password_check_does_not_wait_for_the_loops_default_threads(
+    test_client, database, admin
+):
+    """Code on the loop hands blocking work to asyncio's default threads as
+    well, database work among it that waits for a connection. A user
+    creation that waited for one of those threads while it holds its
+    connection could wait for a thread that is waiting for that connection."""
+    release = threading.Event()
+    released_in_time: list[bool] = []
+
+    def occupy_a_thread() -> None:
+        released_in_time.append(release.wait(HOLD_SECONDS))
+
+    async def occupy_every_default_thread():
+        loop = asyncio.get_running_loop()
+        return [loop.run_in_executor(None, occupy_a_thread) for _ in range(64)]
+
+    async def wait_for(futures):
+        await asyncio.gather(*futures)
+
+    futures = test_client.portal.call(occupy_every_default_thread)
+    try:
+        response = test_client.post(
+            "/api/auth/users",
+            headers=admin,
+            json={"username": "created", "password": NEW_PASSWORD},
+        )
+    finally:
+        release.set()
+        test_client.portal.call(wait_for, futures)
+
+    assert response.status_code == 200
+    assert released_in_time == [True] * 64
+
+
+@pytest.mark.unit
+def test_password_logins_take_turns_from_the_rate_limit_check_to_the_record(
+    test_client, database, admin, monkeypatch
+):
+    """On the loop, a login ran from its rate-limit check to the record of
+    its failure without a break, so a burst of guesses was cut off after
+    `max_attempts`. With the password check in a thread, the logins of a
+    burst would all pass the check first, and each would get its answer."""
+    max_attempts = 3
+    logins = 6
+    monkeypatch.setattr(settings, "auth_rate_limit_max_attempts", max_attempts)
+
+    lock = threading.Lock()
+    asked = [0]
+    all_asked = threading.Event()
+    real_turn = auth._password_login_turn
+
+    class CountedTurn:
+        """The login's turn, counting the logins that asked for one."""
+
+        def __init__(self) -> None:
+            self._turn = real_turn()
+
+        async def __aenter__(self):
+            with lock:
+                asked[0] += 1
+                if asked[0] == logins:
+                    all_asked.set()
+            await self._turn.acquire()
+
+        async def __aexit__(self, *exc_info):
+            self._turn.release()
+
+    monkeypatch.setattr(auth, "_password_login_turn", CountedTurn)
+
+    checks = {"calls": 0, "inside": 0, "most_at_once": 0}
+    all_asked_in_time: list[bool] = []
+    real_verify = security.verify_password
+
+    def counted_check(plain, hashed):
+        with lock:
+            checks["calls"] += 1
+            checks["inside"] += 1
+            checks["most_at_once"] = max(checks["most_at_once"], checks["inside"])
+            first = checks["calls"] == 1
+        try:
+            if first:
+                # Every other login is waiting for its turn by now, or, had
+                # they no turns to wait for, checking its password as well.
+                all_asked_in_time.append(all_asked.wait(HOLD_SECONDS))
+            return real_verify(plain, hashed)
+        finally:
+            with lock:
+                checks["inside"] -= 1
+
+    _patch_everywhere(monkeypatch, "verify_password", counted_check)
+
+    def guess(number: int):
+        response = test_client.post(
+            "/api/auth/login",
+            data={"username": "admin", "password": f"wrong-{number}"},
+        )
+        return response.status_code
+
+    with ThreadPoolExecutor(max_workers=logins) as pool:
+        codes = sorted(pool.map(guess, range(logins)))
+
+    assert all_asked_in_time == [True]
+    assert checks["most_at_once"] == 1
+    assert checks["calls"] == max_attempts
+    assert codes == [401] * (max_attempts - 1) + [429] * (logins - max_attempts + 1)
+    with database() as db:
+        buckets = db.query(AuthRateLimitBucket).all()
+        assert sorted(bucket.failure_count for bucket in buckets) == [max_attempts] * 2
+        assert all(bucket.locked_until is not None for bucket in buckets)
+        events = sorted(event.event_type for event in db.query(AuthEvent).all())
+        assert events == ["local_login_failed"] * (max_attempts - 1) + [
+            "local_login_rate_limited"
+        ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("path", "body", "refused_key"),
+    [
+        (
+            "/api/auth/users",
+            {"username": "twin", "password": NEW_PASSWORD},
+            "backend.errors.auth.usernameAlreadyRegistered",
+        ),
+        (
+            "/api/settings/users",
+            {"username": "twin", "password": NEW_PASSWORD, "email": None},
+            "backend.errors.settings.usernameAlreadyExists",
+        ),
+    ],
+    ids=["auth", "settings"],
+)
+def test_of_two_creations_of_one_username_one_is_refused(
+    test_client, database, admin, monkeypatch, path, body, refused_key
+):
+    """The password is hashed before the checks: the checks and the insert
+    then run on the loop without a break, as they did before. Hashed between
+    them, both requests would pass the check and one insert would fail."""
+    both_hashing = threading.Barrier(2, timeout=HOLD_SECONDS)
+    real_hash = security.get_password_hash
+
+    def meeting_hash(password):
+        both_hashing.wait()
+        return real_hash(password)
+
+    _patch_everywhere(monkeypatch, "get_password_hash", meeting_hash)
+
+    def create(_):
+        try:
+            return test_client.post(path, headers=admin, json=body)
+        except Exception as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(create, range(2)))
+
+    codes = sorted(str(getattr(r, "status_code", r)) for r in responses)
+    assert codes == ["200", "400"]
+    refused = next(r for r in responses if r.status_code == 400)
+    assert refused.json()["detail"]["key"] == refused_key
+    with database() as db:
+        assert db.query(User).filter(User.username == "twin").count() == 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "path",
+    ["/api/auth/change-password", "/api/settings/change-password"],
+    ids=["auth", "settings"],
+)
+def test_a_password_change_does_not_overwrite_a_reset_made_while_it_hashed(
+    test_client, database, admin, monkeypatch, path
+):
+    """The current password is checked, then the new one is hashed in a
+    thread. A reset that lands in between stays: the change is refused as if
+    the current password were wrong, which it now is."""
+    gate = Gate()
+    real_hash = security.get_password_hash
+
+    def held_hash(password):
+        if password == NEW_PASSWORD:
+            gate.hold()
+        return real_hash(password)
+
+    _patch_everywhere(monkeypatch, "get_password_hash", held_hash)
+    target = {"Authorization": f"Bearer {create_access_token({'sub': 'target'})}"}
+    outcomes: list = []
+
+    def change() -> None:
+        outcomes.append(
+            test_client.post(
+                path,
+                headers=target,
+                json={"current_password": PASSWORD, "new_password": NEW_PASSWORD},
+            )
+        )
+
+    with _held_request(gate, change):
+        reset = test_client.post(
+            f"/api/settings/users/{_target_id(database)}/reset-password",
+            headers=admin,
+            json={"new_password": RESET_PASSWORD},
+        )
+
+    assert reset.status_code == 200
+    assert gate.opened_in_time == [True]
+    assert [response.status_code for response in outcomes] == [400]
+    assert (
+        outcomes[0].json()["detail"]["key"]
+        == "backend.errors.auth.currentPasswordIncorrect"
+    )
+    with database() as db:
+        stored = db.query(User).filter(User.username == "target").one()
+        assert security.verify_password(RESET_PASSWORD, stored.password_hash)
+
+
+def _setup_and_enable_totp(test_client, admin) -> tuple[str, list[str]]:
+    setup = test_client.post(
+        "/api/auth/totp/setup", headers=admin, json={"current_password": PASSWORD}
+    )
+    assert setup.status_code == 200
+    secret = setup.json()["secret"]
+    enable = test_client.post(
+        "/api/auth/totp/enable",
+        headers=admin,
+        json={
+            "setup_token": setup.json()["setup_token"],
+            "code": _hotp(secret, int(time.time()) // 30),
+        },
+    )
+    assert enable.status_code == 200
+    return secret, setup.json()["recovery_codes"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("code", ["totp", "recovery"])
+def test_disabling_totp_leaves_a_factor_set_up_while_the_password_was_checked(
+    test_client, database, admin, monkeypatch, code
+):
+    """The disable request checks its code against the factor it read before
+    the password check. A factor that replaced it meanwhile stays, with its
+    recovery codes."""
+    old_secret = _enable_totp(database)
+    gate = Gate()
+    real_verify = security.verify_password
+
+    def held_check(plain, hashed):
+        gate.hold()
+        return real_verify(plain, hashed)
+
+    _patch_everywhere(monkeypatch, "verify_password", held_check)
+    outcomes: list = []
+
+    def disable() -> None:
+        outcomes.append(
+            test_client.post(
+                "/api/auth/totp/disable",
+                headers=admin,
+                json={
+                    "current_password": PASSWORD,
+                    "code": (
+                        RECOVERY_CODE
+                        if code == "recovery"
+                        else _hotp(old_secret, int(time.time()) // 30)
+                    ),
+                },
+            )
+        )
+
+    with _held_request(gate, disable):
+        new_secret, new_codes = _setup_and_enable_totp(test_client, admin)
+
+    assert gate.opened_in_time == [True]
+    assert [response.status_code for response in outcomes] == [400]
+    with database() as db:
+        user = db.query(User).filter(User.username == "admin").one()
+        assert user.totp_enabled is True
+        assert security.decrypt_secret(user.totp_secret_encrypted) == new_secret
+        assert sorted(json.loads(user.totp_recovery_codes_hashes)) == sorted(
+            hash_recovery_code(new_code) for new_code in new_codes
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("change", ["recovery-code-used", "password-changed"])
+def test_disabling_totp_is_refused_when_what_it_checked_changed_meanwhile(
+    test_client, database, admin, monkeypatch, fixture_password_hashes, change
+):
+    """A recovery code used up by a TOTP login, or a password changed, while
+    the disable request checked the password: the factor stays."""
+    _enable_totp(database)
+    gate = Gate()
+    real_verify = security.verify_password
+
+    def held_check(plain, hashed):
+        gate.hold()
+        return real_verify(plain, hashed)
+
+    _patch_everywhere(monkeypatch, "verify_password", held_check)
+    outcomes: list = []
+
+    def disable() -> None:
+        outcomes.append(
+            test_client.post(
+                "/api/auth/totp/disable",
+                headers=admin,
+                json={"current_password": PASSWORD, "code": RECOVERY_CODE},
+            )
+        )
+
+    with _held_request(gate, disable):
+        with database() as db:
+            user = db.query(User).filter(User.username == "admin").one()
+            if change == "recovery-code-used":
+                user.totp_recovery_codes_hashes = json.dumps([])
+            else:
+                user.password_hash = fixture_password_hashes["operator123"]
+            db.commit()
+
+    assert gate.opened_in_time == [True]
+    assert [response.status_code for response in outcomes] == [400]
+    with database() as db:
+        user = db.query(User).filter(User.username == "admin").one()
+        assert user.totp_enabled is True
+        assert user.totp_secret_encrypted is not None
+
+
+@pytest.mark.unit
+def test_disabling_totp_with_a_recovery_code_clears_every_code(
+    test_client, database, admin
+):
+    _enable_totp(database)
+    response = test_client.post(
+        "/api/auth/totp/disable",
+        headers=admin,
+        json={"current_password": PASSWORD, "code": RECOVERY_CODE},
+    )
+    assert response.status_code == 200
+    with database() as db:
+        user = db.query(User).filter(User.username == "admin").one()
+        assert user.totp_enabled is False
+        assert user.totp_secret_encrypted is None
+        assert user.totp_recovery_codes_hashes is None
+
+
+@pytest.mark.unit
+def test_a_login_asks_for_a_second_factor_enabled_while_its_password_was_checked(
+    test_client, database, admin, monkeypatch
+):
+    """On the loop, a login read the user and issued its token without a
+    break. Its password check now runs in a thread: the user is read again
+    after it, so a factor enabled meanwhile is asked for."""
+    gate = Gate()
+    real_verify = security.verify_password
+
+    def held_check(plain, hashed):
+        gate.hold()
+        return real_verify(plain, hashed)
+
+    _patch_everywhere(monkeypatch, "verify_password", held_check)
+    outcomes: list = []
+
+    def log_in() -> None:
+        outcomes.append(
+            test_client.post(
+                "/api/auth/login", data={"username": "admin", "password": PASSWORD}
+            )
+        )
+
+    with _held_request(gate, log_in):
+        _setup_and_enable_totp(test_client, admin)
+
+    assert gate.opened_in_time == [True]
+    assert [response.status_code for response in outcomes] == [200]
+    body = outcomes[0].json()
+    assert body["totp_required"] is True
+    assert not body.get("access_token")
+
+
+@pytest.mark.unit
+def test_a_login_fails_when_the_password_changed_while_it_was_checked(
+    test_client, database, admin, monkeypatch, fixture_password_hashes
+):
+    gate = Gate()
+    real_verify = security.verify_password
+
+    def held_check(plain, hashed):
+        gate.hold()
+        return real_verify(plain, hashed)
+
+    _patch_everywhere(monkeypatch, "verify_password", held_check)
+    outcomes: list = []
+
+    def log_in() -> None:
+        outcomes.append(
+            test_client.post(
+                "/api/auth/login", data={"username": "admin", "password": PASSWORD}
+            )
+        )
+
+    with _held_request(gate, log_in):
+        with database() as db:
+            user = db.query(User).filter(User.username == "admin").one()
+            user.password_hash = fixture_password_hashes["operator123"]
+            db.commit()
+
+    assert gate.opened_in_time == [True]
+    assert [response.status_code for response in outcomes] == [401]
+
+
+@pytest.mark.unit
+def test_a_login_fails_when_the_user_was_deleted_while_it_was_checked(
+    test_client, database, admin, monkeypatch
+):
+    gate = Gate()
+    real_verify = security.verify_password
+
+    def held_check(plain, hashed):
+        gate.hold()
+        return real_verify(plain, hashed)
+
+    _patch_everywhere(monkeypatch, "verify_password", held_check)
+    outcomes: list = []
+
+    def log_in() -> None:
+        outcomes.append(
+            test_client.post(
+                "/api/auth/login", data={"username": "target", "password": PASSWORD}
+            )
+        )
+
+    with _held_request(gate, log_in):
+        with database() as db:
+            db.delete(db.query(User).filter(User.username == "target").one())
+            db.commit()
+
+    assert gate.opened_in_time == [True]
+    assert [response.status_code for response in outcomes] == [401]
+
+
+@pytest.mark.unit
+async def test_a_cancelled_login_keeps_its_turn_until_its_thread_is_done(
+    test_db, fixture_password_hashes, monkeypatch
+):
+    """Cancelled while its thread checks the password, a login must not let
+    the next one start: the two would overlap from the rate-limit check to
+    the record, and the request's session would close under the thread."""
+    from fastapi.security import OAuth2PasswordRequestForm
+    from starlette.requests import Request
+
+    test_db.add(
+        User(
+            username="admin",
+            password_hash=fixture_password_hashes[PASSWORD],
+            is_active=True,
+            role="admin",
+        )
+    )
+    test_db.commit()
+    gate = Gate()
+    real_verify = security.verify_password
+
+    def held_check(plain, hashed):
+        gate.hold()
+        return real_verify(plain, hashed)
+
+    _patch_everywhere(monkeypatch, "verify_password", held_check)
+    request = Request(
+        {"type": "http", "headers": [], "client": ("192.0.2.1", 1234), "state": {}}
+    )
+    form = OAuth2PasswordRequestForm(username="admin", password=PASSWORD)
+    login = asyncio.create_task(auth.login(request, form, test_db))
+    reached = await asyncio.to_thread(gate.reached.wait, HOLD_SECONDS)
+    assert reached, "the login never checked its password"
+
+    login.cancel()
+    for _ in range(10):
+        await asyncio.sleep(0)
+    held_after_cancel = auth._password_login_turn().locked()
+    gate.open()
+    with pytest.raises(asyncio.CancelledError):
+        await login
+
+    assert held_after_cancel
+    assert gate.opened_in_time == [True]
+    assert not auth._password_login_turn().locked()
+
+
+@pytest.mark.unit
+def test_an_enrollment_token_is_stored_with_a_hash_of_itself(
+    test_client, database, admin
+):
+    response = test_client.post(
+        "/api/managed-machines/enrollment-tokens",
+        headers=admin,
+        json={"name": "agent", "expires_in_minutes": 60},
+    )
+    assert response.status_code == 201
+    with database() as db:
+        stored = db.get(AgentEnrollmentToken, response.json()["id"])
+        assert security.verify_password(response.json()["token"], stored.token_hash)

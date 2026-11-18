@@ -1,3 +1,5 @@
+import asyncio
+import concurrent.futures
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 import jwt
@@ -84,6 +86,32 @@ def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool
 def get_password_hash(password: str) -> str:
     """Hash a password"""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+# A bcrypt comparison or hash takes about 175 ms at the default cost, longer on
+# small boards; on the event loop, no other request of the process moves
+# meanwhile. These threads wait for nothing but the CPU, so a request that
+# waits for one while it holds a database connection never waits on a thread
+# that is itself waiting for a connection.
+_PASSWORD_THREADS = concurrent.futures.ThreadPoolExecutor(
+    thread_name_prefix="password-hash"
+)
+
+
+async def verify_password_off_loop(
+    plain_password: str, hashed_password: Optional[str]
+) -> bool:
+    """`verify_password` for code on the event loop."""
+    return await asyncio.get_running_loop().run_in_executor(
+        _PASSWORD_THREADS, verify_password, plain_password, hashed_password
+    )
+
+
+async def get_password_hash_off_loop(password: str) -> str:
+    """`get_password_hash` for code on the event loop."""
+    return await asyncio.get_running_loop().run_in_executor(
+        _PASSWORD_THREADS, get_password_hash, password
+    )
 
 
 # bcrypt hashes at most 72 bytes of input; bcrypt 5 raises ValueError on longer
@@ -853,14 +881,19 @@ def require_repository_access_by_path(
     return repo
 
 
-async def authenticate_user(
-    db: Session, username: str, password: str
-) -> Optional[User]:
-    """Authenticate a user with username and password"""
+def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+    """Authenticate a user with username and password. Blocking: the bcrypt
+    comparison takes about 175 ms. The user is read again after it, so that
+    the caller sees what was committed meanwhile (an enabled second factor);
+    a password changed meanwhile fails the login."""
     user = db.query(User).filter(User.username == username).first()
     if not user:
         return None
-    if not verify_password(password, user.password_hash):
+    checked_hash = user.password_hash
+    if not verify_password(password, checked_hash):
+        return None
+    user = db.query(User).filter(User.id == user.id).populate_existing().one_or_none()
+    if user is None or user.password_hash != checked_hash:
         return None
     return user
 
@@ -936,13 +969,16 @@ async def create_first_user():
 
 
 def create_user(
-    db: Session, username: str, password: str, email: str = None, role: str = "viewer"
+    db: Session,
+    username: str,
+    password_hash: str,
+    email: str = None,
+    role: str = "viewer",
 ) -> User:
-    """Create a new user"""
-    hashed_password = get_password_hash(password)
+    """Create a new user with a password hashed by the caller"""
     user = User(
         username=username,
-        password_hash=hashed_password,
+        password_hash=password_hash,
         email=email,
         role=role,
     )
@@ -952,15 +988,28 @@ def create_user(
     return user
 
 
-def update_user_password(db: Session, user_id: int, new_password: str) -> bool:
-    """Update a user's password"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return False
-
-    user.password_hash = get_password_hash(new_password)
+def update_user_password(
+    db: Session,
+    user_id: int,
+    checked_password_hash: str,
+    new_password_hash: str,
+    **columns,
+) -> bool:
+    """Replace a user's password hash, made by the caller, and set `columns`
+    in the same write, but only while the stored hash is still
+    `checked_password_hash`, the one the caller checked the current password
+    against. A password set meanwhile, such as an administrator's reset, is
+    not overwritten. False when nothing was replaced."""
+    replaced = (
+        db.query(User)
+        .filter(User.id == user_id, User.password_hash == checked_password_hash)
+        .update(
+            {"password_hash": new_password_hash, **columns},
+            synchronize_session=False,
+        )
+    )
     db.commit()
-    return True
+    return replaced == 1
 
 
 # Secret encryption/decryption utilities
