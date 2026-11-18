@@ -919,6 +919,49 @@ async def test_hydrate_replaces_the_directory_the_kernel_resolves(db_session, tm
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_hydrate_does_not_swap_when_a_parent_symlink_moved(db_session, tmp_path):
+    # The stored path leads elsewhere by the time the download ends; the
+    # directory resolved at the start must not be replaced.
+    (tmp_path / "a" / "repo").mkdir(parents=True)
+    (tmp_path / "a" / "repo" / "old").write_text("old copy")
+    (tmp_path / "b").mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(tmp_path / "a")
+
+    class RetargetingRcloneService(_RecordingRcloneService):
+        async def sync(self, source, destination, **kwargs):
+            link.unlink()
+            link.symlink_to(tmp_path / "b")
+            return await super().sync(source, destination, **kwargs)
+
+    stored = str(link / "repo")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=stored, encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=stored,
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=RetargetingRcloneService()
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "failed"
+    assert "no longer leads" in storage.last_sync_error
+    assert (tmp_path / "a" / "repo" / "old").read_text() == "old copy"
+    assert list((tmp_path / "a").glob(".hydrate-*")) == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 @pytest.mark.parametrize("through", ["file", "missing"])
 async def test_hydrate_refuses_a_path_the_kernel_cannot_traverse(
     db_session, tmp_path, through

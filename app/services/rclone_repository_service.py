@@ -589,19 +589,7 @@ class RcloneRepositoryService:
             # whatever symlinks or ".." the stored path holds. The parents are
             # resolved; the last component is not, so a symlink there is seen
             # and refused rather than followed.
-            stored = storage.cache_path.rstrip("/") or "/"
-            stored_parent = os.path.dirname(stored)
-            # realpath collapses "x/.." lexically; ask the kernel, which
-            # refuses it when x is a file (ENOTDIR). A missing parent is fine
-            # (it is created below) unless ".." passes through it.
-            try:
-                os.stat(stored_parent)
-            except FileNotFoundError:
-                if ".." in Path(stored_parent).parts:
-                    raise
-            local_path = os.path.join(
-                os.path.realpath(stored_parent), os.path.basename(stored)
-            )
+            local_path = _resolve_hydrate_target(storage.cache_path)
             _require_replaceable_directory(local_path)
             parent = Path(local_path).parent
             parent.mkdir(parents=True, exist_ok=True)
@@ -629,7 +617,14 @@ class RcloneRepositoryService:
         log_text = _sync_result_log_text(result)
         if result.success:
             try:
-                # Re-checked: the download can take hours.
+                # Re-checked: the download can take hours, and a parent
+                # symlink may now point elsewhere. Narrows the race, does not
+                # close it.
+                if _resolve_hydrate_target(storage.cache_path) != local_path:
+                    raise OSError(
+                        f"{storage.cache_path} no longer leads to {local_path}; "
+                        "the restored copy was not swapped in."
+                    )
                 _require_replaceable_directory(local_path)
                 if os.path.lexists(
                     local_path
@@ -658,6 +653,22 @@ class RcloneRepositoryService:
         hydrate_job.log_text = log_text or hydrate_job.error_text
         db.commit()
         return self.serialize_status(repository, storage, remote)
+
+
+def _resolve_hydrate_target(cache_path: str) -> str:
+    """The directory a hydrate replaces: parents resolved, last component not,
+    so a symlink there is seen and refused rather than followed."""
+    stored = cache_path.rstrip("/") or "/"
+    stored_parent = os.path.dirname(stored)
+    # realpath collapses "x/.." lexically; ask the kernel, which refuses it
+    # when x is a file (ENOTDIR). A missing parent is fine (it is created)
+    # unless ".." passes through it.
+    try:
+        os.stat(stored_parent)
+    except FileNotFoundError:
+        if ".." in Path(stored_parent).parts:
+            raise
+    return os.path.join(os.path.realpath(stored_parent), os.path.basename(stored))
 
 
 def _require_replaceable_directory(path: str) -> None:
