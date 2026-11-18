@@ -115,9 +115,12 @@ describe('GitHub Pages visual regression workflow', () => {
     const captureWorkflow = await readText('.github/workflows/visual-snapshot-capture.yml')
     const step = captureWorkflow.split('- name: Require every shard\n        run: |\n')[1]
     expect(step, 'Require every shard step not found').toBeDefined()
-    const script = step
-      .split('\n\n')[0]
-      .split('\n')
+    // The run block is every line indented past `run: |`; blank lines inside
+    // it belong to the script too.
+    const lines = step.split('\n')
+    const end = lines.findIndex((line) => line.trim() && !line.startsWith(' '.repeat(10)))
+    const script = lines
+      .slice(0, end === -1 ? lines.length : end)
       .map((line) => line.replace(/^ {10}/, ''))
       .join('\n')
 
