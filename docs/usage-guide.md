@@ -415,7 +415,8 @@ If another plan or schedule on the same repository produces names that also
 match, the prune is skipped and the run reports which one, so give them
 different archive name templates. The same happens when another plan's
 template uses a placeholder Borg fills in, such as `{hostname}`, since its
-names cannot be told apart in advance. A managed agent needs a version that supports
+names cannot be told apart in advance. On Borg 2 the plan's own template
+must not use such a placeholder either. A managed agent needs a version that supports
 this option; an older agent fails the prune instead of pruning everything.
 
 Prune from the repository's own maintenance actions always covers the whole

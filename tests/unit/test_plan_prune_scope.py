@@ -181,3 +181,9 @@ def test_refuses_when_a_sibling_name_has_a_borg_placeholder(db, version):
     _plan(db, repo, "laptop", template="{hostname}-{now}")
     with pytest.raises(PruneScopeError, match="laptop"):
         plan_prune_match(db, plan, repo)
+
+
+@pytest.mark.unit
+def test_a_marker_character_in_a_name_is_refused():
+    with pytest.raises(PruneScopeError):
+        plan_archive_glob("{plan_name}-{now}", job_name="a\ue001b", repo_name="r")

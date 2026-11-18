@@ -99,6 +99,13 @@ def plan_archive_glob(
     characters in the literal text are escaped as one-character classes
     (`[[]`, `[*]`, `[?]`), so they match only themselves.
     """
+    # A name carrying a marker character itself would turn into a wildcard.
+    for text in (template, job_name, repo_name):
+        if text and (_DIGITS_MARK in text or _ANY_MARK in text):
+            raise PruneScopeError(
+                "Prune limited to this plan was not run: the archive name "
+                "holds a reserved character."
+            )
     marked = (
         TIME_PLACEHOLDER_PATTERN.sub(
             lambda m: _ANY_MARK if ":" in m.group(0) else _DIGITS_MARK, template
