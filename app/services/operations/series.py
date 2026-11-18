@@ -97,6 +97,14 @@ def _archive_tokens(
                 "Prune limited to this plan was not run: the archive name "
                 "holds a reserved character."
             )
+    for text in (job_name, repo_name):
+        if text and ("{" in text or "}" in text):
+            # The template renders names first, so `{utcnow}` in a plan name
+            # would expand to a fixed time instead of a wildcard.
+            raise PruneScopeError(
+                "Prune limited to this plan was not run: a plan, schedule or "
+                "repository name holds a brace."
+            )
     if template and ("{{" in template or "}}" in template):
         # Borg reads `{{` as a literal brace; a glob cannot keep it apart
         # from a placeholder.
@@ -181,7 +189,12 @@ def plan_archive_glob(
 
 def _schedules_for(db: Session, repository: Repository) -> list[ScheduledJob]:
     # A legacy schedule names its repository by path only; dispatch resolves
-    # it by `Repository.path`, so it targets this repository too.
+    # it by `Repository.path`, unless it has links, which win.
+    has_links = (
+        db.query(ScheduledJobRepository.id)
+        .filter(ScheduledJobRepository.scheduled_job_id == ScheduledJob.id)
+        .exists()
+    )
     direct = (
         db.query(ScheduledJob)
         .filter(
@@ -189,6 +202,7 @@ def _schedules_for(db: Session, repository: Repository) -> list[ScheduledJob]:
             | (
                 ScheduledJob.repository_id.is_(None)
                 & (ScheduledJob.repository == repository.path)
+                & ~has_links
             )
         )
         .all()
@@ -318,7 +332,17 @@ def plan_prune_match(db: Session, plan: BackupPlan, repository: Repository) -> s
             job_name=source.name,
             repo_name=repository.name,
         )
-        if _may_overlap(own, theirs):
+        # Borg 1 checkpoints (`<name>.checkpoint`, `.checkpoint.N`) match
+        # the plan's glob too.
+        checkpoint = list(".checkpoint")
+        # ponytail: checkpoint ordinals up to 999; a token for "digits" would
+        # cover more, add it if a run ever writes a thousand checkpoints.
+        variants = (
+            theirs,
+            theirs + checkpoint,
+            *(theirs + checkpoint + ["."] + [_DIGIT] * n for n in (1, 2, 3)),
+        )
+        if any(_may_overlap(own, variant) for variant in variants):
             raise PruneScopeError(
                 f"Prune limited to this plan was not run: archives of {kind} "
                 f"'{source.name}' may also match '{result}'. Use archive name "

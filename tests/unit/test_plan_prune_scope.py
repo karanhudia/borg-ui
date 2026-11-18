@@ -249,3 +249,47 @@ def test_a_legacy_path_only_schedule_counts_as_a_sibling(db):
     db.commit()
     with pytest.raises(PruneScopeError, match="old"):
         plan_prune_match(db, plan, repo)
+
+
+@pytest.mark.unit
+def test_refuses_when_a_sibling_checkpoint_would_match(db):
+    """`db-[0-9]*point` matches `db-<time>-weekly.checkpoint`."""
+    repo = _repo(db)
+    plan = _plan(db, repo, "a", template="db-{now}point")
+    _plan(db, repo, "b", template="db-{now}-weekly")
+    with pytest.raises(PruneScopeError, match="'b'"):
+        plan_prune_match(db, plan, repo)
+
+
+@pytest.mark.unit
+def test_refuses_a_name_with_a_brace():
+    with pytest.raises(PruneScopeError, match="brace"):
+        plan_archive_glob("{plan_name}-{now}", job_name="x{utcnow}", repo_name="r")
+
+
+@pytest.mark.unit
+def test_a_path_schedule_with_links_elsewhere_is_not_a_sibling(db):
+    from app.database.models import ScheduledJobRepository
+
+    repo = _repo(db)
+    other = Repository(
+        name="other", path="/tmp/other", encryption="none", compression="lz4"
+    )
+    db.add(other)
+    db.commit()
+    plan = _plan(db, repo, "nas", template="photos-{now}")
+    job = ScheduledJob(
+        name="old",
+        cron_expression="0 2 * * *",
+        repository=repo.path,
+        archive_name_template="photos-{now}",
+    )
+    db.add(job)
+    db.commit()
+    db.add(
+        ScheduledJobRepository(
+            scheduled_job_id=job.id, repository_id=other.id, execution_order=0
+        )
+    )
+    db.commit()
+    assert plan_prune_match(db, plan, repo) == "photos-[0-9]*"
