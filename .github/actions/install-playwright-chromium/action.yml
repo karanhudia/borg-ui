@@ -33,7 +33,7 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/playwright-debs
-        key: playwright-debs-${{ steps.versions.outputs.image }}-${{ steps.versions.outputs.playwright }}-v1
+        key: playwright-debs-${{ steps.versions.outputs.image }}-${{ steps.versions.outputs.playwright }}-v2
 
     - name: Install Chromium and system packages
       shell: bash
@@ -47,6 +47,11 @@ runs:
           npx playwright install chromium
           exit 0
         fi
+        # Cache only what this install downloaded: a job may have fetched
+        # other packages (E2E installs borgbackup) under the same key.
+        archives=/var/cache/apt/archives
+        find "$archives" -maxdepth 1 -name '*.deb' | sort > /tmp/debs-before
         npx playwright install --with-deps chromium
         mkdir -p ~/playwright-debs
-        find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t ~/playwright-debs {} +
+        find "$archives" -maxdepth 1 -name '*.deb' | sort | comm -13 /tmp/debs-before - \
+          | xargs -r cp -t ~/playwright-debs
