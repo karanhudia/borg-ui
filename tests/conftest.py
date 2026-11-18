@@ -54,16 +54,22 @@ os.environ["BORG_SECURITY_DIR"] = _borg_security_dir
 os.environ["BORG_KEYS_DIR"] = _borg_keys_dir
 
 
-def _give_xdist_worker_its_own_postgres_database():
-    """Point each pytest-xdist worker at a database of its own.
+def _give_xdist_worker_its_own_databases():
+    """Point each pytest-xdist worker at Redis and Postgres databases of its own.
 
-    Postgres tests reset the public schema of BORG_TEST_POSTGRES_URL, so two
-    workers on one database would drop each other's tables mid-test. Test
-    modules read the variable at import, which happens after this runs.
+    Postgres tests reset the public schema of BORG_TEST_POSTGRES_URL and the
+    cache's clear() flushes its Redis database, so workers sharing either
+    would wipe each other's state mid-test. Settings and test modules read
+    these variables at import, which happens after this runs.
     """
-    url = os.environ.get("BORG_TEST_POSTGRES_URL")
     worker = os.environ.get("PYTEST_XDIST_WORKER")
-    if not url or not worker:
+    if not worker:
+        return
+    # ponytail: Redis has 16 databases; past 16 workers two would share one.
+    os.environ["REDIS_DB"] = str(int(worker.removeprefix("gw")) % 16)
+
+    url = os.environ.get("BORG_TEST_POSTGRES_URL")
+    if not url:
         return
 
     from sqlalchemy import create_engine, text
@@ -83,7 +89,7 @@ def _give_xdist_worker_its_own_postgres_database():
     )
 
 
-_give_xdist_worker_its_own_postgres_database()
+_give_xdist_worker_its_own_databases()
 
 # Add parent directory to path so we can import from app/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

@@ -396,7 +396,7 @@ jobs:
       - name: Run migration upgrade path tests
         run: |
           mapfile -t PYTEST_FILES < .pytest-migration-shard.txt
-          pytest "${PYTEST_FILES[@]}" -v -n 4 --dist loadfile --durations=50 --junitxml=test-results/migrations-${{ matrix.shard }}.xml
+          pytest "${PYTEST_FILES[@]}" -v -n 4 --dist worksteal --durations=50 --junitxml=test-results/migrations-${{ matrix.shard }}.xml
         env:
           BORG_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/borg_test
           BORG_TEST_REQUIRE_RELEASE_TAGS: "1"
@@ -460,7 +460,7 @@ jobs:
       - name: Run backend integration suite
         run: |
           chown -R borg:borg . /tmp/borg-ui-tests
-          gosu borg pytest tests/integration -v --durations=50 --junitxml=test-results/integration.xml
+          gosu borg pytest tests/integration -v -n 4 --dist worksteal --durations=50 --junitxml=test-results/integration.xml
         env:
           REDIS_HOST: redis
           REDIS_PORT: 6379
