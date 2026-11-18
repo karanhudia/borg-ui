@@ -275,3 +275,62 @@ def test_real_collected_suite_is_partitioned_by_whole_files_once(suite, shard_to
                 dialect_nodes = [node for node in nodes if dialect in node]
                 assert dialect_nodes, f"migration inventory lost {dialect} coverage"
                 assert set(dialect_nodes).issubset(recollected)
+
+
+def test_static_weights_balance_migration_files_without_reading_counts():
+    """Checked-in seconds split heavy files apart; counts never move a file."""
+    module = load_shard_module()
+    weights = {"tests/a.py": 190.0, "tests/b.py": 180.0, "tests/c.py": 150.0}
+    before = {"tests/a.py": 4, "tests/b.py": 40, "tests/c.py": 9, "tests/new.py": 1}
+    after = {**before, "tests/b.py": 52, "tests/new.py": 30}
+    for counts in (before, after, dict(reversed(list(after.items())))):
+        shards = [
+            module.select_shard(
+                counts,
+                shard_index=index,
+                shard_total=2,
+                durations=weights,
+                balance_by="weights",
+            )
+            for index in (1, 2)
+        ]
+        # new.py weighs the known mean (173.3s) whatever its count, so it
+        # joins b (180s) while a (190s) takes c (150s).
+        assert [sorted(shard) for shard in shards] == [
+            ["tests/a.py", "tests/c.py"],
+            ["tests/b.py", "tests/new.py"],
+        ]
+
+
+def test_static_weights_cli_requires_a_usable_weights_file(tmp_path):
+    command = [
+        sys.executable,
+        str(SCRIPT_PATH),
+        "--shard-index",
+        "1",
+        "--shard-total",
+        "2",
+        "--balance-by",
+        "weights",
+        "--durations-file",
+        str(tmp_path / "missing.json"),
+    ]
+    result = subprocess.run(
+        command, input="tests/a.py::one\n", text=True, capture_output=True
+    )
+    assert result.returncode == 2
+    assert "weights" in result.stderr
+
+
+def test_migration_weights_name_exactly_the_migration_test_files():
+    """A new migration test file needs a measured weight from its CI run."""
+    import json
+
+    root = SCRIPT_PATH.parents[2]
+    weights = json.loads((root / "scripts/ci/migration-weights.json").read_text())
+    files = {
+        path.relative_to(root).as_posix()
+        for path in (root / "tests/migrations").glob("test_*.py")
+    }
+    assert set(weights) == files
+    assert all(isinstance(s, int) and s > 0 for s in weights.values())

@@ -15,6 +15,7 @@ BACKEND_JOBS = {
 ALWAYS_JOBS = {
     "typecheck-lint-format",
     "frontend-vitest",
+    "frontend-vitest-coverage",
     "frontend-build",
     "smoke-borg-core",
     "smoke-borg-extended",
