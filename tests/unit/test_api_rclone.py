@@ -1454,6 +1454,8 @@ def test_stale_rclone_oauth_link_is_409_not_502(
         "task": None,
     }
 
+    requests = []
+
     class RefusingClient:
         def __init__(self, *args, **kwargs):
             pass
@@ -1465,6 +1467,7 @@ def test_stale_rclone_oauth_link_is_409_not_502(
             return False
 
         async def get(self, url):
+            requests.append(url)
             raise httpx.ConnectError("All connection attempts failed")
 
     monkeypatch.setattr(rclone_api.httpx, "AsyncClient", RefusingClient)
@@ -1478,6 +1481,8 @@ def test_stale_rclone_oauth_link_is_409_not_502(
     assert (
         response.json()["detail"]["key"] == "backend.errors.rclone.oauthLinkUnavailable"
     )
+    # An ended run is refused before any request to its loopback server.
+    assert len(requests) == (1 if session_status == "awaiting_callback" else 0)
     rclone_api.RCLONE_OAUTH_SESSIONS.clear()
 
 
