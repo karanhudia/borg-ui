@@ -35,6 +35,8 @@ vi.mock('../../services/api', async (importOriginal) => {
 const ok = <T,>(data: T) => ({ data }) as never
 
 beforeEach(() => {
+  vi.mocked(mcpAPI.getConfig).mockReset()
+  vi.mocked(mcpAPI.list).mockReset()
   plan.can = () => true
   auth.user = { role: 'admin' }
   vi.mocked(mcpAPI.getConfig).mockResolvedValue(ok(mcpConfig))
@@ -49,6 +51,25 @@ describe('McpTab', () => {
       (await screen.findAllByText('This feature requires the Pro plan.')).length
     ).toBeGreaterThan(0)
     expect(mcpAPI.list).not.toHaveBeenCalled()
+  })
+
+  it('offers a retry when the connections fail to load', async () => {
+    vi.mocked(mcpAPI.list)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(ok(connections))
+    renderWithProviders(<McpTab />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Claude on my laptop')).toBeInTheDocument()
+    expect(screen.queryByText('No MCP connections yet')).not.toBeInTheDocument()
+  })
+
+  it('offers a retry when the settings fail to load', async () => {
+    vi.mocked(mcpAPI.getConfig)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(ok(mcpConfig))
+    renderWithProviders(<McpTab />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Claude on my laptop')).toBeInTheDocument()
   })
 
   it('turned off disables create but keeps revoke', async () => {

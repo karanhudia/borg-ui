@@ -116,6 +116,9 @@ vi.mock('../../components/UsersTab', () => ({
 vi.mock('../Scripts', () => ({
   default: () => <div>Scripts Page</div>,
 }))
+vi.mock('../../components/McpTab', () => ({
+  default: () => <div>MCP Tab</div>,
+}))
 vi.mock('../Activity', () => ({
   default: () => <div>Activity Page</div>,
 }))
@@ -159,6 +162,31 @@ describe('Settings permission routing', () => {
       </ThemeProvider>
     )
     expect(await screen.findByText('Background Work Tab')).toBeInTheDocument()
+  })
+
+  it('stays on the routed tab when an earlier tab appears after the first render', async () => {
+    currentTab.value = 'mcp'
+
+    const { rerender } = renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+    expect(await screen.findByText('MCP Tab')).toBeInTheDocument()
+
+    // Notifications sits before MCP in the tab order.
+    authState.user = { ...authState.user, global_permissions: ['settings.notifications.manage'] }
+    rerender(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    expect(screen.getByText('MCP Tab')).toBeInTheDocument()
+    expect(trackSettings).not.toHaveBeenCalledWith(
+      'View',
+      expect.objectContaining({ tab: 'notifications' })
+    )
   })
 
   it('does not render the notifications tab for a user without the notifications permission', async () => {

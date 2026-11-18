@@ -82,7 +82,10 @@ claude mcp add --transport http borg-ui https://your-borg-ui/mcp --header "Autho
 }
 ```
 
-**VS Code**, in `.mcp.json` at the workspace root:
+**VS Code**, in your own `~/.copilot/mcp-config.json`. Do not put a live token
+in the workspace `.mcp.json`: that file is meant to be committed, and a token
+committed to Git stays in its history until you revoke the connection. See the
+VS Code docs on authentication and secrets in MCP configuration.
 
 ```json
 {
@@ -122,13 +125,17 @@ not flood the conversation.
 
 ## Activity
 
-Each connection's row has an **Activity** button. It lists every tool call with
-its outcome, its target (such as "repository Photos"), how long it took and
-when. The arguments the AI sent are never stored. Activity is kept for 30 days
+Each connection's row has an **Activity** button. It lists each tool call that
+runs, or is refused for an unknown tool or an access level the connection
+lacks, with its outcome, its target (such as "repository Photos"), how long it
+took and when. Calls refused because the plan does not include MCP or MCP is
+turned off, calls over the per-minute limit, and calls with invalid arguments
+are not listed. The arguments the AI sent are never stored. Activity is kept for 30 days
 or 20,000 rows, whichever comes first, and survives revoking the connection.
 
 The list also shows the client each connection last used, such as
-`claude-code 2.1.0`, and how many calls it made today.
+`claude-code 2.1.0`, and how many calls it made today. "Today" is the UTC
+day, so the count resets at midnight UTC.
 
 ## Admin controls
 

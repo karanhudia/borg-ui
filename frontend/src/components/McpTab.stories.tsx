@@ -30,3 +30,6 @@ export const Viewer: Story = {
 export const Community: Story = {
   render: () => render({ config: mcpConfig, connections, plan: 'community' }),
 }
+export const LoadFailed: Story = {
+  render: () => render({ config: mcpConfig, connections, listFails: true }),
+}

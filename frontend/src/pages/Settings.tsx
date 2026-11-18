@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { Box } from '@mui/material'
@@ -102,26 +102,10 @@ const Settings: React.FC = () => {
 
   const tabOrder = React.useMemo(() => getTabOrder(), [getTabOrder])
 
-  // Determine active tab from URL or default to 'account'
-  const getTabIndexFromPath = React.useCallback(
-    (tabPath?: string): number => {
-      if (!tabPath) return 0
-      const index = tabOrder.indexOf(tabPath)
-      return index >= 0 ? index : 0
-    },
-    [tabOrder]
-  )
-
-  const [activeTab, setActiveTab] = useState(() => getTabIndexFromPath(tab))
-
-  const currentTabId = React.useMemo(() => {
-    return tabOrder[activeTab] ?? tabOrder[0]
-  }, [activeTab, tabOrder])
-
-  // Update active tab when URL changes
-  useEffect(() => {
-    setActiveTab(getTabIndexFromPath(tab))
-  }, [tab, getTabIndexFromPath])
+  // The tab comes straight from the URL and the current order. An index kept
+  // in state would point at the wrong tab for a render whenever a tab gated on
+  // a permission appears before the routed one.
+  const currentTabId = tab && tabOrder.includes(tab) ? tab : tabOrder[0]
 
   useEffect(() => {
     if (currentTabId) {

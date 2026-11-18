@@ -16,7 +16,16 @@ export interface ClientSnippet {
   code: string
 }
 
-export const mcpEndpointUrl = (endpointPath: string, origin = window.location.origin): string =>
+/** The origin MCP clients should call: the browser's for the local backend,
+ * the remote backend's own when the hub is showing a remote one (its token is
+ * only valid there). */
+export const backendOrigin = (
+  target: { kind: 'local' | 'remote'; webBaseUrl: string },
+  browserOrigin = window.location.origin
+): string => (target.kind === 'remote' ? new URL(target.webBaseUrl).origin : browserOrigin)
+
+/** `endpointPath` comes from the issuing backend and already holds its base path. */
+export const mcpEndpointUrl = (endpointPath: string, origin: string): string =>
   `${origin}${endpointPath}`
 
 const json = (value: unknown) => JSON.stringify(value, null, 2)
@@ -59,7 +68,9 @@ export function buildClientSnippets(url: string, token: string): ClientSnippet[]
     {
       id: 'vscode',
       label: 'VS Code',
-      where: '.mcp.json',
+      // The per-user file: the workspace .mcp.json is meant to be committed,
+      // and the token must not land in a repository.
+      where: '~/.copilot/mcp-config.json',
       language: 'json',
       code: json({ mcpServers: { 'borg-ui': httpServer } }),
     },

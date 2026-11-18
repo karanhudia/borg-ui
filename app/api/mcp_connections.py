@@ -96,11 +96,15 @@ def _config(settings: SystemSettings, request: Request) -> dict:
     }
 
 
-def _calls_today(db: Session, connection_ids: list[int]) -> dict[int, int]:
+def _utc_midnight() -> datetime:
     # ponytail: "today" is the UTC day; per-user time zones if anyone asks.
-    midnight = datetime.now(timezone.utc).replace(
+    return datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0, tzinfo=None
     )
+
+
+def _calls_today(db: Session, connection_ids: list[int]) -> dict[int, int]:
+    midnight = _utc_midnight()
     if not connection_ids:
         return {}
     rows = (
@@ -137,8 +141,11 @@ def _row(
     }
 
 
-def _check_rules(level: str, skip: bool, cap: str) -> None:
-    if Level.parse(level) > top_level():
+def _check_rules(
+    level: str, skip: bool, cap: str, *, setting_level: bool = True
+) -> None:
+    # Only a level being set must have tools; a stored one is left alone.
+    if setting_level and Level.parse(level) > top_level():
         raise _error(422, "backend.errors.mcp.levelNotAvailable", level=level)
     if Level.parse(level) > Level.parse(cap):
         raise _error(422, "backend.errors.mcp.levelAboveCap", max=cap)
@@ -271,9 +278,10 @@ def update_connection(
             Level.parse(level) == Level.FULL
         )
     if payload.access_level is not None or payload.skip_routine_confirmations:
-        _check_rules(level, skip, cap)
+        _check_rules(level, skip, cap, setting_level=payload.access_level is not None)
     token.access_level = level
     token.skip_routine_confirmations = skip
+    calls = _calls_today(db, [token.id]).get(token.id, 0)
     db.commit()
     db.refresh(token)
     logger.info(
@@ -283,7 +291,7 @@ def update_connection(
         access_level=token.access_level,
     )
     owner = db.query(User.username).filter(User.id == token.user_id).scalar()
-    return _row(token, cap, owner, _calls_today(db, [token.id]).get(token.id, 0))
+    return _row(token, cap, owner, calls)
 
 
 @router.delete("/connections/{connection_id}", status_code=204)

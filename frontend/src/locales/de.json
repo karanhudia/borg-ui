@@ -7079,8 +7079,8 @@
       "appliesAs": "gilt als {{level}}",
       "notConnected": "Noch nicht verbunden",
       "lastSeen": "{{client}}, {{when}}",
-      "callsToday_one": "{{count}} Aufruf heute",
-      "callsToday_other": "{{count}} Aufrufe heute",
+      "callsToday_one": "{{count}} Aufruf heute (UTC)",
+      "callsToday_other": "{{count}} Aufrufe heute (UTC)",
       "owner": "Besitzer: {{name}}",
       "edit": "Bearbeiten",
       "revoke": "Widerrufen",
@@ -7114,7 +7114,9 @@
       "updated": "Verbindung aktualisiert",
       "revoked": "Verbindung widerrufen",
       "closeActivity": "Aktivität schließen",
-      "activityFor": "Aktivität von {{name}}"
+      "activityFor": "Aktivität von {{name}}",
+      "loadFailed": "Ihre MCP-Verbindungen konnten nicht geladen werden.",
+      "retry": "Erneut versuchen"
     }
   }
 }

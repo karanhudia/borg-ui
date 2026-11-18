@@ -12,9 +12,11 @@ export interface McpStoryState {
   connections: McpConnection[]
   role?: 'admin' | 'viewer'
   plan?: 'pro' | 'community'
+  /** The connections request fails, to show the retry state. */
+  listFails?: boolean
 }
 
-function install({ config, connections, role = 'admin', plan = 'pro' }: McpStoryState) {
+function install({ config, connections, role = 'admin', plan = 'pro', listFails }: McpStoryState) {
   const mock = new MockAdapter(api)
   // Proxy auth resolves the user from /auth/me with no stored token, the
   // way the Background work stories do.
@@ -60,7 +62,7 @@ function install({ config, connections, role = 'admin', plan = 'pro' }: McpStory
   })
   mock.onGet('/settings/mcp/config').reply(200, config)
   mock.onPut('/settings/mcp/config').reply((req) => [200, { ...config, ...JSON.parse(req.data) }])
-  mock.onGet('/settings/mcp/connections').reply(200, connections)
+  mock.onGet('/settings/mcp/connections').reply(listFails ? 500 : 200, listFails ? {} : connections)
   mock.onGet(/\/settings\/mcp\/connections\/\d+\/activity/).reply(200, activityRows(8))
   mock.onPost('/settings/mcp/connections').reply(201, {
     ...connections[0],

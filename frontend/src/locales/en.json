@@ -7079,8 +7079,8 @@
       "appliesAs": "applies as {{level}}",
       "notConnected": "Not connected yet",
       "lastSeen": "{{client}}, {{when}}",
-      "callsToday_one": "{{count}} call today",
-      "callsToday_other": "{{count}} calls today",
+      "callsToday_one": "{{count}} call today (UTC)",
+      "callsToday_other": "{{count}} calls today (UTC)",
       "owner": "Owner: {{name}}",
       "edit": "Edit",
       "revoke": "Revoke",
@@ -7114,7 +7114,9 @@
       "updated": "Connection updated",
       "revoked": "Connection revoked",
       "closeActivity": "Close activity",
-      "activityFor": "Activity for {{name}}"
+      "activityFor": "Activity for {{name}}",
+      "loadFailed": "Could not load your MCP connections.",
+      "retry": "Try again"
     }
   }
 }

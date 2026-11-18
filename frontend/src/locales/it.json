@@ -7079,8 +7079,8 @@
       "appliesAs": "vale come {{level}}",
       "notConnected": "Non ancora collegato",
       "lastSeen": "{{client}}, {{when}}",
-      "callsToday_one": "{{count}} chiamata oggi",
-      "callsToday_other": "{{count}} chiamate oggi",
+      "callsToday_one": "{{count}} chiamata oggi (UTC)",
+      "callsToday_other": "{{count}} chiamate oggi (UTC)",
       "owner": "Proprietario: {{name}}",
       "edit": "Modifica",
       "revoke": "Revoca",
@@ -7114,7 +7114,9 @@
       "updated": "Connessione aggiornata",
       "revoked": "Connessione revocata",
       "closeActivity": "Chiudi attività",
-      "activityFor": "Attività di {{name}}"
+      "activityFor": "Attività di {{name}}",
+      "loadFailed": "Impossibile caricare le tue connessioni MCP.",
+      "retry": "Riprova"
     }
   }
 }

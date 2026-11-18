@@ -17,6 +17,7 @@ import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth'
 import { mcpAPI, type McpConnection } from '../services/api'
+import { useActiveBackendTarget } from '../services/remoteBackends/context'
 import { translateBackendKey, type BackendDetail } from '../utils/translateBackendKey'
 import PlanGate from './shared/PlanGate'
 import ResponsiveDialog from './shared/ResponsiveDialog'
@@ -24,7 +25,7 @@ import McpActivityPanel from './mcp/McpActivityPanel'
 import McpConnectedDialog from './mcp/McpConnectedDialog'
 import McpConnectionDialog, { type McpConnectionBody } from './mcp/McpConnectionDialog'
 import McpConnectionsList from './mcp/McpConnectionsList'
-import { mcpEndpointUrl } from './mcp/clientSnippets'
+import { backendOrigin, mcpEndpointUrl } from './mcp/clientSnippets'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const backendMessage = (error: any) =>
@@ -33,6 +34,7 @@ const backendMessage = (error: any) =>
 function McpConnections() {
   const { t } = useTranslation()
   const { user } = useAuth()
+  const backend = useActiveBackendTarget()
   const queryClient = useQueryClient()
   const isAdmin = user?.role === 'admin'
   const [everyone, setEveryone] = useState(false)
@@ -77,6 +79,21 @@ function McpConnections() {
     }
   }
 
+  const failed = [config, list].find((query) => query.isError)
+  if (failed) {
+    return (
+      <Alert
+        severity="error"
+        action={
+          <Button color="inherit" size="small" onClick={() => failed.refetch()}>
+            {t('mcp.tab.retry')}
+          </Button>
+        }
+      >
+        {t('mcp.tab.loadFailed')}
+      </Alert>
+    )
+  }
   if (config.isLoading || list.isLoading || !config.data) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -148,7 +165,7 @@ function McpConnections() {
         <McpConnectedDialog
           open
           token={newToken}
-          endpointUrl={mcpEndpointUrl(config.data.endpoint_path)}
+          endpointUrl={mcpEndpointUrl(config.data.endpoint_path, backendOrigin(backend))}
           onClose={() => setNewToken(null)}
         />
       )}

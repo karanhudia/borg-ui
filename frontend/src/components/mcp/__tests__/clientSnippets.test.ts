@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildClientSnippets, mcpEndpointUrl } from '../clientSnippets'
+import { backendOrigin, buildClientSnippets, mcpEndpointUrl } from '../clientSnippets'
 
 const URL = 'https://backups.example.com/mcp'
 const TOKEN = 'borgui_EXAMPLE'
@@ -9,6 +9,23 @@ describe('mcpEndpointUrl', () => {
     expect(mcpEndpointUrl('/borg/mcp', 'https://backups.example.com')).toBe(
       'https://backups.example.com/borg/mcp'
     )
+  })
+})
+
+describe('backendOrigin', () => {
+  it('uses the browser origin for the local backend', () => {
+    expect(backendOrigin({ kind: 'local', webBaseUrl: '/borg' }, 'https://hub.example.com')).toBe(
+      'https://hub.example.com'
+    )
+  })
+
+  it('uses the remote backend origin, not the hub', () => {
+    expect(
+      backendOrigin(
+        { kind: 'remote', webBaseUrl: 'https://remote.example.com/borg' },
+        'https://hub.example.com'
+      )
+    ).toBe('https://remote.example.com')
   })
 })
 
@@ -54,6 +71,10 @@ describe('buildClientSnippets', () => {
       'Authorization:${AUTH_HEADER}',
     ])
     expect(server.env).toEqual({ AUTH_HEADER: `Bearer ${TOKEN}` })
+  })
+
+  it('vs code goes in the per-user file, not the shared workspace one', () => {
+    expect(snippets[3].where).toBe('~/.copilot/mcp-config.json')
   })
 
   it('vs code uses the http server format', () => {

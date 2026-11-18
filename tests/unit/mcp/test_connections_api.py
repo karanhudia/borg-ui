@@ -1,6 +1,6 @@
 """REST API for MCP connections, the admin switch and the level cap."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -215,13 +215,13 @@ def test_config_lists_available_levels(
 
 @pytest.mark.unit
 def test_rows_count_calls_today(
-    test_client, test_db, test_user, auth_headers, create_connection
+    test_client, test_db, test_user, auth_headers, create_connection, monkeypatch
 ):
     row, _ = create_connection(auth_headers)
     other, _ = create_connection(auth_headers, name="other")
-    midnight = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0, tzinfo=None
-    )
+    # A fixed day, so a run that crosses midnight cannot flip the count.
+    midnight = datetime(2026, 11, 18)
+    monkeypatch.setattr("app.api.mcp_connections._utc_midnight", lambda: midnight)
     for connection_id, when in (
         (row["id"], midnight),
         (row["id"], midnight + timedelta(seconds=5)),
@@ -246,3 +246,18 @@ def test_rows_count_calls_today(
         for item in test_client.get(f"{BASE}/connections", headers=auth_headers).json()
     }
     assert listed == {row["id"]: 2, other["id"]: 1}
+
+
+@pytest.mark.unit
+def test_skip_only_patch_keeps_the_stored_level(
+    test_client, admin_headers, create_connection, monkeypatch
+):
+    row, _ = create_connection(admin_headers, level="full")
+    monkeypatch.setattr("app.api.mcp_connections.top_level", lambda: Level.READ)
+    response = test_client.patch(
+        f"{BASE}/connections/{row['id']}",
+        json={"skip_routine_confirmations": True},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["skip_routine_confirmations"] is True
