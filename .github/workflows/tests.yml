@@ -150,9 +150,25 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
+      # The Ubuntu mirror often serves these 1.5 MB at ~50 kB/s, and apt-get
+      # update adds ~25s more. The .debs are cached per runner image version;
+      # if installing them fails for any reason, apt runs as before.
+      - name: Restore cached apt packages
+        id: apt-debs
+        uses: actions/cache@v5
+        with:
+          path: ~/apt-debs
+          key: apt-debs-${{ env.ImageOS }}-${{ env.ImageVersion }}-borgbackup-shellcheck-v1
+
       - name: Install system dependencies
         run: |
+          if [ "${{ steps.apt-debs.outputs.cache-hit }}" = true ] && sudo dpkg -i ~/apt-debs/*.deb; then
+            exit 0
+          fi
           sudo apt-get update
+          sudo apt-get install -y --download-only borgbackup shellcheck
+          mkdir -p ~/apt-debs
+          find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t ~/apt-debs {} +
           sudo apt-get install -y borgbackup shellcheck
 
       - name: Verify Borg installation
