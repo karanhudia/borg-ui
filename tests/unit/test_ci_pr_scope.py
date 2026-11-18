@@ -360,5 +360,6 @@ def test_coverage_uploads_stay_on_producing_runners_and_migrations_are_isolated(
         for s in migrations["steps"]
         if s.get("name") == "Select complete migration file shard"
     )
-    assert "--balance-by files" in selection["run"]
+    assert "--balance-by weights" in selection["run"]
+    assert "scripts/ci/migration-weights.json" in selection["run"]
     assert "pytest tests/migrations --collect-only" in selection["run"]

@@ -200,6 +200,8 @@ jobs:
           pytest \
             "${PYTEST_FILES[@]}" \
             -v \
+            -n auto \
+            --dist worksteal \
             --cov=app \
             --cov-report=term-missing \
             --durations=50 \
@@ -373,14 +375,15 @@ jobs:
           pip install -r requirements-dev.txt
 
       # Every matrix entry owns a separate runner, Postgres service and temp
-      # directory. Never parallelize tests against one shared migration DB.
-      # File-only weights keep assignments stable if a new release tag expands
-      # parameter counts between checkouts on the two runners.
+      # directory, and each xdist worker gets its own database (tests/conftest.py).
+      # Checked-in per-file seconds, never test counts, keep assignments stable
+      # if a new release tag expands parameter counts between the two runners.
       - name: Select complete migration file shard
         run: |
           python -m pytest tests/migrations --collect-only -q -o addopts='' > .pytest-migration-nodes.txt
           python scripts/ci/select_pytest_shard.py \
-            --shard-index "${{ matrix.shard }}" --shard-total 2 --balance-by files \
+            --shard-index "${{ matrix.shard }}" --shard-total 2 --balance-by weights \
+            --durations-file scripts/ci/migration-weights.json \
             < .pytest-migration-nodes.txt > .pytest-migration-shard.txt
           test -s .pytest-migration-shard.txt
         env:
@@ -390,7 +393,7 @@ jobs:
       - name: Run migration upgrade path tests
         run: |
           mapfile -t PYTEST_FILES < .pytest-migration-shard.txt
-          pytest "${PYTEST_FILES[@]}" -v --durations=50 --junitxml=test-results/migrations-${{ matrix.shard }}.xml
+          pytest "${PYTEST_FILES[@]}" -v -n auto --dist loadfile --durations=50 --junitxml=test-results/migrations-${{ matrix.shard }}.xml
         env:
           BORG_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/borg_test
           BORG_TEST_REQUIRE_RELEASE_TAGS: "1"

@@ -53,6 +53,38 @@ os.environ["BORG_CACHE_DIR"] = _borg_cache_dir
 os.environ["BORG_SECURITY_DIR"] = _borg_security_dir
 os.environ["BORG_KEYS_DIR"] = _borg_keys_dir
 
+
+def _give_xdist_worker_its_own_postgres_database():
+    """Point each pytest-xdist worker at a database of its own.
+
+    Postgres tests reset the public schema of BORG_TEST_POSTGRES_URL, so two
+    workers on one database would drop each other's tables mid-test. Test
+    modules read the variable at import, which happens after this runs.
+    """
+    url = os.environ.get("BORG_TEST_POSTGRES_URL")
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    if not url or not worker:
+        return
+
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.engine import make_url
+
+    base = make_url(url)
+    name = f"{base.database}_{worker}"
+    admin = create_engine(base, isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+            conn.execute(text(f'CREATE DATABASE "{name}"'))
+    finally:
+        admin.dispose()
+    os.environ["BORG_TEST_POSTGRES_URL"] = base.set(database=name).render_as_string(
+        hide_password=False
+    )
+
+
+_give_xdist_worker_its_own_postgres_database()
+
 # Add parent directory to path so we can import from app/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
