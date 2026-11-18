@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-11-18T10:36:07.042Z",
+  "generatedAt": "2026-11-18T11:54:26.065Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1564 visual report",
     "commitSha": "8456bed97ae5",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44286592024"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44298742527"
   },
   "totals": {
     "baseline": 1300,
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/backup-plans-schedulestep--check-flag-conflict--mobile.png",
       "actualPath": "images/actual/backup-plans-schedulestep--check-flag-conflict--mobile.png",
       "diffPath": "images/diff/backup-plans-schedulestep--check-flag-conflict--mobile.png",
-      "diffPixels": 37313,
+      "diffPixels": 43710,
       "totalPixels": 329160,
-      "diffRatio": 0.11335824523028315,
+      "diffRatio": 0.1327925628873496,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -39,9 +39,9 @@
       "baselinePath": "images/baseline/backup-plans-schedulestep--check-flag-conflict.png",
       "actualPath": "images/actual/backup-plans-schedulestep--check-flag-conflict.png",
       "diffPath": "images/diff/backup-plans-schedulestep--check-flag-conflict.png",
-      "diffPixels": 53830,
+      "diffPixels": 60019,
       "totalPixels": 1024000,
-      "diffRatio": 0.052568359375,
+      "diffRatio": 0.0586123046875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -323,21 +323,21 @@
       }
     },
     {
-      "fileName": "pages-cloudstorage--editing-remote.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--editing-remote.png",
-      "actualPath": "images/actual/pages-cloudstorage--editing-remote.png",
-      "diffPath": "images/diff/pages-cloudstorage--editing-remote.png",
-      "diffPixels": 1928,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0018828125,
+      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "diffPixels": 424,
+      "totalPixels": 329160,
+      "diffRatio": 0.0012881273544780654,
       "dimensionsChanged": false,
       "baseline": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       },
       "actual": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       }
     }
   ],
@@ -3480,6 +3480,9 @@
       "fileName": "pages-cloudstorage--delete-confirmation.png"
     },
     {
+      "fileName": "pages-cloudstorage--editing-remote.png"
+    },
+    {
       "fileName": "pages-cloudstorage--empty--mobile.png"
     },
     {
@@ -3748,9 +3751,6 @@
     },
     {
       "fileName": "pages-repositories-groups--empty-without-quick-start.png"
-    },
-    {
-      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png"
     },
     {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api.png"
