@@ -89,6 +89,14 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(captureWorkflow).toContain('npm run visual:screenshots')
     expect(captureWorkflow).toContain('actions/upload-artifact@v7')
     expect(captureWorkflow).toContain('name: visual-actual')
+    // Shards upload visual-actual-N; only a run where every shard succeeded
+    // merges them into the single artifact visual-regression.yml downloads.
+    expect(captureWorkflow).toContain('STORYBOOK_SNAPSHOT_SHARD: ${{ matrix.shard }}/3')
+    expect(captureWorkflow).toContain('name: visual-actual-${{ matrix.shard }}')
+    expect(captureWorkflow).toContain('uses: actions/upload-artifact/merge@v7')
+    expect(captureWorkflow).toContain('pattern: visual-actual-*')
+    expect(captureWorkflow).toContain('needs: capture')
+    expect(captureWorkflow).not.toContain('actions: write')
     expect(captureWorkflow).not.toContain('pull-requests: write')
     expect(captureWorkflow).not.toContain('pages: write')
 

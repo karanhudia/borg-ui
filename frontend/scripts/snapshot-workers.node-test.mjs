@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { runSnapshotWorkers, resolveSnapshotWorkers } from './snapshot-workers.mjs'
+import {
+  resolveSnapshotShard,
+  resolveSnapshotWorkers,
+  runSnapshotWorkers,
+  selectSnapshotShard,
+} from './snapshot-workers.mjs'
 
 function deferred() {
   let resolve
@@ -146,4 +151,28 @@ test('worker configuration defaults conservatively and rejects invalid limits be
     )
     assert.equal(captured, false)
   }
+})
+
+test('shards split stories round-robin, once each, and default to one shard', () => {
+  assert.deepEqual(resolveSnapshotShard({}), { index: 1, total: 1 })
+  assert.deepEqual(resolveSnapshotShard({ STORYBOOK_SNAPSHOT_SHARD: '2/3' }), {
+    index: 2,
+    total: 3,
+  })
+  for (const value of ['', '0/3', '4/3', '1/0', '1', '1/3x', 'a/b', '1/17']) {
+    assert.throws(() => resolveSnapshotShard({ STORYBOOK_SNAPSHOT_SHARD: value }))
+  }
+
+  const stories = Array.from({ length: 10 }, (_, i) => i)
+  const shards = [1, 2, 3].map((index) => selectSnapshotShard(stories, { index, total: 3 }))
+  assert.deepEqual(shards, [
+    [0, 3, 6, 9],
+    [1, 4, 7],
+    [2, 5, 8],
+  ])
+  assert.deepEqual(
+    shards.flat().sort((a, b) => a - b),
+    stories
+  )
+  assert.deepEqual(selectSnapshotShard(stories, { index: 1, total: 1 }), stories)
 })
