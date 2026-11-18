@@ -86,6 +86,7 @@ async def test_execute_prune_command_includes_keep_within(db_engine):
             match_archives="nas-[0-9]*",
         )
 
+    create_subprocess.assert_awaited_once()
     cmd = list(create_subprocess.await_args.args)
     assert "--keep-within=1d" in cmd
     # a plan-scoped prune (issue #1549) passes its glob before the repo path

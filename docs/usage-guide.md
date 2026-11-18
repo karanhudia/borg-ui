@@ -411,12 +411,15 @@ template:
 
 After a template change, archives created before it are pruned only if their
 names still match the new template.
-If another plan or schedule on the same repository produces names that also
-match, the prune is skipped and the run reports which one, so give them
-different archive name templates. The same happens when another plan's
-template uses a placeholder Borg fills in, such as `{hostname}`, since its
-names cannot be told apart in advance. On Borg 2 the plan's own template
-must not use such a placeholder either. A managed agent needs a version that supports
+If another plan or schedule on the same repository could produce names that
+also match, the prune is skipped and the run reports which one, so give them
+archive name templates that differ in fixed text (for example `nas-{now}` and
+`nas-docs-{now}`). Placeholders Borg fills in, such as `{hostname}`, can be
+anything, so a template that differs from another only there is refused too.
+On Borg 1 the plan's own template needs some fixed text: `{now}` on its own
+would match every archive. On Borg 2 the plan's own template must not use a
+Borg placeholder. Literal braces (`{{` or `}}`) are not supported with this
+option. A managed agent needs a version that supports
 this option; an older agent fails the prune instead of pruning everything.
 
 Prune from the repository's own maintenance actions always covers the whole

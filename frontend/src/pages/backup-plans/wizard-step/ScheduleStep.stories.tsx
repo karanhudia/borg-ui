@@ -14,7 +14,7 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.maintenance.runPruneAfter': 'Run prune after backup',
   'backupPlans.wizard.maintenance.pruneScopeToPlan': 'Only prune archives created by this plan',
   'backupPlans.wizard.maintenance.pruneScopeToPlanHelper':
-    "Recommended when several plans back up to the same repository. Without it, prune applies this plan's retention to every archive in the repository, including other plans' archives.",
+    "Recommended when several plans back up to the same repository. Without it, prune applies this plan's retention to every archive in the repository, including other plans' archives. Archives are matched by name using this plan's archive name template, so after a template change, older archives are pruned only if their names still match. If another plan or schedule uses names that also match, the prune is skipped with an error instead.",
   'backupPlans.wizard.maintenance.runCompactAfter': 'Run compact after prune',
   'backupPlans.wizard.maintenance.runCheckAfter': 'Run check after backup',
   'backupPlans.wizard.maintenance.runRestoreCheckAfter': 'Run restore check after backup',

@@ -187,3 +187,65 @@ def test_refuses_when_a_sibling_name_has_a_borg_placeholder(db, version):
 def test_a_marker_character_in_a_name_is_refused():
     with pytest.raises(PruneScopeError):
         plan_archive_glob("{plan_name}-{now}", job_name="a\ue001b", repo_name="r")
+
+
+@pytest.mark.unit
+def test_refuses_a_sibling_whose_names_match_on_some_dates_only(db):
+    """`photos-{date}-{now}` written on the 15th matches `photos-[0-9]*-15-[0-9]*`:
+    one sample date cannot rule that out, the token comparison does."""
+    repo = _repo(db)
+    plan = _plan(db, repo, "a", template="photos-{date}-15-{now}")
+    _plan(db, repo, "b", template="photos-{date}-{now}")
+    with pytest.raises(PruneScopeError, match="'b'"):
+        plan_prune_match(db, plan, repo)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("mine", "theirs"),
+    [
+        ("{plan_name}-{now}", "{plan_name}-docs-{now}"),
+        ("nas-{now}-daily", "nas-{now}-weekly"),
+        (None, None),  # default names differ by plan name
+    ],
+)
+def test_disjoint_templates_stay_eligible(db, mine, theirs):
+    repo = _repo(db)
+    plan = _plan(db, repo, "nas", template=mine)
+    _plan(db, repo, "box", template=theirs)
+    assert plan_prune_match(db, plan, repo)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("version", "template"),
+    [(1, "{now}"), (1, "{now:%Y%m%d%H%M%S}")],
+)
+def test_refuses_a_selector_without_fixed_text(db, version, template):
+    repo = _repo(db, version=version)
+    plan = _plan(db, repo, "nas", template=template)
+    with pytest.raises(PruneScopeError, match="fixed text"):
+        plan_prune_match(db, plan, repo)
+
+
+@pytest.mark.unit
+def test_refuses_literal_braces():
+    with pytest.raises(PruneScopeError, match="brace"):
+        plan_archive_glob("nas-{{hostname}}-{now}", job_name="nas", repo_name="r")
+
+
+@pytest.mark.unit
+def test_a_legacy_path_only_schedule_counts_as_a_sibling(db):
+    repo = _repo(db)
+    plan = _plan(db, repo, "nas", template="photos-{now}")
+    db.add(
+        ScheduledJob(
+            name="old",
+            cron_expression="0 2 * * *",
+            repository=repo.path,
+            archive_name_template="photos-{now}",
+        )
+    )
+    db.commit()
+    with pytest.raises(PruneScopeError, match="old"):
+        plan_prune_match(db, plan, repo)

@@ -69,6 +69,7 @@ async def test_execute_prune_marks_job_complete_and_updates_repo(db_engine):
         )
 
     # a plan-scoped prune (issue #1549) reaches Borg as -a
+    create_subprocess.assert_awaited_once()
     cmd = list(create_subprocess.await_args.args)
     assert cmd[cmd.index("-a") + 1] == "id:nas"
 
