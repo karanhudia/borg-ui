@@ -465,6 +465,9 @@ def retry_backup_job(
         )
     )
     db.commit()
+    # Built before waking the runner: the commit expired retry_job, so reading
+    # it afterwards could reload a status the runner already moved on from.
+    response = _backup_retry_response(retry_job)
     wake_runner()
     logger.info(
         "Backup retry created",
@@ -472,7 +475,7 @@ def retry_backup_job(
         retry_job_id=retry_job.id,
         user=current_user.username,
     )
-    return _backup_retry_response(retry_job)
+    return response
 
 
 @router.get("/jobs")

@@ -192,6 +192,42 @@ class TestBackupStart:
         assert lineage.attempt_number == 2
         assert lineage.request_snapshot["kind"] == "backup_job_retry"
 
+    def test_retry_reports_the_job_it_created_even_if_the_runner_starts_it_first(
+        self, test_client, admin_headers, test_db
+    ):
+        """The runner may start the job before the response is built; the
+        response still describes the pending job the request created."""
+        repo = Repository(
+            name="r", path="/test/repo", encryption="none", repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        source = Operation(
+            repository_id=repo.id,
+            kind="backup",
+            category="backup",
+            status="failed",
+            trigger="manual",
+            priority=0,
+            run_id="r1",
+            params={"executor": "server"},
+        )
+        test_db.add(source)
+        test_db.commit()
+
+        def runner_wins_the_race():
+            retry = test_db.query(Operation).filter(Operation.trigger == "retry").one()
+            retry.status = "running"
+            test_db.commit()
+
+        with patch("app.api.backup.wake_runner", side_effect=runner_wins_the_race):
+            response = test_client.post(
+                f"/api/backup/jobs/{source.id}/retry", headers=admin_headers
+            )
+
+        assert response.status_code == 202
+        assert response.json()["status"] == "pending"
+
     def test_list_and_status_serve_backup_operations(
         self, test_client, admin_headers, test_db
     ):
