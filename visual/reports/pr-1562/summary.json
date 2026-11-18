@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-11-18T10:10:20.964Z",
+  "generatedAt": "2026-11-18T10:49:22.180Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1562 visual report",
     "commitSha": "8456bed97ae5",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44282654414"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44288793578"
   },
   "totals": {
     "baseline": 1300,
-    "actual": 1344,
+    "actual": 1348,
     "compared": 1300,
     "changed": 17,
-    "added": 44,
+    "added": 48,
     "removed": 0,
     "unchanged": 1283
   },
@@ -122,24 +122,6 @@
       "actual": {
         "width": 390,
         "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--create-error.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-error.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-error.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-error.png",
-      "diffPixels": 171690,
-      "totalPixels": 1024000,
-      "diffRatio": 0.167666015625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
       }
     },
     {
@@ -305,13 +287,31 @@
       }
     },
     {
+      "fileName": "pages-cloudstorage--editing-remote.png",
+      "baselinePath": "images/baseline/pages-cloudstorage--editing-remote.png",
+      "actualPath": "images/actual/pages-cloudstorage--editing-remote.png",
+      "diffPath": "images/diff/pages-cloudstorage--editing-remote.png",
+      "diffPixels": 1948,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00190234375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 440,
+      "diffPixels": 530,
       "totalPixels": 329160,
-      "diffRatio": 0.001336735933892332,
+      "diffRatio": 0.0016101591930975817,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -324,6 +324,14 @@
     }
   ],
   "added": [
+    {
+      "fileName": "components-appsidebar--mcp-route--mobile.png",
+      "actualPath": "images/actual/components-appsidebar--mcp-route--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--mcp-route.png",
+      "actualPath": "images/actual/components-appsidebar--mcp-route.png"
+    },
     {
       "fileName": "components-systemsettings-mcpaccesssection--off-and-capped--mobile.png",
       "actualPath": "images/actual/components-systemsettings-mcpaccesssection--off-and-capped--mobile.png"
@@ -475,6 +483,14 @@
     {
       "fileName": "settings-mcptab--empty.png",
       "actualPath": "images/actual/settings-mcptab--empty.png"
+    },
+    {
+      "fileName": "settings-mcptab--load-failed--mobile.png",
+      "actualPath": "images/actual/settings-mcptab--load-failed--mobile.png"
+    },
+    {
+      "fileName": "settings-mcptab--load-failed.png",
+      "actualPath": "images/actual/settings-mcptab--load-failed.png"
     },
     {
       "fileName": "settings-mcptab--turned-off--mobile.png",
@@ -3123,6 +3139,9 @@
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing.png"
     },
     {
+      "fileName": "components-wizard-rclone-remote-dialog--create-error.png"
+    },
+    {
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png"
     },
     {
@@ -3631,9 +3650,6 @@
     },
     {
       "fileName": "pages-cloudstorage--delete-confirmation.png"
-    },
-    {
-      "fileName": "pages-cloudstorage--editing-remote.png"
     },
     {
       "fileName": "pages-cloudstorage--empty--mobile.png"
