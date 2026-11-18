@@ -286,6 +286,24 @@ def test_listing_crash_leads_with_borg_cause_not_its_wrapper():
     assert "footer-secret" not in message
 
 
+def test_diagnostic_leads_with_cause_of_remote_traceback_after_progress_line():
+    # A remote crash arrives after a progress line and without a wrapper, so
+    # the reported message was cut before its cause (dashboard 024bc4c80c39ebca).
+    from app.core.borg_errors import bounded_operation_diagnostic
+
+    stderr = (
+        "Remote: Replaying segments. Please wait, this can take a while...\n"
+        "Traceback (most recent call last):\n"
+        '  File "borg/repository.py", line 930, in replay_segments\n'
+        "    segment_count = sum(1 for _ in self.io.segment_iterator())\n"
+        "FileNotFoundError: [Errno 2] No such file or directory: '/r/data/0'\n"
+    )
+
+    assert bounded_operation_diagnostic(stderr).startswith(
+        "FileNotFoundError: [Errno 2] No such file or directory: '/r/data/0'\n"
+    )
+
+
 def test_diagnostic_leads_with_borg_cause_past_interpreter_noise():
     # Borg can print an unrelated "Exception ignored in" traceback ahead of
     # its own crash; the reported reason was that noise, cut before the cause

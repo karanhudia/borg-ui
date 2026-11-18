@@ -824,6 +824,53 @@ async def test_hydrate_repository_records_staging_failure_without_touching_cache
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("mount_table", ["root", "nested", "unavailable"])
+async def test_hydrate_refuses_a_mounted_local_copy_before_downloading(
+    db_session, tmp_path, monkeypatch, mount_table
+):
+    # Replacing a mount root empties it, then fails on the busy root; a
+    # top-level volume also stages in "/" (dashboard 2cc76f103cf176a5).
+    cache_path = tmp_path / "volume"
+    (cache_path / "data").mkdir(parents=True)
+    sentinel = cache_path / "data" / "keep"
+    sentinel.write_text("existing repository")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=str(cache_path), encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=str(cache_path),
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    monkeypatch.setattr(
+        "app.utils.fs.active_mount_points",
+        lambda: {
+            "root": {str(cache_path)},
+            "nested": {str(cache_path / "data")},
+            "unavailable": None,
+        }[mount_table],
+    )
+    rclone = _RecordingRcloneService()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=rclone
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "failed"
+    assert "mount" in storage.last_sync_error
+    assert rclone.sync_calls == []
+    assert sentinel.read_text() == "existing repository"
+    assert list(tmp_path.glob(".hydrate-*")) == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_hydrate_repository_leaves_no_temp_dir_for_an_unknown_job(
     db_session, tmp_path
 ):

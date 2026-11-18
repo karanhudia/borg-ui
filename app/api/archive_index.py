@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dashboard import resolve_timezone
 from app.api.maintenance_jobs import get_repository_with_access
+from app.core.borg_errors import repository_failure_status
 from app.core.features import require_feature, require_feature_access
 from app.core.security import get_current_user
 from app.database.database import ends_read_on_return, get_db
@@ -498,8 +499,11 @@ async def prune_preview(
             run_id=str(body.preview_run_id) if body.preview_run_id else None,
         )
     except service.DryRunFailed as exc:
+        # A lock another process holds is 423 (dashboard 0a89530469ffaa5d);
+        # any other failed dry run is Borg's, so 502.
+        failure_status = repository_failure_status({"stderr": exc.log})
         raise HTTPException(
-            status_code=502,
+            status_code=502 if failure_status == 500 else failure_status,
             detail={
                 "key": "backend.errors.prune.dryRunFailed",
                 "params": {"log": exc.log},

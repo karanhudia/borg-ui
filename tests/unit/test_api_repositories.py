@@ -4665,7 +4665,10 @@ class TestRepositoriesDelete:
                 headers=admin_headers,
             )
 
-        assert response.status_code == (503 if mount_location == "unavailable" else 409)
+        assert response.status_code == 409
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.permanentDeleteUnsafePath"
+        )
         assert sentinel.read_text() == "repository data"
         assert (repo_path / "config").is_file()
         assert test_db.get(Repository, repo_id) is not None

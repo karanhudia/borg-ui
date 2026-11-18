@@ -328,7 +328,9 @@ def test_exception_report_shape(sent):
 
 
 @pytest.mark.parametrize(
-    "status_code, handled", [(400, True), (403, True), (500, False)]
+    "status_code, handled",
+    # 504: the agent did not answer in time (dashboard dc12aab4d0120698).
+    [(400, True), (403, True), (500, False), (502, False), (504, True)],
 )
 def test_operation_http_refusal_classification(sent, status_code, handled):
     from app.services.operations.runner import _report_failed_operation
@@ -882,3 +884,28 @@ def test_http_error_handler_does_not_report_explicitly_suppressed_context(
     assert sent[0]["props"]["type"].endswith("HTTPException")
     assert "authoritative failure" in sent[0]["props"]["message"]
     assert "incidental iteration failure" not in sent[0]["props"]["stack"]
+
+
+@pytest.mark.parametrize("status_code", [422, 504])
+def test_operation_refusal_wrapped_for_background_runs_is_handled(sent, status_code):
+    # Agent maintenance wraps the refusal in a RuntimeError for flows with no
+    # HTTP context (dashboard 0ea03dea4fe5a664, 995e6a16f9b667f5).
+    from app.services.operations.runner import _report_failed_operation
+
+    try:
+        try:
+            raise HTTPException(
+                status_code=status_code,
+                detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
+            )
+        except HTTPException as exc:
+            raise RuntimeError("agent check failed: timeout") from exc
+    except RuntimeError as wrapped:
+        error = wrapped
+
+    _report_failed_operation(
+        Operation(kind="check", status="failed", error_message=str(error)), error
+    )
+    flush()
+
+    assert sent[0]["props"]["handled"] is True

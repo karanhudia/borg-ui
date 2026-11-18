@@ -101,6 +101,12 @@ def _alembic_config(url: str) -> Config:
     return cfg
 
 
+class SchemaFromNewerRelease(RuntimeError):
+    """The database was migrated by a newer Borg UI than this one: the app was
+    downgraded. An operator's choice, not a migration fault, so it is logged
+    and not reported."""
+
+
 def _is_at_head(engine: Engine) -> bool:
     with engine.connect() as conn:
         if not inspect(conn).has_table("alembic_version"):
@@ -108,10 +114,17 @@ def _is_at_head(engine: Engine) -> bool:
         current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
     from alembic.script import ScriptDirectory
 
-    head = ScriptDirectory.from_config(
-        _alembic_config(str(engine.url))
-    ).get_current_head()
-    return current == head
+    script = ScriptDirectory.from_config(_alembic_config(str(engine.url)))
+    if current and current not in {r.revision for r in script.walk_revisions()}:
+        # Alembic would fail with "Can't locate revision" and no reason
+        # (dashboard fbaf24c499f91122).
+        raise SchemaFromNewerRelease(
+            f"The database is at schema revision {current}, which this Borg UI "
+            "release does not know: it was upgraded by a newer Borg UI release. "
+            "Run that release (or newer) again, or restore a database backup "
+            "taken before the upgrade. The database was left untouched."
+        )
+    return current == script.get_current_head()
 
 
 def _self_referencing_columns(table) -> set[str]:
@@ -853,6 +866,9 @@ if __name__ == "__main__":
     )
     try:
         report = upgrade_from_settings()
+    except SchemaFromNewerRelease as exc:
+        log.error("%s", exc)
+        sys.exit(1)
     except Exception as exc:
         # a reporter failure must never mask the migration's own exception
         try:

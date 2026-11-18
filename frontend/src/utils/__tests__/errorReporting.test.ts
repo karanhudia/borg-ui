@@ -446,6 +446,8 @@ describe('global handlers', () => {
     rejection({ code: 'ERR_CANCELED', isAxiosError: true })
     rejection(new axios.CanceledError('cancelled'))
     rejection(new DOMException('aborted', 'AbortError'))
+    // Monaco's CancellationError when an editor is disposed (dashboard da035b28a9e069d2).
+    rejection(Object.assign(new Error('Canceled'), { name: 'Canceled' }))
     expect(sent).not.toHaveBeenCalled()
   })
 })

@@ -13,6 +13,7 @@ import { RemoteBackendProvider } from './services/remoteBackends/context'
 import App from './App.tsx'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { installGlobalErrorHandlers } from './utils/errorReporting'
+import { installTranslationDomGuard } from './utils/translationDomGuard'
 import './index.css'
 
 // NOTE: Umami initialization is deferred until user preferences are loaded
@@ -31,6 +32,7 @@ const queryClient = new QueryClient({
 })
 
 installGlobalErrorHandlers()
+installTranslationDomGuard()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

@@ -1427,6 +1427,61 @@ def test_rclone_oauth_authorization_url_redirects_through_backend(
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("session_status", ["awaiting_callback", "failed"])
+def test_stale_rclone_oauth_link_is_409_not_502(
+    test_client: TestClient, admin_token, monkeypatch, session_status
+):
+    # rclone's loopback server is gone once its authorize run ends or is
+    # replaced; opening the old link again is a stale link, not a server
+    # fault (dashboard 96a5391934080763, 060a753dfc7c2fbc, 8fb72b05d9fdc172).
+    import httpx
+
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    rclone_api.RCLONE_OAUTH_SESSIONS["oauth-stale"] = {
+        "provider": "onedrive",
+        "status": session_status,
+        "authorization_url": "/rclone/oauth/sessions/oauth-stale/authorize",
+        "local_authorization_url": "http://127.0.0.1:53682/auth?state=abc",
+        "config": None,
+        "error": None,
+        "output": [],
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+        "ready_event": None,
+        "process": None,
+        "task": None,
+    }
+
+    class RefusingClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def get(self, url):
+            raise httpx.ConnectError("All connection attempts failed")
+
+    monkeypatch.setattr(rclone_api.httpx, "AsyncClient", RefusingClient)
+
+    response = test_client.get(
+        f"/api/rclone/oauth/sessions/oauth-stale/authorize?token={admin_token}",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 409
+    assert (
+        response.json()["detail"]["key"] == "backend.errors.rclone.oauthLinkUnavailable"
+    )
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_exchange_borg_ui_oauth_code_maps_malformed_json_to_exchange_error(
     test_db,

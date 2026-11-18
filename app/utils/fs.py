@@ -68,6 +68,25 @@ def mount_points_covering(path: str, root: str) -> Optional[list[str]]:
     )
 
 
+def mount_points_at_or_under(path: str) -> Optional[list[str]]:
+    """Mount points at ``path`` or inside it, or None when they cannot be read.
+
+    Deleting or replacing such a tree empties the mounted filesystem before
+    failing on its busy root (dashboard af9a7a0dce6ff3df).
+    """
+    mount_points = active_mount_points()
+    if mount_points is None:
+        return None
+    root = os.path.abspath(path)
+    candidates = {root, os.path.realpath(root)}
+    return sorted(
+        point
+        for point in mount_points
+        for candidate in candidates
+        if point == candidate or point.startswith(candidate.rstrip("/") + "/")
+    )
+
+
 def remove_tree_without_crossing_mounts(path: str) -> bool:
     """Delete a directory tree, never deleting through a mounted filesystem.
 
@@ -82,17 +101,10 @@ def remove_tree_without_crossing_mounts(path: str) -> bool:
     if not os.path.lexists(root):
         return True
 
-    mount_points = active_mount_points()
-    if mount_points is None:
+    mounted_inside = mount_points_at_or_under(root)
+    if mounted_inside is None:
         logger.error("Refusing to delete directory: mount table unavailable", path=root)
         return False
-    candidates = {root, os.path.realpath(root)}
-    mounted_inside = sorted(
-        point
-        for point in mount_points
-        for candidate in candidates
-        if point == candidate or point.startswith(candidate.rstrip("/") + "/")
-    )
     if mounted_inside:
         logger.error(
             "Refusing to delete directory with a filesystem still mounted inside it",

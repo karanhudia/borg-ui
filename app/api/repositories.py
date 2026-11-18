@@ -6231,26 +6231,20 @@ async def permanently_delete_repository(
 
         # rmtree can delete a mounted repository's contents before failing to
         # remove its mount root. Refuse before touching any files, including
-        # when a bind mount or nested mount is present.
-        mount_points = fs.active_mount_points()
-        if mount_points is None:
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "key": "backend.errors.repo.failedToRemoveRepositoryFiles",
-                    "params": {"path": repository.path},
-                    "message": "Cannot verify active mounts; repository files were not removed.",
-                },
-            )
-        if any(
-            point == str(target) or target in FilesystemPath(point).parents
-            for point in mount_points
-        ):
+        # when a bind mount or nested mount is present, or when the mount
+        # table cannot be read to prove there is none.
+        mounted = fs.mount_points_at_or_under(str(target))
+        if mounted is None or mounted:
             raise HTTPException(
                 status_code=409,
                 detail={
                     "key": "backend.errors.repo.permanentDeleteUnsafePath",
-                    "message": "A filesystem is mounted at or inside this repository; repository files were not removed.",
+                    "message": (
+                        "Cannot verify active mounts; repository files were not removed."
+                        if mounted is None
+                        else "A filesystem is mounted at or inside this repository; "
+                        "repository files were not removed."
+                    ),
                 },
             )
 

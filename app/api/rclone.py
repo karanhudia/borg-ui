@@ -1795,13 +1795,17 @@ def _oauth_session_response(session_id: str) -> dict[str, Any]:
 
 
 async def _fetch_oauth_authorization_redirect(url: str) -> str:
+    # rclone's loopback server lives only as long as its authorize run, and a
+    # newer run takes over its port. A link that no longer redirects is stale:
+    # 409, start the sign-in again (dashboard 96a5391934080763,
+    # 060a753dfc7c2fbc, 8fb72b05d9fdc172).
     local_url = _validate_local_oauth_url(url)
     try:
         async with httpx.AsyncClient(follow_redirects=False, timeout=10.0) as client:
             response = await client.get(local_url)
     except httpx.HTTPError as exc:
         raise HTTPException(
-            status_code=502,
+            status_code=409,
             detail={
                 "key": "backend.errors.rclone.oauthLinkUnavailable",
                 "message": str(exc),
@@ -1811,7 +1815,7 @@ async def _fetch_oauth_authorization_redirect(url: str) -> str:
     redirect_url = response.headers.get("location")
     if not redirect_url:
         raise HTTPException(
-            status_code=502,
+            status_code=409,
             detail={"key": "backend.errors.rclone.oauthLinkUnavailable"},
         )
     return redirect_url
@@ -2606,6 +2610,12 @@ async def open_oauth_authorization(
                 detail={"key": "backend.errors.rclone.oauthLinkUnavailable"},
             )
         return RedirectResponse(provider_url)
+    if session.get("status") != "awaiting_callback":
+        # The authorize run already ended (authorized or failed).
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.rclone.oauthLinkUnavailable"},
+        )
     redirect_url = await _fetch_oauth_authorization_redirect(
         session.get("local_authorization_url")
     )

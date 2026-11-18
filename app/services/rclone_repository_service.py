@@ -31,6 +31,7 @@ from app.services.repository_executor import (
     wait_for_agent_repository_operation_job,
 )
 from app.services.rclone_service import RcloneService, rclone_service
+from app.utils import fs
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
     calculate_next_cron_run,
@@ -583,6 +584,18 @@ class RcloneRepositoryService:
         db.commit()
         temp_dir = None
         try:
+            # The copy is staged beside the local path and swapped in. A
+            # mount root cannot be swapped: replacing it empties the mounted
+            # filesystem, then fails on its busy root. A top-level volume
+            # also stages in "/" (dashboard 2cc76f103cf176a5).
+            mounted = fs.mount_points_at_or_under(storage.cache_path)
+            if mounted is None or mounted:
+                raise OSError(
+                    f"{storage.cache_path} is a mount point or has a filesystem "
+                    "mounted inside it (or the mount table cannot be read), so "
+                    "it cannot be replaced safely. Point the repository at a "
+                    "folder inside the mount and restore again."
+                )
             parent = Path(storage.cache_path).parent
             parent.mkdir(parents=True, exist_ok=True)
             temp_dir = tempfile.mkdtemp(
@@ -609,8 +622,12 @@ class RcloneRepositoryService:
         log_text = _sync_result_log_text(result)
         if result.success:
             try:
-                if os.path.exists(storage.cache_path):
-                    shutil.rmtree(storage.cache_path)
+                if os.path.lexists(
+                    storage.cache_path
+                ) and not fs.remove_tree_without_crossing_mounts(storage.cache_path):
+                    raise OSError(
+                        f"Could not remove the old copy at {storage.cache_path}"
+                    )
                 os.replace(temp_dir, storage.cache_path)
                 repository.path = storage.cache_path
                 storage.sync_status = "current"

@@ -108,6 +108,37 @@ class TestMountArchiveEndpoints:
         )
         mount.assert_not_awaited()
 
+    def test_mount_borg_archive_of_a_missing_repository_is_404(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        monkeypatch,
+    ):
+        # The repository is gone, not a server fault (dashboard bea738bcdf5f61ae).
+        _seed_repo(test_db)
+        monkeypatch.setattr(
+            mounts.mount_service,
+            "mount_borg_archive",
+            AsyncMock(
+                side_effect=Exception(
+                    "Borg mount failed: Repository /mnt/borg/data does not exist."
+                )
+            ),
+        )
+
+        response = test_client.post(
+            "/api/mounts/borg",
+            json={"repository_id": 1},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.mounts.failedMountArchive"
+        )
+
     def test_mount_borg_archive_missing_mount_info_returns_500(
         self,
         test_client: TestClient,
