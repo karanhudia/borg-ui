@@ -478,60 +478,93 @@ def test_password_logins_take_turns_from_the_rate_limit_check_to_the_record(
         ]
 
 
+CREATIONS = [
+    pytest.param(
+        "/api/auth/users",
+        {"username": "twin", "password": NEW_PASSWORD},
+        auth,
+        "_resolve_legacy_role",
+        {
+            "username": "backend.errors.auth.usernameAlreadyRegistered",
+            "email": "backend.errors.auth.emailAlreadyRegistered",
+        },
+        id="auth",
+    ),
+    pytest.param(
+        "/api/settings/users",
+        {"username": "twin", "password": NEW_PASSWORD, "email": None},
+        settings_api,
+        "default_repository_role_for_global_role",
+        {
+            "username": "backend.errors.settings.usernameAlreadyExists",
+            "email": "backend.errors.settings.emailAlreadyExists",
+        },
+        id="settings",
+    ),
+]
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ("path", "body", "refused_key", "module", "between_check_and_insert"),
-    [
-        (
-            "/api/auth/users",
-            {"username": "twin", "password": NEW_PASSWORD},
-            "backend.errors.auth.usernameAlreadyRegistered",
-            auth,
-            "_resolve_legacy_role",
-        ),
-        (
-            "/api/settings/users",
-            {"username": "twin", "password": NEW_PASSWORD, "email": None},
-            "backend.errors.settings.usernameAlreadyExists",
-            settings_api,
-            "default_repository_role_for_global_role",
-        ),
-    ],
-    ids=["auth", "settings"],
+    ("path", "body", "module", "between_check_and_insert", "refused_keys"),
+    CREATIONS,
 )
-def test_of_two_creations_of_one_username_one_is_refused(
+def test_two_creations_take_turns_from_their_checks_to_their_insert(
     test_client,
     database,
     admin,
     monkeypatch,
     path,
     body,
-    refused_key,
     module,
     between_check_and_insert,
+    refused_keys,
 ):
-    """The passwords are hashed at the same time; the checks and the insert
-    then take turns. Without them, both requests would pass the check and one
-    insert would fail: past its check, each waits a moment for the other to
-    pass its check as well. Taking turns, that wait runs out unmet."""
+    """Two creations of one username hash at the same time. The first past
+    its checks waits there until the second either waits for its turn or,
+    with no turns, is past its own checks as well; the latter fails."""
     both_hashing = threading.Barrier(2, timeout=HOLD_SECONDS)
-    both_checked = threading.Barrier(2, timeout=1)
     real_hash = security.get_password_hash
     real_between = getattr(module, between_check_and_insert)
+    real_turn = module.user_creation_turn
+    second_ready = threading.Event()
+    released_by: list[str] = []
+    count_lock = threading.Lock()
+    counts = {"turns": 0, "checked": 0}
+
+    def ready(by: str) -> None:
+        if not second_ready.is_set():
+            released_by.append(by)
+            second_ready.set()
+
+    class WatchedTurn:
+        def __enter__(self):
+            with count_lock:
+                counts["turns"] += 1
+                if counts["turns"] == 2:
+                    ready("the second waiting for its turn")
+            return real_turn.__enter__()
+
+        def __exit__(self, *exc):
+            return real_turn.__exit__(*exc)
 
     def meeting_hash(password):
         both_hashing.wait()
         return real_hash(password)
 
-    def meeting_after_the_check(*args, **kwargs):
-        try:
-            both_checked.wait()
-        except threading.BrokenBarrierError:
-            pass
+    def after_the_check(*args, **kwargs):
+        with count_lock:
+            counts["checked"] += 1
+            first = counts["checked"] == 1
+            if not first:
+                ready("the second past its checks")
+        if first:
+            assert second_ready.wait(HOLD_SECONDS), "the second request never came"
         return real_between(*args, **kwargs)
 
     _patch_everywhere(monkeypatch, "get_password_hash", meeting_hash)
-    monkeypatch.setattr(module, between_check_and_insert, meeting_after_the_check)
+    monkeypatch.setattr(module, between_check_and_insert, after_the_check)
+    monkeypatch.setattr(module, "user_creation_turn", WatchedTurn())
 
     def create(_):
         try:
@@ -542,12 +575,62 @@ def test_of_two_creations_of_one_username_one_is_refused(
     with ThreadPoolExecutor(max_workers=2) as pool:
         responses = list(pool.map(create, range(2)))
 
+    assert released_by == ["the second waiting for its turn"]
     codes = sorted(str(getattr(r, "status_code", r)) for r in responses)
     assert codes == ["200", "400"]
     refused = next(r for r in responses if r.status_code == 400)
-    assert refused.json()["detail"]["key"] == refused_key
+    assert refused.json()["detail"]["key"] == refused_keys["username"]
     with database() as db:
         assert db.query(User).filter(User.username == "twin").count() == 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("taken", ["username", "email"])
+@pytest.mark.parametrize(
+    ("path", "body", "module", "between_check_and_insert", "refused_keys"),
+    CREATIONS,
+)
+def test_a_creation_is_refused_when_an_update_took_its_name_after_the_checks(
+    test_client,
+    database,
+    admin,
+    monkeypatch,
+    path,
+    body,
+    module,
+    between_check_and_insert,
+    refused_keys,
+    taken,
+):
+    """Account updates do not take the creations' turn: one that takes the
+    username or email between a creation's checks and its insert makes the
+    insert fail on the unique key, which answers as the check would have."""
+    body = {**body, "email": "twin@example.com"}
+    real_between = getattr(module, between_check_and_insert)
+
+    def update_after_the_check(*args, **kwargs):
+        with database() as db:
+            target = db.query(User).filter(User.username == "target").one()
+            if taken == "username":
+                target.username = body["username"]
+            else:
+                target.email = body["email"]
+            db.commit()
+        return real_between(*args, **kwargs)
+
+    monkeypatch.setattr(module, between_check_and_insert, update_after_the_check)
+
+    response = test_client.post(path, headers=admin, json=body)
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["key"] == refused_keys[taken]
+    with database() as db:
+        assert db.query(User).filter(User.email == body["email"]).count() == (
+            1 if taken == "email" else 0
+        )
+        assert db.query(User).filter(User.username == body["username"]).count() == (
+            1 if taken == "username" else 0
+        )
 
 
 @pytest.mark.unit
@@ -595,6 +678,38 @@ def test_an_admin_request_answers_when_its_admin_was_deleted_while_it_hashed(
     with database() as db:
         user = db.query(User).filter(User.username == changed_user).one()
         assert security.verify_password(NEW_PASSWORD, user.password_hash)
+
+
+@pytest.mark.unit
+def test_a_reset_answers_not_found_when_its_user_was_deleted_meanwhile(
+    test_client, database, admin, monkeypatch
+):
+    """The reset runs in a thread, so a deletion can commit while it writes.
+    The user is deleted when the reset takes its timestamp: on the code
+    before this change that was between loading the user and the commit."""
+    target_id = _target_id(database)
+    real_datetime = settings_api.datetime
+
+    class DeletingDatetime(real_datetime):
+        @classmethod
+        def utcnow(cls):
+            with database() as db:
+                target = db.query(User).filter(User.id == target_id).first()
+                if target is not None:
+                    db.delete(target)
+                    db.commit()
+            return real_datetime.utcnow()
+
+    monkeypatch.setattr(settings_api, "datetime", DeletingDatetime)
+
+    response = test_client.post(
+        f"/api/settings/users/{target_id}/reset-password",
+        headers=admin,
+        json={"new_password": NEW_PASSWORD},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["key"] == "backend.errors.settings.userNotFound"
 
 
 @pytest.mark.unit

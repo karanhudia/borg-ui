@@ -10,6 +10,7 @@ import weakref
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import structlog
@@ -67,6 +68,7 @@ from app.core.security import (
     encrypt_secret,
     get_password_hash,
     update_user_password,
+    taken_user_key,
     user_creation_turn,
     verify_login_challenge_token,
     verify_password,
@@ -2336,13 +2338,29 @@ def create_new_user(
 
         resolved_role = _resolve_legacy_role(user_data.role, user_data.is_admin)
 
-        user = create_user(
-            db=db,
-            username=user_data.username,
-            password_hash=password_hash,
-            email=user_data.email,
-            role=resolved_role,
-        )
+        try:
+            user = create_user(
+                db=db,
+                username=user_data.username,
+                password_hash=password_hash,
+                email=user_data.email,
+                role=resolved_role,
+            )
+        except IntegrityError:
+            # An account update can take the username or email after the
+            # checks; the turn above is only taken by creations.
+            db.rollback()
+            taken = taken_user_key(db, user_data.username, user_data.email)
+            if taken is None:
+                raise
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "key": "backend.errors.auth.usernameAlreadyRegistered"
+                    if taken == "username"
+                    else "backend.errors.auth.emailAlreadyRegistered"
+                },
+            )
         user.all_repositories_role = default_repository_role_for_global_role(
             resolved_role
         )

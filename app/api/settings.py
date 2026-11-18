@@ -1,5 +1,6 @@
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timezone
@@ -24,6 +25,7 @@ from app.core.security import (
     require_any_role,
     get_password_hash,
     update_user_password,
+    taken_user_key,
     user_creation_turn,
     verify_password,
 )
@@ -1485,7 +1487,23 @@ def create_user(
             )
 
             db.add(new_user)
-            db.commit()
+            try:
+                db.commit()
+            except IntegrityError:
+                # An account update can take the username or email after the
+                # checks; the turn above is only taken by creations.
+                db.rollback()
+                taken = taken_user_key(db, user_data.username, user_data.email)
+                if taken is None:
+                    raise
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.settings.usernameAlreadyExists"
+                        if taken == "username"
+                        else "backend.errors.settings.emailAlreadyExists"
+                    },
+                )
             db.refresh(new_user)
 
         logger.info(
@@ -1696,14 +1714,20 @@ def reset_user_password(
         reset_by = current_user.username
         hashed_password = get_password_hash(password_data.new_password)
 
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
+        # One write by id: a user deleted meanwhile is not found, not a 500.
+        reset = (
+            db.query(User)
+            .filter(User.id == user_id)
+            .update(
+                {"password_hash": hashed_password, "updated_at": datetime.utcnow()},
+                synchronize_session=False,
+            )
+        )
+        if reset != 1:
+            db.rollback()
             raise HTTPException(
                 status_code=404, detail={"key": "backend.errors.settings.userNotFound"}
             )
-
-        user.password_hash = hashed_password
-        user.updated_at = datetime.utcnow()
         db.commit()
 
         logger.info("User password reset", user_id=user_id, reset_by=reset_by)

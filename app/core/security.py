@@ -947,6 +947,17 @@ async def create_first_user():
 user_creation_turn = threading.Lock()
 
 
+def taken_user_key(db: Session, username: str, email: Optional[str]) -> Optional[str]:
+    """After a user insert failed on a unique key: "username" or "email",
+    whichever another writer, such as an account update, has taken meanwhile.
+    None when neither is taken."""
+    if db.query(User.id).filter(User.username == username).first() is not None:
+        return "username"
+    if email and db.query(User.id).filter(User.email == email).first() is not None:
+        return "email"
+    return None
+
+
 def create_user(
     db: Session,
     username: str,
