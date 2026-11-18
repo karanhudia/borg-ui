@@ -23,6 +23,7 @@ import UsersTab from '../components/UsersTab'
 import TabContentLayout from '../components/shared/TabContentLayout'
 import MonitoringReportsTab from '../components/MonitoringReportsTab'
 import BackgroundWorkTab from '../components/BackgroundWorkTab'
+import McpTab from '../components/McpTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 
@@ -64,6 +65,7 @@ const Settings: React.FC = () => {
       'appearance',
       'preferences',
       ...(canManageNotifications ? ['notifications'] : []),
+      'mcp',
     ]
     return [
       ...baseTabs,
@@ -157,6 +159,13 @@ const Settings: React.FC = () => {
       {currentTabId === 'notifications' && canManageNotifications && (
         <TabContentLayout>
           <NotificationsTab />
+        </TabContentLayout>
+      )}
+
+      {/* AI assistants (MCP) Tab */}
+      {currentTabId === 'mcp' && (
+        <TabContentLayout>
+          <McpTab />
         </TabContentLayout>
       )}
 

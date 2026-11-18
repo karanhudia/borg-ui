@@ -12,6 +12,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import ArchiveBrowsingLimitsSection from './system-settings/ArchiveBrowsingLimitsSection'
 import { buildProxyAuthHeaderRows, buildSectionTabs } from './system-settings/config'
+import McpAccessSection from './system-settings/McpAccessSection'
 import MetricsAccessSection from './system-settings/MetricsAccessSection'
 import OidcSection from './system-settings/OidcSection'
 import {
@@ -832,6 +833,8 @@ const SystemSettingsTab: React.FC = () => {
               proxyAuthHeaderRows={proxyAuthHeaderRows}
             />
           )}
+
+          {activeSection === 6 && <McpAccessSection />}
 
           {activeSection === 5 && (
             <OidcSection

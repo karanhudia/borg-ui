@@ -1001,6 +1001,76 @@ export const tokensAPI = {
   revoke: (id: number) => api.delete(`/settings/tokens/${id}`),
 }
 
+export type McpLevel = 'read' | 'operate' | 'manage' | 'full'
+
+export interface McpConfig {
+  enabled: boolean
+  max_access_level: McpLevel
+  endpoint_path: string
+  available_levels: McpLevel[]
+}
+
+export interface McpConnection {
+  id: number
+  name: string
+  prefix: string
+  access_level: McpLevel
+  effective_level: McpLevel
+  skip_routine_confirmations: boolean
+  last_client_name: string | null
+  last_client_version: string | null
+  last_used_at: string | null
+  created_at: string
+  username: string | null
+  calls_today: number
+}
+
+export interface McpConnectionCreated extends McpConnection {
+  token: string
+}
+
+export type McpOutcome =
+  'ok' | 'error' | 'denied_level' | 'denied_rbac' | 'needs_confirmation' | 'confirmed'
+
+export interface McpActivityRow {
+  id: number
+  tool: string
+  effective_level: McpLevel
+  outcome: McpOutcome
+  error_key: string | null
+  target: string | null
+  duration_ms: number
+  created_at: string
+}
+
+export interface McpConnectionInput {
+  name?: string
+  access_level?: McpLevel
+  skip_routine_confirmations?: boolean
+}
+
+export const MCP_ACTIVITY_PAGE = 50
+
+export const mcpAPI = {
+  getConfig: () => api.get<McpConfig>('/settings/mcp/config'),
+  updateConfig: (body: Partial<Pick<McpConfig, 'enabled' | 'max_access_level'>>) =>
+    api.put<McpConfig>('/settings/mcp/config', body),
+  list: (all?: boolean) =>
+    api.get<McpConnection[]>('/settings/mcp/connections', all ? { params: { all: true } } : {}),
+  create: (body: McpConnectionInput & { name: string; access_level: McpLevel }) =>
+    api.post<McpConnectionCreated>('/settings/mcp/connections', body),
+  update: (id: number, body: McpConnectionInput) =>
+    api.patch<McpConnection>(`/settings/mcp/connections/${id}`, body),
+  revoke: (id: number) => api.delete(`/settings/mcp/connections/${id}`),
+  activity: (id: number, beforeId?: number) =>
+    api.get<McpActivityRow[]>(`/settings/mcp/connections/${id}/activity`, {
+      params:
+        beforeId === undefined
+          ? { limit: MCP_ACTIVITY_PAGE }
+          : { limit: MCP_ACTIVITY_PAGE, before_id: beforeId },
+    }),
+}
+
 interface PermissionResponse {
   id: number
   user_id: number

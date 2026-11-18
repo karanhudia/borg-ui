@@ -163,7 +163,8 @@
       "users": "Users",
       "exportImport": "Export/Import",
       "beta": "Beta",
-      "backgroundWork": "Background work"
+      "backgroundWork": "Background work",
+      "mcp": "AI assistants (MCP)"
     },
     "menu": {
       "openDrawer": "Open navigation",
@@ -3710,7 +3711,16 @@
     "statsRefreshCompleted": "Stats refresh completed",
     "failedToStartStatsRefresh": "Failed to start stats refresh",
     "autoPrunePreviewLabel": "Automatic prune previews",
-    "autoPrunePreviewHelper": "Compare retention policies on their own after the archive list changes, and when the Prune Preview page opens. When off, a comparison runs only when you press Compare now."
+    "autoPrunePreviewHelper": "Compare retention policies on their own after the archive list changes, and when the Prune Preview page opens. When off, a comparison runs only when you press Compare now.",
+    "mcpTitle": "AI assistants (MCP)",
+    "mcpDescription": "Turn MCP access on or off and cap the level users may grant.",
+    "mcpEnabled": "Allow MCP connections",
+    "mcpEnabledHelp": "When off, every MCP call is refused with a friendly message. Connections are kept.",
+    "mcpMaxLevel": "Highest access level",
+    "mcpMaxLevelHelp": "Connections above this level keep their setting and work at this level until you raise it again.",
+    "mcpToolsToday": "This version of Borg UI has tools for: {{levels}}.",
+    "mcpSave": "Save",
+    "mcpSaved": "MCP settings saved"
   },
   "monitoringReports": {
     "title": "Monitoring & Reports",
@@ -6407,7 +6417,8 @@
         "levelAboveCap": "Your administrator allows MCP connections up to {{max}} access.",
         "skipNeedsFull": "Skipping confirmations needs Full access.",
         "nameRequired": "Give the connection a name.",
-        "connectionNotFound": "MCP connection not found."
+        "connectionNotFound": "MCP connection not found.",
+        "levelNotAvailable": "This version of Borg UI has no {{level}} tools yet, so {{level}} access cannot be chosen."
       }
     },
     "success": {
@@ -7009,5 +7020,101 @@
     "claimed": "Your {{percent}}% offer is on every buy link until {{date}}.",
     "unavailable": "This offer isn't available for this install.",
     "failed": "The offer could not be claimed just now. Try again in a moment."
+  },
+  "mcp": {
+    "levels": {
+      "read": {
+        "title": "Read",
+        "body": "Looks only: status, problems, repositories, archives, files, jobs, logs, plans and settings."
+      },
+      "operate": {
+        "title": "Operate",
+        "body": "Also runs what exists: backups, checks, compacts, restores to a new place, mounts."
+      },
+      "manage": {
+        "title": "Manage",
+        "body": "Also creates and edits configuration: repositories, plans, schedules, scripts and connections."
+      },
+      "full": {
+        "title": "Full",
+        "body": "Also destructive actions, always through a preview you confirm first."
+      },
+      "comingSoon": "Coming soon",
+      "aboveCap": "Above your administrator's limit",
+      "groupLabel": "Access level"
+    },
+    "dialog": {
+      "createTitle": "New MCP connection",
+      "editTitle": "Edit connection",
+      "name": "Name",
+      "namePlaceholder": "Claude on my laptop",
+      "nameHelp": "So you can tell your connections apart.",
+      "skip": "Skip routine confirmations",
+      "skipHelp": "The AI still asks first before anything that deletes data.",
+      "create": "Create connection",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "connected": {
+      "title": "Connection created",
+      "tokenLabel": "Token",
+      "once": "Copy this token now. It will not be shown again.",
+      "copyToken": "Copy token",
+      "copied": "Copied",
+      "connectTitle": "Connect your client",
+      "runInTerminal": "Run this in a terminal.",
+      "pasteInto": "Add this to {{file}}.",
+      "generic": "Other clients",
+      "genericHint": "Any MCP client that supports Streamable HTTP with a custom header.",
+      "copySnippet": "Copy",
+      "done": "Done",
+      "closeConfirmTitle": "Close without copying the token?",
+      "closeConfirmBody": "You will not be able to see it again. You can revoke this connection and create a new one.",
+      "closeAnyway": "Close anyway",
+      "keepOpen": "Keep open"
+    },
+    "list": {
+      "empty": "No MCP connections yet",
+      "emptyBody": "Create one to talk to Borg UI from Claude Code, Claude Desktop, Cursor or VS Code.",
+      "appliesAs": "applies as {{level}}",
+      "notConnected": "Not connected yet",
+      "lastSeen": "{{client}}, {{when}}",
+      "callsToday_one": "{{count}} call today",
+      "callsToday_other": "{{count}} calls today",
+      "owner": "Owner: {{name}}",
+      "edit": "Edit",
+      "revoke": "Revoke",
+      "activity": "Activity",
+      "revokeTitle": "Revoke {{name}}?",
+      "revokeBody": "Clients using this connection stop working right away. This cannot be undone.",
+      "cancel": "Cancel"
+    },
+    "activity": {
+      "title": "Activity",
+      "empty": "No calls yet",
+      "emptyBody": "Tool calls from this connection show up here. Arguments are never stored.",
+      "loadMore": "Load more",
+      "durationMs": "{{ms}} ms",
+      "outcome": {
+        "ok": "OK",
+        "error": "Error",
+        "denied_level": "Above level",
+        "denied_rbac": "Not permitted",
+        "needs_confirmation": "Needs confirmation",
+        "confirmed": "Confirmed"
+      }
+    },
+    "tab": {
+      "title": "AI assistants (MCP)",
+      "description": "Let an AI assistant use Borg UI for you over the Model Context Protocol. Each connection has its own token and access level.",
+      "newConnection": "New connection",
+      "everyone": "Everyone's connections",
+      "turnedOff": "MCP is turned off by your administrator. Existing connections cannot be used until it is turned back on.",
+      "created": "Connection created",
+      "updated": "Connection updated",
+      "revoked": "Connection revoked",
+      "closeActivity": "Close activity",
+      "activityFor": "Activity for {{name}}"
+    }
   }
 }

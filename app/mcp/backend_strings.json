@@ -173,6 +173,7 @@
     "mcp": {
       "connectionNotFound": "MCP connection not found.",
       "levelAboveCap": "Your administrator allows MCP connections up to {{max}} access.",
+      "levelNotAvailable": "This version of Borg UI has no {{level}} tools yet, so {{level}} access cannot be chosen.",
       "nameRequired": "Give the connection a name.",
       "skipNeedsFull": "Skipping confirmations needs Full access."
     },

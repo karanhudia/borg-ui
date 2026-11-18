@@ -11,6 +11,7 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.features import require_feature
@@ -24,6 +25,7 @@ from app.core.security import (
 from app.database.database import get_db
 from app.database.models import ApiToken, McpActivity, SystemSettings, User
 from app.mcp.levels import LEVEL_NAMES, Level, effective_level
+from app.mcp.registry import top_level
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -90,10 +92,35 @@ def _config(settings: SystemSettings, request: Request) -> dict:
         "enabled": bool(settings.mcp_enabled),
         "max_access_level": settings.mcp_max_access_level,
         "endpoint_path": f"{root}/mcp",
+        "available_levels": [n for n in LEVEL_NAMES if Level.parse(n) <= top_level()],
     }
 
 
-def _row(token: ApiToken, cap: str, username: Optional[str] = None) -> dict:
+def _calls_today(db: Session, connection_ids: list[int]) -> dict[int, int]:
+    # ponytail: "today" is the UTC day; per-user time zones if anyone asks.
+    midnight = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0, tzinfo=None
+    )
+    if not connection_ids:
+        return {}
+    rows = (
+        db.query(McpActivity.connection_id, func.count(McpActivity.id))
+        .filter(
+            McpActivity.connection_id.in_(connection_ids),
+            McpActivity.created_at >= midnight,
+        )
+        .group_by(McpActivity.connection_id)
+        .all()
+    )
+    return dict(rows)
+
+
+def _row(
+    token: ApiToken,
+    cap: str,
+    username: Optional[str] = None,
+    calls_today: int = 0,
+) -> dict:
     return {
         "id": token.id,
         "name": token.name,
@@ -106,10 +133,13 @@ def _row(token: ApiToken, cap: str, username: Optional[str] = None) -> dict:
         "last_used_at": serialize_datetime(token.last_used_at),
         "created_at": serialize_datetime(token.created_at),
         "username": username,
+        "calls_today": calls_today,
     }
 
 
 def _check_rules(level: str, skip: bool, cap: str) -> None:
+    if Level.parse(level) > top_level():
+        raise _error(422, "backend.errors.mcp.levelNotAvailable", level=level)
     if Level.parse(level) > Level.parse(cap):
         raise _error(422, "backend.errors.mcp.levelAboveCap", max=cap)
     if skip and Level.parse(level) != Level.FULL:
@@ -177,9 +207,10 @@ def list_connections(
     )
     if not all:
         query = query.filter(ApiToken.user_id == current_user.id)
+    rows = query.order_by(ApiToken.created_at.desc()).all()
+    calls = _calls_today(db, [token.id for token, _ in rows])
     return [
-        _row(token, cap, username)
-        for token, username in query.order_by(ApiToken.created_at.desc()).all()
+        _row(token, cap, username, calls.get(token.id, 0)) for token, username in rows
     ]
 
 
@@ -252,7 +283,7 @@ def update_connection(
         access_level=token.access_level,
     )
     owner = db.query(User.username).filter(User.id == token.user_id).scalar()
-    return _row(token, cap, owner)
+    return _row(token, cap, owner, _calls_today(db, [token.id]).get(token.id, 0))
 
 
 @router.delete("/connections/{connection_id}", status_code=204)

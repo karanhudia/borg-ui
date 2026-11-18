@@ -18,6 +18,15 @@ def pro_plan(test_db):
     return state
 
 
+@pytest.fixture(autouse=True)
+def every_level_has_tools(monkeypatch):
+    """Tests create connections at every level; production refuses levels
+    with no tools yet (phase 2), so pretend they all have some."""
+    from app.mcp.levels import Level
+
+    monkeypatch.setattr("app.api.mcp_connections.top_level", lambda: Level.FULL)
+
+
 @pytest.fixture
 def create_connection(test_client, pro_plan):
     """Create an MCP connection over REST; returns (row dict, token)."""
