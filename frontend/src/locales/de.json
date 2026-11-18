@@ -1936,7 +1936,7 @@
         "checkMaxDurationHelper": "Sekunden. 0 bedeutet unbegrenzt.",
         "checkExtraFlagsHelper": "Zusätzliche borg check Optionen, die an Wartungs-Checks des Plans angehängt werden.",
         "pruneScopeToPlan": "Nur Archive dieses Plans prunen",
-        "pruneScopeToPlanHelper": "Empfohlen, wenn mehrere Pläne in dasselbe Repository sichern. Ohne diese Option wendet Prune die Aufbewahrung dieses Plans auf alle Archive im Repository an, auch auf die anderer Pläne. Archive werden über die Vorlage für Archivnamen dieses Plans erkannt, daher bleiben Archive aus der Zeit vor einer Vorlagenänderung unberührt. Passen auch Namen eines anderen Plans oder Zeitplans, wird Prune mit einem Fehler übersprungen."
+        "pruneScopeToPlanHelper": "Empfohlen, wenn mehrere Pläne in dasselbe Repository sichern. Ohne diese Option wendet Prune die Aufbewahrung dieses Plans auf alle Archive im Repository an, auch auf die anderer Pläne. Archive werden über ihren Namen anhand der Vorlage für Archivnamen dieses Plans erkannt. Nach einer Vorlagenänderung werden ältere Archive nur gepruned, wenn ihre Namen noch passen. Passen auch Namen eines anderen Plans oder Zeitplans, wird Prune mit einem Fehler übersprungen."
       },
       "review": {
         "plan": "Plan",

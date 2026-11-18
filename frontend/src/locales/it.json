@@ -1936,7 +1936,7 @@
         "checkMaxDurationHelper": "Secondi. Usa 0 per nessun limite.",
         "checkExtraFlagsHelper": "Opzioni aggiuntive di borg check aggiunte ai check di manutenzione del piano.",
         "pruneScopeToPlan": "Esegui prune solo sugli archivi creati da questo piano",
-        "pruneScopeToPlanHelper": "Consigliato quando più piani eseguono il backup nello stesso repository. Senza questa opzione, prune applica la conservazione di questo piano a tutti gli archivi del repository, compresi quelli di altri piani. Gli archivi vengono riconosciuti dal modello del nome archivio di questo piano, quindi quelli precedenti a un cambio di modello non vengono toccati. Se anche i nomi di un altro piano o pianificazione corrispondono, prune viene saltato con un errore."
+        "pruneScopeToPlanHelper": "Consigliato quando più piani eseguono il backup nello stesso repository. Senza questa opzione, prune applica la conservazione di questo piano a tutti gli archivi del repository, compresi quelli di altri piani. Gli archivi vengono riconosciuti dal nome secondo il modello del nome archivio di questo piano, quindi dopo un cambio di modello quelli precedenti subiscono prune solo se il nome corrisponde ancora. Se anche i nomi di un altro piano o pianificazione corrispondono, prune viene saltato con un errore."
       },
       "review": {
         "plan": "Piano",

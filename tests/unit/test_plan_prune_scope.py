@@ -43,8 +43,8 @@ def db():
         ("{plan_name}-{now:%a}", "nas", "r", "nas-*"),
         # Borg's own placeholders expand at create time, so match anything
         ("{hostname}-{plan_name}-{now}", "nas", "r", "*-nas-[0-9]*"),
-        # glob characters in a name match one character, never a class
-        ("{plan_name}-{now}", "a[b]*", "r", "a?b??-[0-9]*"),
+        # glob characters in a name are escaped and match only themselves
+        ("{plan_name}-{now}", "a[b]*", "r", "a[[]b][*]-[0-9]*"),
         # no template: the default name builder (plan, repo, timestamp)
         (None, "nas", "r", "nas-r-[0-9]*"),
         ("", "nas", "r", "nas-r-[0-9]*"),
@@ -151,4 +151,33 @@ def test_refuses_when_a_schedule_writes_matching_names(db):
     )
     db.commit()
     with pytest.raises(PruneScopeError, match="legacy"):
+        plan_prune_match(db, plan, repo)
+
+
+@pytest.mark.unit
+def test_escaped_glob_characters_match_only_themselves():
+    import fnmatch
+
+    glob = plan_archive_glob("{plan_name}-{now}", job_name="db[1]", repo_name="r")
+    assert fnmatch.fnmatchcase("db[1]-2026-11-18T02:00:00.123", glob)
+    assert not fnmatch.fnmatchcase("dbx1x-2026-11-18T02:00:00.123", glob)
+
+
+@pytest.mark.unit
+def test_borg2_refuses_a_series_with_a_borg_placeholder(db):
+    repo = _repo(db, version=2)
+    plan = _plan(db, repo, "nas", template="{hostname}-{plan_name}")
+    with pytest.raises(PruneScopeError, match="placeholder"):
+        plan_prune_match(db, plan, repo)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("version", [1, 2])
+def test_refuses_when_a_sibling_name_has_a_borg_placeholder(db, version):
+    """`{hostname}-{now}` on a host called `nas` writes `nas-<date>`: whether
+    it overlaps this plan cannot be told from the template, so refuse."""
+    repo = _repo(db, version=version)
+    plan = _plan(db, repo, "nas")
+    _plan(db, repo, "laptop", template="{hostname}-{now}")
+    with pytest.raises(PruneScopeError, match="laptop"):
         plan_prune_match(db, plan, repo)

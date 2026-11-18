@@ -409,10 +409,13 @@ template:
   `nas` does not match archives of plan `nas-docs`.
 - Borg 2: the plan's exact archive series name.
 
-Archives created before a template change no longer match and are left alone.
+After a template change, archives created before it are pruned only if their
+names still match the new template.
 If another plan or schedule on the same repository produces names that also
 match, the prune is skipped and the run reports which one, so give them
-different archive name templates. A managed agent needs a version that supports
+different archive name templates. The same happens when another plan's
+template uses a placeholder Borg fills in, such as `{hostname}`, since its
+names cannot be told apart in advance. A managed agent needs a version that supports
 this option; an older agent fails the prune instead of pruning everything.
 
 Prune from the repository's own maintenance actions always covers the whole

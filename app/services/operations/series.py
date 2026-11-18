@@ -82,6 +82,9 @@ _SAMPLE_TIME = {
 }
 
 
+_UNRESOLVED_PLACEHOLDER = re.compile(r"\{[^{}]*\}")
+
+
 class PruneScopeError(ValueError):
     """A plan-scoped prune cannot be limited to the plan's own archives."""
 
@@ -93,7 +96,8 @@ def plan_archive_glob(
     gives backups (issue #1549). Time placeholders become `[0-9]*` so plan
     "nas" does not match plan "nas-docs"; a formatted one (`{now:%a}`) and
     Borg's own placeholders (`{hostname}`) can be anything, so `*`. Glob
-    characters in the literal text match one character (`?`), never a class.
+    characters in the literal text are escaped as one-character classes
+    (`[[]`, `[*]`, `[?]`), so they match only themselves.
     """
     marked = (
         TIME_PLACEHOLDER_PATTERN.sub(
@@ -103,7 +107,7 @@ def plan_archive_glob(
         else template
     )
     name = build_archive_name(job_name, repo_name, marked, timestamp=_DIGITS_MARK)
-    name = re.sub(r"[*?\[\]]", "?", name)
+    name = re.sub(r"[*?\[]", lambda m: f"[{m.group(0)}]", name)
     name = re.sub(r"\{[^{}]*\}", "*", name)
     return name.replace(_DIGITS_MARK, "[0-9]*").replace(_ANY_MARK, "*")
 
@@ -189,6 +193,14 @@ def plan_prune_match(db: Session, plan: BackupPlan, repository: Repository) -> s
         def matches(name: str) -> bool:
             return name == series
 
+        if _UNRESOLVED_PLACEHOLDER.search(series):
+            # Borg fills these in at create time; the exact selector would
+            # not match the real name, and a sibling's could expand to it.
+            raise PruneScopeError(
+                f"Prune limited to this plan was not run: its archive name "
+                f"'{series}' has a placeholder Borg fills in, so its archives "
+                "cannot be selected by name. Use a template without one."
+            )
         result = f"id:{series}"
     else:
         glob = plan_archive_glob(
@@ -216,6 +228,15 @@ def plan_prune_match(db: Session, plan: BackupPlan, repository: Repository) -> s
                 repository.name,
                 source.archive_name_template,
                 **_SAMPLE_TIME,
+            )
+        if sample and _UNRESOLVED_PLACEHOLDER.search(sample):
+            # Borg expands it at create time (`{hostname}`, `{now:%a}`), so
+            # whether the real names overlap this plan's cannot be told here.
+            raise PruneScopeError(
+                f"Prune limited to this plan was not run: {kind} "
+                f"'{source.name}' names its archives with a placeholder Borg "
+                "fills in, so its archives cannot be told apart from this "
+                "plan's."
             )
         if sample and matches(sample):
             raise PruneScopeError(

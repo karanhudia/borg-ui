@@ -1936,7 +1936,7 @@
         "checkMaxDurationHelper": "Seconds. Use 0 for unlimited.",
         "checkExtraFlagsHelper": "Additional borg check options appended to plan maintenance checks.",
         "pruneScopeToPlan": "Only prune archives created by this plan",
-        "pruneScopeToPlanHelper": "Recommended when several plans back up to the same repository. Without it, prune applies this plan's retention to every archive in the repository, including other plans' archives. Archives are matched by this plan's archive name template, so archives from before a template change are left alone. If another plan or schedule uses names that also match, the prune is skipped with an error instead."
+        "pruneScopeToPlanHelper": "Recommended when several plans back up to the same repository. Without it, prune applies this plan's retention to every archive in the repository, including other plans' archives. Archives are matched by name using this plan's archive name template, so after a template change, older archives are pruned only if their names still match. If another plan or schedule uses names that also match, the prune is skipped with an error instead."
       },
       "review": {
         "plan": "Plan",
