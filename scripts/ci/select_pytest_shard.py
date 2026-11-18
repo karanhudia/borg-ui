@@ -49,8 +49,8 @@ def select_shard(
         raise ValueError("shard_index must be between 1 and shard_total")
     if not test_counts:
         raise ValueError("No pytest test nodes found in input")
-    if balance_by not in {"tests", "files"}:
-        raise ValueError("balance_by must be tests or files")
+    if balance_by not in {"tests", "files", "weights"}:
+        raise ValueError("balance_by must be tests, files or weights")
 
     shard_paths: list[list[str]] = [[] for _ in range(shard_total)]
     shard_weights = [0.0 for _ in range(shard_total)]
@@ -59,6 +59,14 @@ def select_shard(
         # Release tags can expand parameter counts between migration runners.
         # Stable file weights keep the assignment independent of that metadata.
         weights = {path: 1.0 for path in test_counts}
+    elif balance_by == "weights":
+        # Checked-in seconds per file. A file without one weighs the mean, never
+        # its test count, so a release tag still cannot move files around.
+        known = {p: s for p, s in (durations or {}).items() if p in test_counts}
+        if not known:
+            raise ValueError("weights balancing needs a weights file")
+        mean = sum(known.values()) / len(known)
+        weights = {path: known.get(path, mean) for path in test_counts}
     else:
         known = {
             path: seconds
@@ -95,9 +103,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--balance-by",
-        choices=("tests", "files"),
+        choices=("tests", "files", "weights"),
         default="tests",
-        help="Balance by tests/durations (default), or by files ignoring counts and history.",
+        help=(
+            "Balance by tests/durations (default), by files ignoring counts and "
+            "history, or by checked-in per-file seconds (--durations-file)."
+        ),
     )
     parser.add_argument(
         "--durations-file",
@@ -130,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
             shard_total=args.shard_total,
             balance_by=args.balance_by,
             durations=load_durations(args.durations_file)
-            if args.durations_file and args.balance_by == "tests"
+            if args.durations_file and args.balance_by != "files"
             else None,
         )
     except ValueError as exc:
