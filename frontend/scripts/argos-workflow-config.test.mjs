@@ -49,7 +49,7 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain('frontend/scripts/**')
     expect(workflow).toContain('visual-regression-state')
     expect(workflow).toContain('persist-credentials: false')
-    expect(workflow).toContain('npx playwright install --with-deps chromium')
+    expect(workflow).toContain('uses: ./source/.github/actions/install-playwright-chromium')
     expect(workflow).toContain('npm run visual:screenshots')
     expect(workflow).toContain('npm run visual:report')
     expect(workflow).toContain('Resolve pull request changed files')

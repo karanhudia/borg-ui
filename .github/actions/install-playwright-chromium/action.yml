@@ -1,0 +1,52 @@
+name: Install Playwright Chromium
+description: >-
+  Install Playwright's Chromium and its system packages. The packages (mostly
+  fonts, ~22 MB) come from an Ubuntu mirror that often serves them at ~70 kB/s,
+  which took over 5 minutes, so their .debs are cached per runner image and
+  Playwright version. Any failure installing from the cache falls back to the
+  normal `playwright install --with-deps`.
+
+inputs:
+  working-directory:
+    description: Directory with node_modules/playwright installed.
+    required: true
+  browsers-path:
+    description: PLAYWRIGHT_BROWSERS_PATH value; empty keeps Playwright's default.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # ImageOS/ImageVersion are runner shell variables, absent from the env
+    # context, so they reach the cache key through a step output.
+    - name: Read runner image and Playwright versions
+      id: versions
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+        echo "playwright=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+    - name: Restore cached Playwright system packages
+      id: debs
+      uses: actions/cache@v5
+      with:
+        path: ~/playwright-debs
+        key: playwright-debs-${{ steps.versions.outputs.image }}-${{ steps.versions.outputs.playwright }}-v1
+
+    - name: Install Chromium and system packages
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}
+        BROWSERS_PATH: ${{ inputs.browsers-path }}
+      run: |
+        if [ -n "$BROWSERS_PATH" ]; then export PLAYWRIGHT_BROWSERS_PATH="$BROWSERS_PATH"; fi
+        if [ "$CACHE_HIT" = true ] && sudo dpkg -i ~/playwright-debs/*.deb; then
+          npx playwright install chromium
+          exit 0
+        fi
+        npx playwright install --with-deps chromium
+        mkdir -p ~/playwright-debs
+        find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t ~/playwright-debs {} +

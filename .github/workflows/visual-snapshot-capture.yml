@@ -60,8 +60,10 @@ jobs:
         run: npm ci
 
       - name: Install Playwright Chromium
-        working-directory: frontend
-        run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
+        uses: ./.github/actions/install-playwright-chromium
+        with:
+          working-directory: frontend
+          browsers-path: "0"
 
       - name: Capture Storybook snapshots
         working-directory: frontend

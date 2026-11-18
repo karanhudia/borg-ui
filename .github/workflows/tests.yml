@@ -1165,11 +1165,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Install Playwright
+      - name: Install frontend dependencies
         working-directory: frontend
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
+        run: npm ci
+
+      - name: Install Playwright
+        uses: ./.github/actions/install-playwright-chromium
+        with:
+          working-directory: frontend
 
       - name: Download frontend build artifact
         uses: actions/download-artifact@v8
