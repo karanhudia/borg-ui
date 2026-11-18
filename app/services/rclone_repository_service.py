@@ -583,20 +583,24 @@ class RcloneRepositoryService:
         storage.last_sync_error = None
         db.commit()
         temp_dir = None
+        # One resolved path for every step below: the mount check, the staging
+        # parent, the removal and the swap must all mean the same directory,
+        # whatever symlinks or ".." the stored path holds.
+        local_path = os.path.realpath(storage.cache_path)
         try:
             # The copy is staged beside the local path and swapped in. A
             # mount root cannot be swapped: replacing it empties the mounted
             # filesystem, then fails on its busy root. A top-level volume
             # also stages in "/" (dashboard 2cc76f103cf176a5).
-            mounted = fs.mount_points_at_or_under(storage.cache_path)
+            mounted = fs.mount_points_at_or_under(local_path)
             if mounted is None or mounted:
                 raise OSError(
-                    f"{storage.cache_path} is a mount point or has a filesystem "
+                    f"{local_path} is a mount point or has a filesystem "
                     "mounted inside it (or the mount table cannot be read), so "
                     "it cannot be replaced safely. Point the repository at a "
                     "folder inside the mount and restore again."
                 )
-            parent = Path(storage.cache_path).parent
+            parent = Path(local_path).parent
             parent.mkdir(parents=True, exist_ok=True)
             temp_dir = tempfile.mkdtemp(
                 prefix=f".hydrate-{repository.id}-", dir=str(parent)
@@ -623,12 +627,10 @@ class RcloneRepositoryService:
         if result.success:
             try:
                 if os.path.lexists(
-                    storage.cache_path
-                ) and not fs.remove_tree_without_crossing_mounts(storage.cache_path):
-                    raise OSError(
-                        f"Could not remove the old copy at {storage.cache_path}"
-                    )
-                os.replace(temp_dir, storage.cache_path)
+                    local_path
+                ) and not fs.remove_tree_without_crossing_mounts(local_path):
+                    raise OSError(f"Could not remove the old copy at {local_path}")
+                os.replace(temp_dir, local_path)
                 repository.path = storage.cache_path
                 storage.sync_status = "current"
                 storage.last_hydrated_at = now

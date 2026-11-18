@@ -757,6 +757,22 @@ async def test_startup_failure_is_sent_before_the_process_exits(
     assert [(e["props"]["kind"], e["props"]["component"]) for e in sent] == [expected]
 
 
+@pytest.mark.asyncio
+async def test_startup_does_not_report_a_database_from_a_newer_release(
+    monkeypatch, sent
+):
+    import app.database.db_upgrade as db_upgrade
+    import app.main as main
+
+    def newer_schema():
+        raise db_upgrade.SchemaFromNewerRelease("from a newer release")
+
+    monkeypatch.setattr(db_upgrade, "ensure_schema", newer_schema)
+    with pytest.raises(db_upgrade.SchemaFromNewerRelease):
+        await main.startup_event()
+    assert sent == []
+
+
 def test_flush_is_bounded_and_never_raises(monkeypatch):
     monkeypatch.setattr(settings, "error_reporting_enabled", True)
     monkeypatch.setattr(requests, "post", lambda *a, **k: time.sleep(10))

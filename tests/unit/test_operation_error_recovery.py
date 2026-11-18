@@ -110,6 +110,14 @@ from fastapi import HTTPException
         # The repository is gone (bea738bcdf5f61ae).
         ({"return_code": 13}, 404),
         ({"error": "Borg mount failed: Repository /mnt/r does not exist."}, 404),
+        # A stored --log-json line, as prune preview passes it on.
+        (
+            {
+                "stderr": '[stderr] {"type": "log_message", "message": '
+                '"Repository /r does not exist.", "msgid": "Repository.DoesNotExist"}'
+            },
+            404,
+        ),
     ],
 )
 def test_repository_refusal_status(result, status):

@@ -8,19 +8,36 @@ describe('installTranslationDomGuard', () => {
   installTranslationDomGuard()
   installTranslationDomGuard()
 
-  it('ignores removing a node a translator moved away', () => {
+  it('removes a moved node from where it is now', () => {
     const parent = document.createElement('div')
-    const text = document.createTextNode('Repositories')
-    parent.appendChild(text)
-    const font = document.createElement('font')
+    const text = parent.appendChild(document.createTextNode('stale'))
+    const font = parent.appendChild(document.createElement('font'))
     font.appendChild(text)
-    parent.appendChild(font)
 
     expect(parent.removeChild(text)).toBe(text)
-    expect(font.firstChild).toBe(text)
+    expect(text.parentNode).toBeNull()
   })
 
-  it('appends when the reference node was moved away', () => {
+  it('ignores removing a node a translator already dropped', () => {
+    const parent = document.createElement('div')
+    const text = document.createTextNode('gone')
+
+    expect(parent.removeChild(text)).toBe(text)
+  })
+
+  it('inserts before the wrapper that holds the reference', () => {
+    const parent = document.createElement('div')
+    const reference = document.createTextNode('ref')
+    const font = parent.appendChild(document.createElement('font'))
+    font.appendChild(reference)
+    const trailing = parent.appendChild(document.createElement('button'))
+    const added = document.createElement('span')
+
+    expect(parent.insertBefore(added, reference)).toBe(added)
+    expect(Array.from(parent.childNodes)).toEqual([added, font, trailing])
+  })
+
+  it('appends when the reference was moved out of the parent', () => {
     const parent = document.createElement('div')
     const moved = document.createTextNode('old')
     document.createElement('font').appendChild(moved)

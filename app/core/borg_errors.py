@@ -175,10 +175,27 @@ def bounded_operation_diagnostic(reason: str) -> str:
 _REMOTE_BORG_MISSING = _re.compile(r"\bborg[\w./-]*'?: (?:command )?not found")
 
 
+def _log_json_messages(text: str) -> str:
+    """Borg's --log-json lines, as stored with a stream prefix ("[stderr] {...}"),
+    reduced to their message so the line matches below work on them too."""
+    lines = []
+    for line in text.splitlines():
+        start = line.find("{")
+        if start != -1:
+            try:
+                record = _json.loads(line[start:])
+            except ValueError:
+                record = None
+            if isinstance(record, dict) and isinstance(record.get("message"), str):
+                line = record["message"]
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def repository_failure_status(result: dict) -> int:
     """Classify evidenced refusals only; unknown Borg failures remain 500."""
     reason = "\n".join(
-        str(result.get(key) or "") for key in ("error", "stderr")
+        _log_json_messages(str(result.get(key) or "")) for key in ("error", "stderr")
     ).lower()
     return_code = result.get("return_code")
     # Another process holds the lock (a running backup, a stale lock), on the

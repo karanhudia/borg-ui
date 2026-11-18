@@ -871,6 +871,44 @@ async def test_hydrate_refuses_a_mounted_local_copy_before_downloading(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_hydrate_replaces_the_directory_the_kernel_resolves(db_session, tmp_path):
+    # "link/../repo" with link -> real/sub is real/repo to the kernel but
+    # tmp/repo lexically; removal and swap must agree on real/repo.
+    (tmp_path / "real" / "sub").mkdir(parents=True)
+    (tmp_path / "link").symlink_to(tmp_path / "real" / "sub")
+    kernel_target = tmp_path / "real" / "repo"
+    kernel_target.mkdir()
+    (kernel_target / "old").write_text("old copy")
+    lexical_target = tmp_path / "repo"
+    lexical_target.mkdir()
+    (lexical_target / "keep").write_text("unrelated")
+    stored = str(tmp_path / "link" / ".." / "repo")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=stored, encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=stored,
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=_RecordingRcloneService()
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "current"
+    assert (lexical_target / "keep").read_text() == "unrelated"
+    assert kernel_target.is_dir() and not (kernel_target / "old").exists()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_hydrate_repository_leaves_no_temp_dir_for_an_unknown_job(
     db_session, tmp_path
 ):
