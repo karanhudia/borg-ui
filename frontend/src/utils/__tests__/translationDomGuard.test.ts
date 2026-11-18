@@ -37,14 +37,29 @@ describe('installTranslationDomGuard', () => {
     expect(Array.from(parent.childNodes)).toEqual([added, font, trailing])
   })
 
-  it('appends when the reference was moved out of the parent', () => {
+  it('appends when the translator replaced the reference', () => {
     const parent = document.createElement('div')
-    const moved = document.createTextNode('old')
-    document.createElement('font').appendChild(moved)
+    const replaced = document.createTextNode('old')
     const added = document.createElement('span')
 
-    expect(parent.insertBefore(added, moved)).toBe(added)
+    expect(parent.insertBefore(added, replaced)).toBe(added)
     expect(parent.lastChild).toBe(added)
+  })
+
+  it('leaves nodes under other parents to the browser', () => {
+    const parent = document.createElement('div')
+    const other = document.createElement('div')
+    const button = other.appendChild(document.createElement('button'))
+    const text = other.appendChild(document.createTextNode('elsewhere'))
+    const added = document.createElement('span')
+
+    expect(() => parent.removeChild(button)).toThrow()
+    expect(() => parent.removeChild(text)).toThrow()
+    expect(() => parent.insertBefore(added, button)).toThrow()
+    expect(() => parent.insertBefore(added, text)).toThrow()
+    expect(button.parentNode).toBe(other)
+    expect(text.parentNode).toBe(other)
+    expect(added.parentNode).toBeNull()
   })
 
   it('still removes and inserts real children', () => {

@@ -764,12 +764,18 @@ async def test_startup_does_not_report_a_database_from_a_newer_release(
     import app.database.db_upgrade as db_upgrade
     import app.main as main
 
+    import app.services.error_reporter as error_reporter
+
     def newer_schema():
         raise db_upgrade.SchemaFromNewerRelease("from a newer release")
 
+    queued = []
+    monkeypatch.setattr(error_reporter, "_enqueue", queued.append)
     monkeypatch.setattr(db_upgrade, "ensure_schema", newer_schema)
     with pytest.raises(db_upgrade.SchemaFromNewerRelease):
         await main.startup_event()
+    # Nothing queued, not only nothing sent yet.
+    assert queued == []
     assert sent == []
 
 

@@ -583,23 +583,17 @@ class RcloneRepositoryService:
         storage.last_sync_error = None
         db.commit()
         temp_dir = None
-        # One resolved path for every step below: the mount check, the staging
-        # parent, the removal and the swap must all mean the same directory,
-        # whatever symlinks or ".." the stored path holds.
-        local_path = os.path.realpath(storage.cache_path)
         try:
-            # The copy is staged beside the local path and swapped in. A
-            # mount root cannot be swapped: replacing it empties the mounted
-            # filesystem, then fails on its busy root. A top-level volume
-            # also stages in "/" (dashboard 2cc76f103cf176a5).
-            mounted = fs.mount_points_at_or_under(local_path)
-            if mounted is None or mounted:
-                raise OSError(
-                    f"{local_path} is a mount point or has a filesystem "
-                    "mounted inside it (or the mount table cannot be read), so "
-                    "it cannot be replaced safely. Point the repository at a "
-                    "folder inside the mount and restore again."
-                )
+            # One path for every step below: the checks, the staging parent,
+            # the removal and the swap must all mean the same directory,
+            # whatever symlinks or ".." the stored path holds. The parents are
+            # resolved; the last component is not, so a symlink there is seen
+            # and refused rather than followed.
+            stored = storage.cache_path.rstrip("/") or "/"
+            local_path = os.path.join(
+                os.path.realpath(os.path.dirname(stored)), os.path.basename(stored)
+            )
+            _require_replaceable_directory(local_path)
             parent = Path(local_path).parent
             parent.mkdir(parents=True, exist_ok=True)
             temp_dir = tempfile.mkdtemp(
@@ -626,6 +620,8 @@ class RcloneRepositoryService:
         log_text = _sync_result_log_text(result)
         if result.success:
             try:
+                # Re-checked: the download can take hours.
+                _require_replaceable_directory(local_path)
                 if os.path.lexists(
                     local_path
                 ) and not fs.remove_tree_without_crossing_mounts(local_path):
@@ -653,6 +649,29 @@ class RcloneRepositoryService:
         hydrate_job.log_text = log_text or hydrate_job.error_text
         db.commit()
         return self.serialize_status(repository, storage, remote)
+
+
+def _require_replaceable_directory(path: str) -> None:
+    """Refuse a hydrate target that cannot be swapped for the restored copy.
+
+    A mount root cannot be swapped: replacing it empties the mounted
+    filesystem, then fails on its busy root, and a top-level volume also
+    stages in "/" (dashboard 2cc76f103cf176a5). A symlink or a regular file
+    at the path is not a repository copy to replace.
+    """
+    if os.path.islink(path) or (os.path.lexists(path) and not os.path.isdir(path)):
+        raise OSError(
+            f"{path} is not a directory (a symlink or a file is there), so "
+            "it is not replaced. Point the repository at a folder and restore again."
+        )
+    mounted = fs.mount_points_at_or_under(path)
+    if mounted is None or mounted:
+        raise OSError(
+            f"{path} is a mount point or has a filesystem mounted inside it "
+            "(or the mount table cannot be read), so it cannot be replaced "
+            "safely. Point the repository at a folder inside the mount and "
+            "restore again."
+        )
 
 
 def _iso(value):

@@ -1,5 +1,5 @@
 import json
-from collections import deque
+from collections import OrderedDict, deque
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -1438,7 +1438,8 @@ def test_stale_rclone_oauth_link_is_409_not_502(
 
     from app.api import rclone as rclone_api
 
-    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    # A fresh table, restored by monkeypatch even when an assertion fails.
+    monkeypatch.setattr(rclone_api, "RCLONE_OAUTH_SESSIONS", OrderedDict())
     rclone_api.RCLONE_OAUTH_SESSIONS["oauth-stale"] = {
         "provider": "onedrive",
         "status": session_status,
@@ -1483,7 +1484,6 @@ def test_stale_rclone_oauth_link_is_409_not_502(
     )
     # An ended run is refused before any request to its loopback server.
     assert len(requests) == (1 if session_status == "awaiting_callback" else 0)
-    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
 
 
 @pytest.mark.unit

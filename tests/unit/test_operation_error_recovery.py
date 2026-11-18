@@ -110,6 +110,26 @@ from fastapi import HTTPException
         # The repository is gone (bea738bcdf5f61ae).
         ({"return_code": 13}, 404),
         ({"error": "Borg mount failed: Repository /mnt/r does not exist."}, 404),
+        # A line too deeply nested to decode keeps its exit code.
+        ({"return_code": 21, "stderr": '{"a": ' + "[" * 100000}, 422),
+        # "(timeout)" in a lock path is not a timeout; the lock could not be
+        # created for lack of permission.
+        (
+            {
+                "stderr": "Failed to create/acquire the lock /backups/photos "
+                "(timeout)/lock.exclusive ([Errno 13] Permission denied)."
+            },
+            422,
+        ),
+        # A repository named like a diagnostic is still just missing.
+        (
+            {"error": "Repository /backups/data integrity error does not exist."},
+            404,
+        ),
+        (
+            {"stderr": "Remote: Data integrity error: Invalid segment magic"},
+            422,
+        ),
         # A stored --log-json line, as prune preview passes it on.
         (
             {

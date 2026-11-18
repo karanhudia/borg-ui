@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -141,6 +143,12 @@ class _RecordingRcloneService:
             command=["rclone", "sync", source, destination],
             redacted_command="rclone sync <path> <path>",
         )
+
+
+class _MarkerWritingRcloneService(_RecordingRcloneService):
+    async def sync(self, source, destination, **kwargs):
+        (Path(destination) / "restored").write_text("from remote")
+        return await super().sync(source, destination, **kwargs)
 
 
 class _VerboseRecordingRcloneService:
@@ -897,14 +905,62 @@ async def test_hydrate_replaces_the_directory_the_kernel_resolves(db_session, tm
     db_session.add_all([remote, repository, storage])
     db_session.commit()
     service = RcloneRepositoryService(
-        cache_root=str(tmp_path / "cache"), service=_RecordingRcloneService()
+        cache_root=str(tmp_path / "cache"), service=_MarkerWritingRcloneService()
     )
 
     status = await service.hydrate_repository(db_session, repository)
 
     assert status["sync_status"] == "current"
     assert (lexical_target / "keep").read_text() == "unrelated"
-    assert kernel_target.is_dir() and not (kernel_target / "old").exists()
+    assert not (lexical_target / "restored").exists()
+    assert not (kernel_target / "old").exists()
+    assert (kernel_target / "restored").read_text() == "from remote"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("occupant", ["symlink", "file"])
+async def test_hydrate_refuses_a_symlink_or_file_at_the_local_path(
+    db_session, tmp_path, occupant
+):
+    # The old rmtree refused both; following the symlink would delete its
+    # target, unlinking the file would report a restore that replaced it.
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "keep").write_text("not the repository")
+    local = tmp_path / "repo"
+    if occupant == "symlink":
+        local.symlink_to(elsewhere)
+    else:
+        local.write_text("a file")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=str(local), encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=str(local),
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    rclone = _RecordingRcloneService()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=rclone
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "failed"
+    assert "not a directory" in storage.last_sync_error
+    assert rclone.sync_calls == []
+    assert (elsewhere / "keep").read_text() == "not the repository"
+    if occupant == "symlink":
+        assert local.is_symlink()
+    else:
+        assert local.read_text() == "a file"
 
 
 @pytest.mark.unit

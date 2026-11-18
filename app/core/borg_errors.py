@@ -175,6 +175,12 @@ def bounded_operation_diagnostic(reason: str) -> str:
 _REMOTE_BORG_MISSING = _re.compile(r"\bborg[\w./-]*'?: (?:command )?not found")
 
 
+_LOCK_TIMEOUT_LINE = _re.compile(
+    r"failed to create/acquire the lock .*\(timeout\)\.?[ \t]*$", _re.M
+)
+_DATA_INTEGRITY_LINE = _re.compile(r"^(?:remote: )?data integrity error:", _re.M)
+
+
 def _log_json_messages(text: str) -> str:
     """Borg's --log-json lines, as stored with a stream prefix ("[stderr] {...}"),
     reduced to their message so the line matches below work on them too."""
@@ -184,7 +190,7 @@ def _log_json_messages(text: str) -> str:
         if start != -1:
             try:
                 record = _json.loads(line[start:])
-            except ValueError:
+            except (ValueError, RecursionError):
                 record = None
             if isinstance(record, dict) and isinstance(record.get("message"), str):
                 line = record["message"]
@@ -204,7 +210,8 @@ def repository_failure_status(result: dict) -> int:
     # run failed, the repository is not held by anyone.
     if "our lock was killed by another borg" not in reason and (
         is_lock_contention_exit_code(return_code)
-        or ("failed to create/acquire the lock" in reason and "(timeout)" in reason)
+        # The reason ends the line; "(timeout)" in the lock path does not count.
+        or _LOCK_TIMEOUT_LINE.search(reason)
     ):
         return 423
     # 422, not 403: the frontend reads 403 as a role refusal and toasts so.
@@ -214,8 +221,9 @@ def repository_failure_status(result: dict) -> int:
         return_code in (21, 42, 44, 83, 90)
         # An encrypted repository with no passphrase stored (a2d56195f9ae231c).
         or "cannot acquire a passphrase" in reason
-        # Damaged repository data (e7d070c0c0f0d0a6).
-        or "data integrity error" in reason
+        # Damaged repository data (e7d070c0c0f0d0a6), as Borg's own prefix
+        # and not inside a repository path.
+        or _DATA_INTEGRITY_LINE.search(reason)
         or "repository path not allowed" in reason
         # The SSH host's key changed or is not trusted (6374772928f444e2).
         or "remote host identification has changed" in reason
