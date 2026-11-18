@@ -590,8 +590,17 @@ class RcloneRepositoryService:
             # resolved; the last component is not, so a symlink there is seen
             # and refused rather than followed.
             stored = storage.cache_path.rstrip("/") or "/"
+            stored_parent = os.path.dirname(stored)
+            # realpath collapses "x/.." lexically; ask the kernel, which
+            # refuses it when x is a file (ENOTDIR). A missing parent is fine
+            # (it is created below) unless ".." passes through it.
+            try:
+                os.stat(stored_parent)
+            except FileNotFoundError:
+                if ".." in Path(stored_parent).parts:
+                    raise
             local_path = os.path.join(
-                os.path.realpath(os.path.dirname(stored)), os.path.basename(stored)
+                os.path.realpath(stored_parent), os.path.basename(stored)
             )
             _require_replaceable_directory(local_path)
             parent = Path(local_path).parent

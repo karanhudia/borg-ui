@@ -919,6 +919,45 @@ async def test_hydrate_replaces_the_directory_the_kernel_resolves(db_session, tm
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("through", ["file", "missing"])
+async def test_hydrate_refuses_a_path_the_kernel_cannot_traverse(
+    db_session, tmp_path, through
+):
+    # realpath collapses "x/.." lexically; the kernel refuses it when x is a
+    # file (ENOTDIR) or missing, so tmp/repo is not what the path names.
+    if through == "file":
+        (tmp_path / "x").write_text("a file")
+    lexical_target = tmp_path / "repo"
+    lexical_target.mkdir()
+    (lexical_target / "keep").write_text("unrelated")
+    stored = str(tmp_path / "x" / ".." / "repo")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=stored, encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=stored,
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    rclone = _RecordingRcloneService()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=rclone
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "failed"
+    assert rclone.sync_calls == []
+    assert (lexical_target / "keep").read_text() == "unrelated"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 @pytest.mark.parametrize("occupant", ["symlink", "file"])
 async def test_hydrate_refuses_a_symlink_or_file_at_the_local_path(
     db_session, tmp_path, occupant
