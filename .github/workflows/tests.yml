@@ -153,12 +153,18 @@ jobs:
       # The Ubuntu mirror often serves these 1.5 MB at ~50 kB/s, and apt-get
       # update adds ~25s more. The .debs are cached per runner image version;
       # if installing them fails for any reason, apt runs as before.
+      # ImageOS/ImageVersion are runner shell variables, absent from the env
+      # context, so they reach the cache key through a step output.
+      - name: Read runner image version
+        id: runner-image
+        run: echo "version=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+
       - name: Restore cached apt packages
         id: apt-debs
         uses: actions/cache@v5
         with:
           path: ~/apt-debs
-          key: apt-debs-${{ env.ImageOS }}-${{ env.ImageVersion }}-borgbackup-shellcheck-v1
+          key: apt-debs-${{ steps.runner-image.outputs.version }}-borgbackup-shellcheck-v1
 
       - name: Install system dependencies
         run: |

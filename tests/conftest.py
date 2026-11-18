@@ -66,7 +66,19 @@ def _give_xdist_worker_its_own_databases():
     if not worker:
         return
     # ponytail: Redis has 16 databases; past 16 workers two would share one.
-    os.environ["REDIS_DB"] = str(int(worker.removeprefix("gw")) % 16)
+    redis_db = str(int(worker.removeprefix("gw")) % 16)
+    os.environ["REDIS_DB"] = redis_db
+    # A configured REDIS_URL wins over REDIS_DB in the cache service, and a
+    # ?db= query wins over the URL path in redis-py, so drop it.
+    redis_url = os.environ.get("REDIS_URL")
+    if redis_url and redis_url.lower() != "disabled":
+        from urllib.parse import parse_qsl, urlencode, urlsplit
+
+        parts = urlsplit(redis_url)
+        query = urlencode([(k, v) for k, v in parse_qsl(parts.query) if k != "db"])
+        os.environ["REDIS_URL"] = parts._replace(
+            path=f"/{redis_db}", query=query
+        ).geturl()
 
     url = os.environ.get("BORG_TEST_POSTGRES_URL")
     if not url:
