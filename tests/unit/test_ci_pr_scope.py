@@ -147,6 +147,7 @@ BACKEND = [
 OTHER = [
     "typecheck-lint-format",
     "frontend-vitest",
+    "frontend-vitest-coverage",
     "frontend-build",
     "smoke-borg-core",
     "smoke-borg-extended",
@@ -346,7 +347,7 @@ def test_preparation_performs_every_unconditional_contract_guard():
 
 def test_coverage_uploads_stay_on_producing_runners_and_migrations_are_isolated():
     jobs = yaml.safe_load((ROOT / ".github/workflows/tests.yml").read_text())["jobs"]
-    for job_id in ("frontend-vitest", "backend-unit-coverage-combine"):
+    for job_id in ("frontend-vitest-coverage", "backend-unit-coverage-combine"):
         assert any(
             s.get("uses", "").startswith("codecov/codecov-action@")
             for s in jobs[job_id]["steps"]
