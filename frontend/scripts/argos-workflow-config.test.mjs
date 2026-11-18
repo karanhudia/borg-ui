@@ -1,4 +1,6 @@
-import { readFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -107,5 +109,53 @@ describe('GitHub Pages visual regression workflow', () => {
 
     expect(pagesWorkflow).toContain('visual-regression-state')
     expect(pagesWorkflow).toContain('docs/.vitepress/dist/visual')
+  })
+
+  it('merges snapshot shards only when every shard holds screenshots', async () => {
+    const captureWorkflow = await readText('.github/workflows/visual-snapshot-capture.yml')
+    const step = captureWorkflow.split('- name: Require every shard\n        run: |\n')[1]
+    expect(step, 'Require every shard step not found').toBeDefined()
+    const script = step
+      .split('\n\n')[0]
+      .split('\n')
+      .map((line) => line.replace(/^ {10}/, ''))
+      .join('\n')
+
+    const dirs = []
+    async function runWithShards(filesByShard) {
+      const dir = await mkdtemp(path.join(tmpdir(), 'visual-merge-'))
+      dirs.push(dir)
+      for (const [shard, files] of Object.entries(filesByShard)) {
+        await mkdir(path.join(dir, 'shards', `visual-actual-${shard}`), { recursive: true })
+        for (const file of files) {
+          await writeFile(path.join(dir, 'shards', `visual-actual-${shard}`, file), 'x')
+        }
+      }
+      const result = spawnSync('bash', ['-eo', 'pipefail', '-c', script], { cwd: dir })
+      return { status: result.status, output: String(result.stdout), dir }
+    }
+
+    try {
+      const complete = await runWithShards({ 1: ['a.png'], 2: ['b.png'], 3: ['c.png'] })
+      expect(complete.status).toBe(0)
+      expect((await readdir(path.join(complete.dir, 'visual-actual'))).sort()).toEqual([
+        'a.png',
+        'b.png',
+        'c.png',
+      ])
+
+      // A shard directory without screenshots, or no directory at all, stops
+      // the merge with the step's own exit 1.
+      for (const shards of [
+        { 1: ['a.png'], 2: ['b.png'], 3: ['meta.json'] },
+        { 1: ['a.png'], 2: ['b.png'] },
+      ]) {
+        const partial = await runWithShards(shards)
+        expect(partial.status).toBe(1)
+        expect(partial.output).toContain('visual-actual-3 is missing. Re-run all jobs')
+      }
+    } finally {
+      await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })))
+    }
   })
 })
