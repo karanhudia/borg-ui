@@ -410,7 +410,10 @@ template:
 - Borg 2: the plan's exact archive series name.
 
 After a template change, archives created before it are pruned only if their
-names still match the new template.
+names still match the new template. Renaming the plan or the repository has the
+same effect when the template uses `{plan_name}` or `{repo_name}`: archives
+named before the rename are no longer matched, so prune them from the
+repository's own maintenance actions if needed.
 If another plan or schedule on the same repository could produce names that
 also match, the prune is skipped and the run reports which one, so give them
 archive name templates that differ in fixed text (for example `nas-{now}` and
