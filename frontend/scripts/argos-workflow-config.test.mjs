@@ -93,9 +93,14 @@ describe('GitHub Pages visual regression workflow', () => {
     // merges them into the single artifact visual-regression.yml downloads.
     expect(captureWorkflow).toContain('STORYBOOK_SNAPSHOT_SHARD: ${{ matrix.shard }}/3')
     expect(captureWorkflow).toContain('name: visual-actual-${{ matrix.shard }}')
-    expect(captureWorkflow).toContain('uses: actions/upload-artifact/merge@v7')
     expect(captureWorkflow).toContain('pattern: visual-actual-*')
     expect(captureWorkflow).toContain('needs: capture')
+    // The merged upload, not a shard upload, must carry the exact name the
+    // report workflow downloads, and it must refuse a partial set of shards.
+    const mergeJob = captureWorkflow.slice(captureWorkflow.indexOf('\n  merge:\n'))
+    expect(mergeJob).toMatch(/^\s+name: visual-actual$/m)
+    expect(mergeJob).toContain('for shard in 1 2 3; do')
+    expect(mergeJob).toContain('Re-run all jobs, not only the failed ones.')
     expect(captureWorkflow).not.toContain('actions: write')
     expect(captureWorkflow).not.toContain('pull-requests: write')
     expect(captureWorkflow).not.toContain('pages: write')

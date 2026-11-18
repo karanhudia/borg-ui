@@ -25,8 +25,9 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
+        version=$(node -p "require('playwright/package.json').version")
         echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
-        echo "playwright=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+        echo "playwright=${version}" >> "$GITHUB_OUTPUT"
 
     - name: Restore cached Playwright system packages
       id: debs
@@ -52,6 +53,10 @@ runs:
         archives=/var/cache/apt/archives
         find "$archives" -maxdepth 1 -name '*.deb' | sort > /tmp/debs-before
         npx playwright install --with-deps chromium
-        mkdir -p ~/playwright-debs
-        find "$archives" -maxdepth 1 -name '*.deb' | sort | comm -13 /tmp/debs-before - \
-          | xargs -r cp -t ~/playwright-debs
+        # Chromium is installed; failing to stage the cache must not fail the job.
+        if ! { mkdir -p ~/playwright-debs &&
+          find "$archives" -maxdepth 1 -name '*.deb' | sort | comm -13 /tmp/debs-before - \
+            | xargs -r cp -t ~/playwright-debs; }; then
+          echo "::warning::Could not stage Playwright packages for the cache; the next run installs them from apt."
+          rm -rf ~/playwright-debs || true
+        fi
