@@ -53,6 +53,50 @@ os.environ["BORG_CACHE_DIR"] = _borg_cache_dir
 os.environ["BORG_SECURITY_DIR"] = _borg_security_dir
 os.environ["BORG_KEYS_DIR"] = _borg_keys_dir
 
+
+def _give_xdist_worker_its_own_databases():
+    """Point each pytest-xdist worker at Redis and Postgres databases of its own.
+
+    Postgres tests reset the public schema of BORG_TEST_POSTGRES_URL and the
+    cache's clear() flushes its Redis database, so workers sharing either
+    would wipe each other's state mid-test. Settings and test modules read
+    these variables at import, which happens after this runs.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    if not worker:
+        return
+    # ponytail: Redis has 16 databases; past 16 workers two would share one.
+    redis_db = str(int(worker.removeprefix("gw")) % 16)
+    os.environ["REDIS_DB"] = redis_db
+    # A REDIS_URL, from the shell or .env, wins over REDIS_DB in the cache
+    # service, and redis://, unix:// and ?db= all pick the database
+    # differently. An exported empty value beats .env and sends every worker
+    # to REDIS_HOST/REDIS_PORT with its own REDIS_DB.
+    os.environ["REDIS_URL"] = ""
+
+    url = os.environ.get("BORG_TEST_POSTGRES_URL")
+    if not url:
+        return
+
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.engine import make_url
+
+    base = make_url(url)
+    name = f"{base.database}_{worker}"
+    admin = create_engine(base, isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+            conn.execute(text(f'CREATE DATABASE "{name}"'))
+    finally:
+        admin.dispose()
+    os.environ["BORG_TEST_POSTGRES_URL"] = base.set(database=name).render_as_string(
+        hide_password=False
+    )
+
+
+_give_xdist_worker_its_own_databases()
+
 # Add parent directory to path so we can import from app/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
