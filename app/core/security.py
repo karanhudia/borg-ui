@@ -1,5 +1,4 @@
-import asyncio
-import concurrent.futures
+import threading
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 import jwt
@@ -86,32 +85,6 @@ def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool
 def get_password_hash(password: str) -> str:
     """Hash a password"""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-# A bcrypt comparison or hash takes about 175 ms at the default cost, longer on
-# small boards; on the event loop, no other request of the process moves
-# meanwhile. These threads wait for nothing but the CPU, so a request that
-# waits for one while it holds a database connection never waits on a thread
-# that is itself waiting for a connection.
-_PASSWORD_THREADS = concurrent.futures.ThreadPoolExecutor(
-    thread_name_prefix="password-hash"
-)
-
-
-async def verify_password_off_loop(
-    plain_password: str, hashed_password: Optional[str]
-) -> bool:
-    """`verify_password` for code on the event loop."""
-    return await asyncio.get_running_loop().run_in_executor(
-        _PASSWORD_THREADS, verify_password, plain_password, hashed_password
-    )
-
-
-async def get_password_hash_off_loop(password: str) -> str:
-    """`get_password_hash` for code on the event loop."""
-    return await asyncio.get_running_loop().run_in_executor(
-        _PASSWORD_THREADS, get_password_hash, password
-    )
 
 
 # bcrypt hashes at most 72 bytes of input; bcrypt 5 raises ValueError on longer
@@ -966,6 +939,12 @@ async def create_first_user():
         db.rollback()
     finally:
         db.close()
+
+
+# User creations take turns from their checks (plan limit, duplicate username
+# or email) to their insert, so two of them cannot both pass a check only one
+# may pass. Taken after the password is hashed, before the first query.
+user_creation_turn = threading.Lock()
 
 
 def create_user(

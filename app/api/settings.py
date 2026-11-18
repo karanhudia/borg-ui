@@ -23,8 +23,8 @@ from app.core.security import (
     get_current_admin_user,
     require_any_role,
     get_password_hash,
-    get_password_hash_off_loop,
     update_user_password,
+    user_creation_turn,
     verify_password,
 )
 from app.core.user_deletion import detach_user_delete_references
@@ -1416,79 +1416,82 @@ def get_users(
 
 
 @router.post("/users")
-async def create_user(
+@ends_read_on_return
+def create_user(
     user_data: UserCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Create a new user (admin only)"""
     try:
-        # Hashed first: the checks below and the insert then run without a
-        # break.
-        hashed_password = await get_password_hash_off_loop(user_data.password)
+        created_by = current_user.username
+        hashed_password = get_password_hash(user_data.password)
 
-        # Check user limit by plan
-        current_plan = get_current_plan(db)
-        user_count = db.query(User).count()
-        limit = USER_LIMITS[current_plan]
-        if limit is not None and user_count >= limit:
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "key": "backend.errors.plan.userLimitReached",
-                    # The paywall behind the limit, so the app counts it like
-                    # any other blocked feature.
-                    "feature": "extra_users",
-                    # Pro lifts the Community limit; past Pro's, only Enterprise does.
-                    "required": (
-                        FEATURES["extra_users"].value
-                        if current_plan == Plan.COMMUNITY
-                        else Plan.ENTERPRISE.value
-                    ),
-                    "current": current_plan.value,
-                    "limit": limit,
-                },
+        with user_creation_turn:
+            # Check user limit by plan
+            current_plan = get_current_plan(db)
+            user_count = db.query(User).count()
+            limit = USER_LIMITS[current_plan]
+            if limit is not None and user_count >= limit:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "key": "backend.errors.plan.userLimitReached",
+                        # The paywall behind the limit, so the app counts it like
+                        # any other blocked feature.
+                        "feature": "extra_users",
+                        # Pro lifts the Community limit; past Pro's, only Enterprise does.
+                        "required": (
+                            FEATURES["extra_users"].value
+                            if current_plan == Plan.COMMUNITY
+                            else Plan.ENTERPRISE.value
+                        ),
+                        "current": current_plan.value,
+                        "limit": limit,
+                    },
+                )
+
+            # Check if username already exists
+            existing_user = (
+                db.query(User).filter(User.username == user_data.username).first()
+            )
+            if existing_user:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.settings.usernameAlreadyExists"},
+                )
+
+            # Check if email already exists
+            existing_email = (
+                db.query(User).filter(User.email == user_data.email).first()
+            )
+            if existing_email:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.settings.emailAlreadyExists"},
+                )
+
+            # Create new user
+            new_user = User(
+                username=user_data.username,
+                full_name=user_data.full_name,
+                email=user_data.email,
+                password_hash=hashed_password,
+                role=user_data.role,
+                all_repositories_role=default_repository_role_for_global_role(
+                    user_data.role
+                ),
+                is_active=True,
             )
 
-        # Check if username already exists
-        existing_user = (
-            db.query(User).filter(User.username == user_data.username).first()
-        )
-        if existing_user:
-            raise HTTPException(
-                status_code=400,
-                detail={"key": "backend.errors.settings.usernameAlreadyExists"},
-            )
-
-        # Check if email already exists
-        existing_email = db.query(User).filter(User.email == user_data.email).first()
-        if existing_email:
-            raise HTTPException(
-                status_code=400,
-                detail={"key": "backend.errors.settings.emailAlreadyExists"},
-            )
-
-        # Create new user
-        new_user = User(
-            username=user_data.username,
-            full_name=user_data.full_name,
-            email=user_data.email,
-            password_hash=hashed_password,
-            role=user_data.role,
-            all_repositories_role=default_repository_role_for_global_role(
-                user_data.role
-            ),
-            is_active=True,
-        )
-
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
+            db.add(new_user)
+            db.commit()
+            db.refresh(new_user)
 
         logger.info(
             "User created",
             username=user_data.username,
-            created_by=current_user.username,
+            created_by=created_by,
         )
 
         return {
@@ -1690,6 +1693,7 @@ def reset_user_password(
 ):
     """Reset user password (admin only)"""
     try:
+        reset_by = current_user.username
         hashed_password = get_password_hash(password_data.new_password)
 
         user = db.query(User).filter(User.id == user_id).first()
@@ -1702,9 +1706,7 @@ def reset_user_password(
         user.updated_at = datetime.utcnow()
         db.commit()
 
-        logger.info(
-            "User password reset", user_id=user_id, reset_by=current_user.username
-        )
+        logger.info("User password reset", user_id=user_id, reset_by=reset_by)
 
         return {"success": True, "message": "backend.success.settings.passwordReset"}
     except HTTPException:

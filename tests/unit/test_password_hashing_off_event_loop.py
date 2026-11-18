@@ -25,6 +25,7 @@ from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import QueuePool
 from sqlalchemy.orm import sessionmaker
 
 import app.api.auth as auth
@@ -32,7 +33,11 @@ import app.api.managed_machines as managed_machines
 import app.api.settings as settings_api
 from app.config import settings
 from app.core import security
-from app.core.security import create_access_token, encrypt_secret
+from app.core.security import (
+    create_access_token,
+    create_login_challenge_token,
+    encrypt_secret,
+)
 from app.core.totp import _hotp, generate_totp_secret, hash_recovery_code
 from app.database.database import Base, get_db, register_utc_session_timezone
 from app.database.models import (
@@ -199,6 +204,13 @@ def _enable_totp(database) -> str:
 def _target_id(database) -> int:
     with database() as db:
         return db.query(User).filter(User.username == "target").one().id
+
+
+def _connections_in_use(database):
+    """Connections checked out of the pool of the requests' engine; None where
+    the tests' engine has no pool that could run out."""
+    pool = getattr(database.kw.get("bind"), "pool", None)
+    return pool.checkedout() if isinstance(pool, QueuePool) else None
 
 
 # (case id, function held, request: path, keyword arguments, status, user
@@ -368,52 +380,21 @@ def test_the_loop_answers_while_a_password_is_checked_or_hashed(
 
     with _held_request(gate, send):
         health = test_client.get("/health")
+        in_use = _connections_in_use(database)
 
     assert health.status_code == 200
     # The call was still held when /health came back: it did not need the
     # call to end first.
     assert gate.opened_in_time == [True]
     assert outcomes == [expected_status]
+    # Nor does the request hold a pooled connection while it waits, except a
+    # login, whose thread checks the password of the user it has just read.
+    if in_use is not None:
+        assert in_use == (1 if path == "/api/auth/login" else 0)
     if changed_user is not None:
         with database() as db:
             user = db.query(User).filter(User.username == changed_user).one()
             assert security.verify_password(NEW_PASSWORD, user.password_hash)
-
-
-@pytest.mark.unit
-def test_a_password_check_does_not_wait_for_the_loops_default_threads(
-    test_client, database, admin
-):
-    """Code on the loop hands blocking work to asyncio's default threads as
-    well, database work among it that waits for a connection. A user
-    creation that waited for one of those threads while it holds its
-    connection could wait for a thread that is waiting for that connection."""
-    release = threading.Event()
-    released_in_time: list[bool] = []
-
-    def occupy_a_thread() -> None:
-        released_in_time.append(release.wait(HOLD_SECONDS))
-
-    async def occupy_every_default_thread():
-        loop = asyncio.get_running_loop()
-        return [loop.run_in_executor(None, occupy_a_thread) for _ in range(64)]
-
-    async def wait_for(futures):
-        await asyncio.gather(*futures)
-
-    futures = test_client.portal.call(occupy_every_default_thread)
-    try:
-        response = test_client.post(
-            "/api/auth/users",
-            headers=admin,
-            json={"username": "created", "password": NEW_PASSWORD},
-        )
-    finally:
-        release.set()
-        test_client.portal.call(wait_for, futures)
-
-    assert response.status_code == 200
-    assert released_in_time == [True] * 64
 
 
 @pytest.mark.unit
@@ -499,35 +480,58 @@ def test_password_logins_take_turns_from_the_rate_limit_check_to_the_record(
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ("path", "body", "refused_key"),
+    ("path", "body", "refused_key", "module", "between_check_and_insert"),
     [
         (
             "/api/auth/users",
             {"username": "twin", "password": NEW_PASSWORD},
             "backend.errors.auth.usernameAlreadyRegistered",
+            auth,
+            "_resolve_legacy_role",
         ),
         (
             "/api/settings/users",
             {"username": "twin", "password": NEW_PASSWORD, "email": None},
             "backend.errors.settings.usernameAlreadyExists",
+            settings_api,
+            "default_repository_role_for_global_role",
         ),
     ],
     ids=["auth", "settings"],
 )
 def test_of_two_creations_of_one_username_one_is_refused(
-    test_client, database, admin, monkeypatch, path, body, refused_key
+    test_client,
+    database,
+    admin,
+    monkeypatch,
+    path,
+    body,
+    refused_key,
+    module,
+    between_check_and_insert,
 ):
-    """The password is hashed before the checks: the checks and the insert
-    then run on the loop without a break, as they did before. Hashed between
-    them, both requests would pass the check and one insert would fail."""
+    """The passwords are hashed at the same time; the checks and the insert
+    then take turns. Without them, both requests would pass the check and one
+    insert would fail: past its check, each waits a moment for the other to
+    pass its check as well. Taking turns, that wait runs out unmet."""
     both_hashing = threading.Barrier(2, timeout=HOLD_SECONDS)
+    both_checked = threading.Barrier(2, timeout=1)
     real_hash = security.get_password_hash
+    real_between = getattr(module, between_check_and_insert)
 
     def meeting_hash(password):
         both_hashing.wait()
         return real_hash(password)
 
+    def meeting_after_the_check(*args, **kwargs):
+        try:
+            both_checked.wait()
+        except threading.BrokenBarrierError:
+            pass
+        return real_between(*args, **kwargs)
+
     _patch_everywhere(monkeypatch, "get_password_hash", meeting_hash)
+    monkeypatch.setattr(module, between_check_and_insert, meeting_after_the_check)
 
     def create(_):
         try:
@@ -544,6 +548,53 @@ def test_of_two_creations_of_one_username_one_is_refused(
     assert refused.json()["detail"]["key"] == refused_key
     with database() as db:
         assert db.query(User).filter(User.username == "twin").count() == 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("path", "body", "changed_user"),
+    [
+        (
+            "/api/auth/users",
+            {"username": "created", "password": NEW_PASSWORD},
+            "created",
+        ),
+        (
+            "/api/settings/users",
+            {"username": "created", "password": NEW_PASSWORD, "email": None},
+            "created",
+        ),
+        (
+            "/api/settings/users/{target}/reset-password",
+            {"new_password": NEW_PASSWORD},
+            "target",
+        ),
+    ],
+    ids=["auth-create", "settings-create", "settings-reset"],
+)
+def test_an_admin_request_answers_when_its_admin_was_deleted_while_it_hashed(
+    test_client, database, admin, monkeypatch, path, body, changed_user
+):
+    """The commit expires the admin who sent the request; read again after
+    it, a deleted admin would turn a done change into an error."""
+    path = path.format(target=_target_id(database))
+    real_hash = security.get_password_hash
+
+    def hash_while_deleting(password):
+        if password == NEW_PASSWORD:
+            with database() as db:
+                db.delete(db.query(User).filter(User.username == "admin").one())
+                db.commit()
+        return real_hash(password)
+
+    _patch_everywhere(monkeypatch, "get_password_hash", hash_while_deleting)
+
+    response = test_client.post(path, headers=admin, json=body)
+
+    assert response.status_code == 200
+    with database() as db:
+        user = db.query(User).filter(User.username == changed_user).one()
+        assert security.verify_password(NEW_PASSWORD, user.password_hash)
 
 
 @pytest.mark.unit
@@ -820,6 +871,104 @@ def test_a_login_fails_when_the_user_was_deleted_while_it_was_checked(
 
     assert gate.opened_in_time == [True]
     assert [response.status_code for response in outcomes] == [401]
+
+
+@pytest.mark.unit
+def test_a_login_keeps_the_second_factor_it_read_with_the_password(
+    test_client, database, admin, monkeypatch
+):
+    """A failed attempt before leaves a bucket, so the rate-limit cleanup of
+    the login commits; the user would be read again after it. A factor
+    disabled at that moment does not let the password alone through."""
+    _enable_totp(database)
+    failed = test_client.post(
+        "/api/auth/login", data={"username": "admin", "password": "wrong"}
+    )
+    assert failed.status_code == 401
+    real_clear = auth.clear_auth_rate_limit
+
+    def clear_while_disabling(db, **kwargs):
+        with database() as other:
+            user = other.query(User).filter(User.username == "admin").one()
+            user.totp_enabled = False
+            user.totp_secret_encrypted = None
+            user.totp_recovery_codes_hashes = None
+            other.commit()
+        return real_clear(db, **kwargs)
+
+    monkeypatch.setattr(auth, "clear_auth_rate_limit", clear_while_disabling)
+
+    response = test_client.post(
+        "/api/auth/login", data={"username": "admin", "password": PASSWORD}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["totp_required"] is True
+    assert not response.json().get("access_token")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("change", ["totp-disabled", "code-used"])
+def test_a_totp_login_with_a_recovery_code_is_refused_when_the_codes_changed(
+    test_client, database, admin, monkeypatch, change
+):
+    """The login uses its recovery code up only while the factor and its codes
+    are the ones it checked: a disable (it runs in a thread) or another login
+    with the same code may have committed meanwhile."""
+    _enable_totp(database)
+    real_verify = auth._verify_totp_or_recovery_code
+
+    def verify_while_changing(user, code):
+        verified = real_verify(user, code)
+        with database() as other:
+            stored = other.query(User).filter(User.username == "admin").one()
+            if change == "totp-disabled":
+                stored.totp_enabled = False
+                stored.totp_secret_encrypted = None
+                stored.totp_recovery_codes_hashes = None
+            else:
+                stored.totp_recovery_codes_hashes = json.dumps([])
+            other.commit()
+        return verified
+
+    monkeypatch.setattr(auth, "_verify_totp_or_recovery_code", verify_while_changing)
+
+    response = test_client.post(
+        "/api/auth/login/totp",
+        json={
+            "login_challenge_token": create_login_challenge_token("admin"),
+            "code": RECOVERY_CODE,
+        },
+    )
+
+    assert response.status_code == 401
+    assert not response.json().get("access_token")
+    with database() as db:
+        user = db.query(User).filter(User.username == "admin").one()
+        if change == "totp-disabled":
+            assert user.totp_enabled is False
+            assert user.totp_recovery_codes_hashes is None
+        else:
+            assert user.totp_recovery_codes_hashes == json.dumps([])
+
+
+@pytest.mark.unit
+def test_a_totp_login_uses_its_recovery_code_up(test_client, database, admin):
+    _enable_totp(database)
+    payload = {
+        "login_challenge_token": create_login_challenge_token("admin"),
+        "code": RECOVERY_CODE,
+    }
+
+    first = test_client.post("/api/auth/login/totp", json=payload)
+    again = test_client.post("/api/auth/login/totp", json=payload)
+
+    assert first.status_code == 200
+    assert first.json()["access_token"]
+    assert again.status_code == 401
+    with database() as db:
+        user = db.query(User).filter(User.username == "admin").one()
+        assert json.loads(user.totp_recovery_codes_hashes) == []
 
 
 @pytest.mark.unit

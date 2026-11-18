@@ -66,11 +66,10 @@ from app.core.security import (
     decrypt_secret,
     encrypt_secret,
     get_password_hash,
-    get_password_hash_off_loop,
     update_user_password,
+    user_creation_turn,
     verify_login_challenge_token,
     verify_password,
-    verify_password_off_loop,
     verify_totp_setup_token,
 )
 from app.core.user_deletion import detach_user_delete_references
@@ -351,6 +350,24 @@ def _consume_recovery_code(user: User, code: str) -> bool:
     remaining = [item for item in existing_hashes if item != normalized_hash]
     _store_recovery_code_hashes(user, remaining)
     return True
+
+
+def _use_up_recovery_code(db: Session, user: User, checked_hashes: str) -> bool:
+    """Store what `_consume_recovery_code` left on `user`, only while the
+    factor is enabled and its recovery codes are the ones it checked: a
+    disable or another login may have committed meanwhile."""
+    remaining = user.totp_recovery_codes_hashes
+    db.expire(user, ["totp_recovery_codes_hashes"])
+    stored = (
+        db.query(User)
+        .filter(
+            User.id == user.id,
+            User.totp_enabled.is_(True),
+            User.totp_recovery_codes_hashes == checked_hashes,
+        )
+        .update({"totp_recovery_codes_hashes": remaining}, synchronize_session=False)
+    )
+    return stored == 1
 
 
 def _matches_totp_or_recovery_code(user: User, code: str) -> bool:
@@ -868,6 +885,9 @@ def _password_login(
             detail={"key": "backend.errors.auth.inactiveUser"},
         )
 
+    # As read with the checked password: the cleanup may commit, and the user
+    # would be read again after it.
+    totp_enabled = user.totp_enabled
     clear_auth_rate_limit(
         db,
         scope="password_login",
@@ -875,7 +895,7 @@ def _password_login(
         client_ip=client_ip,
     )
 
-    if user.totp_enabled:
+    if totp_enabled:
         challenge_token = create_login_challenge_token(user.username)
         logger.info("Password verified, awaiting TOTP", username=user.username)
         return {
@@ -1659,7 +1679,11 @@ async def complete_login_with_totp(
             detail={"key": "backend.errors.auth.invalidTotpCode"},
         )
 
-    if not _verify_totp_or_recovery_code(user, payload.code):
+    checked_recovery_hashes = user.totp_recovery_codes_hashes
+    verified = _verify_totp_or_recovery_code(user, payload.code)
+    if verified and user.totp_recovery_codes_hashes != checked_recovery_hashes:
+        verified = _use_up_recovery_code(db, user, checked_recovery_hashes)
+    if not verified:
         db.commit()
         _record_rate_limit_failure(
             db,
@@ -1839,15 +1863,13 @@ def get_totp_status(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/totp/setup", response_model=TotpSetupResponse)
-async def begin_totp_setup(
+def begin_totp_setup(
     payload: TotpSetupRequest,
     current_user: User = Depends(get_current_user),
 ):
     _ensure_local_password_user(current_user)
 
-    if not await verify_password_off_loop(
-        payload.current_password, current_user.password_hash
-    ):
+    if not verify_password(payload.current_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
@@ -1973,15 +1995,16 @@ def list_passkeys(current_user: User = Depends(get_current_user)):
 @router.post(
     "/passkeys/register/options", response_model=PasskeyBeginRegistrationResponse
 )
-async def begin_passkey_registration(
+@ends_read_on_return
+def begin_passkey_registration(
     payload: PasskeyBeginRegistrationRequest,
     request: Request,
     current_user: User = Depends(get_current_user),
+    # The session that loads the user's passkeys, ended on return.
+    db: Session = Depends(get_db),
 ):
     _ensure_local_password_user(current_user)
-    if not await verify_password_off_loop(
-        payload.current_password, current_user.password_hash
-    ):
+    if not verify_password(payload.current_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
@@ -2279,49 +2302,56 @@ def get_users(
 
 
 @router.post("/users", response_model=UserResponse)
-async def create_new_user(
+@ends_read_on_return
+def create_new_user(
     user_data: UserCreate,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """Create a new user (admin only)"""
-    # Hashed first: the checks below and the insert then run without a break.
-    password_hash = await get_password_hash_off_loop(user_data.password)
+    created_by = current_user.username
+    password_hash = get_password_hash(user_data.password)
 
-    # Check if username already exists
-    existing_user = db.query(User).filter(User.username == user_data.username).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"key": "backend.errors.auth.usernameAlreadyRegistered"},
+    with user_creation_turn:
+        # Check if username already exists
+        existing_user = (
+            db.query(User).filter(User.username == user_data.username).first()
         )
-
-    # Check if email already exists (if provided)
-    if user_data.email:
-        existing_email = db.query(User).filter(User.email == user_data.email).first()
-        if existing_email:
+        if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"key": "backend.errors.auth.emailAlreadyRegistered"},
+                detail={"key": "backend.errors.auth.usernameAlreadyRegistered"},
             )
 
-    resolved_role = _resolve_legacy_role(user_data.role, user_data.is_admin)
+        # Check if email already exists (if provided)
+        if user_data.email:
+            existing_email = (
+                db.query(User).filter(User.email == user_data.email).first()
+            )
+            if existing_email:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"key": "backend.errors.auth.emailAlreadyRegistered"},
+                )
 
-    user = create_user(
-        db=db,
-        username=user_data.username,
-        password_hash=password_hash,
-        email=user_data.email,
-        role=resolved_role,
-    )
-    user.all_repositories_role = default_repository_role_for_global_role(resolved_role)
-    db.commit()
+        resolved_role = _resolve_legacy_role(user_data.role, user_data.is_admin)
+
+        user = create_user(
+            db=db,
+            username=user_data.username,
+            password_hash=password_hash,
+            email=user_data.email,
+            role=resolved_role,
+        )
+        user.all_repositories_role = default_repository_role_for_global_role(
+            resolved_role
+        )
+        db.commit()
     db.refresh(user)
+    created = UserResponse.model_validate(user)
 
-    logger.info(
-        "User created", username=user.username, created_by=current_user.username
-    )
-    return user
+    logger.info("User created", username=created.username, created_by=created_by)
+    return created
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
