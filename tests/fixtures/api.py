@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from starlette.requests import HTTPConnection
 
 # Import app lazily to avoid initialization issues
 from app.database.database import Base, get_db
@@ -86,7 +87,7 @@ def test_db(tmp_path, monkeypatch, api_database_template):
     # Create a single session that will be shared
     shared_session = TestingSessionLocal()
 
-    def override_get_db():
+    def override_get_db(connection: HTTPConnection = None):
         """Return the same session for all requests in this test.
 
         Production yields a fresh session per request, so a request always
@@ -96,7 +97,19 @@ def test_db(tmp_path, monkeypatch, api_database_template):
         stuck on "pending" while the job actually finished). Expiring the
         loaded state first restores per-request read semantics. Only
         already-flushed state is expired, so staged fixture data is kept.
+
+        An agent's WebSocket session gets a session of its own, as in
+        production: its database work runs in threads beside the test and
+        the other requests. (Code that calls the override itself passes no
+        connection.)
         """
+        if connection is not None and connection.scope["type"] == "websocket":
+            db = TestingSessionLocal()
+            try:
+                yield db
+            finally:
+                db.close()
+            return
         if not shared_session.dirty and not shared_session.new:
             shared_session.expire_all()
         try:

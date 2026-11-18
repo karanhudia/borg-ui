@@ -546,15 +546,26 @@ def test_a_keepalive_read_before_a_report_leaves_its_counters(
 
 @contextmanager
 def _agent_session(client, monkeypatch):
-    """An open session, and the event set once a message was handled."""
+    """An open session, once its start is done, and the event set once a
+    message was handled."""
     handled = threading.Event()
+    started = threading.Event()
     original = agents._handle_agent_session_message
+    original_send = agents._send_queued_agent_jobs
 
     async def handle_and_tell(*args, **kwargs):
         await original(*args, **kwargs)
         handled.set()
 
+    async def send_and_tell(db, jobs, *, source):
+        await original_send(db, jobs, source=source)
+        if source == "session_reconnect":
+            started.set()
+
     monkeypatch.setattr(agents, "_handle_agent_session_message", handle_and_tell)
+    # The start sends what is queued after the ack, from a read in a thread: a
+    # job the test queues after the ack is the test's only once that is done.
+    monkeypatch.setattr(agents, "_send_queued_agent_jobs", send_and_tell)
     with client.websocket_connect(
         "/api/agents/session",
         headers={"X-Borg-Agent-Authorization": f"Bearer {RAW_TOKEN}"},
@@ -571,6 +582,7 @@ def _agent_session(client, monkeypatch):
             }
         )
         assert websocket.receive_json()["type"] == "hello_ack"
+        assert started.wait(HOLD_SECONDS)
         yield websocket, handled
 
 
