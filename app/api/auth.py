@@ -2325,8 +2325,8 @@ def create_new_user(
                 detail={"key": "backend.errors.auth.usernameAlreadyRegistered"},
             )
 
-        # Check if email already exists (if provided)
-        if user_data.email:
+        # Check if email already exists (if provided; an empty one counts)
+        if user_data.email is not None:
             existing_email = (
                 db.query(User).filter(User.email == user_data.email).first()
             )
@@ -2345,6 +2345,10 @@ def create_new_user(
                 password_hash=password_hash,
                 email=user_data.email,
                 role=resolved_role,
+                # In the insert: a role change committed after it stays.
+                all_repositories_role=default_repository_role_for_global_role(
+                    resolved_role
+                ),
             )
         except IntegrityError:
             # An account update can take the username or email after the
@@ -2361,10 +2365,6 @@ def create_new_user(
                     else "backend.errors.auth.emailAlreadyRegistered"
                 },
             )
-        user.all_repositories_role = default_repository_role_for_global_role(
-            resolved_role
-        )
-        db.commit()
     db.refresh(user)
     created = UserResponse.model_validate(user)
 

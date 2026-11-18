@@ -585,7 +585,15 @@ def test_two_creations_take_turns_from_their_checks_to_their_insert(
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("taken", ["username", "email"])
+@pytest.mark.parametrize(
+    ("taken", "email"),
+    [
+        ("username", "twin@example.com"),
+        ("email", "twin@example.com"),
+        ("email", ""),
+    ],
+    ids=["username", "email", "empty-email"],
+)
 @pytest.mark.parametrize(
     ("path", "body", "module", "between_check_and_insert", "refused_keys"),
     CREATIONS,
@@ -601,11 +609,13 @@ def test_a_creation_is_refused_when_an_update_took_its_name_after_the_checks(
     between_check_and_insert,
     refused_keys,
     taken,
+    email,
 ):
     """Account updates do not take the creations' turn: one that takes the
     username or email between a creation's checks and its insert makes the
-    insert fail on the unique key, which answers as the check would have."""
-    body = {**body, "email": "twin@example.com"}
+    insert fail on the unique key, which answers as the check would have.
+    An empty email is a key like any other; only NULL never collides."""
+    body = {**body, "email": email}
     real_between = getattr(module, between_check_and_insert)
 
     def update_after_the_check(*args, **kwargs):
@@ -631,6 +641,59 @@ def test_a_creation_is_refused_when_an_update_took_its_name_after_the_checks(
         assert db.query(User).filter(User.username == body["username"]).count() == (
             1 if taken == "username" else 0
         )
+
+
+@pytest.mark.unit
+def test_a_creation_with_an_email_taken_as_empty_is_refused(
+    test_client, database, admin
+):
+    """The unique index counts an empty email; the check does too."""
+    with database() as db:
+        db.query(User).filter(User.username == "target").one().email = ""
+        db.commit()
+
+    response = test_client.post(
+        "/api/auth/users",
+        headers=admin,
+        json={"username": "twin", "password": NEW_PASSWORD, "email": ""},
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"] == "backend.errors.auth.emailAlreadyRegistered"
+    )
+
+
+@pytest.mark.unit
+def test_a_role_change_right_after_a_creation_stays(
+    test_client, database, admin, monkeypatch
+):
+    """The repository role is written with the account. A second write after
+    the insert would put the requested role back over a change committed in
+    between, as an administrator's demotion of the new account."""
+    real_create_user = auth.create_user
+
+    def create_then_demote(*args, **kwargs):
+        user = real_create_user(*args, **kwargs)
+        with database() as db:
+            created = db.query(User).filter(User.username == "created").one()
+            created.role = "viewer"
+            created.all_repositories_role = "viewer"
+            db.commit()
+        return user
+
+    monkeypatch.setattr(auth, "create_user", create_then_demote)
+
+    response = test_client.post(
+        "/api/auth/users",
+        headers=admin,
+        json={"username": "created", "password": NEW_PASSWORD, "role": "operator"},
+    )
+
+    assert response.status_code == 200
+    with database() as db:
+        created = db.query(User).filter(User.username == "created").one()
+        assert (created.role, created.all_repositories_role) == ("viewer", "viewer")
 
 
 @pytest.mark.unit

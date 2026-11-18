@@ -953,7 +953,11 @@ def taken_user_key(db: Session, username: str, email: Optional[str]) -> Optional
     None when neither is taken."""
     if db.query(User.id).filter(User.username == username).first() is not None:
         return "username"
-    if email and db.query(User.id).filter(User.email == email).first() is not None:
+    # NULL emails never collide; an empty string does.
+    if (
+        email is not None
+        and db.query(User.id).filter(User.email == email).first() is not None
+    ):
         return "email"
     return None
 
@@ -964,13 +968,15 @@ def create_user(
     password_hash: str,
     email: str = None,
     role: str = "viewer",
+    all_repositories_role: Optional[str] = None,
 ) -> User:
-    """Create a new user with a password hashed by the caller"""
+    """Create a new user with a password hashed by the caller, in one commit"""
     user = User(
         username=username,
         password_hash=password_hash,
         email=email,
         role=role,
+        all_repositories_role=all_repositories_role,
     )
     db.add(user)
     db.commit()
