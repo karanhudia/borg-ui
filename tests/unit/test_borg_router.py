@@ -1649,3 +1649,55 @@ async def test_agent_init_cancelled_while_it_is_sent_is_abandoned():
 
     abandon.assert_called_once_with(own_db, 11)
     send_cancel.assert_awaited_once_with(sent)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", [1, 2])
+async def test_prune_passes_match_archives_to_the_local_service(version):
+    repo = SimpleNamespace(borg_version=version, id=41)
+    target = (
+        "app.services.v2.prune_service.prune_v2_service.execute_prune"
+        if version == 2
+        else "app.services.prune_service.prune_service.execute_prune"
+    )
+
+    with patch(target, new=AsyncMock()) as mock_prune:
+        await BorgRouter(repo).prune(7, 0, 7, 0, 0, 0, 0, match_archives="nas-[0-9]*")
+
+    assert mock_prune.await_args.kwargs["match_archives"] == "nas-[0-9]*"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("capabilities", "refused"),
+    [(["repository.prune"], True), (["repository.prune.match_archives"], False)],
+)
+async def test_agent_prune_with_a_filter_needs_the_capability(capabilities, refused):
+    """An older agent drops `match_archives` and prunes every archive, so a
+    scoped prune is refused for it (issue #1549)."""
+    repo = SimpleNamespace(
+        borg_version=1, id=41, executor_type="agent", agent_machine_id=3
+    )
+    session = MagicMock()
+    session.get.return_value = SimpleNamespace(capabilities=capabilities)
+
+    with (
+        patch("app.database.database.SessionLocal", return_value=session),
+        patch.object(
+            BorgRouter, "_run_agent_maintenance", new=AsyncMock()
+        ) as mock_agent,
+    ):
+        if refused:
+            with pytest.raises(RuntimeError, match="newer agent"):
+                await BorgRouter(repo).prune(
+                    7, 0, 7, 0, 0, 0, 0, match_archives="nas-[0-9]*"
+                )
+            mock_agent.assert_not_awaited()
+        else:
+            await BorgRouter(repo).prune(
+                7, 0, 7, 0, 0, 0, 0, match_archives="nas-[0-9]*"
+            )
+            operation = mock_agent.await_args.kwargs["operation"]
+            assert operation["match_archives"] == "nas-[0-9]*"

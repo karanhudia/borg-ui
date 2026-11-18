@@ -81,6 +81,7 @@ class PruneV2Service:
         dry_run: bool = False,
         _db=None,
         keep_within: str | None = None,
+        match_archives: str | None = None,
     ):
         """Execute borg2 prune and persist results to the prune operation."""
         db = SessionLocal()
@@ -169,6 +170,8 @@ class PruneV2Service:
                 cmd.extend(["--keep", keep_within.strip()])
             if dry_run:
                 cmd.append("--dry-run")
+            if match_archives:
+                cmd.extend(["-a", match_archives])
 
             logger.info(
                 "Starting borg2 prune",

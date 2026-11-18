@@ -42,6 +42,7 @@ PLAN_FIELDS = (
     "repository_count",
     "repository_run_mode",
     "run_prune_after",
+    "prune_scope_to_plan",
     "run_compact_after",
     "run_check_after",
     "run_restore_check_after",

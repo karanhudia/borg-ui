@@ -1934,7 +1934,9 @@
         "runCheckAfter": "Run check after successful repository backups",
         "runRestoreCheckAfter": "Run restore check on the new archive after successful repository backups",
         "checkMaxDurationHelper": "Seconds. Use 0 for unlimited.",
-        "checkExtraFlagsHelper": "Additional borg check options appended to plan maintenance checks."
+        "checkExtraFlagsHelper": "Additional borg check options appended to plan maintenance checks.",
+        "pruneScopeToPlan": "Only prune archives created by this plan",
+        "pruneScopeToPlanHelper": "Recommended when several plans back up to the same repository. Without it, prune applies this plan's retention to every archive in the repository, including other plans' archives. Archives are matched by this plan's archive name template, so archives from before a template change are left alone. If another plan or schedule uses names that also match, the prune is skipped with an error instead."
       },
       "review": {
         "plan": "Plan",
@@ -1970,7 +1972,10 @@
         "pathCount_other": "{{count}} paths",
         "selectedCount_one": "{{count}} selected",
         "selectedCount_other": "{{count}} selected",
-        "manualOnlyHint": "Runs only when triggered manually."
+        "manualOnlyHint": "Runs only when triggered manually.",
+        "pruneScope": "Prune scope",
+        "pruneScopePlan": "This plan's archives",
+        "pruneScopeRepository": "Whole repository"
       },
       "fileExplorer": {
         "sourceTitle": "Select source paths",

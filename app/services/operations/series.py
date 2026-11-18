@@ -5,6 +5,7 @@ of a schedule or plan archive name template that targets the repository,
 else the archive name with a trailing timestamp stripped, else "default".
 """
 
+import fnmatch
 import re
 from typing import Optional, Sequence
 
@@ -17,7 +18,7 @@ from app.database.models import (
     ScheduledJob,
     ScheduledJobRepository,
 )
-from app.utils.archive_names import build_archive_name
+from app.utils.archive_names import TIME_PLACEHOLDER_PATTERN, build_archive_name
 
 DEFAULT_SERIES = "default"
 
@@ -66,6 +67,45 @@ def template_prefix(
         job_name, repo_name, template, timestamp="", stable_series=True
     )
     return prefix or None
+
+
+# Stand-ins for time placeholders while a template renders into a glob: the
+# rendered literal text is escaped first, then these become wildcards.
+_DIGITS_MARK = "\ue000"
+_ANY_MARK = "\ue001"
+# What a sibling's archive name looks like, to test it against a plan's glob.
+_SAMPLE_TIME = {
+    "timestamp": "2026-01-01T00:00:00.000",
+    "date": "2026-01-01",
+    "time_str": "00:00:00",
+    "unix_timestamp": "1767225600",
+}
+
+
+class PruneScopeError(ValueError):
+    """A plan-scoped prune cannot be limited to the plan's own archives."""
+
+
+def plan_archive_glob(
+    template: Optional[str], *, job_name: str, repo_name: Optional[str]
+) -> str:
+    """Borg 1 `--glob-archives` pattern matching the names this template
+    gives backups (issue #1549). Time placeholders become `[0-9]*` so plan
+    "nas" does not match plan "nas-docs"; a formatted one (`{now:%a}`) and
+    Borg's own placeholders (`{hostname}`) can be anything, so `*`. Glob
+    characters in the literal text match one character (`?`), never a class.
+    """
+    marked = (
+        TIME_PLACEHOLDER_PATTERN.sub(
+            lambda m: _ANY_MARK if ":" in m.group(0) else _DIGITS_MARK, template
+        )
+        if template
+        else template
+    )
+    name = build_archive_name(job_name, repo_name, marked, timestamp=_DIGITS_MARK)
+    name = re.sub(r"[*?\[\]]", "?", name)
+    name = re.sub(r"\{[^{}]*\}", "*", name)
+    return name.replace(_DIGITS_MARK, "[0-9]*").replace(_ANY_MARK, "*")
 
 
 def _schedules_for(db: Session, repository: Repository) -> list[ScheduledJob]:
@@ -131,6 +171,59 @@ def series_prefixes_for_repository(db: Session, repository: Repository) -> list[
         if prefix:
             prefixes.add(prefix)
     return sorted(prefixes, key=len, reverse=True)
+
+
+def plan_prune_match(db: Session, plan: BackupPlan, repository: Repository) -> str:
+    """The archive filter that limits this plan's prune to its own archives:
+    a `--glob-archives` pattern on Borg 1, an exact `-a id:<series>` on
+    Borg 2. Raises PruneScopeError when another plan or schedule targeting
+    the repository writes names the filter also matches, since pruning
+    those under this plan's retention is the loss the scope exists to stop.
+    """
+    borg2 = getattr(repository, "borg_version", 1) == 2
+    if borg2:
+        series = template_prefix(
+            plan.archive_name_template, job_name=plan.name, repo_name=repository.name
+        )
+
+        def matches(name: str) -> bool:
+            return name == series
+
+        result = f"id:{series}"
+    else:
+        glob = plan_archive_glob(
+            plan.archive_name_template, job_name=plan.name, repo_name=repository.name
+        )
+
+        def matches(name: str) -> bool:
+            return fnmatch.fnmatchcase(name, glob)
+
+        result = glob
+
+    siblings = [("schedule", s) for s in _schedules_for(db, repository)] + [
+        ("plan", p) for p in _plans_for(db, repository) if p.id != plan.id
+    ]
+    for kind, source in siblings:
+        if borg2:
+            sample = template_prefix(
+                source.archive_name_template,
+                job_name=source.name,
+                repo_name=repository.name,
+            )
+        else:
+            sample = build_archive_name(
+                source.name,
+                repository.name,
+                source.archive_name_template,
+                **_SAMPLE_TIME,
+            )
+        if sample and matches(sample):
+            raise PruneScopeError(
+                f"Prune limited to this plan was not run: archives of {kind} "
+                f"'{source.name}' also match '{result}'. Use different archive name templates "
+                "for the two."
+            )
+    return result
 
 
 def crons_for_repository(

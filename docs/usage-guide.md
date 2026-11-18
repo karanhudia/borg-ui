@@ -393,6 +393,31 @@ Use check and restore verification regularly. A backup that cannot be restored i
 
 Scheduled repository checks and restore checks are managed from Schedule.
 
+### Pruning a repository shared by several plans
+
+A Backup Plan can run prune after each successful backup. By default that prune
+applies the plan's retention to every archive in the repository. When several
+plans back up to the same repository, one plan's prune can then remove archives
+that other plans created.
+
+To avoid that, turn on **Only prune archives created by this plan** under
+**Run prune after successful repository backups** in the plan's Schedule step.
+The plan's prune then only considers archives whose names match its archive name
+template:
+
+- Borg 1: the template with each time placeholder treated as digits, so plan
+  `nas` does not match archives of plan `nas-docs`.
+- Borg 2: the plan's exact archive series name.
+
+Archives created before a template change no longer match and are left alone.
+If another plan or schedule on the same repository produces names that also
+match, the prune is skipped and the run reports which one, so give them
+different archive name templates. A managed agent needs a version that supports
+this option; an older agent fails the prune instead of pruning everything.
+
+Prune from the repository's own maintenance actions always covers the whole
+repository.
+
 See [Disaster Recovery](disaster-recovery) for restore-check modes and recovery drills.
 
 ## Notifications

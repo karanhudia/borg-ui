@@ -56,6 +56,8 @@ DEFAULT_CAPABILITIES = [
     "repository.restore.existing_files",
     "repository.check",
     "repository.prune",
+    # applies a prune's match_archives filter (issue #1549)
+    "repository.prune.match_archives",
     "repository.compact",
     "repository.rclone_sync",
     "repository.disk_usage",

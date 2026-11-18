@@ -1934,7 +1934,9 @@
         "runCheckAfter": "Ejecutar check tras copias correctas del repositorio",
         "runRestoreCheckAfter": "Ejecutar prueba de restauración del nuevo archivo tras copias correctas del repositorio",
         "checkMaxDurationHelper": "Segundos. Usa 0 para sin límite.",
-        "checkExtraFlagsHelper": "Opciones adicionales de borg check añadidas a los checks de mantenimiento del plan."
+        "checkExtraFlagsHelper": "Opciones adicionales de borg check añadidas a los checks de mantenimiento del plan.",
+        "pruneScopeToPlan": "Hacer prune solo de los archivos creados por este plan",
+        "pruneScopeToPlanHelper": "Recomendado cuando varios planes hacen copia en el mismo repositorio. Sin esta opción, prune aplica la retención de este plan a todos los archivos del repositorio, incluidos los de otros planes. Los archivos se reconocen por la plantilla de nombre de archivo de este plan, así que los anteriores a un cambio de plantilla no se tocan. Si los nombres de otro plan o programación también coinciden, prune se omite con un error."
       },
       "review": {
         "plan": "Plan",
@@ -1970,7 +1972,10 @@
         "pathCount_other": "{{count}} rutas",
         "selectedCount_one": "{{count}} seleccionado",
         "selectedCount_other": "{{count}} seleccionados",
-        "manualOnlyHint": "Solo se ejecuta cuando se dispara manualmente."
+        "manualOnlyHint": "Solo se ejecuta cuando se dispara manualmente.",
+        "pruneScope": "Alcance de prune",
+        "pruneScopePlan": "Archivos de este plan",
+        "pruneScopeRepository": "Todo el repositorio"
       },
       "fileExplorer": {
         "sourceTitle": "Seleccionar rutas de origen",
