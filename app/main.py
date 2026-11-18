@@ -513,11 +513,20 @@ async def _startup_after_schema() -> None:
     # interrupted rows), then start the reconcile scheduler that replaces the old
     # stats refresh loop (spec sections 7.1, 7.5, 7.6).
     from app.database.database import SessionLocal
+    from app.services.backup_plan_execution_service import (
+        backup_plan_execution_service,
+    )
     from app.services.operations.executors import load_default_executors
     from app.services.operations.reconcile import reconcile_scheduler
     from app.services.operations.runner import operation_runner
 
     load_default_executors()
+
+    def startup_sweeps_over() -> None:
+        # Until here a start by hand looks itself for the finished plan runs
+        # whose post-backup scripts the sweep launches (#1543).
+        backup_plan_execution_service.startup_sweep_ran = True
+        sweeps_done.set()
 
     # Set before the runner's own recovery, which is safe because `_recover`
     # is synchronous: the scheduler resumes only after both have run.
@@ -525,7 +534,7 @@ async def _startup_after_schema() -> None:
         try:
             _recover_interrupted_work()
         finally:
-            sweeps_done.set()
+            startup_sweeps_over()
 
     def schedule_after_runner_failure(task: asyncio.Task) -> None:
         # a runner that died before its recovery runs no sweep either; a
@@ -533,7 +542,7 @@ async def _startup_after_schema() -> None:
         if task.cancelled() or task.exception() is None:
             return
         logger.error("Operations runner failed", error=str(task.exception()))
-        sweeps_done.set()
+        startup_sweeps_over()
 
     # `start()` recovers interrupted rows once it holds the runner lease,
     # not before: a process being replaced may still be running them.

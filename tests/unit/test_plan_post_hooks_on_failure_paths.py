@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from app.config import settings
 from app.database.models import (
@@ -1035,6 +1036,102 @@ async def test_restart_between_the_cancel_and_its_cleanup_runs_the_cleanup(
         "backend.errors.backup.cancelledByUser"
     ]
     notify.assert_not_awaited()
+
+
+class _HeldScripts:
+    """A stand-in for `execute_script` that records when each script starts
+    and ends; the first run of `hold` waits for `release`."""
+
+    def __init__(self, scripts, hold):
+        self.by_id = {script.id: script.name for script in scripts}
+        self.hold = hold
+        self.held = asyncio.Event()
+        self.release = asyncio.Event()
+        self.events = []
+
+    async def __call__(self, script, timeout, env, context):
+        name = self.by_id[int(context.split(":script:")[1].split(":")[0])]
+        self.events.append(("start", name))
+        if name == self.hold and not self.held.is_set():
+            self.held.set()
+            await self.release.wait()
+        self.events.append(("end", name))
+        return {"success": True, "exit_code": 0, "stdout": "", "stderr": ""}
+
+
+@pytest.mark.asyncio
+async def test_a_start_before_the_startup_sweep_does_not_run_under_the_cleanup(
+    test_db,
+):
+    """A run was cancelled after its pre-backup script, and the process
+    ended before its post-backup scripts started. The next process serves
+    requests before its startup sweep, which launches them: a new run of the
+    plan starts after them, not under them (#1543)."""
+    from app.utils.process_utils import cleanup_orphaned_jobs
+
+    service = backup_plan_execution_service
+    old_run, all_scripts = _plan_with_hooks(test_db)
+    old_run.status = "running"
+    test_db.commit()
+    _execution(test_db, old_run, "pre-backup")
+    await service.cancel_run(test_db, old_run.id)
+    plan_id = old_run.backup_plan_id
+    scripts = _HeldScripts(all_scripts, hold="Start Database")
+
+    def start_is_refused() -> bool:
+        try:
+            service.refuse_active_run(test_db, plan_id)
+        except HTTPException as refused:
+            assert refused.status_code == 409
+            return True
+        return False
+
+    with (
+        patch.object(service, "live_run_ids", set()),
+        patch.object(service, "startup_sweep_ran", False),
+        patch(
+            "app.services.backup_plan_execution_service.execute_script",
+            side_effect=scripts.__call__,
+        ),
+        patch(
+            "app.services.operations.backup_facade.wait_for_backup_operation",
+            new=_plan_backup_seam(_completed_backup()),
+        ),
+        patch.object(notification_service, "send_backup_failure", new=AsyncMock()),
+    ):
+        assert start_is_refused()
+
+        # the runner has its lease: the sweep, then the scripts it found
+        with service.holding_for_post_hooks() as hold:
+            pending = cleanup_orphaned_jobs(
+                test_db, service.live_run_ids, hold_for_post_hooks=hold
+            )
+        assert pending == [old_run.id]
+        service.recover_post_hooks_after_restart(pending)
+        service.startup_sweep_ran = True
+        await asyncio.wait_for(scripts.held.wait(), timeout=5)
+        assert start_is_refused()
+
+        scripts.release.set()
+        for _ in range(200):
+            if not service.live_run_ids:
+                break
+            await asyncio.sleep(0.01)
+        assert not start_is_refused()
+        cleanup = list(scripts.events)
+        plan = service._query_plan(test_db, plan_id)
+        new_run_id = service.create_run(test_db, plan, trigger="manual")
+        await service.execute_run(new_run_id)
+
+    assert cleanup == [
+        ("start", "Start Database"),
+        ("end", "Start Database"),
+        ("start", "Always Cleanup"),
+        ("end", "Always Cleanup"),
+    ]
+    assert scripts.events[len(cleanup)] == ("start", "Stop Database")
+    test_db.expire_all()
+    assert test_db.get(BackupPlanRun, new_run_id).status == "completed"
 
 
 @pytest.mark.asyncio

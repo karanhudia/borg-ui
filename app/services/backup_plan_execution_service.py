@@ -86,6 +86,7 @@ from app.utils.process_utils import (
     POST_BACKUP_HOOKS_AFTER_CANCEL,
     POST_BACKUP_HOOKS_AFTER_RESTART,
     PRE_BACKUP_SCRIPT_HOOK_TYPES,
+    _post_backup_scripts_still_pending,
     pre_backup_scripts_started,
 )
 from app.services.operations.backup_facade import (
@@ -730,6 +731,10 @@ class BackupPlanExecutionService:
         # (`cleanup_orphaned_jobs`) runs once the runner holds its lease and
         # must not fail them as interrupted by the restart (#1398).
         self.live_run_ids: set[int] = set()
+        # Whether the startup sweep is over. It makes the finished runs
+        # live whose post-backup scripts a restart left to run; a start
+        # before it finds them in the database instead (`has_active_run`).
+        self.startup_sweep_ran = False
         # The pre-backup gate of each run this process is executing.
         self._pre_hook_gates: dict[int, _PreHookGate] = {}
 
@@ -769,20 +774,8 @@ class BackupPlanExecutionService:
             if self.has_active_run(db, plan.id):
                 continue
             if plan.schedule_mode == "availability":
-                last_success = (
-                    db.query(BackupPlanRun.completed_at)
-                    .filter(
-                        BackupPlanRun.backup_plan_id == plan.id,
-                        BackupPlanRun.status.in_(SUCCESS_BACKUP_STATUSES),
-                        BackupPlanRun.completed_at.isnot(None),
-                    )
-                    .order_by(BackupPlanRun.completed_at.desc())
-                    .first()
-                )
-                if last_success and plan.min_success_interval_minutes:
-                    allowed_at = to_utc_naive(last_success[0]) + timedelta(
-                        minutes=plan.min_success_interval_minutes
-                    )
+                allowed_at = self._minimum_interval_ends_at(db, plan)
+                if allowed_at is not None:
                     if now < allowed_at:
                         plan.next_run = min(
                             allowed_at,
@@ -924,7 +917,11 @@ class BackupPlanExecutionService:
                 and plan.next_run is not None
                 and plan.next_run <= now
             )
-            if not still_due or self.has_active_run(db, plan.id):
+            if (
+                not still_due
+                or self.has_active_run(db, plan.id)
+                or self._minimum_interval_not_elapsed(db, plan, now)
+            ):
                 db.rollback()
                 return False
             created.append(self.create_run(db, plan, trigger="schedule"))
@@ -937,6 +934,39 @@ class BackupPlanExecutionService:
         return await self.launch_after(
             db, work, in_thread=checkout_can_wait(db.get_bind())
         )
+
+    @staticmethod
+    def _minimum_interval_ends_at(db: Session, plan: BackupPlan) -> Optional[datetime]:
+        """When the availability plan's minimum interval after its last
+        successful run ends, or None without one."""
+        if not plan.min_success_interval_minutes:
+            return None
+        last_success = (
+            db.query(BackupPlanRun.completed_at)
+            .filter(
+                BackupPlanRun.backup_plan_id == plan.id,
+                BackupPlanRun.status.in_(SUCCESS_BACKUP_STATUSES),
+                BackupPlanRun.completed_at.isnot(None),
+            )
+            .order_by(BackupPlanRun.completed_at.desc())
+            .first()
+        )
+        if not last_success:
+            return None
+        return to_utc_naive(last_success[0]) + timedelta(
+            minutes=plan.min_success_interval_minutes
+        )
+
+    def _minimum_interval_not_elapsed(
+        self, db: Session, plan: BackupPlan, now: datetime
+    ) -> bool:
+        """Asked again right before the start: a run of the plan may have
+        succeeded since the dispatch looked, while it awaited the source
+        probe. The plan stays due, and the next look records the skip."""
+        if plan.schedule_mode != "availability":
+            return False
+        allowed_at = self._minimum_interval_ends_at(db, plan)
+        return allowed_at is not None and now < allowed_at
 
     @staticmethod
     def _latest_run_id(db: Session, plan_id: int) -> Optional[int]:
@@ -1056,8 +1086,19 @@ class BackupPlanExecutionService:
         runs = db.query(BackupPlanRun.id).filter(
             BackupPlanRun.backup_plan_id == plan_id
         )
+        # read before the rows: the sweep makes live what it finds, and
+        # only then is it over
+        startup_sweep_ran = self.startup_sweep_ran
         active = BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES)
         if runs.filter(active).first() is not None:
+            return True
+        # A finished run whose post-backup scripts a restart left to run is
+        # live from the startup sweep on, which launches them. The sweep
+        # waits for the runner's lease; a start before it finds the run
+        # here (#1543).
+        if not startup_sweep_ran and _post_backup_scripts_still_pending(
+            db, (), plan_id
+        ):
             return True
         # A cancelled run is still running its post-backup hooks (#1385);
         # a new run's pre-backup hooks must not start under them. The rows

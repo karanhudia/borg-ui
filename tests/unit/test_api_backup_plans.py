@@ -3331,6 +3331,122 @@ class TestBackupPlanRoutes:
         assert skipped.repositories[0].status == "skipped"
 
     @pytest.mark.asyncio
+    async def test_availability_plan_asks_for_the_minimum_interval_again_after_the_probe(
+        self, test_db
+    ):
+        """A run started by hand that succeeds while the source probe is
+        awaited counts: the scheduled run does not start, and the plan stays
+        due, so the next minute records the skip as usual (#1543)."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        now = datetime(2026, 1, 2, 12, 0)
+        due_at = now - timedelta(minutes=1)
+        plan = _create_scheduled_plan(test_db, [repo], next_run=due_at)
+        plan.schedule_mode = "availability"
+        plan.cron_expression = None
+        plan.availability_check_interval_minutes = 30
+        plan.min_success_interval_minutes = 20 * 60
+        test_db.commit()
+
+        async def probe_while_a_manual_run_succeeds(*_args, **_kwargs):
+            test_db.add(
+                BackupPlanRun(
+                    backup_plan_id=plan.id,
+                    trigger="manual",
+                    status="completed",
+                    started_at=now - timedelta(minutes=5),
+                    completed_at=now,
+                    created_at=now - timedelta(minutes=5),
+                )
+            )
+            test_db.commit()
+            return AvailabilityDecision(True)
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.source_locations_available",
+                new=AsyncMock(side_effect=probe_while_a_manual_run_succeeds),
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.asyncio.create_task",
+                side_effect=lambda coro: coro.close(),
+            ) as mock_create_task,
+        ):
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
+
+        assert dispatched == 0
+        mock_create_task.assert_not_called()
+        runs = test_db.query(BackupPlanRun).filter_by(backup_plan_id=plan.id).all()
+        assert [(run.trigger, run.status) for run in runs] == [("manual", "completed")]
+        test_db.refresh(plan)
+        assert plan.next_run == due_at
+        assert plan.last_run is None
+
+        # the next minute takes the usual way: a skip, and the next check
+        later = now + timedelta(minutes=1)
+        assert (
+            await backup_plan_execution_service.dispatch_due_runs(test_db, later) == 0
+        )
+        skipped = (
+            test_db.query(BackupPlanRun)
+            .filter_by(backup_plan_id=plan.id, status="skipped")
+            .one()
+        )
+        assert skipped.skip_reason == "minimum_interval_not_elapsed"
+        test_db.refresh(plan)
+        assert plan.next_run == later + timedelta(minutes=30)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "schedule_mode, status, hours_ago",
+        [
+            ("availability", "failed", 0),
+            ("cron", "completed", 0),
+            ("availability", "completed", 21),
+        ],
+    )
+    async def test_only_a_recent_success_of_an_availability_plan_holds_the_scheduled_run_back(
+        self, test_db, schedule_mode, status, hours_ago
+    ):
+        _set_plan(test_db, "community")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        now = datetime(2026, 1, 2, 12, 0)
+        plan = _create_scheduled_plan(
+            test_db, [repo], next_run=now - timedelta(minutes=1)
+        )
+        plan.schedule_mode = schedule_mode
+        plan.availability_check_interval_minutes = 30
+        plan.min_success_interval_minutes = 20 * 60
+        test_db.add(
+            BackupPlanRun(
+                backup_plan_id=plan.id,
+                trigger="manual",
+                status=status,
+                started_at=now - timedelta(hours=hours_ago, minutes=5),
+                completed_at=now - timedelta(hours=hours_ago),
+                created_at=now - timedelta(hours=hours_ago, minutes=5),
+            )
+        )
+        test_db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.source_locations_available",
+                new=AsyncMock(return_value=AvailabilityDecision(True)),
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.asyncio.create_task",
+                side_effect=lambda coro: coro.close(),
+            ),
+        ):
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
+
+        assert dispatched == 1
+
+    @pytest.mark.asyncio
     async def test_dispatch_due_runs_skips_and_advances_paid_only_plan_after_downgrade(
         self, test_db
     ):
