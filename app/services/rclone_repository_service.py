@@ -659,15 +659,24 @@ def _resolve_hydrate_target(cache_path: str) -> str:
     """The directory a hydrate replaces: parents resolved, last component not,
     so a symlink there is seen and refused rather than followed."""
     stored = cache_path.rstrip("/") or "/"
+    # A trailing "." names its own directory; a trailing ".." names the
+    # parent, which a restore must never replace.
+    while os.path.basename(stored) == ".":
+        stored = os.path.dirname(stored).rstrip("/") or "/"
+    if os.path.basename(stored) in ("", ".."):
+        raise OSError(f"{cache_path} does not name a repository folder to restore into")
     stored_parent = os.path.dirname(stored)
     # realpath collapses "x/.." lexically; ask the kernel, which refuses it
-    # when x is a file (ENOTDIR). A missing parent is fine (it is created)
-    # unless ".." passes through it.
-    try:
-        os.stat(stored_parent)
-    except FileNotFoundError:
-        if ".." in Path(stored_parent).parts:
-            raise
+    # when x is a file (ENOTDIR) or missing. Walk the parent: once a
+    # component is missing (the rest is created), no ".." may follow it.
+    parts = Path(stored_parent).parts
+    for index in range(1, len(parts) + 1):
+        try:
+            os.stat(os.path.join(*parts[:index]))
+        except FileNotFoundError:
+            if ".." in parts[index:]:
+                raise
+            break
     return os.path.join(os.path.realpath(stored_parent), os.path.basename(stored))
 
 

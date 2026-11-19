@@ -1212,3 +1212,24 @@ async def test_hydrate_refuses_a_mirror_without_a_local_copy(db_session, tmp_pat
 
     with pytest.raises(ValueError, match="no local copy"):
         await service.hydrate_repository(db_session, repository)
+
+
+@pytest.mark.unit
+def test_hydrate_target_resolution(tmp_path):
+    from app.services.rclone_repository_service import _resolve_hydrate_target
+
+    (tmp_path / "live").mkdir()
+    (tmp_path / "repo").mkdir()
+    # A missing folder after a ".." through an existing one is created later.
+    assert _resolve_hydrate_target(str(tmp_path / "live/../lost/repo")) == str(
+        tmp_path.resolve() / "lost" / "repo"
+    )
+    # A trailing "." is the folder itself.
+    assert _resolve_hydrate_target(str(tmp_path / "repo") + "/./.") == str(
+        tmp_path.resolve() / "repo"
+    )
+    # ".." through a missing folder, or a trailing "..", is refused.
+    with pytest.raises(FileNotFoundError):
+        _resolve_hydrate_target(str(tmp_path / "missing/../repo"))
+    with pytest.raises(OSError, match="does not name a repository folder"):
+        _resolve_hydrate_target(str(tmp_path / "repo") + "/..")

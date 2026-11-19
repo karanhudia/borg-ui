@@ -62,6 +62,34 @@ describe('installTranslationDomGuard', () => {
     expect(added.parentNode).toBeNull()
   })
 
+  it('leaves text inside ordinary nested elements to the browser', () => {
+    const parent = document.createElement('div')
+    const span = parent.appendChild(document.createElement('span'))
+    const text = span.appendChild(document.createTextNode('Ready'))
+    const added = document.createElement('b')
+
+    expect(() => parent.removeChild(text)).toThrow()
+    expect(() => parent.insertBefore(added, text)).toThrow()
+    expect(text.parentNode).toBe(span)
+    expect(Array.from(parent.childNodes)).toEqual([span])
+  })
+
+  it('does not pull a node out of another container for a detached reference', () => {
+    const parent = document.createElement('div')
+    const other = document.createElement('div')
+    const button = other.appendChild(document.createElement('button'))
+
+    expect(() => parent.insertBefore(button, document.createTextNode('new'))).toThrow()
+    expect(button.parentNode).toBe(other)
+  })
+
+  it('keeps the browser error for a text node inserting into itself', () => {
+    const parent = document.createElement('div')
+    const text = parent.appendChild(document.createTextNode('x'))
+
+    expect(() => text.insertBefore(document.createElement('span'), text)).toThrow(DOMException)
+  })
+
   it('still removes and inserts real children', () => {
     const parent = document.createElement('div')
     const first = parent.appendChild(document.createElement('span'))

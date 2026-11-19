@@ -214,6 +214,17 @@ def repository_failure_status(result: dict) -> int:
         or _LOCK_TIMEOUT_LINE.search(reason)
     ):
         return 423
+    if return_code in (13, 31) or any(
+        _re.fullmatch(r"archive .+ does not exist\.?", line.strip())
+        # Wrapped as "Borg mount failed: Repository /r does not exist."
+        # (dashboard bea738bcdf5f61ae).
+        or _re.search(r"(?:^|: )repository .+ does not exist\.?$", line.strip())
+        for line in reason.splitlines()
+    ):
+        # The archive or repository is gone, e.g. pruned while the page was
+        # open (dashboard 59a11c4953c3d968, 774c24917f83b4cf). Ahead of the
+        # 422 matches, which a repository path can contain.
+        return 404
     # 422, not 403: the frontend reads 403 as a role refusal and toasts so.
     if (
         # 83: borg serve's --restrict-to-path refused the path; 90: damaged
@@ -261,16 +272,6 @@ def repository_failure_status(result: dict) -> int:
         )
     ):
         return 409
-    if return_code in (13, 31) or any(
-        _re.fullmatch(r"archive .+ does not exist\.?", line.strip())
-        # Wrapped as "Borg mount failed: Repository /r does not exist."
-        # (dashboard bea738bcdf5f61ae).
-        or _re.search(r"(?:^|: )repository .+ does not exist\.?$", line.strip())
-        for line in reason.splitlines()
-    ):
-        # The archive or repository is gone, e.g. pruned while the page was
-        # open (dashboard 59a11c4953c3d968, 774c24917f83b4cf).
-        return 404
     return 500
 
 

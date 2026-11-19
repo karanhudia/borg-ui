@@ -127,6 +127,10 @@ from fastapi import HTTPException
             404,
         ),
         (
+            {"error": "Repository /backups/permission denied does not exist."},
+            404,
+        ),
+        (
             {"stderr": "Remote: Data integrity error: Invalid segment magic"},
             422,
         ),
