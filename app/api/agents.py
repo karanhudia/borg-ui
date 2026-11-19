@@ -2353,13 +2353,15 @@ def poll_jobs(
             AgentJob.status == "queued",
         )
         .order_by(AgentJob.created_at.asc(), AgentJob.id.asc())
-        .limit(limit)
         .all()
     )
     # A scoped prune goes out only over a session, checked against that
     # session's hello: the stored capabilities are shared by every process
-    # with this agent's token, so they cannot vouch for this caller.
-    jobs = [job for job in jobs if not _is_scoped_prune(job)]
+    # with this agent's token, so they cannot vouch for this caller. Skipped
+    # before the limit, so one at the head does not hide the jobs behind it.
+    # ponytail: filters in Python over the agent's queue (a handful of jobs);
+    # move it into SQL if queues ever grow long.
+    jobs = [job for job in jobs if not _is_scoped_prune(job)][:limit]
     return AgentJobPollResponse(jobs=[_serialize_agent_job(job) for job in jobs])
 
 

@@ -3872,6 +3872,20 @@ class TestScopedPruneNeedsTheCapability:
         test_db.refresh(job)
         assert job.status == "queued"
 
+    def test_poll_returns_the_job_behind_it(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered, agent = self._agent(test_client, test_db, admin_headers, [])
+        _scoped_prune_job(test_db, agent)
+        behind = _create_agent_job(test_db, agent)
+
+        poll = test_client.get(
+            "/api/agents/jobs/poll?limit=1",
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert [j["id"] for j in poll.json()["jobs"]] == [behind.id]
+
     def test_it_never_commits_as_claimed(
         self, test_client: TestClient, test_db, admin_headers
     ):
