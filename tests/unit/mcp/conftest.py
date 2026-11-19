@@ -119,6 +119,10 @@ def _fresh_auth_cache():
 @pytest.fixture
 def scratch_tools():
     """Register throwaway tools for one test, removed afterwards."""
+    # The real tools register when their modules are first imported. If that
+    # happened during the test, they would count as throwaway and be removed,
+    # and the cached modules would never register them again in this process.
+    import app.mcp.tools  # noqa: F401
     from app.mcp.registry import REGISTRY
 
     before = set(REGISTRY)
