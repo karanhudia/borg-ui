@@ -1625,6 +1625,11 @@ def _fail_agent_job(
     return True
 
 
+def _is_scoped_prune(job: AgentJob) -> bool:
+    operation = (job.payload or {}).get("operation") or {}
+    return isinstance(operation, dict) and bool(operation.get("match_archives"))
+
+
 def _refuse_unsupported_scoped_prune(
     job: AgentJob, capabilities: Optional[list], db: Session
 ) -> bool:
@@ -1632,11 +1637,11 @@ def _refuse_unsupported_scoped_prune(
     filter, and say so. The router checks when it queues the job, but an
     agent reinstalled at an older version would ignore the filter and prune
     the whole repository (issue #1549). Called wherever a queued job reaches
-    an agent: the shared session dispatcher, poll and claim."""
+    an agent: the shared session dispatcher. Poll and claim never hand one
+    out (see `poll_jobs`)."""
     from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
 
-    operation = (job.payload or {}).get("operation") or {}
-    if not isinstance(operation, dict) or not operation.get("match_archives"):
+    if not _is_scoped_prune(job):
         return False
     if PRUNE_MATCH_CAPABILITY in (capabilities or []):
         return False
@@ -2351,11 +2356,10 @@ def poll_jobs(
         .limit(limit)
         .all()
     )
-    jobs = [
-        job
-        for job in jobs
-        if not _refuse_unsupported_scoped_prune(job, current_agent.capabilities, db)
-    ]
+    # A scoped prune goes out only over a session, checked against that
+    # session's hello: the stored capabilities are shared by every process
+    # with this agent's token, so they cannot vouch for this caller.
+    jobs = [job for job in jobs if not _is_scoped_prune(job)]
     return AgentJobPollResponse(jobs=[_serialize_agent_job(job) for job in jobs])
 
 
@@ -2370,9 +2374,12 @@ def claim_job(
     _reject_final_job(job)
 
     if job.status == "queued":
-        if _refuse_unsupported_scoped_prune(job, current_agent.capabilities, db):
-            db.refresh(job)
-            _reject_final_job(job)
+        if _is_scoped_prune(job):
+            # Left queued for a session (see `poll_jobs`).
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"key": "backend.errors.agents.jobNotStartable"},
+            )
         claimed = _mark_agent_job_claimed(job, db)
         db.commit()
         db.refresh(job)

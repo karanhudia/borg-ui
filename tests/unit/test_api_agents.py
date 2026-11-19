@@ -3852,50 +3852,25 @@ class TestScopedPruneNeedsTheCapability:
         test_db.commit()
         return registered, agent
 
-    def test_poll_fails_it_instead_of_handing_it_out(
-        self, test_client: TestClient, test_db, admin_headers
+    @pytest.mark.parametrize("stored", [[], ["repository.prune.match_archives"]])
+    def test_http_never_hands_it_out(
+        self, test_client: TestClient, test_db, admin_headers, stored
     ):
-        registered, agent = self._agent(test_client, test_db, admin_headers, [])
+        """Poll and claim leave it queued for a session, even when the stored
+        capabilities say yes: another process with the same token may have
+        written them, so they do not vouch for this caller."""
+        registered, agent = self._agent(test_client, test_db, admin_headers, stored)
         job = _scoped_prune_job(test_db, agent)
+        headers = _agent_headers(registered["agent_token"])
 
-        response = test_client.get(
-            "/api/agents/jobs/poll", headers=_agent_headers(registered["agent_token"])
-        )
+        poll = test_client.get("/api/agents/jobs/poll", headers=headers)
+        claim = test_client.post(f"/api/agents/jobs/{job.id}/claim", headers=headers)
 
-        assert response.status_code == 200
-        assert response.json()["jobs"] == []
-        test_db.refresh(job)
-        assert job.status == "failed"
-        assert "newer agent" in job.error_message
-
-    def test_claim_is_refused(self, test_client: TestClient, test_db, admin_headers):
-        registered, agent = self._agent(test_client, test_db, admin_headers, [])
-        job = _scoped_prune_job(test_db, agent)
-
-        claim = test_client.post(
-            f"/api/agents/jobs/{job.id}/claim",
-            headers=_agent_headers(registered["agent_token"]),
-        )
-
+        assert poll.status_code == 200
+        assert poll.json()["jobs"] == []
         assert claim.status_code == 409
         test_db.refresh(job)
-        assert job.status == "failed"
-
-    def test_an_agent_with_the_capability_gets_it(
-        self, test_client: TestClient, test_db, admin_headers
-    ):
-        from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
-
-        registered, agent = self._agent(
-            test_client, test_db, admin_headers, [PRUNE_MATCH_CAPABILITY]
-        )
-        job = _scoped_prune_job(test_db, agent)
-
-        response = test_client.get(
-            "/api/agents/jobs/poll", headers=_agent_headers(registered["agent_token"])
-        )
-
-        assert [j["id"] for j in response.json()["jobs"]] == [job.id]
+        assert job.status == "queued"
 
     def test_it_never_commits_as_claimed(
         self, test_client: TestClient, test_db, admin_headers
