@@ -464,10 +464,11 @@ def retry_backup_job(
             ),
         )
     )
-    db.commit()
-    # Built before waking the runner: the commit expired retry_job, so reading
-    # it afterwards could reload a status the runner already moved on from.
+    # Built before the commit: the commit expires retry_job, and once it is
+    # committed a runner (woken, or on its own poll) may already have claimed
+    # it, so reading it back could report `running` for the job just created.
     response = _backup_retry_response(retry_job)
+    db.commit()
     wake_runner()
     logger.info(
         "Backup retry created",

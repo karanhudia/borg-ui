@@ -193,10 +193,13 @@ class TestBackupStart:
         assert lineage.request_snapshot["kind"] == "backup_job_retry"
 
     def test_retry_reports_the_job_it_created_even_if_the_runner_starts_it_first(
-        self, test_client, admin_headers, test_db
+        self, test_client, admin_headers, test_db, held_runner
     ):
-        """The runner may start the job before the response is built; the
-        response still describes the pending job the request created."""
+        """A runner may claim the job as soon as it is committed, woken or on
+        its own poll; the response still describes the pending job the
+        request created."""
+        from sqlalchemy import event, update
+
         repo = Repository(
             name="r", path="/test/repo", encryption="none", repository_type="local"
         )
@@ -215,18 +218,32 @@ class TestBackupStart:
         test_db.add(source)
         test_db.commit()
 
-        def runner_wins_the_race():
-            retry = test_db.query(Operation).filter(Operation.trigger == "retry").one()
-            retry.status = "running"
-            test_db.commit()
+        # Right after the endpoint's commit, another connection claims the
+        # retry, the way the runner's own session would.
+        def runner_claims_the_retry(_session):
+            with test_db.get_bind().connect() as runner:
+                runner.execute(
+                    update(Operation)
+                    .where(Operation.trigger == "retry")
+                    .values(status="running")
+                )
+                runner.commit()
 
-        with patch("app.api.backup.wake_runner", side_effect=runner_wins_the_race):
-            response = test_client.post(
-                f"/api/backup/jobs/{source.id}/retry", headers=admin_headers
-            )
+        event.listen(test_db, "after_commit", runner_claims_the_retry)
+        try:
+            with patch("app.api.backup.wake_runner") as wake:
+                response = test_client.post(
+                    f"/api/backup/jobs/{source.id}/retry", headers=admin_headers
+                )
+        finally:
+            event.remove(test_db, "after_commit", runner_claims_the_retry)
 
         assert response.status_code == 202
         assert response.json()["status"] == "pending"
+        wake.assert_called_once_with()
+        test_db.expire_all()
+        claimed = test_db.query(Operation).filter(Operation.trigger == "retry").one()
+        assert claimed.status == "running"
 
     def test_list_and_status_serve_backup_operations(
         self, test_client, admin_headers, test_db
