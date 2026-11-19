@@ -7,7 +7,7 @@ import os  # noqa: F401
 from datetime import datetime, timezone
 
 from app.database.models import User, Repository
-from app.database.database import ends_read_on_return, get_db
+from app.database.database import end_read_loaded, ends_read_on_return, get_db
 from app.core.borg_errors import (
     get_exit_code_message,
     is_borg_warning_exit_code,
@@ -275,6 +275,10 @@ async def preview_restore(
             # the server.
             return await _agent_restore_preview(db, repo, restore_request)
 
+        # Borg's dry run follows: the request holds no pooled connection
+        # meanwhile. The router has its remote path by then, and nothing is
+        # queried through the session on the event loop afterwards.
+        router = BorgRouter(repo)
         if (
             repo.repository_type == "ssh"
             or repo.path.startswith("ssh://")
@@ -282,7 +286,9 @@ async def preview_restore(
         ):
             env, temp_key_file = _build_repo_env(repo, db)
             try:
-                result = await BorgRouter(repo).preview_restore(
+                router.remote_path()
+                end_read_loaded(db, repo)
+                result = await router.preview_restore(
                     archive=restore_request.archive,
                     paths=restore_request.paths,
                     env=env,
@@ -290,7 +296,9 @@ async def preview_restore(
             finally:
                 cleanup_temp_key_file(temp_key_file)
         else:
-            result = await BorgRouter(repo).preview_restore(
+            router.remote_path()
+            end_read_loaded(db, repo)
+            result = await router.preview_restore(
                 archive=restore_request.archive,
                 paths=restore_request.paths,
             )

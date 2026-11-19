@@ -1285,6 +1285,7 @@ def _borg_methods():
         "prepare_env",
         "ssh_repository_url",
         "ssh_repository_directory",
+        "remote_path",
         "remote_path_env",
     }
     return sorted(

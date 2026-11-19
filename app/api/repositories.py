@@ -17,7 +17,15 @@ import shutil
 import uuid
 
 from app.core.borg_major import borg_major, is_borg2
-from app.database.database import SessionLocal, ends_read_on_return, get_db
+from app.database.database import (
+    SessionLocal,
+    end_read_keeping_loaded,
+    end_read_loaded,
+    ends_read_on_return,
+    get_db,
+    run_off_loop,
+    run_transaction_off_loop,
+)
 from app.database.models import (
     AgentMachine,
     Archive,
@@ -663,6 +671,33 @@ def _schedule_summary(matched: List[ScheduledJob]) -> Dict[str, Any]:
     }
 
 
+async def _repository_borg_env_ending_read(repository: Repository, db: Session):
+    """The Borg environment of a request's command, read in a thread, with
+    the session's read ended there. `repository` stays loaded."""
+    temp_key_file = None
+
+    def prepare():
+        nonlocal temp_key_file
+        try:
+            env, temp_key_file = _prepare_repository_borg_env(
+                repository, db, lock_wait=REQUEST_LOCK_WAIT
+            )
+            end_read_loaded(db, repository)
+        except BaseException:
+            # The caller may wait and try again: not with the connection of
+            # a read that failed half way.
+            db.rollback()
+            raise
+        return env
+
+    try:
+        return await run_off_loop(prepare), temp_key_file
+    except BaseException:
+        # A caller cancelled meanwhile never gets the key file to remove.
+        cleanup_temp_key_file(temp_key_file)
+        raise
+
+
 async def _run_repository_command(
     repository: Repository,
     db: Session,
@@ -672,14 +707,22 @@ async def _run_repository_command(
     log_message: Optional[str] = None,
     log_fields: Optional[Dict[str, Any]] = None,
     passphrase: Optional[str] = None,
+    end_read: bool = False,
 ):
     """Execute a repository-scoped Borg command with common SSH/env handling.
 
     ``passphrase`` replaces the stored one for this command only.
+
+    With ``end_read`` the environment is read in a thread and the session's
+    read ends there: for a request that holds no pooled connection, and must
+    neither wait for one on the event loop nor hold one while Borg runs.
     """
-    env, temp_key_file = _prepare_repository_borg_env(
-        repository, db, lock_wait=REQUEST_LOCK_WAIT
-    )
+    if end_read:
+        env, temp_key_file = await _repository_borg_env_ending_read(repository, db)
+    else:
+        env, temp_key_file = _prepare_repository_borg_env(
+            repository, db, lock_wait=REQUEST_LOCK_WAIT
+        )
     if passphrase is not None:
         env["BORG_PASSPHRASE"] = passphrase
     # Both callers machine-parse the JSON output; pin the render zone so borg1
@@ -737,6 +780,7 @@ async def _run_repository_command_with_retries(
                 timeout,
                 log_message=ssh_log_message,
                 log_fields={"repo_id": repo_id},
+                end_read=True,
             )
 
             if returncode != 0:
@@ -4830,6 +4874,25 @@ async def get_repository(
         # Get repository statistics
         stats = await get_repository_stats(repository, db, bypass_lock=use_bypass_lock)
 
+        # The rest is read in a thread, and the request waits for that thread
+        # holding no connection.
+        end_read_keeping_loaded(db, repository)
+        return await run_off_loop(_repository_detail_answer, db, repository, stats)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get repository", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToRetrieveRepository"},
+        )
+
+
+def _repository_detail_answer(
+    db: Session, repository: Repository, stats: Dict[str, Any]
+) -> Dict[str, Any]:
+    """The repository detail's answer, with the session's read ended."""
+    try:
         # computed before the payload is built: on a failure this rolls the
         # session back, which would expire every row the payload still reads
         storage = storage_payload(_storage_summary_or_none(db, repository))
@@ -4888,14 +4951,8 @@ async def get_repository(
             "success": True,
             "repository": repository_payload,
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Failed to get repository", error=str(e))
-        raise HTTPException(
-            status_code=500,
-            detail={"key": "backend.errors.repo.failedToRetrieveRepository"},
-        )
+    finally:
+        db.rollback()
 
 
 async def _apply_index_mode_change(
@@ -6815,11 +6872,41 @@ async def list_repository_archives(
 ):
     """List archives straight from borg. The database-backed list is
     `GET /{repo_id}/archives` in `app/api/archive_index.py`; this route
-    stays for the Archives page until phase 4."""
+    stays for the Archives page until phase 4.
 
-    async def _operation():
+    A server repository is listed by Borg: the request holds no pooled
+    connection while it waits for its turn on the repository or for Borg,
+    and reads in threads meanwhile, never waiting for a connection on the
+    event loop."""
+
+    def prepare():
         repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
         if is_agent_executor(repository):
+            # As before: its job is queued and awaited through the session.
+            return repository, None
+        use_bypass_lock, source = _resolve_bypass_lock(
+            repository, db, "bypass_lock_on_list"
+        )
+        router = BorgRouter(repository)
+        cmd = router.build_repo_list_command(repository.path)
+        options = list(
+            router.remote_command_options(effective_repository_remote_path(repository))
+        )
+        # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
+        # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
+        # where it exists.
+        if use_bypass_lock and not router.is_v2:
+            options.append("--bypass-lock")
+        # Options must precede "--": Borg reads anything after it as an operand.
+        boundary = cmd.index("--") if "--" in cmd else len(cmd)
+        cmd[boundary:boundary] = options
+        timeout = get_operation_timeouts(db)["list_timeout"]
+        end_read_loaded(db, repository)
+        return repository, (cmd, timeout, use_bypass_lock, source)
+
+    async def _operation():
+        repository, command = await run_off_loop(prepare)
+        if command is None:
             agent_job = queue_agent_repository_operation_job(
                 db,
                 repository,
@@ -6853,42 +6940,34 @@ async def list_repository_archives(
                 },
             }
 
-        use_bypass_lock, source = _resolve_bypass_lock(
-            repository, db, "bypass_lock_on_list"
-        )
-        router = BorgRouter(repository)
-        cmd = router.build_repo_list_command(repository.path)
-        options = list(
-            router.remote_command_options(effective_repository_remote_path(repository))
-        )
-        # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
-        # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
-        # where it exists.
-        if use_bypass_lock and not router.is_v2:
-            options.append("--bypass-lock")
-        # Options must precede "--": Borg reads anything after it as an operand.
-        boundary = cmd.index("--") if "--" in cmd else len(cmd)
-        cmd[boundary:boundary] = options
-
+        cmd, timeout, use_bypass_lock, source = command
         stdout = await _run_repository_command_with_retries(
             repository,
             db,
             repo_id=repo_id,
             cmd=cmd,
-            timeout=get_operation_timeouts(db)["list_timeout"],
+            timeout=timeout,
             bypass_lock=use_bypass_lock,
             source=source,
             command_label="Executing borg list command",
             ssh_log_message="Using SSH key for archive list",
             failure_key="backend.errors.repo.failedToListArchives",
         )
+
         # Parse JSON output
         try:
             archives_data = json.loads(stdout.decode())
             archives = archives_data.get("archives", [])
             # The listing ran under TZ=UTC (_run_repository_command).
             archives = _normalize_archive_listing_times(archives, timezone_name="UTC")
-            archives = enrich_archives_with_backup_metadata(archives, repository, db)
+            archives = await run_transaction_off_loop(
+                db,
+                enrich_archives_with_backup_metadata,
+                archives,
+                repository,
+                db,
+                keep=(repository,),
+            )
 
             logger.info(
                 "Archives listed successfully", repo_id=repo_id, count=len(archives)
@@ -6910,6 +6989,8 @@ async def list_repository_archives(
                 detail={"key": "backend.errors.repo.failedParseArchiveList"},
             )
 
+    # The wait for the repository's turn holds no connection.
+    end_read_keeping_loaded(db, current_user)
     return await run_serialized_repository_command(repo_id, _operation)
 
 
@@ -6919,11 +7000,36 @@ async def get_repository_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get detailed repository information using borg info"""
+    """Get detailed repository information using borg info
 
-    async def _operation():
+    As the live archive list above: no pooled connection is held while the
+    request waits for its turn on the repository or for Borg."""
+
+    def prepare():
         repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
         if is_agent_executor(repository):
+            # As before: its job is queued and awaited through the session.
+            return repository, None
+        use_bypass_lock, source = _resolve_bypass_lock(
+            repository, db, "bypass_lock_on_info"
+        )
+        router = BorgRouter(repository)
+        cmd = router.build_repo_info_command(repository.path)
+        cmd.extend(
+            router.remote_command_options(effective_repository_remote_path(repository))
+        )
+        # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
+        # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
+        # where it exists.
+        if use_bypass_lock and not router.is_v2:
+            cmd.append("--bypass-lock")
+        timeout = get_operation_timeouts(db)["info_timeout"]
+        end_read_loaded(db, repository)
+        return repository, (cmd, timeout, use_bypass_lock, source)
+
+    async def _operation():
+        repository, command = await run_off_loop(prepare)
+        if command is None:
             agent_job = queue_agent_repository_operation_job(
                 db,
                 repository,
@@ -6966,32 +7072,20 @@ async def get_repository_info(
                 "raw_output": info_data,
             }
 
-        use_bypass_lock, source = _resolve_bypass_lock(
-            repository, db, "bypass_lock_on_info"
-        )
-        router = BorgRouter(repository)
-        cmd = router.build_repo_info_command(repository.path)
-        cmd.extend(
-            router.remote_command_options(effective_repository_remote_path(repository))
-        )
-        # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
-        # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
-        # where it exists.
-        if use_bypass_lock and not router.is_v2:
-            cmd.append("--bypass-lock")
-
+        cmd, timeout, use_bypass_lock, source = command
         stdout = await _run_repository_command_with_retries(
             repository,
             db,
             repo_id=repo_id,
             cmd=cmd,
-            timeout=get_operation_timeouts(db)["info_timeout"],
+            timeout=timeout,
             bypass_lock=use_bypass_lock,
             source=source,
             command_label="Executing borg info command",
             ssh_log_message="Using SSH key for repository info",
             failure_key="backend.errors.repo.failedToGetRepositoryInfo",
         )
+
         # Parse JSON output
         try:
             info_data = normalize_repo_info_encryption(json.loads(stdout.decode()))
@@ -7005,7 +7099,9 @@ async def get_repository_info(
 
             # Same sync as the agent branch above: the card renders the stored
             # columns (Borg 2 only — the helper guards).
-            sync_archive_stats_from_info(repository, info_data, db)
+            await run_transaction_off_loop(
+                db, sync_archive_stats_from_info, repository, info_data, db
+            )
 
             return {
                 "success": True,
@@ -7036,6 +7132,8 @@ async def get_repository_info(
                 },
             )
 
+    # The wait for the repository's turn holds no connection.
+    end_read_keeping_loaded(db, current_user)
     return await run_serialized_repository_command(repo_id, _operation)
 
 
@@ -7062,7 +7160,12 @@ async def break_repository_lock(
         # Break the lock using borg break-lock
         env, temp_key_file = _prepare_repository_borg_env(repository, db)
         try:
-            result = await BorgRouter(repository).break_lock(env=env)
+            router = BorgRouter(repository)
+            # The request holds no pooled connection while Borg, or the
+            # repository's agent, breaks the lock.
+            router.remote_path()
+            end_read_loaded(db, repository, current_user)
+            result = await router.break_lock(env=env)
         finally:
             cleanup_temp_key_file(temp_key_file)
 
@@ -7116,7 +7219,13 @@ def _stats_last_modified(
 async def get_repository_stats(
     repository: Repository, db: Session, bypass_lock: bool = False
 ) -> Dict[str, Any]:
-    """Get repository statistics"""
+    """Get repository statistics
+
+    A server repository's statistics come from Borg. The session's read ends
+    before Borg runs, so the request holds no pooled connection meanwhile,
+    and what is read afterwards is read in a thread: on the event loop, a
+    wait for a connection would hold every request. `repository` stays
+    loaded throughout."""
     if is_agent_executor(repository):
         return {
             "total_size": repository.total_size or "Unknown",
@@ -7140,13 +7249,12 @@ async def get_repository_stats(
         router = BorgRouter(repository)
         cmd = router.build_repo_info_command(repository.path)
         cmd.extend(
-            router.remote_command_options(
-                effective_repository_remote_path(repository), bypass_lock=bypass_lock
-            )
+            router.remote_command_options(router.remote_path(), bypass_lock=bypass_lock)
         )
         # machine-parsed: render timestamps in UTC (Borg 1 prints them naive)
         info_env = dict(env or {})
         info_env["TZ"] = "UTC"
+        end_read_loaded(db, repository)
         info_result = await borg._execute_command(cmd, env=info_env)
 
         if not info_result["success"]:
@@ -7165,7 +7273,9 @@ async def get_repository_stats(
             )
         except (json.JSONDecodeError, ValueError, AttributeError):
             pass
-        last_modified = _stats_last_modified(db, repository, reported)
+        last_modified = await run_transaction_off_loop(
+            db, _stats_last_modified, db, repository, reported, keep=(repository,)
+        )
 
         # Parse repository info (basic implementation)
         # In a real implementation, you would parse the borg info output

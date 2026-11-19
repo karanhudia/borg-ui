@@ -7,6 +7,7 @@ All routes accept a `repository` query param (the repo path).
 import json
 import os
 import re
+from contextlib import ExitStack
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,10 +19,11 @@ from app.api.archive_download import extract_file_download
 from app.api.archives import (
     agent_file_download,
     _content_disposition_attachment,
+    _remote_path_ending_read,
     _stream_agent_archive_tar,
     _tar_strip_components,
 )
-from app.database.database import ends_read_on_return, get_db
+from app.database.database import end_read_loaded, ends_read_on_return, get_db
 from app.database.models import User, Repository, SystemSettings
 from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.operations.maintenance_start import start_archive_delete
@@ -245,18 +247,20 @@ async def list_archives(
         )
     elif _repo_needs_custom_env(repo):
         with repository_borg_env(repo, db) as env:
+            remote_path = _remote_path_ending_read(repo, db)
             result = await borg2.list_archives(
                 repo.path,
                 passphrase=repo.passphrase,
-                remote_path=effective_repository_remote_path(repo),
+                remote_path=remote_path,
                 bypass_lock=repo.bypass_lock,
                 env=env,
             )
     else:
+        remote_path = _remote_path_ending_read(repo, db)
         result = await borg2.list_archives(
             repo.path,
             passphrase=repo.passphrase,
-            remote_path=effective_repository_remote_path(repo),
+            remote_path=remote_path,
             bypass_lock=repo.bypass_lock,
         )
     if not result.get("success", bool(result.get("stdout"))):
@@ -287,26 +291,44 @@ async def get_archive_info(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive_id)
+    # A server repository's Borg environment, for both calls of the answer:
+    # the session's read ends before the first.
+    with ExitStack() as borg_env:
+        return await _archive_info(
+            db, repo, archive_selector, include_files, file_limit, borg_env
+        )
+
+
+async def _archive_info(
+    db: Session,
+    repo: Repository,
+    archive_selector: str,
+    include_files: bool,
+    file_limit: int,
+    borg_env: ExitStack,
+):
     if is_agent_executor(repo):
         result = await _agent_archive_info_result(
             db, repo, archive_selector, timeout_seconds=_get_info_timeout(db)
         )
     elif _repo_needs_custom_env(repo):
-        with repository_borg_env(repo, db) as env:
-            result = await borg2.info_archive(
-                repo.path,
-                archive_selector,
-                passphrase=repo.passphrase,
-                remote_path=effective_repository_remote_path(repo),
-                bypass_lock=repo.bypass_lock,
-                env=env,
-            )
-    else:
+        env = borg_env.enter_context(repository_borg_env(repo, db))
+        remote_path = _remote_path_ending_read(repo, db)
         result = await borg2.info_archive(
             repo.path,
             archive_selector,
             passphrase=repo.passphrase,
-            remote_path=effective_repository_remote_path(repo),
+            remote_path=remote_path,
+            bypass_lock=repo.bypass_lock,
+            env=env,
+        )
+    else:
+        remote_path = _remote_path_ending_read(repo, db)
+        result = await borg2.info_archive(
+            repo.path,
+            archive_selector,
+            passphrase=repo.passphrase,
+            remote_path=remote_path,
             bypass_lock=repo.bypass_lock,
         )
     if not result.get("success", bool(result.get("stdout"))):
@@ -366,21 +388,20 @@ async def get_archive_info(
                     )
                     list_result = {"success": False}
             elif _repo_needs_custom_env(repo):
-                with repository_borg_env(repo, db) as env:
-                    list_result = await borg2.list_archive_contents(
-                        repo.path,
-                        archive_selector,
-                        passphrase=repo.passphrase,
-                        remote_path=effective_repository_remote_path(repo),
-                        bypass_lock=repo.bypass_lock,
-                        env=env,
-                    )
+                list_result = await borg2.list_archive_contents(
+                    repo.path,
+                    archive_selector,
+                    passphrase=repo.passphrase,
+                    remote_path=remote_path,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
             else:
                 list_result = await borg2.list_archive_contents(
                     repo.path,
                     archive_selector,
                     passphrase=repo.passphrase,
-                    remote_path=effective_repository_remote_path(repo),
+                    remote_path=remote_path,
                     bypass_lock=repo.bypass_lock,
                 )
             # An agent listing renders mtimes in the agent's zone; a
@@ -493,6 +514,9 @@ async def get_archive_contents(
                 }
                 if fast_browse:
                     kwargs["browse_depth"] = get_browse_depth(repo, path)
+                # Borg runs next: the request holds no pooled connection
+                # meanwhile.
+                end_read_loaded(db, repo)
                 result = await borg2.list_archive_contents(**kwargs)
         else:
             kwargs = {
@@ -505,6 +529,7 @@ async def get_archive_contents(
             }
             if fast_browse:
                 kwargs["browse_depth"] = get_browse_depth(repo, path)
+            end_read_loaded(db, repo)
             result = await borg2.list_archive_contents(**kwargs)
         # borg2 list exits with 1 on warnings but stdout is still valid JSONL —
         # treat any result that produced stdout as usable.
@@ -641,25 +666,29 @@ async def download_file_from_archive(
             return await agent_file_download(db, repo, archive_selector, file_path)
 
         async def extract(temp_dir: str):
+            # Neither the extraction nor the download holds a pooled
+            # connection.
             if _repo_needs_custom_env(repo):
                 with repository_borg_env(repo, db) as env:
+                    remote_path = _remote_path_ending_read(repo, db)
                     return await borg2.extract_archive(
                         repo.path,
                         archive_selector,
                         [file_path],
                         temp_dir,
                         passphrase=repo.passphrase,
-                        remote_path=effective_repository_remote_path(repo),
+                        remote_path=remote_path,
                         bypass_lock=repo.bypass_lock,
                         env=env,
                     )
+            remote_path = _remote_path_ending_read(repo, db)
             return await borg2.extract_archive(
                 repo.path,
                 archive_selector,
                 [file_path],
                 temp_dir,
                 passphrase=repo.passphrase,
-                remote_path=effective_repository_remote_path(repo),
+                remote_path=remote_path,
                 bypass_lock=repo.bypass_lock,
             )
 
@@ -704,24 +733,28 @@ async def download_folder_from_archive(
             return await _stream_agent_archive_tar(
                 db, repo, archive_selector, directory_path
             )
+        # Neither the wait for Borg's first bytes nor the download holds a
+        # pooled connection.
         if _repo_needs_custom_env(repo):
             with repository_borg_env(repo, db) as env:
+                remote_path = _remote_path_ending_read(repo, db)
                 stream = borg2.export_archive_tar(
                     repo.path,
                     archive_selector,
                     directory_path,
                     passphrase=repo.passphrase,
-                    remote_path=effective_repository_remote_path(repo),
+                    remote_path=remote_path,
                     env=env,
                     strip_components=_tar_strip_components(directory_path),
                 )
                 return await _tar_download_response(stream, directory_path)
+        remote_path = _remote_path_ending_read(repo, db)
         stream = borg2.export_archive_tar(
             repo.path,
             archive_selector,
             directory_path,
             passphrase=repo.passphrase,
-            remote_path=effective_repository_remote_path(repo),
+            remote_path=remote_path,
             strip_components=_tar_strip_components(directory_path),
         )
         return await _tar_download_response(stream, directory_path)

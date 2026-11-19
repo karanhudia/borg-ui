@@ -22,6 +22,7 @@ from app.database.models import (
     LicensingState,
     Repository,
     SystemSettings,
+    User,
 )
 from app.database.models import SSHConnection, SSHKey
 from tests.utils.operations import seed_job_operation
@@ -871,14 +872,18 @@ class TestV2RepositoryRoutes:
                 side_effect=fake_list_archives,
             ),
         ):
-            archives_result, info_result = await asyncio.gather(
-                repositories_v2_api.list_archives(
-                    repo.id, current_user=SimpleNamespace(role="admin"), db=test_db
-                ),
-                repositories_v2_api.get_repository_info(
-                    repo.id, current_user=SimpleNamespace(role="admin"), db=test_db
-                ),
-            )
+            # A session each, as two requests have: the handlers read in
+            # threads.
+            sessions = sessionmaker(bind=test_db.get_bind())
+            with sessions() as first, sessions() as second:
+                archives_result, info_result = await asyncio.gather(
+                    repositories_v2_api.list_archives(
+                        repo.id, current_user=User(role="admin"), db=first
+                    ),
+                    repositories_v2_api.get_repository_info(
+                        repo.id, current_user=User(role="admin"), db=second
+                    ),
+                )
 
         assert state["max_active"] == 1
         assert archives_result["archives"] == []
@@ -909,7 +914,7 @@ class TestV2RepositoryRoutes:
             ) as mock_borg2,
         ):
             result = await repositories_v2_api.list_archives(
-                repo.id, current_user=SimpleNamespace(role="admin"), db=test_db
+                repo.id, current_user=User(role="admin"), db=test_db
             )
 
         assert result["borg_version"] == 2
@@ -1006,7 +1011,7 @@ class TestV2RepositoryRoutes:
             ) as mock_rinfo,
         ):
             result = await repositories_v2_api.get_repository_info(
-                repo.id, current_user=SimpleNamespace(role="admin"), db=test_db
+                repo.id, current_user=User(role="admin"), db=test_db
             )
 
         assert result["borg_version"] == 2

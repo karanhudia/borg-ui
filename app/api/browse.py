@@ -7,7 +7,7 @@ import os  # noqa: F401
 import structlog
 
 from app.database.models import User, Repository, SystemSettings, AgentJob
-from app.database.database import get_db
+from app.database.database import end_read_loaded, get_db
 from app.api.auth import get_current_user
 from app.core.security import check_repo_access
 from app.core.borg_router import BorgRouter
@@ -172,7 +172,13 @@ async def _list_archive_contents_local(
 ) -> dict:
     env, temp_key_file = _build_repo_env(repository, db)
     try:
-        return await BorgRouter(repository).list_archive_contents(
+        router = BorgRouter(repository)
+        # Borg runs next: the request holds no pooled connection meanwhile.
+        # The router has its remote path by then, and nothing is queried
+        # through the session on the event loop afterwards.
+        router.remote_path()
+        end_read_loaded(db, repository)
+        return await router.list_archive_contents(
             archive=archive_name,
             path="",  # Always fetch all items
             max_lines=max_items,  # Kill borg process if this limit is exceeded
