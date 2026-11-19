@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-11-19T13:51:37.682Z",
+  "generatedAt": "2026-11-19T14:14:35.848Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1551 visual report",
     "commitSha": "2fbd31fad5c4",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44537532760"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44541465978"
   },
   "totals": {
     "baseline": 1350,
     "actual": 1358,
     "compared": 1350,
-    "changed": 1,
+    "changed": 9,
     "added": 8,
     "removed": 0,
-    "unchanged": 1349
+    "unchanged": 1341
   },
   "changed": [
     {
-      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 422,
+      "fileName": "components-announcementmodal--maintenance-notice--mobile.png",
+      "baselinePath": "images/baseline/components-announcementmodal--maintenance-notice--mobile.png",
+      "actualPath": "images/actual/components-announcementmodal--maintenance-notice--mobile.png",
+      "diffPath": "images/diff/components-announcementmodal--maintenance-notice--mobile.png",
+      "diffPixels": 1519,
       "totalPixels": 329160,
-      "diffRatio": 0.001282051282051282,
+      "diffRatio": 0.004614777008141937,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -32,6 +32,150 @@
       "actual": {
         "width": 390,
         "height": 844
+      }
+    },
+    {
+      "fileName": "components-announcementmodal--maintenance-notice.png",
+      "baselinePath": "images/baseline/components-announcementmodal--maintenance-notice.png",
+      "actualPath": "images/actual/components-announcementmodal--maintenance-notice.png",
+      "diffPath": "images/diff/components-announcementmodal--maintenance-notice.png",
+      "diffPixels": 1520,
+      "totalPixels": 1024000,
+      "diffRatio": 0.001484375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-announcementmodal--many-highlights--mobile.png",
+      "baselinePath": "images/baseline/components-announcementmodal--many-highlights--mobile.png",
+      "actualPath": "images/actual/components-announcementmodal--many-highlights--mobile.png",
+      "diffPath": "images/diff/components-announcementmodal--many-highlights--mobile.png",
+      "diffPixels": 1041,
+      "totalPixels": 329160,
+      "diffRatio": 0.0031625956981407217,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-announcementmodal--many-highlights.png",
+      "baselinePath": "images/baseline/components-announcementmodal--many-highlights.png",
+      "actualPath": "images/actual/components-announcementmodal--many-highlights.png",
+      "diffPath": "images/diff/components-announcementmodal--many-highlights.png",
+      "diffPixels": 1044,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00101953125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-announcementmodal--release-246-update--mobile.png",
+      "baselinePath": "images/baseline/components-announcementmodal--release-246-update--mobile.png",
+      "actualPath": "images/actual/components-announcementmodal--release-246-update--mobile.png",
+      "diffPath": "images/diff/components-announcementmodal--release-246-update--mobile.png",
+      "diffPixels": 1041,
+      "totalPixels": 329160,
+      "diffRatio": 0.0031625956981407217,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-announcementmodal--release-246-update.png",
+      "baselinePath": "images/baseline/components-announcementmodal--release-246-update.png",
+      "actualPath": "images/actual/components-announcementmodal--release-246-update.png",
+      "diffPath": "images/diff/components-announcementmodal--release-246-update.png",
+      "diffPixels": 1044,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00101953125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-announcementmodal--release-highlight--mobile.png",
+      "baselinePath": "images/baseline/components-announcementmodal--release-highlight--mobile.png",
+      "actualPath": "images/actual/components-announcementmodal--release-highlight--mobile.png",
+      "diffPath": "images/diff/components-announcementmodal--release-highlight--mobile.png",
+      "diffPixels": 1051,
+      "totalPixels": 329160,
+      "diffRatio": 0.0031929760602746383,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-announcementmodal--release-highlight.png",
+      "baselinePath": "images/baseline/components-announcementmodal--release-highlight.png",
+      "actualPath": "images/actual/components-announcementmodal--release-highlight.png",
+      "diffPath": "images/diff/components-announcementmodal--release-highlight.png",
+      "diffPixels": 1046,
+      "totalPixels": 1024000,
+      "diffRatio": 0.001021484375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-appsidebar--community-plan.png",
+      "baselinePath": "images/baseline/components-appsidebar--community-plan.png",
+      "actualPath": "images/actual/components-appsidebar--community-plan.png",
+      "diffPath": "images/diff/components-appsidebar--community-plan.png",
+      "diffPixels": 13,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0000126953125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
       }
     }
   ],
@@ -858,34 +1002,7 @@
       "fileName": "components-analyticsconsentbanner--default.png"
     },
     {
-      "fileName": "components-announcementmodal--maintenance-notice--mobile.png"
-    },
-    {
-      "fileName": "components-announcementmodal--maintenance-notice.png"
-    },
-    {
-      "fileName": "components-announcementmodal--many-highlights--mobile.png"
-    },
-    {
-      "fileName": "components-announcementmodal--many-highlights.png"
-    },
-    {
-      "fileName": "components-announcementmodal--release-246-update--mobile.png"
-    },
-    {
-      "fileName": "components-announcementmodal--release-246-update.png"
-    },
-    {
-      "fileName": "components-announcementmodal--release-highlight--mobile.png"
-    },
-    {
-      "fileName": "components-announcementmodal--release-highlight.png"
-    },
-    {
       "fileName": "components-appsidebar--community-plan--mobile.png"
-    },
-    {
-      "fileName": "components-appsidebar--community-plan.png"
     },
     {
       "fileName": "components-appsidebar--mcp-route--mobile.png"
@@ -3634,6 +3751,9 @@
     },
     {
       "fileName": "pages-repositories-groups--empty-without-quick-start.png"
+    },
+    {
+      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png"
     },
     {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api.png"
