@@ -933,15 +933,25 @@ class TestUserManagement:
             role="admin",
             password_hash="fakehash",
         )
-        test_db.add(user)
+        other = User(
+            username="wipe-other",
+            email="wipe-other@example.com",
+            role="admin",
+            password_hash="fakehash",
+        )
+        test_db.add_all([user, other])
         test_db.commit()
-        wipe = RepositoryWipeJob(
-            repository_id=None,
+        requested = RepositoryWipeJob(
             status="completed",
             requested_by_user_id=user.id,
+            confirmed_by_user_id=other.id,
+        )
+        confirmed = RepositoryWipeJob(
+            status="completed",
+            requested_by_user_id=other.id,
             confirmed_by_user_id=user.id,
         )
-        test_db.add(wipe)
+        test_db.add_all([requested, confirmed])
         test_db.commit()
 
         response = test_client.delete(
@@ -949,9 +959,16 @@ class TestUserManagement:
         )
 
         assert response.status_code == 200
-        test_db.refresh(wipe)
-        assert wipe.requested_by_user_id is None
-        assert wipe.confirmed_by_user_id is None
+        test_db.refresh(requested)
+        test_db.refresh(confirmed)
+        assert (requested.requested_by_user_id, requested.confirmed_by_user_id) == (
+            None,
+            other.id,
+        )
+        assert (confirmed.requested_by_user_id, confirmed.confirmed_by_user_id) == (
+            other.id,
+            None,
+        )
 
     def test_delete_user_nonexistent(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent user returns 404"""
