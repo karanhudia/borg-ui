@@ -240,3 +240,21 @@ def test_retry_check_is_refused_with_a_pointer():
     assert result.is_error and api.posts == []
     assert "Only backups and plan runs can be retried" in result.text
     assert "check_repository" in result.text
+
+
+# Review fixes
+
+
+@pytest.mark.unit
+def test_failed_estimate_still_reports_the_started_job():
+    """The start went through; a failed history lookup must not turn that
+    into an error the AI would answer by starting it again."""
+    routes = {
+        **REPOS,
+        "/api/activity/recent": lambda params: (_ for _ in ()).throw(ApiError(500)),
+        "POST /api/backup/start": STARTED,
+    }
+    result, _ = run("start_backup", routes, repository="Photos")
+    assert not result.is_error
+    assert result.text.startswith("⏳ Backup of *Photos* started (backup 412).")
+    assert "Usually" not in result.text

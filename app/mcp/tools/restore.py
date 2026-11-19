@@ -11,7 +11,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 from app.mcp import borg_routes, resolve
-from app.mcp.client import ApiError
+from app.mcp.client import LONG_TIMEOUT, ApiError
 from app.mcp.levels import Level
 from app.mcp.registry import tool
 from app.mcp.render import ToolResult
@@ -66,6 +66,7 @@ async def preview_restore(ctx, args: RestoreTarget) -> ToolResult:
             "paths": args.paths,
             "destination": "",
         },
+        timeout=LONG_TIMEOUT,
     )
     lines = [
         line for line in (answer.get("preview") or "").splitlines() if line.strip()
@@ -109,7 +110,8 @@ async def _listing(ctx, repo: dict, destination: str, ssh: Optional[dict]):
     """The destination's entries, or None when it does not exist yet."""
     if repo.get("execution_target") == "agent":
         route = f"/api/managed-machines/agents/{repo.get('agent_machine_id')}/filesystem/browse"
-        params = {"path": destination}
+        # The agent hides dotfiles unless asked; they count as contents here.
+        params = {"path": destination, "include_hidden": True}
     elif ssh is not None:
         route = SERVER_BROWSE
         params = {
@@ -154,6 +156,13 @@ async def _listing(ctx, repo: dict, destination: str, ssh: Optional[dict]):
 )
 async def restore_files(ctx, args: RestoreArgs) -> ToolResult:
     repo, archive = await _target(ctx, args)
+    if args.destination_connection and repo.get("execution_target") == "agent":
+        return ToolResult(
+            f"*{repo['name']}* restores on its agent machine, so the folder must be "
+            "on that machine. Leave destination_connection empty and pick a folder "
+            "there (browse_agent_folders shows them).",
+            is_error=True,
+        )
     ssh = (
         await resolve.ssh_connection(ctx, args.destination_connection)
         if args.destination_connection

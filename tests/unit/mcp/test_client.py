@@ -117,3 +117,29 @@ async def test_post_sends_json_body(client_for):
         },
     )
     assert answer["cron_expression"] == "0 3 * * *"
+
+
+@pytest.mark.unit
+async def test_post_passes_its_timeout(client_for, monkeypatch):
+    import httpx
+
+    seen = {}
+    real = httpx.AsyncClient.request
+
+    async def spy(self, *args, **kwargs):
+        seen["timeout"] = self.timeout.read
+        return await real(self, *args, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "request", spy)
+    await client_for.post(
+        "/api/schedule/validate-cron",
+        json={
+            "minute": "0",
+            "hour": "3",
+            "day_of_month": "*",
+            "month": "*",
+            "day_of_week": "*",
+        },
+        timeout=321,
+    )
+    assert seen["timeout"] == 321

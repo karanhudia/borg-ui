@@ -15,6 +15,10 @@ import httpx
 from app.core.security import MCP_INTERNAL_HEADER, create_mcp_internal_token
 
 INTERNAL_BASE_URL = "http://borg-ui.internal"
+DEFAULT_TIMEOUT = 120
+# Borg dry runs (prune and restore previews) and source scans read a lot on
+# big repositories and hosts; they get longer before the call gives up.
+LONG_TIMEOUT = 600
 
 
 class ApiError(Exception):
@@ -60,8 +64,12 @@ class InternalClient:
     async def get(self, path: str, /, **params) -> Any:
         return await self.request("GET", path, params=params)
 
-    async def post(self, path: str, /, json: Any = None, **params) -> Any:
-        return await self.request("POST", path, params=params, json=json)
+    async def post(
+        self, path: str, /, json: Any = None, timeout: Optional[float] = None, **params
+    ) -> Any:
+        return await self.request(
+            "POST", path, params=params, json=json, timeout=timeout
+        )
 
     async def request(
         self,
@@ -70,6 +78,7 @@ class InternalClient:
         *,
         params: Optional[dict] = None,
         json: Any = None,
+        timeout: Optional[float] = None,
     ) -> Any:
         clean = {k: v for k, v in (params or {}).items() if v is not None}
         headers = {
@@ -80,7 +89,9 @@ class InternalClient:
         # A crashing route answers 500 here, as it would over the network.
         transport = httpx.ASGITransport(app=self._app, raise_app_exceptions=False)
         async with httpx.AsyncClient(
-            transport=transport, base_url=INTERNAL_BASE_URL, timeout=120
+            transport=transport,
+            base_url=INTERNAL_BASE_URL,
+            timeout=timeout or DEFAULT_TIMEOUT,
         ) as client:
             response = await client.request(
                 method, path, params=clean, json=json, headers=headers

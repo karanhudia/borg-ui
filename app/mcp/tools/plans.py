@@ -7,6 +7,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 from app.mcp import resolve
+from app.mcp.client import LONG_TIMEOUT
 from app.mcp.levels import Level
 from app.mcp.registry import tool
 from app.mcp.render import (
@@ -453,13 +454,16 @@ async def discover_sources(ctx, args: DiscoverArgs) -> ToolResult:
         found = await ctx.api.post(
             "/api/source-discovery/databases/scan",
             json={**target, "paths": DATABASE_SCAN_PATHS},
+            timeout=LONG_TIMEOUT,
         )
         databases = [
             d for d in found.get("detections") or [] if d.get("detected", True)
         ]
         warnings += found.get("warnings") or []
     if args.kind in ("containers", "both"):
-        found = await ctx.api.post("/api/source-discovery/containers/scan", json=target)
+        found = await ctx.api.post(
+            "/api/source-discovery/containers/scan", json=target, timeout=LONG_TIMEOUT
+        )
         containers = found.get("containers") or []
         warnings += found.get("warnings") or []
     counts = []

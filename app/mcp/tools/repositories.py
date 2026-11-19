@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.mcp import resolve
+from app.mcp.client import LONG_TIMEOUT
 from app.mcp.levels import Level
 from app.mcp.registry import tool
 from app.mcp.render import (
@@ -490,7 +491,9 @@ async def preview_prune(ctx, args: PruneArgs) -> ToolResult:
         )
     repo = await resolve.repository(ctx, args.repository)
     preview = await ctx.api.post(
-        f"/api/repositories/{repo['id']}/prune/preview", json=rules
+        f"/api/repositories/{repo['id']}/prune/preview",
+        json=rules,
+        timeout=LONG_TIMEOUT,
     )
     gone = [a for a in preview.get("archives") or [] if a.get("verdict") == "deleted"]
     gone.sort(key=lambda a: str(a.get("start") or ""))

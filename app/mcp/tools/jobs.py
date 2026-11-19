@@ -98,13 +98,18 @@ async def estimate(
 ) -> Optional[float]:
     """Median seconds of the last five completed runs like this one, or None
     with fewer than two to go on (spec 5.7: an estimate, never a guess)."""
-    rows = await ctx.api.get(
-        "/api/activity/recent",
-        job_type=job_type,
-        status="completed",
-        repository_id=repository_id,
-        limit=50,
-    )
+    try:
+        rows = await ctx.api.get(
+            "/api/activity/recent",
+            job_type=job_type,
+            status="completed",
+            repository_id=repository_id,
+            limit=50,
+        )
+    except ApiError:
+        # Callers ask after starting work; a failed lookup is "no estimate",
+        # never an error that hides a job which did start.
+        return None
     if backup_plan_id is not None:
         rows = [row for row in rows if row.get("backup_plan_id") == backup_plan_id]
     took = [t for t in map(_took, rows) if t is not None][:5]
@@ -419,12 +424,16 @@ async def get_job_log(ctx, args: LogArgs) -> ToolResult:
 async def wait_for_job(ctx, args: JobRef) -> ToolResult:
     deadline = time.monotonic() + WAIT_SECONDS
     job = await _job(ctx, args.job_type, args.job_id)
+    reported = -1.0
     while (
         job.get("status") not in TERMINAL
         and time.monotonic() + POLL_SECONDS <= deadline
     ):
-        if job.get("progress_percent") is not None:
-            await ctx.progress(job["progress_percent"], job.get("progress_message"))
+        percent = job.get("progress_percent")
+        if percent is not None and percent > reported:
+            # MCP: progress must increase with each notification.
+            reported = percent
+            await ctx.progress(percent, job.get("progress_message"))
         await asyncio.sleep(POLL_SECONDS)
         job = await _job(ctx, args.job_type, args.job_id)
     if job.get("status") in TERMINAL:

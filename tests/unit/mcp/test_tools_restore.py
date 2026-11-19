@@ -164,3 +164,41 @@ def test_preview_restore_caps_listing():
     assert "file49.md" in result.text and "file50.md" not in result.text
     assert "and 150 more" in result.text
     assert "Nothing was written." in result.text
+
+
+@pytest.mark.unit
+def test_agent_listing_includes_hidden_files():
+    """Review fix: the agent hides dotfiles unless asked, and a folder holding
+    only .bashrc is not empty."""
+    _, api = _restore(AGENT, AGENT_BROWSE, {"items": []})
+    listing = [p for path, p in api.calls if path == AGENT_BROWSE][0]
+    assert listing["include_hidden"] is True
+
+
+@pytest.mark.unit
+def test_agent_repository_refuses_an_ssh_destination():
+    """Agent restores write on the agent's own host; an SSH destination would
+    be silently ignored, so say so instead of starting."""
+    result, api = _restore(
+        AGENT,
+        AGENT_BROWSE,
+        {"items": []},
+        destination_connection="borg@backups.example.com",
+    )
+    assert result.is_error and api.posts == []
+    assert result.text.startswith("*Laptop* restores on its agent machine")
+
+
+@pytest.mark.unit
+def test_restore_preview_waits_long():
+    from app.mcp.client import LONG_TIMEOUT
+
+    routes = {
+        "/api/repositories/": {"repositories": [V1]},
+        "/api/repositories/1/archives": {"archives": [ARCHIVE]},
+        "POST /api/restore/preview": {"preview": ""},
+    }
+    _, api = run(
+        "preview_restore", routes, repository="Photos", archive="latest", paths=["x"]
+    )
+    assert api.timeouts["/api/restore/preview"] == LONG_TIMEOUT

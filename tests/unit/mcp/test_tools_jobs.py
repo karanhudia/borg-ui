@@ -171,3 +171,30 @@ def test_wait_for_job_without_token_sends_no_notifications(admin_mcp, monkeypatc
     _running_then_done(monkeypatch)
     messages = _wait(admin_mcp)
     assert [m for m in messages if "method" in m] == []
+
+
+@pytest.mark.unit
+def test_wait_for_job_progress_only_increases(admin_mcp, monkeypatch):
+    """MCP: progress must increase with each notification, so a stalled job
+    sends nothing new."""
+    from app.mcp.tools import jobs
+
+    answers = [
+        {"type": "backup", "status": "running", "progress_percent": 40},
+        {"type": "backup", "status": "running", "progress_percent": 40},
+        {"type": "backup", "status": "running", "progress_percent": 60},
+        {"type": "backup", "status": "completed"},
+    ]
+
+    async def fake_job(ctx, job_type, job_id):
+        return answers.pop(0)
+
+    monkeypatch.setattr(jobs, "_job", fake_job)
+    monkeypatch.setattr(jobs, "POLL_SECONDS", 0)
+    messages = _wait(admin_mcp, token="t2")
+    values = [
+        m["params"]["progress"]
+        for m in messages
+        if m.get("method") == "notifications/progress"
+    ]
+    assert values == [40, 60]

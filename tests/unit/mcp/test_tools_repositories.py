@@ -178,3 +178,12 @@ def test_preview_prune_without_sizes():
     result, _ = _run("preview_prune", routes, repository="Photos", keep_daily=7)
     assert "free at least" not in result.text
     assert "space it frees is not known" in result.text
+
+
+@pytest.mark.unit
+def test_dry_runs_wait_longer_than_ordinary_calls():
+    from app.mcp.client import LONG_TIMEOUT
+
+    routes = {**_REPOS, "POST /api/repositories/1/prune/preview": PREVIEW}
+    _, api = _run("preview_prune", routes, repository="Photos", keep_daily=7)
+    assert api.timeouts["/api/repositories/1/prune/preview"] == LONG_TIMEOUT

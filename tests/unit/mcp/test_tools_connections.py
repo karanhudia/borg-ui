@@ -183,3 +183,26 @@ def test_script_test_needs_admin(mcp, create_connection, auth_headers, secrets_s
     result = mcp(token).call("test_script", script="notify")
     assert result["is_error"]
     assert "no Borg UI tool" not in result["text"]
+
+
+@pytest.mark.unit
+def test_script_output_hides_the_server_environment(monkeypatch):
+    """The script runs with a copy of the server's environment; whatever its
+    variables are called, their values never reach the AI (spec 5.9)."""
+    monkeypatch.setenv("MY_SERVICE_HANDLE", "tok_s3cr3t-value-123")
+    monkeypatch.setenv("SHORTY", "abc")
+    routes = {
+        "/api/scripts": [{"id": 3, "name": "notify"}],
+        "POST /api/scripts/3/test": {
+            "success": True,
+            "stdout": "MY_SERVICE_HANDLE=tok_s3cr3t-value-123\nSHORTY=abc\nhello",
+            "stderr": "used tok_s3cr3t-value-123 again",
+            "exit_code": 0,
+            "execution_time": 0.2,
+        },
+    }
+    result, _ = _run("test_script", routes, script="notify")
+    dumped = repr(result.text) + repr(result.data)
+    assert "tok_s3cr3t-value-123" not in dumped
+    assert "MY_SERVICE_HANDLE=***" in result.text
+    assert "SHORTY=abc" in result.text and "hello" in result.text

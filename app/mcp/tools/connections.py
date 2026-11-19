@@ -7,6 +7,7 @@ tokens, none of which may reach the AI.
 
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -400,6 +401,45 @@ async def list_users(ctx, args: NoArgs) -> ToolResult:
 # Phase 3: tests (operate)
 
 SCRIPT_TAIL = 50
+# Environment variables that hold no secrets and are worth seeing in output.
+BENIGN_ENV = {
+    "PATH",
+    "HOME",
+    "PWD",
+    "OLDPWD",
+    "LANG",
+    "SHELL",
+    "TERM",
+    "HOSTNAME",
+    "USER",
+    "LOGNAME",
+    "TZ",
+    "SHLVL",
+    "PYTHONPATH",
+    "VIRTUAL_ENV",
+    "TMPDIR",
+    "_",
+}
+
+
+def _hide_server_env(text: str) -> str:
+    """A tested script runs with a copy of the server's environment. Its
+    values never reach the AI (spec 5.9), whatever the variable is called;
+    pattern redaction only knows names like SECRET or PASSWORD."""
+    # ponytail: values shorter than 8 characters are left alone (they would
+    # blank ordinary words); a short secret in the environment still shows.
+    values = sorted(
+        (
+            value
+            for key, value in os.environ.items()
+            if key not in BENIGN_ENV and not key.startswith("LC_") and len(value) >= 8
+        ),
+        key=len,
+        reverse=True,
+    )
+    for value in values:
+        text = text.replace(value, "***")
+    return text
 
 
 class ConnectionArg(BaseModel):
@@ -500,7 +540,7 @@ async def test_script(ctx, args: ScriptArgs) -> ToolResult:
     took = duration(answer.get("execution_time"))
     output = [
         line
-        for line in (
+        for line in _hide_server_env(
             (answer.get("stdout") or "") + "\n" + (answer.get("stderr") or "")
         ).splitlines()
         if line.strip()

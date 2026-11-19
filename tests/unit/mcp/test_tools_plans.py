@@ -121,3 +121,18 @@ def test_discover_containers_over_ssh():
     ]
     assert result.text.startswith("Found nothing on borg@nas.example.com.")
     assert "⚠ docker not found" in result.text
+
+
+@pytest.mark.unit
+def test_source_scans_wait_long():
+    from app.mcp.client import LONG_TIMEOUT
+
+    routes = {
+        "POST /api/source-discovery/databases/scan": {"detections": [], "warnings": []},
+        "POST /api/source-discovery/containers/scan": {
+            "containers": [],
+            "warnings": [],
+        },
+    }
+    _, api = _run("discover_sources", routes)
+    assert set(api.timeouts.values()) == {LONG_TIMEOUT}

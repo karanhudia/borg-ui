@@ -112,3 +112,16 @@ def test_keyed_server_errors_use_their_message(monkeypatch):
     text = render_error(exc, tool="list_archives").text
     assert text == backend_message("backend.errors.repo.failedToListArchives", {})
     assert text and not text.startswith("Something went wrong")
+
+
+@pytest.mark.unit
+def test_timeout_is_a_clear_sentence():
+    """Review fix: a long Borg dry run that outlasts the in-process client used
+    to answer with the generic 'something went wrong'."""
+    import httpx
+
+    from app.mcp.errors import GENERIC
+
+    result = render_error(httpx.ReadTimeout("timed out"), tool="preview_prune")
+    assert result.is_error and result.text != GENERIC
+    assert result.text.startswith("That took longer than Borg UI waits")
