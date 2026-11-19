@@ -672,10 +672,15 @@ def _delivered(prepare):
     """
 
     def messages(session, *args, **kwargs):
-        prepared = [
-            (setting.id, setting.name, setting.service_url, title, html, markdown)
-            for setting, title, html, markdown in prepare(*args, **kwargs)
-        ]
+        try:
+            prepared = [
+                (setting.id, setting.name, setting.service_url, title, html, markdown)
+                for setting, title, html, markdown in prepare(*args, **kwargs)
+            ]
+        except BaseException:
+            # ended here, in the worker thread, not by the caller on the loop
+            session.rollback()
+            raise
         if prepared:
             session.commit()
         return prepared

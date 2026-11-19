@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
+import structlog
 from croniter import croniter
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,8 @@ from app.utils.schedule_time import (
     normalize_schedule_timezone,
 )
 
+
+logger = structlog.get_logger()
 
 DEFAULT_STALE_AFTER_DAYS = 3
 DEFAULT_MONITORING_INTERVAL_HOURS = 24
@@ -184,8 +187,8 @@ def _alert_cooldown_elapsed(settings: SystemSettings, now: datetime) -> bool:
 
 
 def _monitoring_check(
-    db: Session, now: datetime, force: bool
-) -> Optional[tuple[list[StaleRepository], int, bool, Optional[datetime]]]:
+    db: Session, now: datetime, force: bool, claimed: list
+) -> Optional[tuple[list[StaleRepository], int, bool]]:
     """The stale repositories, the age they are stale after, and whether an
     alert is due; None when the monitoring is not due. The check is recorded
     here, under the settings row's lock and before any alert is sent: a
@@ -210,7 +213,10 @@ def _monitoring_check(
     checked_before = settings.backup_monitoring_last_checked_at
     settings.backup_monitoring_last_checked_at = now
     db.commit()
-    return stale_repositories, stale_after_days, alert_due, checked_before
+    # handed out at once: a caller cancelled while this thread finishes
+    # still learns that the check was recorded
+    claimed.append((checked_before, alert_due))
+    return stale_repositories, stale_after_days, alert_due
 
 
 def _reopen_monitoring_check(
@@ -241,26 +247,36 @@ async def run_backup_monitoring(
     db: Session, now: Optional[datetime] = None, *, force: bool = False
 ) -> dict:
     now_naive = _normalize_now(now)
-    checked = await run_transaction_off_loop(
-        db, _monitoring_check, db, now_naive, force
-    )
-    if checked is None:
-        return {"skipped": True, "reason": "not_due", "stale_count": 0}
-    stale_repositories, stale_after_days, alert_due, checked_before = checked
-
+    claimed: list = []
     alert_sent = False
-    if alert_due:
-        try:
+    try:
+        checked = await run_transaction_off_loop(
+            db, _monitoring_check, db, now_naive, force, claimed
+        )
+        if checked is None:
+            return {"skipped": True, "reason": "not_due", "stale_count": 0}
+        stale_repositories, stale_after_days, alert_due = checked
+        if alert_due:
             await NotificationService.send_stale_backup_alert(
                 db, stale_repositories, stale_after_days
             )
-        except Exception:
-            await run_transaction_off_loop(
-                db, _reopen_monitoring_check, db, now_naive, checked_before
-            )
-            raise
-        alert_sent = True
-        await run_transaction_off_loop(db, _record_alert_sent, db, now_naive)
+            alert_sent = True
+            await run_transaction_off_loop(db, _record_alert_sent, db, now_naive)
+    except BaseException:
+        # The check is recorded, its alert was due and is not sent: the
+        # preparation failed, or the scheduler was stopped meanwhile. The
+        # check counts as not made, and the next pass tries again.
+        if claimed and claimed[0][1] and not alert_sent:
+            try:
+                await run_transaction_off_loop(
+                    db, _reopen_monitoring_check, db, now_naive, claimed[0][0]
+                )
+            except Exception as reopen_error:
+                logger.warning(
+                    "Failed to reopen the backup monitoring check",
+                    error=str(reopen_error),
+                )
+        raise
     return {
         "skipped": False,
         "stale_count": len(stale_repositories),

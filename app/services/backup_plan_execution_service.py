@@ -1156,7 +1156,7 @@ class BackupPlanExecutionService:
                     job_name=plan_name,
                 )
             except Exception as exc:
-                db.rollback()
+                # a failed preparation has rolled the session back itself
                 logger.warning(
                     "Failed to send backup failure notification",
                     backup_plan_id=plan_id,

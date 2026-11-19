@@ -77,9 +77,12 @@ def _ssh_address(db: Session, connection_id) -> SSHAddress | None:
     return SSHAddress(connection.host, connection.port)
 
 
-def _repository_probes(db: Session, repositories: list[Repository]) -> list[tuple]:
+def _repository_probes(db: Session, repository_ids: list[int]) -> list[tuple]:
     probes = []
-    for repository in repositories:
+    for repository_id in repository_ids:
+        repository = db.get(Repository, repository_id)
+        if repository is None:
+            continue  # deleted since it was selected: nothing to probe
         if repository.agent_machine_id is not None:
             probes.append(
                 (
@@ -130,11 +133,13 @@ async def _probes_available(probes: list[tuple]) -> AvailabilityDecision:
 
 
 async def repositories_available(
-    db: Session, repositories: Iterable[Repository]
+    db: Session, repository_ids: Iterable[int]
 ) -> AvailabilityDecision:
-    """Require every selected source to be available; local sources are available."""
+    """Require every selected source to be available; local sources are
+    available. The repositories are read by id, in the probe's own step: a
+    row read in an earlier transaction may be gone by now."""
     probes = await run_transaction_off_loop(
-        db, _repository_probes, db, list(repositories)
+        db, _repository_probes, db, list(repository_ids)
     )
     return await _probes_available(probes)
 

@@ -1004,9 +1004,14 @@ async def test_a_schedule_changed_while_its_source_is_probed_is_left_alone(
     assert launches == []
     assert _operations(database) == set()
     assert _skip_reasons(database) == []
-    if change == "moved":
-        with database() as session:
-            assert session.get(ScheduledJob, job_id).next_run == later
+    with database() as session:
+        job = session.get(ScheduledJob, job_id)
+        if change == "moved":
+            assert job.next_run == later
+        elif change == "switched-off":
+            assert job.enabled is False
+        else:
+            assert job is None
 
 
 @pytest.mark.unit
@@ -1612,3 +1617,108 @@ async def test_a_plan_required_skip_is_written_under_the_jobs_lock_on_a_new_inst
 
     assert edits == ["waited"]
     assert _skip_reasons(database) == ["plan_required"]
+
+
+@pytest.mark.unit
+async def test_a_repository_deleted_after_screening_is_not_a_dispatch_failure(
+    database, launches, monkeypatch
+):
+    """The screening found the schedule's repository; a request replaces
+    the link and deletes that repository before the probe reads it. The
+    probe skips it, and the pass records no failed dispatch."""
+    _settings(database)
+    [ssh_id] = _seed(
+        database, SSHConnection(host="source.invalid", username="u", port=22)
+    )
+    old_id, new_id = _seed(
+        database,
+        _repository("old", source_ssh_connection_id=ssh_id),
+        _repository("new"),
+    )
+    job_id = _availability_job(database, old_id)
+    sent: list[tuple] = []
+    real = schedule_api.repositories_available
+
+    def replace_and_delete() -> None:
+        with database.side.connect() as connection:
+            connection.execute(
+                text(
+                    "UPDATE scheduled_job_repositories SET repository_id = :new "
+                    "WHERE scheduled_job_id = :job"
+                ),
+                {"new": new_id, "job": job_id},
+            )
+            connection.execute(
+                text("DELETE FROM repositories WHERE id = :old"), {"old": old_id}
+            )
+            connection.commit()
+
+    async def after_the_edit(db, repository_ids):
+        # between the screening's step and the probe's
+        await asyncio.to_thread(replace_and_delete)
+        return await real(db, repository_ids)
+
+    async def notify(*args, **kwargs) -> None:
+        sent.append(args)
+
+    monkeypatch.setattr(schedule_api, "repositories_available", after_the_edit)
+    monkeypatch.setattr(schedule_api, "_send_schedule_failure", notify)
+
+    await _one_pass(monkeypatch)
+
+    assert sent == []
+    assert launches == [("multi-repo", job_id)]  # the new link is backed up
+
+
+@pytest.mark.unit
+async def test_a_stale_backup_alert_stopped_before_it_is_sent_is_tried_again(
+    database, monkeypatch
+):
+    """The scheduler is stopped (cancelled) after the check was recorded
+    and before the alert went out: the check counts as not made."""
+    from app.services import backup_monitoring_service as monitoring
+
+    _settings(database, backup_monitoring_enabled=True)
+    _seed(database, _repository("never-backed-up"))
+    sent: list[str] = []
+
+    async def stopped(db, *args, **kwargs) -> None:
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(NotificationService, "send_stale_backup_alert", stopped)
+    with database() as db:
+        with pytest.raises(asyncio.CancelledError):
+            await monitoring.run_backup_monitoring(db, datetime.utcnow())
+
+    async def send(db, *args, **kwargs) -> None:
+        sent.append("alert")
+
+    monkeypatch.setattr(NotificationService, "send_stale_backup_alert", send)
+    with database() as db:
+        result = await monitoring.run_backup_monitoring(db, datetime.utcnow())
+
+    assert result["alert_sent"] is True
+    assert sent == ["alert"]
+
+
+@pytest.mark.unit
+async def test_a_failed_notification_preparation_ends_its_read_in_its_thread(
+    database,
+):
+    """A preparation that read and then failed leaves no transaction (and
+    no pooled connection) behind for the caller to end on the loop."""
+    from app.services.notification_service import _delivered
+
+    _settings(database)
+
+    @_delivered
+    def prepare(db):
+        db.query(SystemSettings).first()
+        raise RuntimeError("preparation failed")
+        yield  # a generator, as every prepared notification is
+
+    with database() as db:
+        with pytest.raises(RuntimeError):
+            await prepare(db)
+        assert not db.in_transaction()
+        assert database.engine.pool.checkedout() == 0

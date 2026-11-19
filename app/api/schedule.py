@@ -3007,9 +3007,10 @@ def _claim_due_job(db: Session, job_id: int, now: datetime) -> Optional[Schedule
 
 def _screen_due_job(
     db: Session, job_id: int, now: datetime, notices: list[tuple]
-) -> tuple[str, Optional[list[Repository]]]:
+) -> tuple[str, Optional[list[int]]]:
     """What happens to the due job: `skipped` (recorded here), `dispatch`, or
-    `probe` with the repositories whose sources have to be available first.
+    `probe` with the ids of the repositories whose sources have to be
+    available first.
     `gone` for a job that is no longer due."""
     # Asked before the claim: on an install with no licensing row yet, the
     # first look creates it and commits, which would end the claim.
@@ -3071,7 +3072,7 @@ def _screen_due_job(
             db.query(Repository).filter(Repository.path == job.repository).first()
         )
         linked_repositories = [repository] if repository else []
-    return "probe", linked_repositories
+    return "probe", [repository.id for repository in linked_repositories]
 
 
 def _record_source_unavailable(
@@ -3165,7 +3166,7 @@ async def dispatch_due_scheduled_backups(
         notices: list[tuple] = []
         launches: list[Callable[[], None]] = []
         try:
-            outcome, repositories = await run_transaction_off_loop(
+            outcome, repository_ids = await run_transaction_off_loop(
                 db, _screen_due_job, db, job_id, now, notices
             )
             if outcome in ("skipped", "gone"):
@@ -3174,8 +3175,8 @@ async def dispatch_due_scheduled_backups(
             if outcome == "probe":
                 sources_available = False
                 decision_reason = "No repositories are configured for this automation."
-                if repositories:
-                    decision = await repositories_available(db, repositories)
+                if repository_ids:
+                    decision = await repositories_available(db, repository_ids)
                     sources_available = decision.available
                     decision_reason = (
                         decision.reason or "The backup source is unavailable."
