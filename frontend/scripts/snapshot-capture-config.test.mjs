@@ -83,13 +83,13 @@ describe('settleInBrowser', () => {
 })
 
 describe('waitForStoryToSettle', () => {
-  const fakePage = (editorLoading) => {
+  const fakePage = (hasEditor) => {
     const calls = []
     return {
       calls,
       async $(selector) {
         calls.push(['$', selector])
-        return editorLoading ? {} : null
+        return hasEditor ? {} : null
       },
       async waitForSelector(selector, options) {
         calls.push(['waitForSelector', selector, options])
@@ -103,21 +103,21 @@ describe('waitForStoryToSettle', () => {
     }
   }
 
-  it('waits for a lazy code editor to finish loading, then settles again', async () => {
+  it('waits for any code editor and its stylesheet, then settles again', async () => {
     const page = fakePage(true)
     await waitForStoryToSettle(page)
     expect(page.calls).toEqual([
       ['evaluate'],
-      ['$', '[data-code-editor-loading]'],
+      ['$', '[data-code-editor]'],
       ['waitForSelector', '[data-code-editor-loading]', { state: 'detached', timeout: 120_000 }],
       ['waitForLoadState', 'networkidle', { timeout: 120_000 }],
       ['evaluate'],
     ])
   })
 
-  it('settles once when nothing is loading', async () => {
+  it('settles once when the story has no code editor', async () => {
     const page = fakePage(false)
     await waitForStoryToSettle(page)
-    expect(page.calls).toEqual([['evaluate'], ['$', '[data-code-editor-loading]']])
+    expect(page.calls).toEqual([['evaluate'], ['$', '[data-code-editor]']])
   })
 })

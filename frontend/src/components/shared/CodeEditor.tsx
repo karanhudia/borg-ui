@@ -23,7 +23,7 @@ export default function CodeEditor({
 }: CodeEditorProps) {
   const { t } = useTranslation()
   return (
-    <Box sx={{ mb: 2 }}>
+    <Box data-code-editor sx={{ mb: 2 }}>
       {label && (
         <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 500 }}>
           {label}
