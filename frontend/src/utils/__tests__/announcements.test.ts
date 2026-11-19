@@ -9,6 +9,7 @@ import {
   isVersionString,
   resolveAnnouncementLocale,
   selectAnnouncement,
+  selectSeasonalBadge,
   snoozeAnnouncement,
 } from '../announcements'
 
@@ -358,5 +359,49 @@ describe('announcements utils', () => {
 
     expect(localized.title).toBe(baseAnnouncement.title)
     expect(localized.message).toBe(baseAnnouncement.message)
+  })
+})
+
+describe('seasonal badges', () => {
+  const badge: Announcement = {
+    id: 'badge-black-friday-2026',
+    type: 'seasonal_badge',
+    emoji: '🛍️',
+    title: 'Black Friday',
+    message: 'Happy Black Friday from Borg UI.',
+    cta_plans: ['community'],
+    starts_at: '2026-11-23T00:00:00Z',
+    ends_at: '2026-12-01T23:59:59Z',
+  }
+  const during = {
+    appVersion: '2.5.0',
+    plan: 'community' as const,
+    now: new Date('2026-11-25T12:00:00Z'),
+  }
+
+  beforeEach(() => localStorage.clear())
+
+  it('never reaches the announcement modal', () => {
+    expect(selectAnnouncement([badge], during)).toBeNull()
+  })
+
+  it('is picked only inside its window and for its target plans', () => {
+    expect(selectSeasonalBadge([badge], during)?.id).toBe(badge.id)
+    expect(
+      selectSeasonalBadge([badge], { ...during, now: new Date('2026-12-02T00:00:00Z') })
+    ).toBeNull()
+    expect(
+      selectSeasonalBadge([{ ...badge, target_plans: ['community'] }], { ...during, plan: 'pro' })
+    ).toBeNull()
+    expect(selectSeasonalBadge([badge], { ...during, plan: 'pro' })?.id).toBe(badge.id)
+  })
+
+  it('rejects a badge without an emoji or with a bad cta plan', () => {
+    expect(selectSeasonalBadge([{ ...badge, emoji: undefined }], during)).toBeNull()
+    expect(selectSeasonalBadge([{ ...badge, cta_plans: ['gold'] as never }], during)).toBeNull()
+  })
+
+  it('ignores regular announcements', () => {
+    expect(selectSeasonalBadge([baseAnnouncement], during)).toBeNull()
   })
 })

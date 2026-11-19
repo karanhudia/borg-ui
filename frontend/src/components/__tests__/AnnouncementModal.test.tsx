@@ -114,4 +114,31 @@ describe('AnnouncementModal', () => {
 
     expect(onAcknowledge).toHaveBeenCalledTimes(1)
   })
+
+  it('shows a festive emoji and chunk burst when the entry asks for them', () => {
+    renderWithProviders(
+      <AnnouncementModal
+        announcement={{ ...baseAnnouncement, emoji: '🛍️', effect: 'chunks' }}
+        open
+        onAcknowledge={vi.fn()}
+        onSnooze={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('🛍️')).toBeInTheDocument()
+    expect(screen.getByTestId('chunk-burst')).toBeInTheDocument()
+  })
+
+  it('keeps the plain icon and no burst for a normal announcement', () => {
+    renderWithProviders(
+      <AnnouncementModal
+        announcement={baseAnnouncement}
+        open
+        onAcknowledge={vi.fn()}
+        onSnooze={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByTestId('chunk-burst')).not.toBeInTheDocument()
+  })
 })

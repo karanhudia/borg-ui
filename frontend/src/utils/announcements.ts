@@ -8,6 +8,7 @@ const ANNOUNCEMENT_TYPES = new Set<Announcement['type']>([
   'maintenance_notice',
   'migration_notice',
   'custom_announcement',
+  'seasonal_badge',
 ])
 
 const VALID_PLANS = new Set<Plan>(['community', 'pro', 'enterprise'])
@@ -107,6 +108,12 @@ function isValidDateString(value: unknown) {
   )
 }
 
+function isOptionalPlanList(value: unknown) {
+  return (
+    value === undefined || (Array.isArray(value) && value.every((plan) => VALID_PLANS.has(plan)))
+  )
+}
+
 export function isValidAnnouncement(value: unknown): value is Announcement {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const announcement = value as Announcement
@@ -132,9 +139,10 @@ export function isValidAnnouncement(value: unknown): value is Announcement {
     isValidDateString(announcement.ends_at) &&
     (announcement.min_app_version === undefined || isVersionString(announcement.min_app_version)) &&
     (announcement.max_app_version === undefined || isVersionString(announcement.max_app_version)) &&
-    (announcement.target_plans === undefined ||
-      (Array.isArray(announcement.target_plans) &&
-        announcement.target_plans.every((plan) => VALID_PLANS.has(plan))))
+    isOptionalPlanList(announcement.target_plans) &&
+    isOptionalPlanList(announcement.cta_plans) &&
+    isOptionalString(announcement.effect) &&
+    (announcement.type !== 'seasonal_badge' || isNonEmptyString(announcement.emoji))
   )
 }
 
@@ -340,7 +348,10 @@ export function selectAnnouncement(
   context: AnnouncementContext
 ): Announcement | null {
   const eligibleAnnouncements = announcements
-    .filter((announcement) => isAnnouncementEligible(announcement, context))
+    .filter(
+      (announcement): announcement is Announcement =>
+        isAnnouncementEligible(announcement, context) && announcement.type !== 'seasonal_badge'
+    )
     .sort(compareAnnouncements)
 
   const highestPriorityCritical = eligibleAnnouncements.find((announcement) =>
@@ -363,4 +374,18 @@ export function selectAnnouncement(
   }
 
   return latestApplicableUpdate ?? eligibleAnnouncements[0] ?? null
+}
+
+export function selectSeasonalBadge(
+  announcements: unknown[],
+  context: AnnouncementContext
+): Announcement | null {
+  return (
+    announcements
+      .filter(
+        (announcement): announcement is Announcement =>
+          isAnnouncementEligible(announcement, context) && announcement.type === 'seasonal_badge'
+      )
+      .sort(compareAnnouncements)[0] ?? null
+  )
 }

@@ -51,6 +51,10 @@ vi.mock('../../utils/analytics', () => ({
   setAppVersion: mockSetAppVersion,
 }))
 
+vi.mock('../../hooks/useSeasonalBadge', () => ({
+  useSeasonalBadge: () => ({ badge: null, showSale: false, trackSaleClick: vi.fn() }),
+}))
+
 vi.mock('../SidebarVersionInfo', () => ({
   default: () => <div>Sidebar Version Info</div>,
 }))
