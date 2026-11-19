@@ -607,6 +607,8 @@ def get_backup_status(
             "progress_details": serialize_backup_progress_details(job, repo),
             "route_strategy": job.route_strategy,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get backup status", error=str(e))
         raise HTTPException(
@@ -945,6 +947,8 @@ def stream_backup_logs(
             "has_more": False,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to stream backup logs", error=str(e), job_id=job_id)
         raise HTTPException(
