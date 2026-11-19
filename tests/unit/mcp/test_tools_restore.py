@@ -202,3 +202,54 @@ def test_restore_preview_waits_long():
         "preview_restore", routes, repository="Photos", archive="latest", paths=["x"]
     )
     assert api.timeouts["/api/restore/preview"] == LONG_TIMEOUT
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("dest", ["/", "/local", "/local/"])
+def test_ssh_root_destinations_are_refused(dest):
+    """The browse route lists an SSH connection's default_path for these, while
+    the restore writes the literal path, so the check would look elsewhere."""
+    result, api = _restore(
+        V1,
+        SERVER,
+        {"items": []},
+        destination=dest,
+        destination_connection="borg@backups.example.com",
+    )
+    assert result.is_error and api.posts == []
+    assert [c for c in api.calls if c[0] == SERVER] == []
+
+
+@pytest.mark.unit
+def test_contents_only_tells_the_route_which_paths_are_folders():
+    """contents_only strips the selected folder itself only when the route
+    knows it is a folder; the web UI sends that as path_metadata."""
+    routes = _routes(V1, SERVER, {"items": []})
+    routes["/api/browse/1/photos-2026-11-14"] = {
+        "items": [
+            {"name": "notes", "type": "directory"},
+            {"name": "todo.md", "type": "file"},
+        ]
+    }
+    _, api = run(
+        "restore_files",
+        routes,
+        repository="Photos",
+        archive="latest",
+        paths=["home/alex/notes", "home/alex/todo.md"],
+        destination=DEST,
+        layout="contents_only",
+    )
+    browse = [p for path, p in api.calls if path == "/api/browse/1/photos-2026-11-14"]
+    assert browse[0]["path"] == "home/alex"
+    assert api.posts[0][1]["path_metadata"] == [
+        {"path": "home/alex/notes", "type": "directory"},
+        {"path": "home/alex/todo.md", "type": "file"},
+    ]
+
+
+@pytest.mark.unit
+def test_preserve_path_needs_no_lookup():
+    _, api = _restore(V1, SERVER, {"items": []})
+    assert not [c for c in api.calls if c[0].startswith("/api/browse/")]
+    assert api.posts[0][1]["path_metadata"] == []

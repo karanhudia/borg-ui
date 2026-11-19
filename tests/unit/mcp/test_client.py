@@ -158,3 +158,20 @@ async def test_slow_sync_route_times_out_promptly():
         with pytest.raises(httpx.TimeoutException):
             await client.post("/slow", timeout=0.05)
     assert time.monotonic() - started < 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/activity/../repositories/1/prune",
+        "/api/activity/x#/9/cancel",
+        "/api/x?y=1",
+    ],
+)
+async def test_paths_cannot_leave_their_route(path):
+    """One choke point for every tool: a name a tool puts into a path cannot
+    turn the request into another route (PR #1575 review)."""
+    client = InternalClient(None, user_id=1, connection_id=1)
+    with pytest.raises(ValueError):
+        await client.post(path)

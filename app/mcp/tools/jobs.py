@@ -12,6 +12,7 @@ import statistics
 import time
 from typing import Optional
 
+import httpx
 from pydantic import BaseModel, Field
 
 from app.mcp import resolve
@@ -65,7 +66,10 @@ JOB_FIELDS = (
     "has_logs",
 )
 
+# A job type goes into route paths, so it is a plain name, never a path.
+JOB_TYPE_PATTERN = r"^[a-z][a-z0-9_]{0,39}$"
 _JOB_TYPE = Field(
+    pattern=JOB_TYPE_PATTERN,
     description="Job type as listed by list_activity, such as backup, check, prune.",
     examples=["backup"],
 )
@@ -106,7 +110,7 @@ async def estimate(
             repository_id=repository_id,
             limit=50,
         )
-    except ApiError:
+    except (ApiError, httpx.HTTPError):
         # Callers ask after starting work; a failed lookup is "no estimate",
         # never an error that hides a job which did start.
         return None
@@ -448,7 +452,9 @@ async def wait_for_job(ctx, args: JobRef) -> ToolResult:
 
 class ExplainArgs(BaseModel):
     job_type: Optional[str] = Field(
-        None, description="Job type; leave both empty for the most recent failure."
+        None,
+        pattern=JOB_TYPE_PATTERN,
+        description="Job type; leave both empty for the most recent failure.",
     )
     job_id: Optional[int] = Field(
         None, description="Job id; leave both empty for the most recent failure."

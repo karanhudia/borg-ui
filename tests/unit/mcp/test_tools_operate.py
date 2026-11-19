@@ -258,3 +258,23 @@ def test_failed_estimate_still_reports_the_started_job():
     assert not result.is_error
     assert result.text.startswith("⏳ Backup of *Photos* started (backup 412).")
     assert "Usually" not in result.text
+
+
+@pytest.mark.unit
+def test_estimate_timeout_still_reports_the_started_job():
+    import httpx
+
+    def slow(params):
+        raise httpx.ReadTimeout("slow")
+
+    routes = {**REPOS, "/api/activity/recent": slow, "POST /api/backup/start": STARTED}
+    result, _ = run("start_backup", routes, repository="Photos")
+    assert not result.is_error and result.data["job_id"] == 412
+
+
+@pytest.mark.unit
+def test_cancel_job_type_cannot_change_the_route():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        run("cancel_job", {}, job_type="../repositories/1/prune#", job_id=9)

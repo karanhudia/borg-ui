@@ -102,6 +102,26 @@ class RestoreArgs(RestoreTarget):
     )
 
 
+async def _path_metadata(
+    ctx, repo: dict, archive: dict, paths: list[str]
+) -> list[dict]:
+    """Which selected paths are folders, read from the archive, as the web
+    UI's browser sends it: contents_only strips a folder itself only when the
+    route knows it is one."""
+    from app.mcp.tools.archives import _contents
+
+    meta, listed = [], {}
+    for selected in paths:
+        parent, _, name = selected.strip("/").rpartition("/")
+        if parent not in listed:
+            path, params = borg_routes.archive_contents(repo, archive, parent)
+            listed[parent] = (await _contents(ctx, path, params)).get("items") or []
+        item = next((i for i in listed[parent] if i.get("name") == name), None)
+        if item and item.get("type") in ("file", "directory"):
+            meta.append({"path": selected, "type": item["type"]})
+    return meta
+
+
 class _Refused(Exception):
     pass
 
@@ -138,8 +158,8 @@ async def _listing(ctx, repo: dict, destination: str, ssh: Optional[dict]):
     title="Restore files (new location)",
     description=(
         "Restores paths from an archive into a folder that is empty or does not "
-        "exist yet, and answers at once with the job id. It never writes over "
-        "existing files. Use preview_restore first to see what it would write."
+        "exist yet, and answers at once with the job id. A folder that holds "
+        "anything is refused. Use preview_restore first to see what it would write."
     ),
     level=Level.OPERATE,
     routes=(
@@ -148,6 +168,8 @@ async def _listing(ctx, repo: dict, destination: str, ssh: Optional[dict]):
         "GET /api/ssh-keys/connections",
         "GET /api/filesystem/browse",
         "GET /api/managed-machines/agents/{agent_machine_id}/filesystem/browse",
+        "GET /api/browse/{repository_id}/{archive_name}",
+        "GET /api/v2/archives/{archive_id}/contents",
         "GET /api/activity/recent",
         "POST /api/restore/start",
     ),
@@ -161,6 +183,17 @@ async def restore_files(ctx, args: RestoreArgs) -> ToolResult:
             f"*{repo['name']}* restores on its agent machine, so the folder must be "
             "on that machine. Leave destination_connection empty and pick a folder "
             "there (browse_agent_folders shows them).",
+            is_error=True,
+        )
+    if args.destination_connection and (args.destination.rstrip("/") or "/") in (
+        "/",
+        "/local",
+    ):
+        # The SSH browse route lists the connection's default folder for these,
+        # while the restore writes the literal path: the check would look elsewhere.
+        return ToolResult(
+            f"Restore stopped. Pick a folder inside {args.destination} on the other "
+            "server, such as /srv/restore, not the top level.",
             is_error=True,
         )
     ssh = (
@@ -189,6 +222,11 @@ async def restore_files(ctx, args: RestoreArgs) -> ToolResult:
             "overwrite.",
             is_error=True,
         )
+    metadata = (
+        await _path_metadata(ctx, repo, archive, args.paths)
+        if args.layout == "contents_only"
+        else []
+    )
     answer = await ctx.api.post(
         "/api/restore/start",
         json={
@@ -200,6 +238,7 @@ async def restore_files(ctx, args: RestoreArgs) -> ToolResult:
             "destination_type": "ssh" if ssh else "local",
             "destination_connection_id": ssh["id"] if ssh else None,
             "restore_layout": args.layout,
+            "path_metadata": metadata,
             "existing_files": "refuse",
         },
     )

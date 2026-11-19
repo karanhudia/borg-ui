@@ -135,8 +135,10 @@ Everything at Read, plus running what already exists:
   itself needs Full.
 - **Restores**: preview a restore, and restore files into a folder that is
   empty or does not exist yet, on the server, over SSH or on an agent. At
-  Operate a restore never writes over existing files: a folder that already
-  has anything in it is refused.
+  Operate a folder that already has anything in it is refused. The check runs
+  once, just before the restore starts: Borg 2 repositories also refuse
+  existing files while extracting, Borg 1 repositories do not, so a file put
+  into the folder after the check could be replaced.
 - **Mounts**: mount an archive or a whole repository read-only, and unmount
   it. Borg UI picks the mount point.
 - **Tests**: test an SSH connection, send a test notification, and run a

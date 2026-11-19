@@ -58,6 +58,19 @@ class ApiError(Exception):
         return cls(response.status_code)
 
 
+class UnsafePath(ValueError):
+    """A path that would leave the route a tool meant to call."""
+
+    text = "That name cannot be used here. Use the name exactly as Borg UI lists it."
+
+
+def _check_path(path: str) -> None:
+    # Tools build paths from names; "..", "#" or "?" would point the request
+    # at another route than the one the tool declares.
+    if "#" in path or "?" in path or ".." in path.split("/"):
+        raise UnsafePath(path)
+
+
 class InternalClient:
     def __init__(self, app, *, user_id: int, connection_id: int):
         self._app = app
@@ -83,6 +96,7 @@ class InternalClient:
         json: Any = None,
         timeout: Optional[float] = None,
     ) -> Any:
+        _check_path(path)
         clean = {k: v for k, v in (params or {}).items() if v is not None}
         headers = {
             MCP_INTERNAL_HEADER: create_mcp_internal_token(

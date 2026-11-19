@@ -198,3 +198,36 @@ def test_wait_for_job_progress_only_increases(admin_mcp, monkeypatch):
         if m.get("method") == "notifications/progress"
     ]
     assert values == [40, 60]
+
+
+@pytest.mark.unit
+def test_progress_messages_are_redacted(admin_mcp, monkeypatch):
+    """Progress skips finish(), so it redacts on its own (PR #1575 review)."""
+    from app.mcp.tools import jobs
+
+    answers = [
+        {
+            "type": "backup",
+            "status": "running",
+            "progress_percent": 10,
+            "progress_message": "/data/password=example-secret/file",
+        },
+        {"type": "backup", "status": "completed"},
+    ]
+
+    async def fake_job(ctx, job_type, job_id):
+        return answers.pop(0)
+
+    monkeypatch.setattr(jobs, "_job", fake_job)
+    monkeypatch.setattr(jobs, "POLL_SECONDS", 0)
+    messages = _wait(admin_mcp, token="t3")
+    sent = [m for m in messages if m.get("method") == "notifications/progress"]
+    assert sent and "example-secret" not in sent[0]["params"]["message"]
+
+
+@pytest.mark.unit
+def test_job_type_must_be_a_plain_name(admin_mcp):
+    refused = admin_mcp.call(
+        "get_job_log", job_type="../repositories/1/prune#", job_id=9
+    )
+    assert refused["is_error"] and "job_type" in refused["text"]

@@ -31,6 +31,7 @@ from app.mcp.context import ConnectionContext, ToolContext
 from app.mcp.db import session_scope
 from app.mcp.registry import REGISTRY, ToolSpec, tools_for
 from app.mcp.render import ToolResult, finish
+from app.utils.redaction import redact_secrets
 
 logger = structlog.get_logger()
 
@@ -188,8 +189,10 @@ async def on_call_tool(ctx, params) -> types.CallToolResult:
             api=InternalClient(
                 app, user_id=conn.user_id, connection_id=conn.connection_id
             ),
+            # Progress skips finish(), so it redacts on its own (a file path
+            # in the message can hold a secret).
             progress=lambda percent, message=None: ctx.session.report_progress(
-                percent, 100, message
+                percent, 100, redact_secrets(message) if message else message
             ),
         )
         from app.mcp.errors import outcome_for, render_error

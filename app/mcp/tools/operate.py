@@ -10,7 +10,7 @@ from app.mcp import borg_routes, resolve
 from app.mcp.levels import Level
 from app.mcp.registry import tool
 from app.mcp.render import ToolResult, duration
-from app.mcp.tools.jobs import estimate
+from app.mcp.tools.jobs import JOB_TYPE_PATTERN, estimate
 
 WAIT_OFFER = "Want me to wait for it?"
 
@@ -127,6 +127,7 @@ async def run_schedule_now(ctx, args: ScheduleArg) -> ToolResult:
 
 class JobArgs(BaseModel):
     job_type: str = Field(
+        pattern=JOB_TYPE_PATTERN,
         description="Job type as listed by list_activity, such as backup, check, backup_plan_run.",
         examples=["backup"],
     )

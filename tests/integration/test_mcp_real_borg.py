@@ -122,4 +122,5 @@ def test_operate_tools_on_a_real_repository(
     assert not restore["is_error"], restore["text"]
     restored = _until_done(session, "restore", restore["data"]["job_id"])
     assert restored["data"]["job"]["status"] == "completed", restored["text"]
-    assert any(p.name == "hello.txt" for p in target.rglob("*"))
+    # contents_only puts the folder's contents straight in, with their data
+    assert (target / "hello.txt").read_text() == "hello"
