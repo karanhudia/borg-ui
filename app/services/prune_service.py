@@ -70,6 +70,7 @@ class PruneService:
         dry_run: bool = False,
         db: Session = None,
         keep_within: str | None = None,
+        match_archives: str | None = None,
     ):
         """Execute repository prune operation with job tracking"""
 
@@ -168,6 +169,8 @@ class PruneService:
                 cmd.extend(["--keep-yearly", str(keep_yearly)])
             if keep_within and keep_within.strip():
                 cmd.append(f"--keep-within={keep_within.strip()}")
+            if match_archives:
+                cmd.extend(["--glob-archives", match_archives])
 
             # Add remote path if specified
             if remote_path := effective_repository_remote_path(repository):

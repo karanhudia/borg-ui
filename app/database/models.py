@@ -949,6 +949,8 @@ class BackupPlan(Base):
     prune_keep_quarterly = Column(Integer, default=0, nullable=False)
     prune_keep_yearly = Column(Integer, default=1, nullable=False)
     prune_keep_within = Column(String, nullable=True)
+    # Prune only the archives this plan's name template produces (#1549).
+    prune_scope_to_plan = Column(Boolean, default=False, nullable=False)
 
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

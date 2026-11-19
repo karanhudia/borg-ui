@@ -253,6 +253,11 @@ def _agent_source_paths(
 # key, so it is sent only to an agent that reads it.
 RESTORE_CANARY_CAPABILITY = "backup.restore_canary"
 
+# Advertised by an agent whose prune applies an operation's `match_archives`
+# (issue #1549). An older one ignores the key and prunes every archive, so a
+# scoped prune is refused for it rather than sent.
+PRUNE_MATCH_CAPABILITY = "repository.prune.match_archives"
+
 
 def agent_stages_restore_canary(
     agent: Optional[AgentMachine], repository: Repository

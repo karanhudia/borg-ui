@@ -612,6 +612,15 @@ class RepositoryOperationPayload:
                     cmd.append(f"--keep-within={str(keep_within).strip()}")
             if dry_run:
                 cmd.append("--dry-run")
+            match_archives = operation.get("match_archives")
+            if match_archives:
+                # Limits the prune to one plan's archives (issue #1549): a
+                # glob on Borg 1, an `-a` pattern on Borg 2.
+                validate_operand(str(match_archives), "prune archive filter")
+                if self.borg_version == 2:
+                    cmd.extend(["-a", str(match_archives)])
+                else:
+                    cmd.extend(["--glob-archives", str(match_archives)])
             if self.borg_version == 1:
                 cmd.append(self.repository_path)
             return cmd

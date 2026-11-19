@@ -173,6 +173,7 @@ class BackupPlanPayload(BaseModel):
     script_hooks: Optional[list[BackupPlanScriptPayload]] = None
     run_repository_scripts: bool = True
     run_prune_after: bool = False
+    prune_scope_to_plan: bool = False
     run_compact_after: bool = False
     run_check_after: bool = False
     run_restore_check_after: bool = False
@@ -690,6 +691,7 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
                 "script_hooks": _serialize_plan_script_hooks(plan),
                 "run_repository_scripts": bool(plan.run_repository_scripts),
                 "run_prune_after": bool(plan.run_prune_after),
+                "prune_scope_to_plan": bool(plan.prune_scope_to_plan),
                 "run_compact_after": bool(plan.run_compact_after),
                 "run_check_after": bool(plan.run_check_after),
                 "run_restore_check_after": bool(plan.run_restore_check_after),
@@ -1666,6 +1668,10 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
     plan.post_backup_script_parameters = payload.post_backup_script_parameters
     plan.run_repository_scripts = payload.run_repository_scripts
     plan.run_prune_after = payload.run_prune_after
+    if "prune_scope_to_plan" in payload.model_fields_set:
+        # A client from before the option leaves it out; keeping the stored
+        # value stops that save widening the prune to the whole repository.
+        plan.prune_scope_to_plan = payload.prune_scope_to_plan
     plan.run_compact_after = payload.run_compact_after
     plan.run_check_after = payload.run_check_after
     plan.run_restore_check_after = payload.run_restore_check_after

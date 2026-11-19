@@ -1632,6 +1632,43 @@ def _fail_agent_job(
     return True
 
 
+def _is_scoped_prune(job: AgentJob) -> bool:
+    operation = (job.payload or {}).get("operation") or {}
+    return isinstance(operation, dict) and bool(operation.get("match_archives"))
+
+
+def _refuse_unsupported_scoped_prune(
+    job: AgentJob, capabilities: Optional[list], db: Session
+) -> bool:
+    """Fail a plan-scoped prune whose agent no longer advertises the archive
+    filter, and say so. The router checks when it queues the job, but an
+    agent reinstalled at an older version would ignore the filter and prune
+    the whole repository (issue #1549). Called wherever a queued job reaches
+    an agent: the shared session dispatcher. Poll and claim never hand one
+    out (see `poll_jobs`)."""
+    from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
+
+    if not _is_scoped_prune(job):
+        return False
+    if PRUNE_MATCH_CAPABILITY in (capabilities or []):
+        return False
+    # Take it off the queue first, conditional on `queued`: if another
+    # transport claimed or started it since it was read, that run is left
+    # alone. Either way it is not this caller's to hand out. No commit until
+    # it has failed: a committed `claimed` would let an agent that polled it
+    # earlier claim and start it in between.
+    if not _mark_agent_job_claimed(job, db):
+        return True
+    _fail_agent_job(
+        job,
+        db,
+        error_message="Prune limited to this plan needs a newer agent on this "
+        "machine. Update the agent and run the plan again.",
+    )
+    db.commit()
+    return True
+
+
 def _lock_failure_is_deferred(job: Any, db: Session) -> bool:
     """Whether the runner will defer this lock failure (see
     `lock_contention_defers`); `job` carries the payload and the failure
@@ -2529,9 +2566,15 @@ def poll_jobs(
             AgentJob.status == "queued",
         )
         .order_by(AgentJob.created_at.asc(), AgentJob.id.asc())
-        .limit(limit)
         .all()
     )
+    # A scoped prune goes out only over a session, checked against that
+    # session's hello: the stored capabilities are shared by every process
+    # with this agent's token, so they cannot vouch for this caller. Skipped
+    # before the limit, so one at the head does not hide the jobs behind it.
+    # ponytail: filters in Python over the agent's queue (a handful of jobs);
+    # move it into SQL if queues ever grow long.
+    jobs = [job for job in jobs if not _is_scoped_prune(job)][:limit]
     return AgentJobPollResponse(jobs=[_serialize_agent_job(job) for job in jobs])
 
 
@@ -2546,6 +2589,12 @@ def claim_job(
     _reject_final_job(job)
 
     if job.status == "queued":
+        if _is_scoped_prune(job):
+            # Left queued for a session (see `poll_jobs`).
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"key": "backend.errors.agents.jobNotStartable"},
+            )
         claimed = _mark_agent_job_claimed(job, db)
         db.commit()
         db.refresh(job)

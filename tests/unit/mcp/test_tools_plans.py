@@ -17,6 +17,8 @@ def test_list_and_get_backup_plan(admin_mcp, secrets_seeded):
         "*Nightly photos*: /local/photos to 0 repositories, `0 2 * * *` (UTC)"
         in listed["text"]
     )
+    # the list endpoint has no detail fields: leave them out, not null
+    assert "prune_scope_to_plan" not in listed["data"]["backup_plans"][0]
     plan = admin_mcp.call("get_backup_plan", plan="nightly")
     assert plan["text"].startswith("*Nightly photos*")
     assert "Backs up: /local/photos" in plan["text"]

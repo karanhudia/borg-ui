@@ -525,6 +525,8 @@ async def run_prune(ctx) -> Outcome:
     )
     keep_within = params.get("keep_within")
     kwargs = {"keep_within": keep_within} if keep_within is not None else {}
+    if params.get("match_archives"):
+        kwargs["match_archives"] = params["match_archives"]
 
     async def call(router, job_id):
         await router.prune(job_id, *retention, False, raise_busy=True, **kwargs)

@@ -1,4 +1,5 @@
 {
+  "tests/migrations/test_backup_plan_prune_scope_to_plan_upgrade.py": 51,
   "tests/migrations/test_backup_plan_restore_check_after_upgrade.py": 51,
   "tests/migrations/test_interrupted_revisions.py": 76,
   "tests/migrations/test_maintenance_concurrency_after_upgrade.py": 180,

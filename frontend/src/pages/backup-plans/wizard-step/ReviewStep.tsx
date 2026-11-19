@@ -648,6 +648,15 @@ export function ReviewStep({
               <ReviewCodePill>{retentionLabel}</ReviewCodePill>
             </ReviewAttrRow>
           )}
+          {wizardState.runPruneAfter && (
+            <ReviewAttrRow label={t('backupPlans.wizard.review.pruneScope')}>
+              <ReviewCodePill>
+                {wizardState.pruneScopeToPlan
+                  ? t('backupPlans.wizard.review.pruneScopePlan')
+                  : t('backupPlans.wizard.review.pruneScopeRepository')}
+              </ReviewCodePill>
+            </ReviewAttrRow>
+          )}
           <ReviewAttrRow label={t('backupPlans.wizard.review.compact')}>
             <ReviewStatus
               enabled={wizardState.runCompactAfter}

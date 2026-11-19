@@ -49,6 +49,7 @@ export interface BackupPlanPayloadState {
   scriptHooks?: BackupPlanScriptHook[]
   runRepositoryScripts: boolean
   runPruneAfter: boolean
+  pruneScopeToPlan: boolean
   runCompactAfter: boolean
   runCheckAfter: boolean
   runRestoreCheckAfter: boolean
@@ -430,6 +431,7 @@ export function buildBackupPlanPayload(
     script_hooks: scriptHooks,
     run_repository_scripts: state.runRepositoryScripts,
     run_prune_after: state.runPruneAfter,
+    prune_scope_to_plan: state.pruneScopeToPlan,
     run_compact_after: state.runCompactAfter,
     run_check_after: state.runCheckAfter,
     run_restore_check_after: state.runRestoreCheckAfter,

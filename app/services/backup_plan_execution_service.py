@@ -5,6 +5,7 @@ import json
 import os
 import shlex
 import time
+from types import SimpleNamespace
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -96,6 +97,7 @@ from app.services.operations.backup_facade import (
     wait_out_backup_operation,
 )
 from app.services.operations.enqueue import wake_runner
+from app.services.operations.series import plan_prune_match
 from app.services.operations.events import broadcast_operation_updated
 from app.services.operations.runner import REPOSITORY_BUSY_KEY, operation_runner
 from app.services.operations.vocab import TERMINAL_STATUSES
@@ -169,6 +171,7 @@ class PlanRunContext:
     script_hooks: list[dict[str, Any]]
     run_repository_scripts: bool
     run_prune_after: bool
+    prune_scope_to_plan: bool
     run_compact_after: bool
     run_check_after: bool
     run_restore_check_after: bool
@@ -2040,6 +2043,7 @@ class BackupPlanExecutionService:
             script_hooks=_plan_script_hooks(plan),
             run_repository_scripts=bool(plan.run_repository_scripts),
             run_prune_after=bool(plan.run_prune_after),
+            prune_scope_to_plan=bool(plan.prune_scope_to_plan),
             run_compact_after=bool(plan.run_compact_after),
             run_check_after=bool(plan.run_check_after),
             run_restore_check_after=bool(plan.run_restore_check_after),
@@ -3153,12 +3157,26 @@ class BackupPlanExecutionService:
             )
             backup_job.maintenance_status = "running_prune"
             db.commit()
-            await self._run_inline_maintenance(
-                db,
-                backup_job,
-                prune_job,
-                run_id,
-                lambda: BorgRouter(repo).prune(
+
+            async def prune_step():
+                # Resolved here, inside the step, so a refusal (another
+                # source's archives match too, an agent too old for the
+                # filter) closes the prune row failed with its reason
+                # instead of pruning every archive (issue #1549).
+                match_archives = (
+                    plan_prune_match(
+                        db,
+                        SimpleNamespace(
+                            id=context.plan_id,
+                            name=context.plan_name,
+                            archive_name_template=context.archive_name_template,
+                        ),
+                        repo,
+                    )
+                    if context.prune_scope_to_plan
+                    else None
+                )
+                await BorgRouter(repo).prune(
                     job_id=prune_job.id,
                     keep_hourly=context.prune_keep_hourly,
                     keep_daily=context.prune_keep_daily,
@@ -3168,9 +3186,13 @@ class BackupPlanExecutionService:
                     keep_yearly=context.prune_keep_yearly,
                     dry_run=False,
                     keep_within=context.prune_keep_within,
+                    match_archives=match_archives,
                     is_cancelled=lambda: self._is_run_cancelled(run_id),
                     wait_for_read_work=True,
-                ),
+                )
+
+            await self._run_inline_maintenance(
+                db, backup_job, prune_job, run_id, prune_step
             )
             if self._is_run_cancelled(run_id):
                 return "cancelled"

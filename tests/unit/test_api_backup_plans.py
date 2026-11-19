@@ -359,6 +359,7 @@ class TestBackupPlanRoutes:
                 [repo.id],
                 run_check_after=True,
                 run_restore_check_after=True,
+                prune_scope_to_plan=True,
                 check_max_duration=0,
                 check_extra_flags=" --verify-data ",
             ),
@@ -368,11 +369,21 @@ class TestBackupPlanRoutes:
         assert create_response.status_code == 201
         created = create_response.json()
         assert created["run_restore_check_after"] is True
+        assert created["prune_scope_to_plan"] is True
         assert created["name"] == "Nightly project plan"
         assert created["source_directories"] == ["/srv/project"]
         assert created["repository_count"] == 1
         assert created["check_extra_flags"] == "--verify-data"
         assert created["repositories"][0]["repository_id"] == repo.id
+
+        # an update that leaves the field out keeps it (an older client)
+        omitted = _payload([repo.id])
+        omitted.pop("prune_scope_to_plan", None)
+        kept = test_client.put(
+            f"/api/backup-plans/{created['id']}", json=omitted, headers=admin_headers
+        )
+        assert kept.status_code == 200
+        assert kept.json()["prune_scope_to_plan"] is True
 
         list_response = test_client.get("/api/backup-plans/", headers=admin_headers)
         assert list_response.status_code == 200
@@ -6325,6 +6336,81 @@ class TestBackupPlanRoutes:
         assert "compact" not in by_kind
         backup_job = BackupJobFacade(test_db, by_kind["backup"])
         assert backup_job.maintenance_status == "prune_failed"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scoped", [False, True])
+    async def test_plan_prune_filters_to_its_archives_only_when_asked(
+        self, test_db, scoped
+    ):
+        """Issue #1549: with the toggle on the prune gets the plan's glob,
+        with it off the prune covers the repository as before."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(
+            test_db, [repo], run_prune_after=True, prune_scope_to_plan=scoped
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        prune = AsyncMock()
+        with (
+            patch(
+                "app.services.operations.backup_facade.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch.object(BorgRouter, "prune", new=prune),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        expected = "Plan-execution-Primary-[0-9]*" if scoped else None
+        assert prune.await_args.kwargs["match_archives"] == expected
+
+    @pytest.mark.asyncio
+    async def test_plan_prune_refuses_when_another_plan_shares_its_names(self, test_db):
+        """Another plan writing names the filter matches would be pruned under
+        this plan's retention: the prune fails with the reason, Borg never
+        runs (issue #1549)."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            run_prune_after=True,
+            prune_scope_to_plan=True,
+            archive_name_template="shared-{now}",
+        )
+        _create_execution_plan(
+            test_db, [repo], name="Other plan", archive_name_template="shared-{now}"
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        prune = AsyncMock()
+        with (
+            patch(
+                "app.services.operations.backup_facade.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch.object(BorgRouter, "prune", new=prune),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        prune.assert_not_awaited()
+        test_db.expire_all()
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        assert "Other plan" in run.repositories[0].error_message
+        prune_op = (
+            test_db.query(Operation)
+            .filter(Operation.repository_id == repo.id, Operation.kind == "prune")
+            .one()
+        )
+        assert prune_op.status == "failed"
 
     @pytest.mark.asyncio
     async def test_maintenance_failure_marks_repository_warning(self, test_db):

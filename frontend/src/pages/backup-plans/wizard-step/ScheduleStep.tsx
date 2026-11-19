@@ -1,6 +1,7 @@
 import {
   Alert,
   Box,
+  Checkbox,
   Divider,
   FormControlLabel,
   Stack,
@@ -132,6 +133,25 @@ export function ScheduleStep({
           />
           {wizardState.runPruneAfter && (
             <Box sx={wizardSwitchChildSx}>
+              <Box sx={{ mb: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={wizardState.pruneScopeToPlan}
+                      onChange={(event) => updateState({ pruneScopeToPlan: event.target.checked })}
+                      slotProps={{ input: { 'aria-describedby': 'prune-scope-to-plan-help' } }}
+                    />
+                  }
+                  label={t('backupPlans.wizard.maintenance.pruneScopeToPlan')}
+                />
+                <Typography
+                  id="prune-scope-to-plan-help"
+                  variant="body2"
+                  sx={{ color: 'text.secondary', pl: 4 }}
+                >
+                  {t('backupPlans.wizard.maintenance.pruneScopeToPlanHelper')}
+                </Typography>
+              </Box>
               <PruneSettingsInput
                 values={{
                   keepHourly: wizardState.pruneKeepHourly,

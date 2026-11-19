@@ -71,6 +71,19 @@ async def dispatch_agent_job_if_connected(
         # reconnect of the same agent): after the first send commits, the
         # caller's copy reloads with whatever the other pass wrote.
         return False
+    # Lazy: the API module imports this one.
+    from app.api.agents import _refuse_unsupported_scoped_prune
+
+    # The session this goes to, as its hello described it: the stored record
+    # can be newer (another process's heartbeat) than the agent listening.
+    connection = agent_connection_manager.get(agent_machine_id)
+    capabilities = ((connection.metadata if connection else None) or {}).get(
+        "capabilities"
+    )
+    if _refuse_unsupported_scoped_prune(job, capabilities, db):
+        # An older agent would ignore the filter and prune the whole
+        # repository.
+        return False
 
     previous_claimed_at = job.claimed_at
     now = _now_utc()

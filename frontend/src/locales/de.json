@@ -1935,7 +1935,9 @@
         "runCheckAfter": "Check nach erfolgreichen Repository-Sicherungen ausführen",
         "runRestoreCheckAfter": "Wiederherstellungstest für das neue Archiv nach erfolgreichen Repository-Sicherungen ausführen",
         "checkMaxDurationHelper": "Sekunden. 0 bedeutet unbegrenzt.",
-        "checkExtraFlagsHelper": "Zusätzliche borg check Optionen, die an Wartungs-Checks des Plans angehängt werden."
+        "checkExtraFlagsHelper": "Zusätzliche borg check Optionen, die an Wartungs-Checks des Plans angehängt werden.",
+        "pruneScopeToPlan": "Nur Archive dieses Plans prunen",
+        "pruneScopeToPlanHelper": "Empfohlen, wenn mehrere Pläne in dasselbe Repository sichern. Ohne diese Option wendet Prune die Aufbewahrung dieses Plans auf alle Archive im Repository an, auch auf die anderer Pläne. Archive werden über ihren Namen anhand der Vorlage für Archivnamen dieses Plans erkannt. Nach einer Vorlagenänderung werden ältere Archive nur gepruned, wenn ihre Namen noch passen. Passen auch Namen eines anderen Plans oder Zeitplans, wird Prune mit einem Fehler übersprungen."
       },
       "review": {
         "plan": "Plan",
@@ -1971,7 +1973,10 @@
         "pathCount_other": "{{count}} Pfade",
         "selectedCount_one": "{{count}} ausgewählt",
         "selectedCount_other": "{{count}} ausgewählt",
-        "manualOnlyHint": "Läuft nur bei manueller Auslösung."
+        "manualOnlyHint": "Läuft nur bei manueller Auslösung.",
+        "pruneScope": "Prune-Umfang",
+        "pruneScopePlan": "Archive dieses Plans",
+        "pruneScopeRepository": "Gesamtes Repository"
       },
       "fileExplorer": {
         "sourceTitle": "Quellpfade auswählen",
