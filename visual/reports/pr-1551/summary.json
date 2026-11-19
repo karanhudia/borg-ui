@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-11-19T14:14:35.848Z",
+  "generatedAt": "2026-11-19T14:32:45.045Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1551 visual report",
     "commitSha": "2fbd31fad5c4",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44541465978"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44544662820"
   },
   "totals": {
     "baseline": 1350,
@@ -161,21 +161,21 @@
       }
     },
     {
-      "fileName": "components-appsidebar--community-plan.png",
-      "baselinePath": "images/baseline/components-appsidebar--community-plan.png",
-      "actualPath": "images/actual/components-appsidebar--community-plan.png",
-      "diffPath": "images/diff/components-appsidebar--community-plan.png",
-      "diffPixels": 13,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0000126953125,
+      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "diffPixels": 496,
+      "totalPixels": 329160,
+      "diffRatio": 0.0015068659618422652,
       "dimensionsChanged": false,
       "baseline": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       },
       "actual": {
-        "width": 1280,
-        "height": 800
+        "width": 390,
+        "height": 844
       }
     }
   ],
@@ -1003,6 +1003,9 @@
     },
     {
       "fileName": "components-appsidebar--community-plan--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--community-plan.png"
     },
     {
       "fileName": "components-appsidebar--mcp-route--mobile.png"
@@ -3751,9 +3754,6 @@
     },
     {
       "fileName": "pages-repositories-groups--empty-without-quick-start.png"
-    },
-    {
-      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png"
     },
     {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api.png"
