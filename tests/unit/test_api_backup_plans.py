@@ -376,6 +376,15 @@ class TestBackupPlanRoutes:
         assert created["check_extra_flags"] == "--verify-data"
         assert created["repositories"][0]["repository_id"] == repo.id
 
+        # an update that leaves the field out keeps it (an older client)
+        omitted = _payload([repo.id])
+        omitted.pop("prune_scope_to_plan", None)
+        kept = test_client.put(
+            f"/api/backup-plans/{created['id']}", json=omitted, headers=admin_headers
+        )
+        assert kept.status_code == 200
+        assert kept.json()["prune_scope_to_plan"] is True
+
         list_response = test_client.get("/api/backup-plans/", headers=admin_headers)
         assert list_response.status_code == 200
         assert [plan["id"] for plan in list_response.json()["backup_plans"]] == [

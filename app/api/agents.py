@@ -1625,6 +1625,31 @@ def _fail_agent_job(
     return True
 
 
+def _refuse_unsupported_scoped_prune(
+    job: AgentJob, agent: Optional[AgentMachine], db: Session
+) -> bool:
+    """Fail a plan-scoped prune whose agent no longer advertises the archive
+    filter, and say so. The router checks when it queues the job, but an
+    agent reinstalled at an older version would ignore the filter and prune
+    the whole repository (issue #1549). Called wherever a queued job reaches
+    an agent: session dispatch, poll and claim."""
+    from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
+
+    operation = (job.payload or {}).get("operation") or {}
+    if not isinstance(operation, dict) or not operation.get("match_archives"):
+        return False
+    if agent is not None and PRUNE_MATCH_CAPABILITY in (agent.capabilities or []):
+        return False
+    _fail_agent_job(
+        job,
+        db,
+        error_message="Prune limited to this plan needs a newer agent on this "
+        "machine. Update the agent and run the plan again.",
+    )
+    db.commit()
+    return True
+
+
 def _lock_failure_is_deferred(job: Any, db: Session) -> bool:
     """Whether the runner will defer this lock failure (see
     `lock_contention_defers`); `job` carries the payload and the failure
@@ -1743,8 +1768,11 @@ async def _dispatch_queued_agent_jobs(
         # Naive UTC, the form the column stores (see `utc_now`).
         query = query.filter(AgentJob.created_at <= utc_now() - older_than)
     jobs = query.order_by(AgentJob.created_at.asc(), AgentJob.id.asc()).all()
+    agent = db.get(AgentMachine, agent_machine_id) if jobs else None
     for job in jobs:
         if live_agent_job_kind(job) == "filesystem.browse":
+            continue
+        if _refuse_unsupported_scoped_prune(job, agent, db):
             continue
         await dispatch_agent_job_best_effort(db, job, source=source)
 
@@ -2319,6 +2347,11 @@ def poll_jobs(
         .limit(limit)
         .all()
     )
+    jobs = [
+        job
+        for job in jobs
+        if not _refuse_unsupported_scoped_prune(job, current_agent, db)
+    ]
     return AgentJobPollResponse(jobs=[_serialize_agent_job(job) for job in jobs])
 
 
@@ -2333,6 +2366,9 @@ def claim_job(
     _reject_final_job(job)
 
     if job.status == "queued":
+        if _refuse_unsupported_scoped_prune(job, current_agent, db):
+            db.refresh(job)
+            _reject_final_job(job)
         claimed = _mark_agent_job_claimed(job, db)
         db.commit()
         db.refresh(job)

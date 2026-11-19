@@ -1668,7 +1668,10 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
     plan.post_backup_script_parameters = payload.post_backup_script_parameters
     plan.run_repository_scripts = payload.run_repository_scripts
     plan.run_prune_after = payload.run_prune_after
-    plan.prune_scope_to_plan = payload.prune_scope_to_plan
+    if "prune_scope_to_plan" in payload.model_fields_set:
+        # A client from before the option leaves it out; keeping the stored
+        # value stops that save widening the prune to the whole repository.
+        plan.prune_scope_to_plan = payload.prune_scope_to_plan
     plan.run_compact_after = payload.run_compact_after
     plan.run_check_after = payload.run_check_after
     plan.run_restore_check_after = payload.run_restore_check_after

@@ -143,7 +143,7 @@ async def list_backup_plans(ctx, args: NoArgsList) -> ToolResult:
     return ToolResult(
         "\n".join(lines),
         {
-            "backup_plans": [{k: p.get(k) for k in PLAN_FIELDS} for p in shown],
+            "backup_plans": [{k: p[k] for k in PLAN_FIELDS if k in p} for p in shown],
             "next_cursor": cursor,
         },
     )

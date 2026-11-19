@@ -3822,3 +3822,98 @@ class TestAgentBackupProgressWithoutTotal:
         backup_job = resolve_backup_job(test_db, backup_id)
         assert backup_job.original_size == 1024
         assert backup_job.progress == 0
+
+
+def _scoped_prune_job(test_db, agent: AgentMachine) -> AgentJob:
+    job = _create_agent_job(test_db, agent)
+    job.job_type = "repository"
+    job.payload = {
+        "schema_version": 1,
+        "job_kind": "repository.prune",
+        "repository": {"id": 7},
+        "operation": {"match_archives": "nas-[0-9]*"},
+    }
+    test_db.commit()
+    return job
+
+
+@pytest.mark.unit
+class TestScopedPruneNeedsTheCapability:
+    """A scoped prune queued while the agent supported the filter must not
+    reach it once it reports an older version (issue #1549): an old agent
+    ignores the filter and prunes the whole repository."""
+
+    def _agent(self, test_client, test_db, admin_headers, capabilities):
+        registered = _register_agent(
+            test_client, _create_enrollment_token(test_client, admin_headers)["token"]
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        agent.capabilities = capabilities
+        test_db.commit()
+        return registered, agent
+
+    def test_poll_fails_it_instead_of_handing_it_out(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered, agent = self._agent(test_client, test_db, admin_headers, [])
+        job = _scoped_prune_job(test_db, agent)
+
+        response = test_client.get(
+            "/api/agents/jobs/poll", headers=_agent_headers(registered["agent_token"])
+        )
+
+        assert response.status_code == 200
+        assert response.json()["jobs"] == []
+        test_db.refresh(job)
+        assert job.status == "failed"
+        assert "newer agent" in job.error_message
+
+    def test_claim_is_refused(self, test_client: TestClient, test_db, admin_headers):
+        registered, agent = self._agent(test_client, test_db, admin_headers, [])
+        job = _scoped_prune_job(test_db, agent)
+
+        claim = test_client.post(
+            f"/api/agents/jobs/{job.id}/claim",
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert claim.status_code == 409
+        test_db.refresh(job)
+        assert job.status == "failed"
+
+    def test_an_agent_with_the_capability_gets_it(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
+
+        registered, agent = self._agent(
+            test_client, test_db, admin_headers, [PRUNE_MATCH_CAPABILITY]
+        )
+        job = _scoped_prune_job(test_db, agent)
+
+        response = test_client.get(
+            "/api/agents/jobs/poll", headers=_agent_headers(registered["agent_token"])
+        )
+
+        assert [j["id"] for j in response.json()["jobs"]] == [job.id]
+
+    @pytest.mark.asyncio
+    async def test_reconnect_dispatch_skips_it(
+        self, test_client: TestClient, test_db, admin_headers, monkeypatch
+    ):
+        from app.api import agents as agents_api
+
+        _, agent = self._agent(test_client, test_db, admin_headers, [])
+        job = _scoped_prune_job(test_db, agent)
+        sent = []
+
+        async def fake_dispatch(db, queued, **_):
+            sent.append(queued.id)
+            return True
+
+        monkeypatch.setattr(agents_api, "dispatch_agent_job_best_effort", fake_dispatch)
+        await agents_api._dispatch_queued_agent_jobs(test_db, agent.id)
+
+        assert sent == []
+        test_db.refresh(job)
+        assert job.status == "failed"
