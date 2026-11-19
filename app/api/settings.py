@@ -320,6 +320,7 @@ class SystemSettingsUpdate(BaseModel):
     mqtt_tls_client_cert: Optional[str] = None
     mqtt_tls_client_key: Optional[str] = None
     mqtt_beta_enabled: Optional[bool] = None
+    mcp_beta_enabled: Optional[bool] = None
 
     # Metrics settings
     metrics_enabled: Optional[bool] = None
@@ -526,6 +527,7 @@ async def get_system_settings(
                 "mqtt_tls_client_cert": settings.mqtt_tls_client_cert,
                 "mqtt_tls_client_key": settings.mqtt_tls_client_key,
                 "mqtt_beta_enabled": settings.mqtt_beta_enabled,
+                "mcp_beta_enabled": settings.mcp_beta_enabled,
                 "mqtt_password_set": bool(
                     settings.mqtt_password
                 ),  # Indicate if password is set (without exposing it)
@@ -942,6 +944,8 @@ async def update_system_settings(
         # MQTT settings
         if settings_update.mqtt_beta_enabled is not None:
             settings.mqtt_beta_enabled = settings_update.mqtt_beta_enabled
+        if settings_update.mcp_beta_enabled is not None:
+            settings.mcp_beta_enabled = settings_update.mcp_beta_enabled
         if settings_update.mqtt_enabled is not None:
             settings.mqtt_enabled = settings_update.mqtt_enabled
         if settings_update.mqtt_broker_url is not None:

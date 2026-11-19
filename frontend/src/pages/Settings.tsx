@@ -47,7 +47,7 @@ const Settings: React.FC = () => {
     (globalRoleRank?.get('operator') ?? Infinity)
   const { trackSettings, EventAction } = useAnalytics()
   const { tab } = useParams<{ tab?: string }>()
-  const { data: systemSettingsData } = useQuery({
+  const { data: systemSettingsData, isLoading: systemSettingsLoading } = useQuery({
     queryKey: ['systemSettings'],
     queryFn: async () => {
       const response = await settingsAPI.getSystemSettings()
@@ -56,6 +56,7 @@ const Settings: React.FC = () => {
   })
   const systemSettings = systemSettingsData?.settings
   const mqttBetaEnabled = systemSettings?.mqtt_beta_enabled ?? false
+  const mcpBetaEnabled = systemSettings?.mcp_beta_enabled ?? false
 
   // Get tab order based on user role
   const getTabOrder = React.useCallback(() => {
@@ -65,7 +66,7 @@ const Settings: React.FC = () => {
       'appearance',
       'preferences',
       ...(canManageNotifications ? ['notifications'] : []),
-      'mcp',
+      ...(mcpBetaEnabled ? ['mcp'] : []),
     ]
     return [
       ...baseTabs,
@@ -97,6 +98,7 @@ const Settings: React.FC = () => {
     canManageExportImport,
     canManageNotifications,
     mqttBetaEnabled,
+    mcpBetaEnabled,
     canViewBackgroundWork,
   ])
 
@@ -107,16 +109,19 @@ const Settings: React.FC = () => {
   // a permission appears before the routed one.
   const currentTabId = tab && tabOrder.includes(tab) ? tab : tabOrder[0]
 
+  // Tabs gated on the authorization model or a beta switch are missing from
+  // the order until those load, and the routed tab would fall back to Account
+  // for a frame. Hold the render (and the view event) for that case only.
+  const holdForRoutedTab =
+    (authorizationLoading || systemSettingsLoading) && !!tab && !tabOrder.includes(tab)
+
   useEffect(() => {
-    if (currentTabId) {
+    if (currentTabId && !holdForRoutedTab) {
       trackSettings(EventAction.VIEW, { section: 'settings', tab: currentTabId })
     }
-  }, [currentTabId, trackSettings, EventAction])
+  }, [currentTabId, holdForRoutedTab, trackSettings, EventAction])
 
-  // Tabs gated on the authorization model are missing from the order until
-  // it loads, and an index lookup for one of them would fall back to the
-  // Account tab for a frame. Hold the render for that case only.
-  if (authorizationLoading && tab && !tabOrder.includes(tab)) {
+  if (holdForRoutedTab) {
     return null
   }
 
@@ -147,7 +152,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* AI assistants (MCP) Tab */}
-      {currentTabId === 'mcp' && (
+      {currentTabId === 'mcp' && mcpBetaEnabled && (
         <TabContentLayout>
           <McpTab />
         </TabContentLayout>

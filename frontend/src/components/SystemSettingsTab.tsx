@@ -655,7 +655,12 @@ const SystemSettingsTab: React.FC = () => {
   }
 
   const proxyAuthHeaderRows = buildProxyAuthHeaderRows(proxyAuthConfig)
-  const sectionTabs = buildSectionTabs(t)
+  // MCP access is the last section; it stays hidden until the beta is on.
+  const mcpBetaEnabled = systemSettings?.mcp_beta_enabled ?? false
+  const allSectionTabs = buildSectionTabs(t)
+  const sectionTabs = mcpBetaEnabled ? allSectionTabs : allSectionTabs.slice(0, -1)
+  // Another admin can turn the beta off while MCP is the open section.
+  const shownSection = activeSection < sectionTabs.length ? activeSection : 0
 
   const authEventStats = useMemo(() => {
     const events = authEventsData ?? []
@@ -739,11 +744,11 @@ const SystemSettingsTab: React.FC = () => {
         </Box>
 
         <SettingsSectionsCard
-          activeSection={activeSection}
+          activeSection={shownSection}
           sectionTabs={sectionTabs}
           onActiveSectionChange={setActiveSection}
         >
-          {activeSection === 0 && (
+          {shownSection === 0 && (
             <OperationTimeoutsSection
               mountTimeout={mountTimeout}
               infoTimeout={infoTimeout}
@@ -761,7 +766,7 @@ const SystemSettingsTab: React.FC = () => {
             />
           )}
 
-          {activeSection === 1 && (
+          {shownSection === 1 && (
             <RepositoryMonitoringSection
               statsRefreshInterval={statsRefreshInterval}
               autoPrunePreview={autoPrunePreview}
@@ -803,7 +808,7 @@ const SystemSettingsTab: React.FC = () => {
             />
           )}
 
-          {activeSection === 2 && (
+          {shownSection === 2 && (
             <MetricsAccessSection
               metricsEnabled={metricsEnabled}
               metricsRequireAuth={metricsRequireAuth}
@@ -818,7 +823,7 @@ const SystemSettingsTab: React.FC = () => {
             />
           )}
 
-          {activeSection === 3 && (
+          {shownSection === 3 && (
             <ArchiveBrowsingLimitsSection
               browseMaxItems={browseMaxItems}
               browseMaxMemoryMb={browseMaxMemoryMb}
@@ -827,16 +832,16 @@ const SystemSettingsTab: React.FC = () => {
             />
           )}
 
-          {activeSection === 4 && (
+          {shownSection === 4 && (
             <ProxyAuthSection
               proxyAuthConfig={proxyAuthConfig}
               proxyAuthHeaderRows={proxyAuthHeaderRows}
             />
           )}
 
-          {activeSection === 6 && <McpAccessSection />}
+          {shownSection === 6 && <McpAccessSection />}
 
-          {activeSection === 5 && (
+          {shownSection === 5 && (
             <OidcSection
               systemSettings={systemSettings}
               oidcEnabled={oidcEnabled}

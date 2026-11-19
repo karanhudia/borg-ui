@@ -397,6 +397,29 @@ describe('BetaFeaturesTab', () => {
     })
   })
 
+  describe('MCP Beta', () => {
+    it('can enable MCP', async () => {
+      const user = userEvent.setup()
+      vi.mocked(settingsAPI.updateSystemSettings).mockResolvedValue({} as AxiosResponse)
+
+      renderWithProviders(<BetaFeaturesTab />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Enable MCP')).toBeInTheDocument()
+      })
+
+      const mcpSwitch = getSwitchByLabel('Enable MCP')
+      expect(mcpSwitch).not.toBeChecked()
+      await user.click(mcpSwitch)
+
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          mcp_beta_enabled: true,
+        })
+      })
+    })
+  })
+
   it('does not render managed CLI agents as a beta feature', async () => {
     renderWithProviders(<BetaFeaturesTab />)
 
@@ -446,6 +469,7 @@ describe('BetaFeaturesTab', () => {
           lock_breaking_enabled: true,
           borg2_fast_browse_beta_enabled: true,
           mqtt_beta_enabled: true,
+          mcp_beta_enabled: true,
         },
       }
 

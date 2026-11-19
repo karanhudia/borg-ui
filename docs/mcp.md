@@ -33,6 +33,16 @@ upgraded.
 Your own permissions still apply. A viewer's connection can only do what a
 viewer can do in the web UI, whatever its level.
 
+## Turning MCP on
+
+MCP is a beta feature and is off on a new or upgraded install. An admin turns
+it on under **Settings > Advanced > Beta** with **Enable MCP**. Until then the
+AI assistants (MCP) tab and the MCP section of System settings are hidden,
+and no new connection can be created. Existing connections still connect and
+list tools, but every tool call is refused with a note pointing at this
+switch. Turning the beta off again keeps those connections: their tool calls
+work again once it is back on.
+
 ## Creating a connection
 
 1. Open **Settings > Personal > AI assistants (MCP)**.

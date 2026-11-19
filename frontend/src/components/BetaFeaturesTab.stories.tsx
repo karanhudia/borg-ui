@@ -10,6 +10,7 @@ const initialSettings: SystemSettings = {
   lock_breaking_enabled: true,
   borg2_fast_browse_beta_enabled: true,
   mqtt_beta_enabled: false,
+  mcp_beta_enabled: true,
 }
 
 function createMockQueryClient() {

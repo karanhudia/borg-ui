@@ -4,6 +4,7 @@
   "tests/migrations/test_interrupted_revisions.py": 76,
   "tests/migrations/test_maintenance_concurrency_after_upgrade.py": 180,
   "tests/migrations/test_mcp_after_upgrade.py": 154,
+  "tests/migrations/test_mcp_beta_enabled_upgrade.py": 51,
   "tests/migrations/test_repository_agent_script_after_upgrade.py": 107,
   "tests/migrations/test_revisions_have_tests.py": 1,
   "tests/migrations/test_schedule_repository_scripts_after_upgrade.py": 125,

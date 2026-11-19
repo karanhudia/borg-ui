@@ -171,6 +171,7 @@
       "repositoryOperationActive": "Another operation is already running on this repository. Please wait for it to finish and try again."
     },
     "mcp": {
+      "betaDisabled": "MCP is an experimental feature. An administrator can turn it on under Settings > Advanced > Beta.",
       "connectionNotFound": "MCP connection not found.",
       "levelAboveCap": "Your administrator allows MCP connections up to {{max}} access.",
       "levelNotAvailable": "This version of Borg UI has no {{level}} tools yet, so {{level}} access cannot be chosen.",

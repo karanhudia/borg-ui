@@ -303,13 +303,20 @@ describe('AppSidebar', () => {
     expect(await screen.findAllByRole('link', { name: /notifications/i })).not.toHaveLength(0)
   })
 
-  it('shows AI assistants (MCP) to every user, without a permission', async () => {
+  it('shows AI assistants (MCP) to every user once the beta is on', async () => {
     mockHasGlobalPermission.mockImplementation(() => false)
 
-    renderSidebar({ initialRoute: '/settings/mcp' })
+    renderSidebar({ initialRoute: '/settings/mcp', systemSettings: { mcp_beta_enabled: true } })
 
     const links = await screen.findAllByRole('link', { name: /ai assistants \(mcp\)/i })
     expect(links[0]).toHaveAttribute('href', '/settings/mcp')
+  })
+
+  it('hides AI assistants (MCP) while the beta is off', async () => {
+    renderSidebar({ initialRoute: '/settings/account' })
+
+    expect(await screen.findAllByRole('link', { name: /appearance/i })).not.toHaveLength(0)
+    expect(screen.queryAllByRole('link', { name: /ai assistants \(mcp\)/i })).toHaveLength(0)
   })
 
   it('hides Notifications from a user without the notifications permission', async () => {

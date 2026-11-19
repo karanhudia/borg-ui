@@ -27,9 +27,26 @@ def every_level_has_tools(monkeypatch):
     monkeypatch.setattr("app.api.mcp_connections.top_level", lambda: Level.FULL)
 
 
+@pytest.fixture(autouse=True)
+def mcp_beta_on(test_db):
+    """MCP ships behind a beta switch, off by default; these tests need it on."""
+    from app.api.mcp_connections import mcp_settings
+
+    settings = mcp_settings(test_db)
+    settings.mcp_beta_enabled = True
+    test_db.commit()
+    return settings
+
+
 @pytest.fixture
-def create_connection(test_client, pro_plan):
+def create_connection(test_client, test_db, pro_plan):
     """Create an MCP connection over REST; returns (row dict, token)."""
+    # Turned on here too: integration tests import this fixture without the
+    # autouse one above.
+    from app.api.mcp_connections import mcp_settings
+
+    mcp_settings(test_db).mcp_beta_enabled = True
+    test_db.commit()
 
     def create(headers, *, name="Claude on my laptop", level="read", **extra):
         response = test_client.post(

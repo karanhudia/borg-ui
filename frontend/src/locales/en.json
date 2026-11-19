@@ -4165,7 +4165,10 @@
     "mqttIntegrationTitle": "MQTT Integration",
     "enableMqtt": "Enable MQTT",
     "mqttIntegrationDescription": "Activates MQTT integration in the UI.",
-    "failedToUpdateSetting": "Failed to update setting: {{message}}"
+    "failedToUpdateSetting": "Failed to update setting: {{message}}",
+    "mcpTitle": "MCP server (AI assistants)",
+    "enableMcp": "Enable MCP",
+    "mcpDescription": "Lets AI assistants such as Claude connect to Borg UI over MCP. Adds AI assistants (MCP) to Settings. Still experimental, so tools and access levels may change."
   },
   "exportImport": {
     "title": "Export / Import",
@@ -6423,7 +6426,8 @@
         "skipNeedsFull": "Skipping confirmations needs Full access.",
         "nameRequired": "Give the connection a name.",
         "connectionNotFound": "MCP connection not found.",
-        "levelNotAvailable": "This version of Borg UI has no {{level}} tools yet, so {{level}} access cannot be chosen."
+        "levelNotAvailable": "This version of Borg UI has no {{level}} tools yet, so {{level}} access cannot be chosen.",
+        "betaDisabled": "MCP is an experimental feature. An administrator can turn it on under Settings > Advanced > Beta."
       }
     },
     "success": {

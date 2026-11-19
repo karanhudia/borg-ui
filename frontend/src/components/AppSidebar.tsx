@@ -157,6 +157,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   })
 
   const showMqttNav = systemData?.settings?.mqtt_beta_enabled ?? false
+  const showMcpNav = systemData?.settings?.mcp_beta_enabled ?? false
 
   // Show a "NEW" badge on the Backup Plans nav item until the user has created
   // at least one plan. The cache is invalidated on plan creation/deletion, so
@@ -259,7 +260,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
               ...(canManageNotifications
                 ? [{ name: 'Notifications', href: '/settings/notifications', icon: Bell }]
                 : []),
-              { name: 'AI assistants (MCP)', href: '/settings/mcp', icon: Bot },
+              ...(showMcpNav
+                ? [{ name: 'AI assistants (MCP)', href: '/settings/mcp', icon: Bot }]
+                : []),
             ],
           },
           // The System group also carries Background work, which operators
@@ -342,6 +345,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     ]
   }, [
     showMqttNav,
+    showMcpNav,
     canManageUsers,
     canManageLicensing,
     canManageSystemSettings,

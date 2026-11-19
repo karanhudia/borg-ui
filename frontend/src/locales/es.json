@@ -4165,7 +4165,10 @@
     "mqttIntegrationTitle": "Integración MQTT",
     "enableMqtt": "Habilitar MQTT",
     "mqttIntegrationDescription": "Activa la integración MQTT en la interfaz.",
-    "failedToUpdateSetting": "Error al actualizar la configuración: {{message}}"
+    "failedToUpdateSetting": "Error al actualizar la configuración: {{message}}",
+    "mcpTitle": "Servidor MCP (asistentes de IA)",
+    "enableMcp": "Activar MCP",
+    "mcpDescription": "Permite que asistentes de IA como Claude se conecten a Borg UI mediante MCP. Añade Asistentes de IA (MCP) a Configuración. Aún es experimental, así que las herramientas y los niveles de acceso pueden cambiar."
   },
   "exportImport": {
     "title": "Exportar / Importar",
@@ -6423,7 +6426,8 @@
         "skipNeedsFull": "Omitir confirmaciones requiere acceso Completo.",
         "nameRequired": "Ponle un nombre a la conexión.",
         "connectionNotFound": "No se encontró la conexión MCP.",
-        "levelNotAvailable": "Esta versión de Borg UI aún no tiene herramientas de {{level}}, así que no se puede elegir el acceso {{level}}."
+        "levelNotAvailable": "Esta versión de Borg UI aún no tiene herramientas de {{level}}, así que no se puede elegir el acceso {{level}}.",
+        "betaDisabled": "MCP es una función experimental. Un administrador puede activarla en Configuración > Avanzado > Beta."
       }
     },
     "success": {

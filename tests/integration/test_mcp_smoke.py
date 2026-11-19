@@ -26,8 +26,10 @@ def _free_port() -> int:
 
 @pytest.fixture
 def running_app(test_db):
+    from app.api.mcp_connections import mcp_settings
     from app.main import app
 
+    mcp_settings(test_db).mcp_beta_enabled = True
     test_db.add(LicensingState(instance_id="t-mcp-smoke", plan="pro", status="active"))
     user = User(username="smoke", password_hash="x", is_active=True, role="admin")
     test_db.add(user)
