@@ -1626,7 +1626,7 @@ def _fail_agent_job(
 
 
 def _refuse_unsupported_scoped_prune(
-    job: AgentJob, agent: Optional[AgentMachine], db: Session
+    job: AgentJob, capabilities: Optional[list], db: Session
 ) -> bool:
     """Fail a plan-scoped prune whose agent no longer advertises the archive
     filter, and say so. The router checks when it queues the job, but an
@@ -1638,7 +1638,7 @@ def _refuse_unsupported_scoped_prune(
     operation = (job.payload or {}).get("operation") or {}
     if not isinstance(operation, dict) or not operation.get("match_archives"):
         return False
-    if agent is not None and PRUNE_MATCH_CAPABILITY in (agent.capabilities or []):
+    if PRUNE_MATCH_CAPABILITY in (capabilities or []):
         return False
     _fail_agent_job(
         job,
@@ -2347,7 +2347,7 @@ def poll_jobs(
     jobs = [
         job
         for job in jobs
-        if not _refuse_unsupported_scoped_prune(job, current_agent, db)
+        if not _refuse_unsupported_scoped_prune(job, current_agent.capabilities, db)
     ]
     return AgentJobPollResponse(jobs=[_serialize_agent_job(job) for job in jobs])
 
@@ -2363,7 +2363,7 @@ def claim_job(
     _reject_final_job(job)
 
     if job.status == "queued":
-        if _refuse_unsupported_scoped_prune(job, current_agent, db):
+        if _refuse_unsupported_scoped_prune(job, current_agent.capabilities, db):
             db.refresh(job)
             _reject_final_job(job)
         claimed = _mark_agent_job_claimed(job, db)

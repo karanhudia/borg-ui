@@ -73,13 +73,16 @@ async def dispatch_agent_job_if_connected(
         return False
     # Lazy: the API module imports this one.
     from app.api.agents import _refuse_unsupported_scoped_prune
-    from app.database.models import AgentMachine
 
-    if _refuse_unsupported_scoped_prune(
-        job, db.get(AgentMachine, agent_machine_id), db
-    ):
-        # The agent connected now no longer reports the prune filter: an
-        # older agent would ignore it and prune the whole repository.
+    # The session this goes to, as its hello described it: the stored record
+    # can be newer (another process's heartbeat) than the agent listening.
+    connection = agent_connection_manager.get(agent_machine_id)
+    capabilities = ((connection.metadata if connection else None) or {}).get(
+        "capabilities"
+    )
+    if _refuse_unsupported_scoped_prune(job, capabilities, db):
+        # An older agent would ignore the filter and prune the whole
+        # repository.
         return False
 
     previous_claimed_at = job.claimed_at

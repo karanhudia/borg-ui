@@ -3898,17 +3898,32 @@ class TestScopedPruneNeedsTheCapability:
         assert [j["id"] for j in response.json()["jobs"]] == [job.id]
 
     @pytest.mark.asyncio
-    async def test_session_dispatch_does_not_send_it(
-        self, test_client: TestClient, test_db, admin_headers, monkeypatch
+    @pytest.mark.parametrize("session_has_it", [False, True])
+    async def test_session_dispatch_checks_the_connected_session(
+        self,
+        test_client: TestClient,
+        test_db,
+        admin_headers,
+        monkeypatch,
+        session_has_it,
     ):
         """Covers every push: reconnect, heartbeat, and the router's own send
-        after an older agent connected while the prune waited for reads."""
-        from app.services import agent_job_dispatcher
+        after an older agent connected while the prune waited for reads. The
+        stored record says the agent supports the filter (another process's
+        heartbeat); what counts is the session the job goes to."""
+        from types import SimpleNamespace
 
-        _, agent = self._agent(test_client, test_db, admin_headers, [])
+        from app.services import agent_job_dispatcher
+        from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
+
+        _, agent = self._agent(
+            test_client, test_db, admin_headers, [PRUNE_MATCH_CAPABILITY]
+        )
         job = _scoped_prune_job(test_db, agent)
         manager = agent_job_dispatcher.agent_connection_manager
+        hello = {"capabilities": [PRUNE_MATCH_CAPABILITY] if session_has_it else []}
         monkeypatch.setattr(manager, "is_connected", lambda _id: True)
+        monkeypatch.setattr(manager, "get", lambda _id: SimpleNamespace(metadata=hello))
         sent = []
 
         async def fake_send(*args, **kwargs):
@@ -3916,9 +3931,12 @@ class TestScopedPruneNeedsTheCapability:
 
         monkeypatch.setattr(manager, "send_command", fake_send)
 
-        assert not await agent_job_dispatcher.dispatch_agent_job_if_connected(
+        result = await agent_job_dispatcher.dispatch_agent_job_if_connected(
             test_db, job
         )
-        assert sent == []
         test_db.refresh(job)
-        assert job.status == "failed"
+        if session_has_it:
+            assert result and sent == [job.id]
+        else:
+            assert not result and sent == []
+            assert job.status == "failed"
