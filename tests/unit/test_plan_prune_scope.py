@@ -293,3 +293,13 @@ def test_a_path_schedule_with_links_elsewhere_is_not_a_sibling(db):
     )
     db.commit()
     assert plan_prune_match(db, plan, repo) == "photos-[0-9]*"
+
+
+@pytest.mark.unit
+def test_refuses_a_sibling_named_like_this_plans_checkpoints(db):
+    """Borg matches `db-[0-9]*-weekly` against `<name>.checkpoint` too."""
+    repo = _repo(db)
+    plan = _plan(db, repo, "a", template="db-{now}-weekly")
+    _plan(db, repo, "b", template="db-{now}-weekly.checkpoint")
+    with pytest.raises(PruneScopeError, match="'b'"):
+        plan_prune_match(db, plan, repo)

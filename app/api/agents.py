@@ -1632,7 +1632,7 @@ def _refuse_unsupported_scoped_prune(
     filter, and say so. The router checks when it queues the job, but an
     agent reinstalled at an older version would ignore the filter and prune
     the whole repository (issue #1549). Called wherever a queued job reaches
-    an agent: session dispatch, poll and claim."""
+    an agent: the shared session dispatcher, poll and claim."""
     from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
 
     operation = (job.payload or {}).get("operation") or {}
@@ -1768,11 +1768,8 @@ async def _dispatch_queued_agent_jobs(
         # Naive UTC, the form the column stores (see `utc_now`).
         query = query.filter(AgentJob.created_at <= utc_now() - older_than)
     jobs = query.order_by(AgentJob.created_at.asc(), AgentJob.id.asc()).all()
-    agent = db.get(AgentMachine, agent_machine_id) if jobs else None
     for job in jobs:
         if live_agent_job_kind(job) == "filesystem.browse":
-            continue
-        if _refuse_unsupported_scoped_prune(job, agent, db):
             continue
         await dispatch_agent_job_best_effort(db, job, source=source)
 

@@ -177,6 +177,20 @@ def _may_overlap(a: list, b: list) -> bool:
     return True
 
 
+_CHECKPOINT = list(".checkpoint")
+
+
+def _with_checkpoints(tokens: list) -> list:
+    """The names and the checkpoint names a template gives archives."""
+    # ponytail: checkpoint ordinals up to 999; a token for "digits" would
+    # cover more, add it if a run ever writes a thousand checkpoints.
+    return [
+        tokens,
+        tokens + _CHECKPOINT,
+        *(tokens + _CHECKPOINT + ["."] + [_DIGIT] * n for n in (1, 2, 3)),
+    ]
+
+
 def plan_archive_glob(
     template: Optional[str], *, job_name: str, repo_name: Optional[str]
 ) -> str:
@@ -332,17 +346,15 @@ def plan_prune_match(db: Session, plan: BackupPlan, repository: Repository) -> s
             job_name=source.name,
             repo_name=repository.name,
         )
-        # Borg 1 checkpoints (`<name>.checkpoint`, `.checkpoint.N`) match
-        # the plan's glob too.
-        checkpoint = list(".checkpoint")
-        # ponytail: checkpoint ordinals up to 999; a token for "digits" would
-        # cover more, add it if a run ever writes a thousand checkpoints.
-        variants = (
-            theirs,
-            theirs + checkpoint,
-            *(theirs + checkpoint + ["."] + [_DIGIT] * n for n in (1, 2, 3)),
-        )
-        if any(_may_overlap(own, variant) for variant in variants):
+        # Borg 1 checkpoints (`<name>.checkpoint`, `.checkpoint.N`): Borg
+        # matches them with the plan's glob, and a sibling writes them too,
+        # so compare both sides with and without the suffix.
+        pairs = [
+            (mine, other)
+            for mine in _with_checkpoints(own)
+            for other in _with_checkpoints(theirs)
+        ]
+        if any(_may_overlap(mine, other) for mine, other in pairs):
             raise PruneScopeError(
                 f"Prune limited to this plan was not run: archives of {kind} "
                 f"'{source.name}' may also match '{result}'. Use archive name "

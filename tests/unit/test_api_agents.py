@@ -3898,22 +3898,27 @@ class TestScopedPruneNeedsTheCapability:
         assert [j["id"] for j in response.json()["jobs"]] == [job.id]
 
     @pytest.mark.asyncio
-    async def test_reconnect_dispatch_skips_it(
+    async def test_session_dispatch_does_not_send_it(
         self, test_client: TestClient, test_db, admin_headers, monkeypatch
     ):
-        from app.api import agents as agents_api
+        """Covers every push: reconnect, heartbeat, and the router's own send
+        after an older agent connected while the prune waited for reads."""
+        from app.services import agent_job_dispatcher
 
         _, agent = self._agent(test_client, test_db, admin_headers, [])
         job = _scoped_prune_job(test_db, agent)
+        manager = agent_job_dispatcher.agent_connection_manager
+        monkeypatch.setattr(manager, "is_connected", lambda _id: True)
         sent = []
 
-        async def fake_dispatch(db, queued, **_):
-            sent.append(queued.id)
-            return True
+        async def fake_send(*args, **kwargs):
+            sent.append(kwargs.get("job_id"))
 
-        monkeypatch.setattr(agents_api, "dispatch_agent_job_best_effort", fake_dispatch)
-        await agents_api._dispatch_queued_agent_jobs(test_db, agent.id)
+        monkeypatch.setattr(manager, "send_command", fake_send)
 
+        assert not await agent_job_dispatcher.dispatch_agent_job_if_connected(
+            test_db, job
+        )
         assert sent == []
         test_db.refresh(job)
         assert job.status == "failed"
