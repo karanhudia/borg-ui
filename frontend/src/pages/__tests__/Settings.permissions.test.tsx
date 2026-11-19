@@ -166,6 +166,23 @@ describe('Settings permission routing', () => {
     expect(await screen.findByText('Background Work Tab')).toBeInTheDocument()
   })
 
+  it('waits for the beta switches before opening a deep link to the MCP tab', async () => {
+    currentTab.value = 'mcp'
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    expect(screen.queryByText('Account Tab')).not.toBeInTheDocument()
+    expect(await screen.findByText('MCP Tab')).toBeInTheDocument()
+    expect(trackSettings).not.toHaveBeenCalledWith(
+      'View',
+      expect.objectContaining({ tab: 'account' })
+    )
+  })
+
   it('stays on the routed tab when an earlier tab appears after the first render', async () => {
     currentTab.value = 'mcp'
 

@@ -312,3 +312,15 @@ def test_beta_switch_round_trips_through_system_settings(
         ]
         is True
     )
+
+
+@pytest.mark.unit
+def test_non_admin_cannot_change_the_beta_switch(
+    test_client, test_db, auth_headers, mcp_beta_on
+):
+    response = test_client.put(
+        "/api/settings/system", json={"mcp_beta_enabled": False}, headers=auth_headers
+    )
+    assert response.status_code == 403
+    test_db.refresh(mcp_beta_on)
+    assert mcp_beta_on.mcp_beta_enabled is True

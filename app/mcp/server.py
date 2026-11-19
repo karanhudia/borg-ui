@@ -124,7 +124,7 @@ def _gate(app) -> Optional[str]:
         if not settings.mcp_beta_enabled:
             return (
                 "MCP is an experimental feature. An administrator can turn it on "
-                "under Settings > Beta."
+                "under Settings > Advanced > Beta."
             )
         if not settings.mcp_enabled:
             return (

@@ -36,7 +36,7 @@ viewer can do in the web UI, whatever its level.
 ## Turning MCP on
 
 MCP is a beta feature and is off on a new or upgraded install. An admin turns
-it on under **Settings > System > Beta** with **Enable MCP**. Until then the
+it on under **Settings > Advanced > Beta** with **Enable MCP**. Until then the
 AI assistants (MCP) tab and the MCP section of System settings are hidden,
 every MCP call is refused, and no new connection can be created. Turning the
 beta off again keeps existing connections: they work again once it is back on.

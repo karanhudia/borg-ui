@@ -69,7 +69,7 @@ administration.
 | Appearance | Choose theme and display preferences. |
 | Preferences | Set personal UI behavior and default preferences. |
 | Notifications | Configure backup, restore, schedule, check, and report notifications. This appears for admins only. |
-| AI assistants (MCP) | Appears once an admin turns on MCP under System > Beta. Create and revoke MCP connections so an AI assistant (Claude Code, Claude Desktop, Cursor, VS Code) can use Borg UI for you, copy the client setup, and see each connection's activity. Pro, Lite and Enterprise. See [AI assistants (MCP)](mcp.md). |
+| AI assistants (MCP) | Appears once an admin turns on MCP under Advanced > Beta. Create and revoke MCP connections so an AI assistant (Claude Code, Claude Desktop, Cursor, VS Code) can use Borg UI for you, copy the client setup, and see each connection's activity. Pro, Lite and Enterprise. See [AI assistants (MCP)](mcp.md). |
 
 ### System
 

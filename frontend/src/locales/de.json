@@ -6427,7 +6427,7 @@
         "nameRequired": "Geben Sie der Verbindung einen Namen.",
         "connectionNotFound": "MCP-Verbindung nicht gefunden.",
         "levelNotAvailable": "Diese Version von Borg UI hat noch keine Werkzeuge für {{level}}, daher kann der Zugriff {{level}} nicht gewählt werden.",
-        "betaDisabled": "MCP ist eine experimentelle Funktion. Ein Administrator kann sie unter Einstellungen > Beta einschalten."
+        "betaDisabled": "MCP ist eine experimentelle Funktion. Ein Administrator kann sie unter Einstellungen > Erweitert > Beta einschalten."
       }
     },
     "success": {

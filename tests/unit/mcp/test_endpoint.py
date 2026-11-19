@@ -138,7 +138,7 @@ def test_beta_switch_off_refuses_every_call(mcp, setup, test_db):
     _settings(test_db).mcp_beta_enabled = False
     test_db.commit()
     result = mcp(token).call("zz_read_echo", word="hi")
-    assert result["is_error"] and "Settings > Beta" in result["text"]
+    assert result["is_error"] and "Settings > Advanced > Beta" in result["text"]
 
 
 @pytest.mark.unit
