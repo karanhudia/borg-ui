@@ -133,3 +133,28 @@ async def test_slow_route_times_out():
     with anyio.fail_after(3):
         with pytest.raises(httpx.TimeoutException):
             await client.post("/slow", timeout=0.05)
+
+
+@pytest.mark.unit
+async def test_slow_sync_route_times_out_promptly():
+    """A sync route runs in a worker thread, which cancellation waits for; the
+    caller must still get its timeout on time (CodeRabbit, pre-PR)."""
+    import time
+
+    import anyio
+    import httpx
+    from fastapi import FastAPI
+
+    slow = FastAPI()
+
+    @slow.post("/slow")
+    def handler():
+        time.sleep(2)
+        return {}
+
+    client = InternalClient(slow, user_id=1, connection_id=1)
+    started = time.monotonic()
+    with anyio.fail_after(1.5):
+        with pytest.raises(httpx.TimeoutException):
+            await client.post("/slow", timeout=0.05)
+    assert time.monotonic() - started < 1

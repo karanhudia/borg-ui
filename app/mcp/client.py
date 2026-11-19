@@ -8,9 +8,9 @@ user's MCP token never leaves the endpoint.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Optional
 
-import anyio
 import httpx
 
 from app.core.security import MCP_INTERNAL_HEADER, create_mcp_internal_token
@@ -20,6 +20,8 @@ DEFAULT_TIMEOUT = 120
 # Borg dry runs (prune and restore previews) and source scans read a lot on
 # big repositories and hosts; they get longer before the call gives up.
 LONG_TIMEOUT = 600
+# Requests past their deadline, kept referenced until their route finishes.
+_DETACHED: set[asyncio.Task] = set()
 
 
 class ApiError(Exception):
@@ -90,19 +92,33 @@ class InternalClient:
         # A crashing route answers 500 here, as it would over the network.
         transport = httpx.ASGITransport(app=self._app, raise_app_exceptions=False)
         limit = timeout or DEFAULT_TIMEOUT
+
+        async def send() -> httpx.Response:
+            async with httpx.AsyncClient(
+                transport=transport, base_url=INTERNAL_BASE_URL
+            ) as client:
+                return await client.request(
+                    method, path, params=clean, json=json, headers=headers
+                )
+
         # The ASGI transport ignores httpx timeouts (only network transports
-        # enforce them), so the deadline is ours. Cancelling the route is what
-        # a client that hung up does; a sync route's thread runs to its end.
+        # enforce them), so the deadline is ours. The request runs as its own
+        # task because cancelling a sync route waits for its worker thread:
+        # at the deadline the caller is answered at once, and the route is
+        # cancelled as when a client hangs up (a running thread still ends on
+        # its own).
+        task = asyncio.ensure_future(send())
         try:
-            with anyio.fail_after(limit):
-                async with httpx.AsyncClient(
-                    transport=transport, base_url=INTERNAL_BASE_URL
-                ) as client:
-                    response = await client.request(
-                        method, path, params=clean, json=json, headers=headers
-                    )
-        except TimeoutError:
-            raise httpx.ReadTimeout(f"{method} {path} took over {limit} s") from None
+            done, _ = await asyncio.wait({task}, timeout=limit)
+        except BaseException:
+            task.cancel()
+            raise
+        if not done:
+            task.cancel()
+            _DETACHED.add(task)
+            task.add_done_callback(_DETACHED.discard)
+            raise httpx.ReadTimeout(f"{method} {path} took over {limit} s")
+        response = task.result()
         if response.is_success:
             if response.status_code == 204 or not response.content:
                 return None
