@@ -2831,6 +2831,10 @@ def _dispatch_due_scheduled_job(
                 )
                 return None
             raise
+        # read again under the admission's lock: an edit of the repository
+        # may have committed while it waited, and the operation copies the
+        # repository's source from this row
+        db.refresh(repo)
 
         _now = datetime.now()
         archive_name = build_archive_name(

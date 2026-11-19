@@ -2113,6 +2113,78 @@ async def test_a_schedule_whose_repository_moves_during_its_admission_starts_not
 
 
 @pytest.mark.unit
+@pytest.mark.skipif(not POSTGRES_URL, reason="BORG_TEST_POSTGRES_URL is not set")
+async def test_a_scheduled_backup_records_the_source_committed_during_its_admission(
+    launches, monkeypatch
+):
+    """PostgreSQL. An edit giving the repository another source connection
+    holds the repository's row when the dispatch reaches its admission, and
+    commits after: the queued backup records the new connection."""
+    with _postgres_engines() as (engine, side):
+        database = Database("postgresql", engine, side)
+        monkeypatch.setattr(schedule_api, "SessionLocal", database.sessions)
+        _settings(database)
+        old, new = _seed(
+            database,
+            SSHConnection(host="source.invalid", username="u", port=22),
+            SSHConnection(host="source.invalid", username="u", port=22),
+        )
+        [repository_id] = _seed(
+            database, _repository("edited", source_ssh_connection_id=old)
+        )
+        _seed(
+            database,
+            ScheduledJob(
+                name="single schedule",
+                cron_expression="0 2 * * *",
+                enabled=True,
+                repository_id=repository_id,
+                next_run=datetime.utcnow() - PAST,
+            ),
+        )
+        editing = threading.Event()
+        editors: list[threading.Thread] = []
+
+        def edit() -> None:
+            with side.connect() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE repositories SET source_ssh_connection_id = :new "
+                        "WHERE id = :id"
+                    ),
+                    {"new": new, "id": repository_id},
+                )
+                editing.set()
+                threading.Event().wait(0.5)  # the dispatch reaches its lock
+                connection.commit()
+
+        real = schedule_api.ensure_repository_admission
+
+        def admission(db, repository, *args, **kwargs):
+            if not editors:
+                editor = threading.Thread(target=edit)
+                editor.start()
+                editors.append(editor)
+                assert editing.wait(HOLD_SECONDS)
+            return real(db, repository, *args, **kwargs)
+
+        monkeypatch.setattr(schedule_api, "ensure_repository_admission", admission)
+        with database() as db:
+            await schedule_api.dispatch_due_scheduled_backups(db, datetime.utcnow())
+        await asyncio.sleep(0)
+        for editor in editors:
+            await asyncio.to_thread(editor.join, HOLD_SECONDS)
+        with database() as session:
+            from app.services.operations.backup_facade import BackupJobFacade
+
+            [operation] = session.query(Operation).all()
+            recorded = BackupJobFacade(session, operation).source_ssh_connection_id
+
+    assert len(editors) == 1
+    assert recorded == new
+
+
+@pytest.mark.unit
 async def test_a_plan_whose_source_changes_while_probed_starts_no_run(
     database, monkeypatch, launches
 ):
