@@ -1830,6 +1830,9 @@ async def test_a_run_the_startup_sweep_ends_keeps_its_plan_busy_for_its_post_hoo
     import app.main as main
 
     service = backup_plan_execution_service
+    # only what is live keeps the plan busy here, not the look of a start
+    # before the sweep
+    monkeypatch.setattr(service, "startup_sweep_ran", True)
     repository_id = _seed_repository(database)
     plan_id = _seed_plan(database, repository_id)
     run_id = _seed_run_with_post_hooks_to_run(
@@ -1910,6 +1913,7 @@ def test_a_start_that_reads_while_the_sweep_ends_a_run_finds_the_plan_busy(
     interrupted run as failed between two steps of that look. The sweep holds
     the run before its commit, so the look reads the rows first and who is
     live after: the other way round it finds neither."""
+    service.startup_sweep_ran = True  # only what is live counts here
     repository_id = _seed_repository(database)
     plan_id = _seed_plan(database, repository_id)
     run_id = _seed_run_with_post_hooks_to_run(
@@ -1947,6 +1951,7 @@ def test_a_finished_run_with_post_hooks_to_run_keeps_its_plan_busy_from_the_swee
     has nothing to end and commits nothing. Its post-backup scripts are
     launched after the sweep, and a start in a worker thread reads in
     between."""
+    service.startup_sweep_ran = True  # only what is live counts here
     repository_id = _seed_repository(database)
     plan_id = _seed_plan(database, repository_id)
     run_id = _seed_run_with_post_hooks_to_run(
@@ -1964,6 +1969,118 @@ def test_a_finished_run_with_post_hooks_to_run_keeps_its_plan_busy_from_the_swee
         assert service.has_active_run(db, plan_id)
 
 
+def _seed_post_hooks_to_run(
+    sessions, plan_id: int, repository_id: int, left_by: str
+) -> int:
+    """A finished run whose post-backup scripts are still to run: left by a
+    cancel, or by an earlier restart that the next one followed before they
+    started."""
+    if left_by == "cancel":
+        return _seed_run_with_post_hooks_to_run(
+            sessions, plan_id, repository_id, "cancelled"
+        )
+    run_id = _seed_run_with_post_hooks_to_run(
+        sessions, plan_id, repository_id, "running"
+    )
+    with sessions() as db:
+        assert cleanup_orphaned_jobs(db) == [run_id]
+    return run_id
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("left_by", ["cancel", "restart"])
+def test_a_finished_run_with_post_hooks_to_run_keeps_its_plan_busy_before_the_sweep(
+    database, service, left_by
+):
+    """The startup sweep launches the scripts, and it waits for the runner's
+    lease. A start before it is refused like one beside the running
+    scripts, and no other plan is held (#1543)."""
+    repository_id = _seed_repository(database)
+    plan_id = _seed_plan(database, repository_id)
+    other_plan_id = _seed_plan(database, repository_id, name="other plan")
+    _seed_post_hooks_to_run(database, plan_id, repository_id, left_by)
+
+    with database() as db:
+        assert service.has_active_run(db, plan_id)
+        assert not service.has_active_run(db, other_plan_id)
+        with pytest.raises(HTTPException) as refused:
+            service.refuse_active_run(db, plan_id)
+        assert refused.value.status_code == 409
+        assert not db.in_transaction()  # the plan's lock is given back
+
+    # a sweep that launched nothing for the run leaves no plan busy
+    service.startup_sweep_ran = True
+    with database() as db:
+        assert not service.has_active_run(db, plan_id)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "run", ["scripts started", "no pre-backup script ran", "says nothing"]
+)
+def test_a_finished_run_with_no_post_hooks_to_run_leaves_its_plan_free_before_the_sweep(
+    database, service, run
+):
+    repository_id = _seed_repository(database)
+    plan_id = _seed_plan(database, repository_id)
+    if run == "says nothing":
+        _seed_run_with_post_hooks_to_run(database, plan_id, repository_id, "failed")
+    elif run == "no pre-backup script ran":
+        run_id = _seed_run(database, plan_id, repository_id, "cancelled")
+        with database() as db:
+            db.get(BackupPlanRun, run_id).error_message = POST_BACKUP_HOOKS_AFTER_CANCEL
+            db.commit()
+    else:
+        run_id = _seed_run_with_post_hooks_to_run(
+            database, plan_id, repository_id, "cancelled"
+        )
+        with database() as db:
+            db.add(
+                ScriptExecution(
+                    backup_plan_id=plan_id,
+                    backup_plan_run_id=run_id,
+                    hook_type="post-backup",
+                    status="failed",
+                    started_at=datetime.utcnow(),
+                    triggered_by="backup_plan",
+                )
+            )
+            db.commit()
+
+    with database() as db:
+        assert not service.has_active_run(db, plan_id)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("path", ["run", "retry"])
+def test_a_start_before_the_sweep_is_refused_beside_post_hooks_still_to_run(
+    test_client, database, held_runner, admin, plan_runs_do_nothing, monkeypatch, path
+):
+    repository_id = _seed_repository(database)
+    plan_id = _seed_plan(database, repository_id)
+    failed = _seed_run(database, plan_id, repository_id, "failed")
+    _seed_post_hooks_to_run(database, plan_id, repository_id, "cancel")
+    url = (
+        f"/api/backup-plans/{plan_id}/run"
+        if path == "run"
+        else f"/api/backup-plans/runs/{failed}/retry"
+    )
+    monkeypatch.setattr(backup_plan_execution_service, "startup_sweep_ran", False)
+
+    refused = test_client.post(url, headers=admin)
+
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["detail"] == {
+        "key": "backend.errors.backupPlans.runAlreadyActive"
+    }
+    assert plan_runs_do_nothing == []
+    assert _runs(database, plan_id) == [("manual", "failed"), ("manual", "cancelled")]
+
+    # and it can be repeated once the sweep is over and the scripts ended
+    monkeypatch.setattr(backup_plan_execution_service, "startup_sweep_ran", True)
+    assert test_client.post(url, headers=admin).status_code == 202
+
+
 @pytest.mark.unit
 def test_a_sweep_that_fails_gives_up_the_runs_it_held(database, monkeypatch):
     """The sweep holds the runs and its commit fails: no post-backup scripts
@@ -1973,6 +2090,7 @@ def test_a_sweep_that_fails_gives_up_the_runs_it_held(database, monkeypatch):
     import app.main as main
 
     service = backup_plan_execution_service
+    monkeypatch.setattr(service, "startup_sweep_ran", True)  # as after it
     repository_id = _seed_repository(database)
     plan_id = _seed_plan(database, repository_id)
     interrupted = _seed_run_with_post_hooks_to_run(

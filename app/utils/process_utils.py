@@ -174,12 +174,18 @@ def _post_backup_scripts_after_restart(db: Session, run_id: int) -> Optional[str
 
 
 def _post_backup_scripts_still_pending(
-    db: Session, live_plan_run_ids: Collection[int]
+    db: Session,
+    live_plan_run_ids: Collection[int],
+    plan_id: Optional[int] = None,
 ) -> list[int]:
-    """Finished runs that still say their post-backup scripts are to run,
-    after a restart or a cancel, and none of them started: the restart came
-    before they did. A run whose plan is gone has none to run."""
-    query = db.query(BackupPlanRun.id).filter(
+    """Finished runs, of every plan or of `plan_id`, that still say their
+    post-backup scripts are to run, after a restart or a cancel, and none of
+    them started: the restart came before they did. A run whose plan is gone
+    has none to run."""
+    query = db.query(BackupPlanRun.id)
+    if plan_id is not None:
+        query = query.filter(BackupPlanRun.backup_plan_id == plan_id)
+    query = query.filter(
         BackupPlanRun.status.notin_(ACTIVE_PLAN_RUN_STATUSES),
         BackupPlanRun.backup_plan_id.isnot(None),
         or_(
