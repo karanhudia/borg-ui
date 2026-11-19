@@ -28,9 +28,17 @@ export interface SeasonalBadgeProps {
   /** Show the sale line and make the emoji a link to cta_url. */
   showSale: boolean
   onSaleClick?: () => void
+  /** False while this copy is off screen (a closed or CSS-hidden drawer), so a
+   *  hidden copy never spends the once-per-session burst. */
+  active?: boolean
 }
 
-export default function SeasonalBadge({ badge, showSale, onSaleClick }: SeasonalBadgeProps) {
+export default function SeasonalBadge({
+  badge,
+  showSale,
+  onSaleClick,
+  active = true,
+}: SeasonalBadgeProps) {
   const id = badge?.id
   const wantsBurst = badge?.effect === 'chunks'
   const [burst, setBurst] = useState(false)
@@ -38,8 +46,8 @@ export default function SeasonalBadge({ badge, showSale, onSaleClick }: Seasonal
   // Claiming and ending are separate effects: a re-run of the claim (StrictMode)
   // finds the key taken, so the timer must not live in the same effect.
   useEffect(() => {
-    if (id && wantsBurst && claimBurst(id)) setBurst(true)
-  }, [id, wantsBurst])
+    if (active && id && wantsBurst && claimBurst(id)) setBurst(true)
+  }, [active, id, wantsBurst])
 
   useEffect(() => {
     if (!burst) return

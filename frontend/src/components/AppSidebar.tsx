@@ -5,7 +5,7 @@ import { useTabEnablement } from '../context/AppContext'
 import { setAppVersion } from '../utils/analytics'
 import { BASE_PATH } from '@/utils/basePath'
 import { useQuery } from '@tanstack/react-query'
-import { Box, Drawer, Toolbar, List, Typography, Divider } from '@mui/material'
+import { Box, Drawer, Toolbar, List, Typography, Divider, useMediaQuery } from '@mui/material'
 import {
   Home,
   FileText,
@@ -407,12 +407,14 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   }, [])
 
   const seasonal = useSeasonalBadge()
+  // Both drawers stay mounted; only the one on screen may play the badge burst.
+  const isDesktop = useMediaQuery((theme) => theme.breakpoints.up('sm'))
 
   const toggleMenu = (menuName: string) => {
     setExpandedMenus((prev) => ({ ...prev, [menuName]: !prev[menuName] }))
   }
 
-  const content = (
+  const renderContent = (badgeActive: boolean) => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box>
         <Toolbar sx={{ gap: 1.5, pl: { xs: 2, sm: 2 }, position: 'relative' }}>
@@ -472,6 +474,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             badge={seasonal.badge}
             showSale={seasonal.showSale}
             onSaleClick={seasonal.trackSaleClick}
+            active={badgeActive}
           />
         </Toolbar>
         <Divider />
@@ -575,7 +578,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
           '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
         }}
       >
-        {content}
+        {renderContent(!isDesktop && mobileOpen)}
       </Drawer>
       <Drawer
         variant="permanent"
@@ -585,7 +588,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
         }}
         open
       >
-        {content}
+        {renderContent(isDesktop)}
       </Drawer>
     </Box>
   )

@@ -52,6 +52,17 @@ describe('SeasonalBadge', () => {
     vi.useRealTimers()
   })
 
+  it('keeps the burst for the copy that is on screen', () => {
+    // Hidden drawer copy mounts first and must not spend the session burst.
+    render(<SeasonalBadge badge={badge} showSale={false} active={false} />)
+    expect(screen.queryByTestId('chunk-burst')).toBeNull()
+
+    const visible = render(<SeasonalBadge badge={badge} showSale={false} active={false} />)
+    expect(screen.queryByTestId('chunk-burst')).toBeNull()
+    visible.rerender(<SeasonalBadge badge={badge} showSale={false} active />)
+    expect(screen.getByTestId('chunk-burst')).toBeInTheDocument()
+  })
+
   it('renders nothing without a badge', () => {
     const { container } = render(<SeasonalBadge badge={null} showSale />)
     expect(container).toBeEmptyDOMElement()
