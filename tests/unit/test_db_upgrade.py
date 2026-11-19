@@ -1053,3 +1053,21 @@ def test_a_revision_interrupted_after_its_alter_is_finished_on_next_boot(tmp_pat
     engine.dispose()
     assert {"total_size_source", "borg_last_modified"} <= columns
     assert alembic_init(db).action == "skipped"
+
+
+@pytest.mark.unit
+def test_a_database_from_a_newer_release_is_refused_with_a_clear_message(tmp_path):
+    # Downgrading the app leaves a revision this release does not know;
+    # alembic's own "Can't locate revision" said nothing about why
+    # (dashboard fbaf24c499f91122).
+    from app.database.db_upgrade import SchemaFromNewerRelease, _sqlite_url
+
+    db = tmp_path / "borg.db"
+    alembic_init(db)
+    engine = create_engine(_sqlite_url(db))
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE alembic_version SET version_num = 'f00dfeedbeef'"))
+    engine.dispose()
+
+    with pytest.raises(SchemaFromNewerRelease, match="newer Borg UI release"):
+        alembic_init(db)

@@ -2352,6 +2352,26 @@ class TestPrunePreview:
         assert r.json()["detail"]["key"] == "backend.errors.prune.dryRunFailed"
         assert r.json()["detail"]["params"]["log"] == "boom"
 
+    def test_dry_run_on_a_locked_repository_is_423(
+        self, test_client, test_db, admin_headers
+    ):
+        # Another process holds the lock (dashboard 0a89530469ffaa5d).
+        repo = _repo(test_db)
+        log = (
+            '[stderr] {"message": "Failed to create/acquire the lock /r/lock '
+            '(timeout).", "msgid": "LockTimeout"}'
+        )
+        with patch.object(
+            pp, "run_prune_dry_run", new=_fake_dry_run(status="failed", log=log)
+        ):
+            r = test_client.post(
+                f"/api/repositories/{repo.id}/prune/preview",
+                json={"keep_daily": 1},
+                headers=admin_headers,
+            )
+        assert r.status_code == 423
+        assert r.json()["detail"]["key"] == "backend.errors.prune.dryRunFailed"
+
     def test_viewer_cannot_preview(self, test_client, test_db, auth_headers):
         repo = _repo(test_db)
         r = test_client.post(

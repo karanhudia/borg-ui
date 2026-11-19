@@ -368,10 +368,14 @@ async def startup_event():
     # prepares the schema, but the app is not always started through it —
     # `uvicorn app.main:app` has to work too, and without this it comes up
     # against an empty database and fails every request that reads from it.
-    from app.database.db_upgrade import ensure_schema
+    from app.database.db_upgrade import SchemaFromNewerRelease, ensure_schema
 
     try:
         ensure_schema()
+    except SchemaFromNewerRelease as exc:
+        # A downgrade is the operator's choice, not a migration fault.
+        logger.error("Refusing to start", reason=str(exc))
+        raise
     except Exception as exc:
         report_exception(exc, kind="migration", component="ensure_schema")
         flush()  # the process exits next and the sender thread with it

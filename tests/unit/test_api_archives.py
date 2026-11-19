@@ -786,7 +786,8 @@ class TestDownloadFileEndpoint:
                 headers=admin_headers,
             )
 
-        assert response.status_code == 500
+        # A missing repository is the user's state, not a server fault.
+        assert response.status_code == 404
         assert response.json()["detail"] == {
             "key": "backend.errors.archives.failedExtractFile",
             "params": {"error": stderr},

@@ -155,6 +155,7 @@ from app.utils.schedule_time import (
     normalize_schedule_timezone,
 )
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
+from app.utils import fs
 from app.utils.ssh_paths import apply_ssh_command_prefix
 from app.utils.repository_paths import build_ssh_repository_path
 from app.utils.source_locations import (
@@ -6228,8 +6229,30 @@ async def permanently_delete_repository(
         repository_wipe_service._ensure_no_conflicting_operations(db, repository)
         target = _permanent_delete_target(repository)
 
+        # rmtree can delete a mounted repository's contents before failing to
+        # remove its mount root. Refuse before touching any files, including
+        # when a bind mount or nested mount is present, or when the mount
+        # table cannot be read to prove there is none.
+        mounted = fs.mount_points_at_or_under(str(target))
+        if mounted is None or mounted:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "key": "backend.errors.repo.permanentDeleteUnsafePath",
+                    "message": (
+                        "Cannot verify active mounts; repository files were not removed."
+                        if mounted is None
+                        else "A filesystem is mounted at or inside this repository; "
+                        "repository files were not removed."
+                    ),
+                },
+            )
+
         try:
-            shutil.rmtree(target)
+            if not fs.remove_tree_without_crossing_mounts(str(target)):
+                raise OSError(
+                    "Repository removal was refused or could not be completed"
+                )
         except OSError as exc:
             logger.error(
                 "Failed to remove repository files",

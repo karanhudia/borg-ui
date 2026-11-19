@@ -27,7 +27,10 @@ from app.core.borg2 import (
     borg2_unreadable_repository_detail,
     normalize_repo_info_encryption,
 )
-from app.core.borg_errors import is_repository_exists_failure
+from app.core.borg_errors import (
+    is_repository_exists_failure,
+    repository_failure_status,
+)
 from app.services.repository_info_sync import sync_archive_stats_from_info
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.repository_command_lock import run_serialized_repository_command
@@ -334,7 +337,7 @@ async def create_repository(
     if not result["success"] and not result.get("already_existed"):
         logger.error("borg2 rcreate failed", stderr=result["stderr"])
         raise HTTPException(
-            status_code=500,
+            status_code=repository_failure_status(result),
             detail=_borg2_failure_detail(result, "backend.errors.repo.initFailed"),
         )
 

@@ -328,7 +328,9 @@ def test_exception_report_shape(sent):
 
 
 @pytest.mark.parametrize(
-    "status_code, handled", [(400, True), (403, True), (500, False)]
+    "status_code, handled",
+    # 504: the agent did not answer in time (dashboard dc12aab4d0120698).
+    [(400, True), (403, True), (500, False), (502, False), (504, True)],
 )
 def test_operation_http_refusal_classification(sent, status_code, handled):
     from app.services.operations.runner import _report_failed_operation
@@ -755,6 +757,28 @@ async def test_startup_failure_is_sent_before_the_process_exits(
     assert [(e["props"]["kind"], e["props"]["component"]) for e in sent] == [expected]
 
 
+@pytest.mark.asyncio
+async def test_startup_does_not_report_a_database_from_a_newer_release(
+    monkeypatch, sent
+):
+    import app.database.db_upgrade as db_upgrade
+    import app.main as main
+
+    import app.services.error_reporter as error_reporter
+
+    def newer_schema():
+        raise db_upgrade.SchemaFromNewerRelease("from a newer release")
+
+    queued = []
+    monkeypatch.setattr(error_reporter, "_enqueue", queued.append)
+    monkeypatch.setattr(db_upgrade, "ensure_schema", newer_schema)
+    with pytest.raises(db_upgrade.SchemaFromNewerRelease):
+        await main.startup_event()
+    # Nothing queued, not only nothing sent yet.
+    assert queued == []
+    assert sent == []
+
+
 def test_flush_is_bounded_and_never_raises(monkeypatch):
     monkeypatch.setattr(settings, "error_reporting_enabled", True)
     monkeypatch.setattr(requests, "post", lambda *a, **k: time.sleep(10))
@@ -882,3 +906,28 @@ def test_http_error_handler_does_not_report_explicitly_suppressed_context(
     assert sent[0]["props"]["type"].endswith("HTTPException")
     assert "authoritative failure" in sent[0]["props"]["message"]
     assert "incidental iteration failure" not in sent[0]["props"]["stack"]
+
+
+@pytest.mark.parametrize("status_code", [422, 504])
+def test_operation_refusal_wrapped_for_background_runs_is_handled(sent, status_code):
+    # Agent maintenance wraps the refusal in a RuntimeError for flows with no
+    # HTTP context (dashboard 0ea03dea4fe5a664, 995e6a16f9b667f5).
+    from app.services.operations.runner import _report_failed_operation
+
+    try:
+        try:
+            raise HTTPException(
+                status_code=status_code,
+                detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
+            )
+        except HTTPException as exc:
+            raise RuntimeError("agent check failed: timeout") from exc
+    except RuntimeError as wrapped:
+        error = wrapped
+
+    _report_failed_operation(
+        Operation(kind="check", status="failed", error_message=str(error)), error
+    )
+    flush()
+
+    assert sent[0]["props"]["handled"] is True

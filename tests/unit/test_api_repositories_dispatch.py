@@ -499,6 +499,7 @@ async def test_repository_command_failure_carries_borg_reason(test_db):
                 failure_key="backend.errors.repo.failedToGetRepositoryInfo",
             )
 
-    assert caught.value.status_code == 500
+    # A missing repository is the user's state, not a server fault.
+    assert caught.value.status_code == 404
     assert caught.value.detail["key"] == "backend.errors.repo.failedToGetRepositoryInfo"
     assert "does not exist" in caught.value.detail["params"]["error"]

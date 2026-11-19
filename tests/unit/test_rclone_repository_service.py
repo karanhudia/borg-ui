@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -141,6 +143,12 @@ class _RecordingRcloneService:
             command=["rclone", "sync", source, destination],
             redacted_command="rclone sync <path> <path>",
         )
+
+
+class _MarkerWritingRcloneService(_RecordingRcloneService):
+    async def sync(self, source, destination, **kwargs):
+        (Path(destination) / "restored").write_text("from remote")
+        return await super().sync(source, destination, **kwargs)
 
 
 class _VerboseRecordingRcloneService:
@@ -764,6 +772,281 @@ async def test_hydrate_repository_persists_failure_when_rclone_raises(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failure_step", ["parent", "staging"])
+async def test_hydrate_repository_records_staging_failure_without_touching_cache(
+    db_session, tmp_path, monkeypatch, failure_step
+):
+    from app.database.models import Operation, OperationRcloneDetails
+    from app.services.operations.rclone_facade import RcloneSyncFacade
+
+    cache_path = tmp_path / "cache" / "repositories" / "9"
+    cache_path.mkdir(parents=True)
+    sentinel = cache_path / "keep"
+    sentinel.write_text("existing repository")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=str(cache_path), encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=str(cache_path),
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+
+    def refuse_directory(*args, **kwargs):
+        raise PermissionError("cache parent is not writable")
+
+    if failure_step == "parent":
+        monkeypatch.setattr("pathlib.Path.mkdir", refuse_directory)
+    else:
+        monkeypatch.setattr(
+            "app.services.rclone_repository_service.tempfile.mkdtemp", refuse_directory
+        )
+    rclone = _RecordingRcloneService()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=rclone
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    db_session.expire_all()
+    details = db_session.query(OperationRcloneDetails).one()
+    job = RcloneSyncFacade(db_session, db_session.get(Operation, details.operation_id))
+    assert status["sync_status"] == "failed"
+    assert storage.sync_status == "failed"
+    assert storage.last_sync_error == "cache parent is not writable"
+    assert job.status == "failed"
+    assert job.error_text == "cache parent is not writable"
+    assert job.log_text == "cache parent is not writable"
+    assert job.started_at is not None
+    assert job.completed_at is not None
+    assert storage.last_hydrated_at is None
+    assert sentinel.read_text() == "existing repository"
+    assert list(cache_path.parent.glob(".hydrate-*")) == []
+    assert rclone.sync_calls == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mount_table", ["root", "nested", "unavailable"])
+async def test_hydrate_refuses_a_mounted_local_copy_before_downloading(
+    db_session, tmp_path, monkeypatch, mount_table
+):
+    # Replacing a mount root empties it, then fails on the busy root; a
+    # top-level volume also stages in "/" (dashboard 2cc76f103cf176a5).
+    cache_path = tmp_path / "volume"
+    (cache_path / "data").mkdir(parents=True)
+    sentinel = cache_path / "data" / "keep"
+    sentinel.write_text("existing repository")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=str(cache_path), encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=str(cache_path),
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    monkeypatch.setattr(
+        "app.utils.fs.active_mount_points",
+        lambda: {
+            "root": {str(cache_path)},
+            "nested": {str(cache_path / "data")},
+            "unavailable": None,
+        }[mount_table],
+    )
+    rclone = _RecordingRcloneService()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=rclone
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "failed"
+    assert "mount" in storage.last_sync_error
+    assert rclone.sync_calls == []
+    assert sentinel.read_text() == "existing repository"
+    assert list(tmp_path.glob(".hydrate-*")) == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_hydrate_replaces_the_directory_the_kernel_resolves(db_session, tmp_path):
+    # "link/../repo" with link -> real/sub is real/repo to the kernel but
+    # tmp/repo lexically; removal and swap must agree on real/repo.
+    (tmp_path / "real" / "sub").mkdir(parents=True)
+    (tmp_path / "link").symlink_to(tmp_path / "real" / "sub")
+    kernel_target = tmp_path / "real" / "repo"
+    kernel_target.mkdir()
+    (kernel_target / "old").write_text("old copy")
+    lexical_target = tmp_path / "repo"
+    lexical_target.mkdir()
+    (lexical_target / "keep").write_text("unrelated")
+    stored = str(tmp_path / "link" / ".." / "repo")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=stored, encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=stored,
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=_MarkerWritingRcloneService()
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "current"
+    assert (lexical_target / "keep").read_text() == "unrelated"
+    assert not (lexical_target / "restored").exists()
+    assert not (kernel_target / "old").exists()
+    assert (kernel_target / "restored").read_text() == "from remote"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_hydrate_does_not_swap_when_a_parent_symlink_moved(db_session, tmp_path):
+    # The stored path leads elsewhere by the time the download ends; the
+    # directory resolved at the start must not be replaced.
+    (tmp_path / "a" / "repo").mkdir(parents=True)
+    (tmp_path / "a" / "repo" / "old").write_text("old copy")
+    (tmp_path / "b").mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(tmp_path / "a")
+
+    class RetargetingRcloneService(_RecordingRcloneService):
+        async def sync(self, source, destination, **kwargs):
+            link.unlink()
+            link.symlink_to(tmp_path / "b")
+            return await super().sync(source, destination, **kwargs)
+
+    stored = str(link / "repo")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=stored, encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=stored,
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=RetargetingRcloneService()
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "failed"
+    assert "no longer leads" in storage.last_sync_error
+    assert (tmp_path / "a" / "repo" / "old").read_text() == "old copy"
+    assert list((tmp_path / "a").glob(".hydrate-*")) == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("through", ["file", "missing"])
+async def test_hydrate_refuses_a_path_the_kernel_cannot_traverse(
+    db_session, tmp_path, through
+):
+    # realpath collapses "x/.." lexically; the kernel refuses it when x is a
+    # file (ENOTDIR) or missing, so tmp/repo is not what the path names.
+    if through == "file":
+        (tmp_path / "x").write_text("a file")
+    lexical_target = tmp_path / "repo"
+    lexical_target.mkdir()
+    (lexical_target / "keep").write_text("unrelated")
+    stored = str(tmp_path / "x" / ".." / "repo")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=stored, encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=stored,
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    rclone = _RecordingRcloneService()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=rclone
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "failed"
+    assert rclone.sync_calls == []
+    assert (lexical_target / "keep").read_text() == "unrelated"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("occupant", ["symlink", "file"])
+async def test_hydrate_refuses_a_symlink_or_file_at_the_local_path(
+    db_session, tmp_path, occupant
+):
+    # The old rmtree refused both; following the symlink would delete its
+    # target, unlinking the file would report a restore that replaced it.
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "keep").write_text("not the repository")
+    local = tmp_path / "repo"
+    if occupant == "symlink":
+        local.symlink_to(elsewhere)
+    else:
+        local.write_text("a file")
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=str(local), encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=str(local),
+        sync_policy="after_success",
+        sync_status="current",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    rclone = _RecordingRcloneService()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=rclone
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    assert status["sync_status"] == "failed"
+    assert "not a directory" in storage.last_sync_error
+    assert rclone.sync_calls == []
+    assert (elsewhere / "keep").read_text() == "not the repository"
+    if occupant == "symlink":
+        assert local.is_symlink()
+    else:
+        assert local.read_text() == "a file"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_hydrate_repository_leaves_no_temp_dir_for_an_unknown_job(
     db_session, tmp_path
 ):
@@ -929,3 +1212,24 @@ async def test_hydrate_refuses_a_mirror_without_a_local_copy(db_session, tmp_pat
 
     with pytest.raises(ValueError, match="no local copy"):
         await service.hydrate_repository(db_session, repository)
+
+
+@pytest.mark.unit
+def test_hydrate_target_resolution(tmp_path):
+    from app.services.rclone_repository_service import _resolve_hydrate_target
+
+    (tmp_path / "live").mkdir()
+    (tmp_path / "repo").mkdir()
+    # A missing folder after a ".." through an existing one is created later.
+    assert _resolve_hydrate_target(str(tmp_path / "live/../lost/repo")) == str(
+        tmp_path.resolve() / "lost" / "repo"
+    )
+    # A trailing "." is the folder itself.
+    assert _resolve_hydrate_target(str(tmp_path / "repo") + "/./.") == str(
+        tmp_path.resolve() / "repo"
+    )
+    # ".." through a missing folder, or a trailing "..", is refused.
+    with pytest.raises(FileNotFoundError):
+        _resolve_hydrate_target(str(tmp_path / "missing/../repo"))
+    with pytest.raises(OSError, match="does not name a repository folder"):
+        _resolve_hydrate_target(str(tmp_path / "repo") + "/..")

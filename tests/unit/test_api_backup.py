@@ -1569,11 +1569,13 @@ class TestBackupStatus:
     def test_get_backup_status_nonexistent(
         self, test_client: TestClient, admin_headers
     ):
-        """Test getting status for non-existent job returns 500 (exception wrapped)"""
+        """A job that is not there is 404, not a server error."""
         response = test_client.get("/api/backup/status/99999", headers=admin_headers)
 
-        # The except Exception block catches HTTPException and converts to 500
-        assert response.status_code == 500
+        assert response.status_code == 404
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.backup.backupJobNotFound"
+        )
 
     def test_get_backup_status_unauthorized(self, test_client: TestClient):
         """Test getting backup status without auth returns 403"""
@@ -2206,13 +2208,16 @@ class TestBackupLogs:
     def test_stream_backup_logs_nonexistent(
         self, test_client: TestClient, admin_headers
     ):
-        """Test streaming logs for non-existent job returns 500 (exception wrapped)"""
+        """A job deleted while its log view was open is 404, not a server
+        error (dashboard 967e865bc30ac5ad)."""
         response = test_client.get(
             "/api/backup/logs/99999/stream", headers=admin_headers
         )
 
-        # The except Exception block catches HTTPException and converts to 500
-        assert response.status_code == 500
+        assert response.status_code == 404
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.backup.backupJobNotFound"
+        )
 
     def test_stream_backup_logs_unauthorized(self, test_client: TestClient):
         """Test streaming logs without auth returns 403"""

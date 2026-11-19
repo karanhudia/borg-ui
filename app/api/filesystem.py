@@ -362,15 +362,25 @@ def _remote_file_exists_error(result) -> bool:
     return "file exists" in output
 
 
-# The SSH server refused the login or its host key is not trusted: the user
-# fixes the connection, so this is not a server fault (no 500).
+# The SSH server refused the login, its host key is not trusted, or the
+# connection settings are wrong: the user fixes the connection, so this is not
+# a server fault (no 500).
 _SSH_REFUSAL_MARKERS = (
     "host key verification failed",
     "remote host identification has changed",
+    # The login shell prints output, which breaks SFTP (231181a75000f29f).
+    "received message too long",
+    # Wrong host or port (06c87184963eec1e).
+    "connection refused",
 )
 # OpenSSH's login refusal lists whatever methods the server offers, e.g.
 # "(publickey)", "(password)" or "(publickey,password,keyboard-interactive)".
-_SSH_AUTH_REFUSAL = re.compile(r"permission denied \([a-z0-9@.,-]+\)")
+_SSH_AUTH_REFUSAL = re.compile(
+    r"permission denied \([a-z0-9@.,-]+\)"
+    # OpenSSH closing before the login, e.g. a port that is not SSH
+    # (dashboard 0950052be6b5027e). Not a session the remote end dropped.
+    r"|connection closed by \S+ port \d+"
+)
 
 
 def _ssh_failure_status(error_msg: str | None) -> int:

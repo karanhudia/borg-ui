@@ -31,6 +31,7 @@ from app.services.repository_executor import (
     wait_for_agent_repository_operation_job,
 )
 from app.services.rclone_service import RcloneService, rclone_service
+from app.utils import fs
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
     calculate_next_cron_run,
@@ -571,11 +572,6 @@ class RcloneRepositoryService:
                 commit=False,
             )
             hydrate_job = RcloneSyncFacade(db, operation)
-        parent = Path(storage.cache_path).parent
-        parent.mkdir(parents=True, exist_ok=True)
-        temp_dir = tempfile.mkdtemp(
-            prefix=f".hydrate-{repository.id}-", dir=str(parent)
-        )
         hydrate_job.direction = "remote_to_cache"
         hydrate_job.operation = "hydrate"
         hydrate_job.status = "running"
@@ -586,7 +582,20 @@ class RcloneRepositoryService:
         storage.sync_status = "hydrating"
         storage.last_sync_error = None
         db.commit()
+        temp_dir = None
         try:
+            # One path for every step below: the checks, the staging parent,
+            # the removal and the swap must all mean the same directory,
+            # whatever symlinks or ".." the stored path holds. The parents are
+            # resolved; the last component is not, so a symlink there is seen
+            # and refused rather than followed.
+            local_path = _resolve_hydrate_target(storage.cache_path)
+            _require_replaceable_directory(local_path)
+            parent = Path(local_path).parent
+            parent.mkdir(parents=True, exist_ok=True)
+            temp_dir = tempfile.mkdtemp(
+                prefix=f".hydrate-{repository.id}-", dir=str(parent)
+            )
             result = await self.service.sync(
                 target,
                 temp_dir,
@@ -594,7 +603,8 @@ class RcloneRepositoryService:
                 extra_flags=storage.extra_flags or [],
             )
         except Exception as exc:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            if temp_dir is not None:
+                shutil.rmtree(temp_dir, ignore_errors=True)
             storage.sync_status = "failed"
             storage.last_sync_error = _exception_message(exc)
             hydrate_job.status = "failed"
@@ -607,9 +617,20 @@ class RcloneRepositoryService:
         log_text = _sync_result_log_text(result)
         if result.success:
             try:
-                if os.path.exists(storage.cache_path):
-                    shutil.rmtree(storage.cache_path)
-                os.replace(temp_dir, storage.cache_path)
+                # Re-checked: the download can take hours, and a parent
+                # symlink may now point elsewhere. Narrows the race, does not
+                # close it.
+                if _resolve_hydrate_target(storage.cache_path) != local_path:
+                    raise OSError(
+                        f"{storage.cache_path} no longer leads to {local_path}; "
+                        "the restored copy was not swapped in."
+                    )
+                _require_replaceable_directory(local_path)
+                if os.path.lexists(
+                    local_path
+                ) and not fs.remove_tree_without_crossing_mounts(local_path):
+                    raise OSError(f"Could not remove the old copy at {local_path}")
+                os.replace(temp_dir, local_path)
                 repository.path = storage.cache_path
                 storage.sync_status = "current"
                 storage.last_hydrated_at = now
@@ -632,6 +653,54 @@ class RcloneRepositoryService:
         hydrate_job.log_text = log_text or hydrate_job.error_text
         db.commit()
         return self.serialize_status(repository, storage, remote)
+
+
+def _resolve_hydrate_target(cache_path: str) -> str:
+    """The directory a hydrate replaces: parents resolved, last component not,
+    so a symlink there is seen and refused rather than followed."""
+    stored = cache_path.rstrip("/") or "/"
+    # A trailing "." names its own directory; a trailing ".." names the
+    # parent, which a restore must never replace.
+    while os.path.basename(stored) == ".":
+        stored = os.path.dirname(stored).rstrip("/") or "/"
+    if os.path.basename(stored) in ("", ".."):
+        raise OSError(f"{cache_path} does not name a repository folder to restore into")
+    stored_parent = os.path.dirname(stored)
+    # realpath collapses "x/.." lexically; ask the kernel, which refuses it
+    # when x is a file (ENOTDIR) or missing. Walk the parent: once a
+    # component is missing (the rest is created), no ".." may follow it.
+    parts = Path(stored_parent).parts
+    for index in range(1, len(parts) + 1):
+        try:
+            os.stat(os.path.join(*parts[:index]))
+        except FileNotFoundError:
+            if ".." in parts[index:]:
+                raise
+            break
+    return os.path.join(os.path.realpath(stored_parent), os.path.basename(stored))
+
+
+def _require_replaceable_directory(path: str) -> None:
+    """Refuse a hydrate target that cannot be swapped for the restored copy.
+
+    A mount root cannot be swapped: replacing it empties the mounted
+    filesystem, then fails on its busy root, and a top-level volume also
+    stages in "/" (dashboard 2cc76f103cf176a5). A symlink or a regular file
+    at the path is not a repository copy to replace.
+    """
+    if os.path.islink(path) or (os.path.lexists(path) and not os.path.isdir(path)):
+        raise OSError(
+            f"{path} is not a directory (a symlink or a file is there), so "
+            "it is not replaced. Point the repository at a folder and restore again."
+        )
+    mounted = fs.mount_points_at_or_under(path)
+    if mounted is None or mounted:
+        raise OSError(
+            f"{path} is a mount point or has a filesystem mounted inside it "
+            "(or the mount table cannot be read), so it cannot be replaced "
+            "safely. Point the repository at a folder inside the mount and "
+            "restore again."
+        )
 
 
 def _iso(value):

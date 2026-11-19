@@ -242,8 +242,17 @@ class OperationContext:
 def _report_failed_operation(op: Operation, failure: Optional[Exception]) -> None:
     # never lets the report touch the run's outcome
     try:
-        expected_refusal = (
-            isinstance(failure, HTTPException) and 400 <= failure.status_code < 500
+        # Agent maintenance re-raises the refusal as a RuntimeError for flows
+        # with no HTTP context; judge the refusal it carries.
+        refusal = failure
+        if not isinstance(refusal, HTTPException) and isinstance(
+            getattr(refusal, "__cause__", None), HTTPException
+        ):
+            refusal = refusal.__cause__
+        # 504: the agent did not answer in time, the host's state rather than
+        # a Borg UI fault (dashboard dc12aab4d0120698).
+        expected_refusal = isinstance(refusal, HTTPException) and (
+            400 <= refusal.status_code < 500 or refusal.status_code == 504
         )
         if failure is not None and not expected_refusal:
             error_reporter.report_exception(failure, kind="job", component=op.kind)
