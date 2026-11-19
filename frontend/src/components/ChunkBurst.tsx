@@ -15,7 +15,14 @@ const fall = keyframes`
   100% { transform: translate3d(14px, var(--chunk-fall), 0) rotate(220deg); opacity: 0; }
 `
 
-export default function ChunkBurst({ fall: distance = 72 }: { fall?: number }) {
+interface ChunkBurstProps {
+  /** How far the chunks drop, in px. */
+  fall?: number
+  /** Fade the chunks out towards the bottom so they never sit on body text. */
+  fade?: boolean
+}
+
+export default function ChunkBurst({ fall: distance = 72, fade = false }: ChunkBurstProps) {
   return (
     <Box
       aria-hidden="true"
@@ -26,6 +33,9 @@ export default function ChunkBurst({ fall: distance = 72 }: { fall?: number }) {
         overflow: 'hidden',
         pointerEvents: 'none',
         '--chunk-fall': `${distance}px`,
+        ...(fade && {
+          maskImage: 'linear-gradient(to bottom, #000 0%, #000 35%, transparent 75%)',
+        }),
         '@media (prefers-reduced-motion: reduce)': { display: 'none' },
       }}
     >

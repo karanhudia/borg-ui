@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import type { Announcement } from '../types/announcements'
 import ResponsiveDialog from './shared/ResponsiveDialog'
 import ChunkBurst from './ChunkBurst'
+import { festiveEmojiAnimation } from './festiveMotion'
 
 interface AnnouncementModalProps {
   announcement: Announcement | null
@@ -77,6 +78,11 @@ export default function AnnouncementModal({
   const highlightBg = isDark ? alpha('#000000', 0.24) : alpha('#000000', 0.03)
   const glintTop = isDark ? alpha('#ffffff', 0.08) : alpha('#ffffff', 0.6)
   const hoverBg = isDark ? alpha('#ffffff', 0.08) : alpha('#000000', 0.06)
+  const festive = Boolean(announcement.emoji)
+  const festiveText = isDark ? '#fcd34d' : '#92400e'
+  // Tints painted over the panel colour, so falling chunks pass behind
+  // the chip, tile and close button instead of showing through them.
+  const solid = (tint: string) => `linear-gradient(${tint}, ${tint}), ${panelBackground}`
 
   // Header and actions stay put; the highlights scroll when they outgrow the viewport.
   const actions = (
@@ -173,25 +179,49 @@ export default function AnnouncementModal({
       }}
     >
       <Box sx={{ position: 'relative', px: { xs: 2.25, sm: 3 }, pt: 2.25, pb: 1.5 }}>
-        {announcement.effect === 'chunks' ? <ChunkBurst fall={160} /> : null}
+        {announcement.effect === 'chunks' ? <ChunkBurst fall={150} fade /> : null}
         <Box sx={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
           <Box
             sx={{
               width: 44,
               height: 44,
               borderRadius: 2,
-              bgcolor: alpha(accentColor, 0.18),
               color: accentColor,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              border: `1px solid ${alpha(accentColor, 0.32)}`,
               boxShadow: `inset 0 1px 0 ${glintTop}`,
+              ...(festive
+                ? {
+                    // Warm sale palette (amber to rose) instead of the notice accent.
+                    background: isDark
+                      ? `linear-gradient(135deg, ${alpha('#f59e0b', 0.28)}, ${alpha('#fb7185', 0.28)}), ${panelBackground}`
+                      : 'linear-gradient(135deg, #fef3c7, #ffe4e6)',
+                    border: `1px solid ${alpha('#f59e0b', isDark ? 0.4 : 0.45)}`,
+                  }
+                : {
+                    background: solid(alpha(accentColor, 0.18)),
+                    border: `1px solid ${alpha(accentColor, 0.32)}`,
+                  }),
             }}
           >
             {announcement.emoji ? (
-              <Box component="span" aria-hidden="true" sx={{ fontSize: 24, lineHeight: 1 }}>
+              <Box
+                component="span"
+                aria-hidden="true"
+                sx={{
+                  fontSize: 27,
+                  lineHeight: 1,
+                  display: 'inline-block',
+                  filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.25))',
+                  animation: festiveEmojiAnimation,
+                  '@media (prefers-reduced-motion: reduce)': {
+                    animation: 'none',
+                    transform: 'rotate(-14deg)',
+                  },
+                }}
+              >
                 {announcement.emoji}
               </Box>
             ) : (
@@ -215,16 +245,16 @@ export default function AnnouncementModal({
                 label={t(`announcements.types.${announcement.type}`)}
                 sx={{
                   height: 24,
-                  bgcolor: subtleBg,
-                  color: foreground,
-                  border: `1px solid ${subtleBorder}`,
+                  background: solid(festive ? alpha('#f59e0b', isDark ? 0.18 : 0.14) : subtleBg),
+                  color: festive ? festiveText : foreground,
+                  border: `1px solid ${festive ? alpha('#f59e0b', 0.4) : subtleBorder}`,
                   '& .MuiChip-label': {
                     px: 1.2,
                     fontSize: '0.72rem',
                     fontWeight: 700,
                   },
                   '& .MuiChip-icon': {
-                    color: mutedText,
+                    color: festive ? festiveText : mutedText,
                   },
                 }}
               />
@@ -270,10 +300,10 @@ export default function AnnouncementModal({
               sx={{
                 color: secondaryText,
                 border: `1px solid ${borderAlpha}`,
-                bgcolor: isDark ? alpha('#ffffff', 0.03) : alpha('#000000', 0.02),
+                background: solid(isDark ? alpha('#ffffff', 0.03) : alpha('#000000', 0.02)),
                 '&:hover': {
                   color: foreground,
-                  bgcolor: hoverBg,
+                  background: solid(hoverBg),
                 },
               }}
             >

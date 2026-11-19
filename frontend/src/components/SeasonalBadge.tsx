@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Box, Tooltip, Typography } from '@mui/material'
-import { keyframes } from '@mui/system'
 import type { Announcement } from '../types/announcements'
 import ChunkBurst from './ChunkBurst'
+import { festiveEmojiAnimation } from './festiveMotion'
 
 /* A festive emoji on the sidebar logo tile, from a seasonal_badge feed entry.
    The "chunks" effect (ChunkBurst) plays once per browser session. Render this inside a
@@ -11,16 +11,6 @@ import ChunkBurst from './ChunkBurst'
 const BURST_MS = 4200
 const SESSION_KEY = 'borg-ui:seasonal-burst:'
 
-const pop = keyframes`
-  0% { transform: scale(0) rotate(-40deg); }
-  70% { transform: scale(1.15) rotate(-8deg); }
-  100% { transform: scale(1) rotate(-14deg); }
-`
-const wobble = keyframes`
-  0%, 88%, 100% { transform: rotate(-14deg); }
-  92% { transform: rotate(-24deg); }
-  96% { transform: rotate(-4deg); }
-`
 const reducedMotion = '@media (prefers-reduced-motion: reduce)'
 
 function claimBurst(id: string): boolean {
@@ -118,7 +108,7 @@ export default function SeasonalBadge({ badge, showSale, onSaleClick }: Seasonal
             zIndex: 1,
             filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.35))',
             transform: 'rotate(-14deg)',
-            animation: `${pop} 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both, ${wobble} 7s ease-in-out 1.5s infinite`,
+            animation: festiveEmojiAnimation,
             '&:focus-visible': {
               outline: '2px solid',
               outlineColor: 'primary.main',
