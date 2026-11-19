@@ -307,11 +307,15 @@ async def _archive_info(
     file_limit: int,
     borg_env: ExitStack,
 ):
-    if is_agent_executor(repo):
+    # Decided once: the wait for an agent commits the session, and a
+    # repository moved to another executor meanwhile would be read again.
+    agent = is_agent_executor(repo)
+    custom_env = _repo_needs_custom_env(repo)
+    if agent:
         result = await _agent_archive_info_result(
             db, repo, archive_selector, timeout_seconds=_get_info_timeout(db)
         )
-    elif _repo_needs_custom_env(repo):
+    elif custom_env:
         env = borg_env.enter_context(repository_borg_env(repo, db))
         remote_path = _remote_path_ending_read(repo, db)
         result = await borg2.info_archive(
@@ -364,7 +368,7 @@ async def _archive_info(
         }
 
         if include_files:
-            if is_agent_executor(repo):
+            if agent:
                 try:
                     list_result = await _agent_archive_contents_result(
                         db,
@@ -387,7 +391,7 @@ async def _archive_info(
                         status_code=exc.status_code,
                     )
                     list_result = {"success": False}
-            elif _repo_needs_custom_env(repo):
+            elif custom_env:
                 list_result = await borg2.list_archive_contents(
                     repo.path,
                     archive_selector,
@@ -406,11 +410,7 @@ async def _archive_info(
                 )
             # An agent listing renders mtimes in the agent's zone; a
             # server-side listing runs under TZ=UTC (the wrapper pins it).
-            mtime_zone = (
-                agent_timezone_for_repository(db, repo)
-                if is_agent_executor(repo)
-                else "UTC"
-            )
+            mtime_zone = agent_timezone_for_repository(db, repo) if agent else "UTC"
             if list_result.get("success", bool(list_result.get("stdout"))):
                 files = []
                 for line in (list_result.get("stdout") or "").strip().split("\n"):

@@ -1113,6 +1113,57 @@ def test_a_cancelled_request_leaves_no_key_file_and_no_connection(
 
 
 @pytest.mark.unit
+def test_archive_info_stays_with_the_agent_when_the_repository_moves_meanwhile(
+    monkeypatch,
+):
+    """The wait for the agent's answer commits the session, and the
+    repository is read again afterwards. One moved to the server meanwhile
+    must not send the file listing to the server's Borg, whose remote path
+    and environment this request never prepared."""
+    from contextlib import ExitStack
+
+    from app.api.v2 import archives as v2_archives
+
+    repository = SimpleNamespace(
+        id=1,
+        path="/repos/agent",
+        executor_type="agent",
+        execution_target=None,
+        passphrase=None,
+        bypass_lock=False,
+    )
+    listed = []
+
+    async def info(db, repo, archive, *, timeout_seconds):
+        repo.executor_type = "server"
+        return {"success": True, "stdout": json.dumps({"archives": [{"name": "a1"}]})}
+
+    async def contents(db, repo, **kwargs):
+        listed.append(kwargs["archive"])
+        return {"success": True, "stdout": json.dumps({"path": "etc/hosts"})}
+
+    async def server_borg(*args, **kwargs):
+        raise AssertionError("the server's Borg was asked")
+
+    monkeypatch.setattr(v2_archives, "_agent_archive_info_result", info)
+    monkeypatch.setattr(v2_archives, "_agent_archive_contents_result", contents)
+    monkeypatch.setattr(v2_archives, "_get_info_timeout", lambda db: 5)
+    monkeypatch.setattr(v2_archives, "_get_list_timeout", lambda db: 5)
+    monkeypatch.setattr(
+        v2_archives, "agent_timezone_for_repository", lambda db, repo: "UTC"
+    )
+    monkeypatch.setattr(v2_archives.borg2, "list_archive_contents", server_borg)
+
+    with ExitStack() as borg_env:
+        answer = asyncio.run(
+            v2_archives._archive_info(None, repository, "a1", True, 10, borg_env)
+        )
+
+    assert listed == ["a1"]
+    assert [entry["path"] for entry in answer["info"]["files"]] == ["etc/hosts"]
+
+
+@pytest.mark.unit
 def test_the_router_looks_its_remote_path_up_once(monkeypatch):
     looked_up = []
 
