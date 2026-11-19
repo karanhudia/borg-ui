@@ -9,7 +9,13 @@ import asyncio
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-from app.database.models import AuthEvent, OidcLoginState, User, SystemSettings
+from app.database.models import (
+    AuthEvent,
+    OidcLoginState,
+    RepositoryWipeJob,
+    SystemSettings,
+    User,
+)
 from app.core.features import Plan
 
 
@@ -916,6 +922,36 @@ class TestUserManagement:
         test_db.refresh(login_state)
         assert auth_event.actor_user_id is None
         assert login_state.user_id is None
+
+    def test_delete_user_who_ran_a_repository_wipe(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Wipe history keeps its row when the user who ran it is deleted (dashboard e4561d13bbb29ff1)."""
+        user = User(
+            username="wipe-runner",
+            email="wipe-runner@example.com",
+            role="admin",
+            password_hash="fakehash",
+        )
+        test_db.add(user)
+        test_db.commit()
+        wipe = RepositoryWipeJob(
+            repository_id=None,
+            status="completed",
+            requested_by_user_id=user.id,
+            confirmed_by_user_id=user.id,
+        )
+        test_db.add(wipe)
+        test_db.commit()
+
+        response = test_client.delete(
+            f"/api/settings/users/{user.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(wipe)
+        assert wipe.requested_by_user_id is None
+        assert wipe.confirmed_by_user_id is None
 
     def test_delete_user_nonexistent(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent user returns 404"""
