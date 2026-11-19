@@ -71,3 +71,10 @@ def tools_for(level: Level) -> list[ToolSpec]:
         (spec for spec in REGISTRY.values() if spec.level <= level),
         key=lambda spec: spec.name,
     )
+
+
+def top_level() -> Level:
+    """The highest level any registered tool needs. Connections may not be
+    set above it, so a level never gains tools silently when a release adds
+    them."""
+    return max((spec.level for spec in REGISTRY.values()), default=Level.READ)

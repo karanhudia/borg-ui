@@ -4,7 +4,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from app.mcp.levels import Level
-from app.mcp.registry import tool, tools_for
+from app.mcp.registry import top_level, tool, tools_for
 from app.mcp.render import ToolResult
 
 
@@ -63,3 +63,12 @@ def test_input_schema_is_the_model_schema(scratch_tools):
         scratch_tools["zz_read_echo"].input_model.model_json_schema()
         == EchoArgs.model_json_schema()
     )
+
+
+@pytest.mark.unit
+def test_top_level_follows_the_registered_tools(scratch_tools):
+    from app.mcp import tools  # noqa: F401  (the real catalog)
+
+    assert top_level() == Level.READ
+    register_pair()
+    assert top_level() == Level.FULL

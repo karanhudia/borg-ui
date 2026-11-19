@@ -145,6 +145,7 @@ export const ROUTE_WORDS: Record<string, ReadonlySet<string>> = {
     'export',
     'licensing',
     'logs',
+    'mcp',
     'monitoring',
     'mounts',
     'mqtt',

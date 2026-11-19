@@ -1,8 +1,11 @@
 """REST API for MCP connections, the admin switch and the level cap."""
 
+from datetime import datetime, timedelta
+
 import pytest
 
-from app.database.models import SystemSettings
+from app.database.models import McpActivity, SystemSettings
+from app.mcp.levels import Level
 
 BASE = "/api/settings/mcp"
 
@@ -45,6 +48,7 @@ def test_config_read_by_anyone_written_by_admins(
         "enabled": True,
         "max_access_level": "full",
         "endpoint_path": "/mcp",
+        "available_levels": ["read", "operate", "manage", "full"],
     }
     denied = test_client.put(
         f"{BASE}/config", json={"enabled": False}, headers=auth_headers
@@ -181,3 +185,79 @@ def test_patch_changes_level(test_client, admin_headers, create_connection):
     assert response.status_code == 200
     assert response.json()["access_level"] == "manage"
     assert response.json()["name"] == "renamed"
+
+
+@pytest.mark.unit
+def test_level_without_tools_is_refused(
+    test_client, admin_headers, pro_plan, monkeypatch
+):
+    monkeypatch.setattr("app.api.mcp_connections.top_level", lambda: Level.READ)
+    response = test_client.post(
+        f"{BASE}/connections",
+        json={"name": "x", "access_level": "operate"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "key": "backend.errors.mcp.levelNotAvailable",
+        "params": {"level": "operate"},
+    }
+
+
+@pytest.mark.unit
+def test_config_lists_available_levels(
+    test_client, auth_headers, pro_plan, monkeypatch
+):
+    monkeypatch.setattr("app.api.mcp_connections.top_level", lambda: Level.READ)
+    config = test_client.get(f"{BASE}/config", headers=auth_headers).json()
+    assert config["available_levels"] == ["read"]
+
+
+@pytest.mark.unit
+def test_rows_count_calls_today(
+    test_client, test_db, test_user, auth_headers, create_connection, monkeypatch
+):
+    row, _ = create_connection(auth_headers)
+    other, _ = create_connection(auth_headers, name="other")
+    # A fixed day, so a run that crosses midnight cannot flip the count.
+    midnight = datetime(2026, 11, 18)
+    monkeypatch.setattr("app.api.mcp_connections._utc_midnight", lambda: midnight)
+    for connection_id, when in (
+        (row["id"], midnight),
+        (row["id"], midnight + timedelta(seconds=5)),
+        (row["id"], midnight - timedelta(seconds=1)),
+        (other["id"], midnight),
+    ):
+        test_db.add(
+            McpActivity(
+                connection_id=connection_id,
+                connection_name="x",
+                user_id=test_user.id,
+                tool="t",
+                effective_level="read",
+                outcome="ok",
+                duration_ms=0,
+                created_at=when,
+            )
+        )
+    test_db.commit()
+    listed = {
+        item["id"]: item["calls_today"]
+        for item in test_client.get(f"{BASE}/connections", headers=auth_headers).json()
+    }
+    assert listed == {row["id"]: 2, other["id"]: 1}
+
+
+@pytest.mark.unit
+def test_skip_only_patch_keeps_the_stored_level(
+    test_client, admin_headers, create_connection, monkeypatch
+):
+    row, _ = create_connection(admin_headers, level="full")
+    monkeypatch.setattr("app.api.mcp_connections.top_level", lambda: Level.READ)
+    response = test_client.patch(
+        f"{BASE}/connections/{row['id']}",
+        json={"skip_routine_confirmations": True},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["skip_routine_confirmations"] is True

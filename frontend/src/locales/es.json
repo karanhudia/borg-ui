@@ -163,7 +163,8 @@
       "users": "Usuarios",
       "exportImport": "Exportar/Importar",
       "beta": "Beta",
-      "backgroundWork": "Trabajo en segundo plano"
+      "backgroundWork": "Trabajo en segundo plano",
+      "mcp": "Asistentes de IA (MCP)"
     },
     "menu": {
       "openDrawer": "Abrir navegación",
@@ -3710,7 +3711,16 @@
     "statsRefreshCompleted": "Actualización de estadísticas completada",
     "failedToStartStatsRefresh": "Error al iniciar la actualización de estadísticas",
     "autoPrunePreviewLabel": "Vistas previas de poda automáticas",
-    "autoPrunePreviewHelper": "Compara las políticas de retención por sí solo cuando cambia la lista de archivos y al abrir la página de vista previa de poda. Si está desactivado, la comparación solo se ejecuta al pulsar Comparar ahora."
+    "autoPrunePreviewHelper": "Compara las políticas de retención por sí solo cuando cambia la lista de archivos y al abrir la página de vista previa de poda. Si está desactivado, la comparación solo se ejecuta al pulsar Comparar ahora.",
+    "mcpTitle": "Asistentes de IA (MCP)",
+    "mcpDescription": "Activa o desactiva el acceso MCP y limita el nivel que pueden conceder los usuarios.",
+    "mcpEnabled": "Permitir conexiones MCP",
+    "mcpEnabledHelp": "Desactivado, cada llamada MCP se rechaza con un mensaje amable. Las conexiones se conservan.",
+    "mcpMaxLevel": "Nivel de acceso máximo",
+    "mcpMaxLevelHelp": "Las conexiones por encima de este nivel conservan su ajuste y funcionan con este nivel hasta que lo vuelvas a subir.",
+    "mcpToolsToday": "Esta versión de Borg UI tiene herramientas para: {{levels}}.",
+    "mcpSave": "Guardar",
+    "mcpSaved": "Ajustes de MCP guardados"
   },
   "monitoringReports": {
     "title": "Monitorización e informes",
@@ -6407,7 +6417,8 @@
         "levelAboveCap": "Tu administrador permite conexiones MCP con acceso de hasta {{max}}.",
         "skipNeedsFull": "Omitir confirmaciones requiere acceso Completo.",
         "nameRequired": "Ponle un nombre a la conexión.",
-        "connectionNotFound": "No se encontró la conexión MCP."
+        "connectionNotFound": "No se encontró la conexión MCP.",
+        "levelNotAvailable": "Esta versión de Borg UI aún no tiene herramientas de {{level}}, así que no se puede elegir el acceso {{level}}."
       }
     },
     "success": {
@@ -7009,5 +7020,103 @@
     "claimed": "Tu oferta del {{percent}} % está en cada enlace de compra hasta el {{date}}.",
     "unavailable": "Esta oferta no está disponible para esta instalación.",
     "failed": "No se pudo obtener la oferta ahora mismo. Inténtalo de nuevo en un momento."
+  },
+  "mcp": {
+    "levels": {
+      "read": {
+        "title": "Lectura",
+        "body": "Solo mira: estado, problemas, repositorios, archivos, ficheros, trabajos, registros, planes y ajustes."
+      },
+      "operate": {
+        "title": "Operar",
+        "body": "Además ejecuta lo que existe: copias, comprobaciones, compactaciones, restauraciones a otro lugar, montajes."
+      },
+      "manage": {
+        "title": "Gestionar",
+        "body": "Además crea y edita configuración: repositorios, planes, programaciones, scripts y conexiones."
+      },
+      "full": {
+        "title": "Completo",
+        "body": "Además acciones destructivas, siempre mediante una vista previa que confirmas antes."
+      },
+      "comingSoon": "Próximamente",
+      "aboveCap": "Por encima del límite de tu administrador",
+      "groupLabel": "Nivel de acceso"
+    },
+    "dialog": {
+      "createTitle": "Nueva conexión MCP",
+      "editTitle": "Editar conexión",
+      "name": "Nombre",
+      "namePlaceholder": "Claude en mi portátil",
+      "nameHelp": "Para distinguir tus conexiones.",
+      "skip": "Omitir confirmaciones rutinarias",
+      "skipHelp": "La IA sigue preguntando antes de cualquier cosa que borre datos.",
+      "create": "Crear conexión",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    },
+    "connected": {
+      "title": "Conexión creada",
+      "tokenLabel": "Token",
+      "once": "Copia este token ahora. No se volverá a mostrar.",
+      "copyToken": "Copiar token",
+      "copied": "Copiado",
+      "connectTitle": "Conecta tu cliente",
+      "runInTerminal": "Ejecuta esto en una terminal.",
+      "pasteInto": "Añade esto a {{file}}.",
+      "generic": "Otros clientes",
+      "genericHint": "Cualquier cliente MCP que admita Streamable HTTP con una cabecera propia.",
+      "copySnippet": "Copiar",
+      "done": "Hecho",
+      "closeConfirmTitle": "¿Cerrar sin copiar el token?",
+      "closeConfirmBody": "No podrás volver a verlo. Puedes revocar esta conexión y crear una nueva.",
+      "closeAnyway": "Cerrar igualmente",
+      "keepOpen": "Mantener abierto"
+    },
+    "list": {
+      "empty": "Aún no hay conexiones MCP",
+      "emptyBody": "Crea una para usar Borg UI desde Claude Code, Claude Desktop, Cursor o VS Code.",
+      "appliesAs": "se aplica como {{level}}",
+      "notConnected": "Aún no conectado",
+      "lastSeen": "{{client}}, {{when}}",
+      "callsToday_one": "{{count}} llamada hoy (UTC)",
+      "callsToday_other": "{{count}} llamadas hoy (UTC)",
+      "owner": "Propietario: {{name}}",
+      "edit": "Editar",
+      "revoke": "Revocar",
+      "activity": "Actividad",
+      "revokeTitle": "¿Revocar {{name}}?",
+      "revokeBody": "Los clientes que usan esta conexión dejan de funcionar al instante. No se puede deshacer.",
+      "cancel": "Cancelar"
+    },
+    "activity": {
+      "title": "Actividad",
+      "empty": "Aún no hay llamadas",
+      "emptyBody": "Las llamadas a herramientas de esta conexión aparecen aquí. Los argumentos nunca se guardan.",
+      "loadMore": "Cargar más",
+      "durationMs": "{{ms}} ms",
+      "outcome": {
+        "ok": "OK",
+        "error": "Error",
+        "denied_level": "Por encima del nivel",
+        "denied_rbac": "No permitido",
+        "needs_confirmation": "Requiere confirmación",
+        "confirmed": "Confirmado"
+      }
+    },
+    "tab": {
+      "title": "Asistentes de IA (MCP)",
+      "description": "Deja que un asistente de IA use Borg UI por ti mediante el Model Context Protocol. Cada conexión tiene su propio token y nivel de acceso.",
+      "newConnection": "Nueva conexión",
+      "everyone": "Conexiones de todos",
+      "turnedOff": "Tu administrador ha desactivado MCP. Las conexiones existentes no se pueden usar hasta que se vuelva a activar.",
+      "created": "Conexión creada",
+      "updated": "Conexión actualizada",
+      "revoked": "Conexión revocada",
+      "closeActivity": "Cerrar actividad",
+      "activityFor": "Actividad de {{name}}",
+      "loadFailed": "No se pudieron cargar tus conexiones MCP.",
+      "retry": "Reintentar"
+    }
   }
 }

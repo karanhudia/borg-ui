@@ -146,3 +146,10 @@ export const ViewerSettings: Story = {
   },
   render: () => renderSidebar(proSystemInfo, viewerUser),
 }
+
+export const McpRoute: Story = {
+  parameters: {
+    router: { initialEntries: ['/settings/mcp'] },
+  },
+  render: () => renderSidebar(proSystemInfo),
+}

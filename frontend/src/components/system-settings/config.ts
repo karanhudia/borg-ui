@@ -41,4 +41,8 @@ export const buildSectionTabs = (t: TFunction): SectionTabConfig[] => [
     label: t('systemSettings.oidcTitle'),
     description: t('systemSettings.oidcDescription'),
   },
+  {
+    label: t('systemSettings.mcpTitle'),
+    description: t('systemSettings.mcpDescription'),
+  },
 ]

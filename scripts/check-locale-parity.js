@@ -100,6 +100,7 @@ if (hasErrors) {
 // a genuine loanword in one language (e.g. "Repository" in German) is often a real
 // untranslated gap in another (e.g. Spanish, which normally uses "Repositorio").
 const IDENTICAL_TO_ENGLISH_ALLOWLIST = {
+  'mcp.list.lastSeen': ['de.json', 'es.json', 'it.json'],
   'activity.umbrella.plan': ['de.json', 'es.json'],
   'backupPlans.runsPanel.columns.plan': ['de.json'],
   'backupPlans.sort.nameAZ': ['de.json'],

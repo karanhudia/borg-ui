@@ -479,6 +479,23 @@
       "availability": "included"
     },
     {
+      "id": "mcp",
+      "plan": "pro",
+      "label": "AI assistants (MCP)",
+      "label_localized": {
+        "es": "Asistentes de IA (MCP)",
+        "de": "KI-Assistenten (MCP)",
+        "it": "Assistenti IA (MCP)"
+      },
+      "description": "Ask Claude Code, Claude Desktop, Cursor or VS Code about your backups, with a per-connection access level and activity log.",
+      "description_localized": {
+        "es": "Pregunta a Claude Code, Claude Desktop, Cursor o VS Code por tus copias de seguridad, con un nivel de acceso y un registro de actividad por conexión.",
+        "de": "Fragen Sie Claude Code, Claude Desktop, Cursor oder VS Code nach Ihren Backups, mit Zugriffsstufe und Aktivitätsprotokoll pro Verbindung.",
+        "it": "Chiedi a Claude Code, Claude Desktop, Cursor o VS Code dei tuoi backup, con livello di accesso e registro attività per ogni connessione."
+      },
+      "availability": "included"
+    },
+    {
       "id": "archive_change_tracking",
       "plan": "pro",
       "gate": "archive_history",
