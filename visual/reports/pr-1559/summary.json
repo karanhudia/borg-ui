@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-11-19T03:14:50.831Z",
+  "generatedAt": "2026-11-19T03:54:01.716Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1559 visual report",
     "commitSha": "8456bed97ae5",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44449843338"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44454473281"
   },
   "totals": {
     "baseline": 1300,
     "actual": 1300,
     "compared": 1300,
-    "changed": 13,
+    "changed": 14,
     "added": 0,
     "removed": 0,
-    "unchanged": 1287
+    "unchanged": 1286
   },
   "changed": [
     {
@@ -143,21 +143,39 @@
       }
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPixels": 59752,
-      "totalPixels": 329160,
-      "diffRatio": 0.1815287398225787,
+      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-managed-remote.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-managed-remote.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-managed-remote.png",
+      "diffPixels": 171690,
+      "totalPixels": 1024000,
+      "diffRatio": 0.167666015625,
       "dimensionsChanged": false,
       "baseline": {
-        "width": 390,
-        "height": 844
+        "width": 1280,
+        "height": 800
       },
       "actual": {
-        "width": 390,
-        "height": 844
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote.png",
+      "diffPixels": 171690,
+      "totalPixels": 1024000,
+      "diffRatio": 0.167666015625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
       }
     },
     {
@@ -2877,10 +2895,7 @@
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing.png"
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png"
