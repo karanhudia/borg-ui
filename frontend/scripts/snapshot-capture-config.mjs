@@ -51,9 +51,28 @@ export function settleInBrowser({ quietMs, maxMs }) {
   })
 }
 
+// CodeEditor pulls Monaco from a CDN, so how long it shows its loading box
+// depends on the network. Wait it out, or the shot is a coin flip.
+export const codeEditorSelector = '[data-code-editor]'
+export const pendingContentSelector = '[data-code-editor-loading]'
+
 export async function waitForStoryToSettle(page) {
-  await page.evaluate(settleInBrowser, {
-    quietMs: storySettleQuietMs,
-    maxMs: storySettleMaxMs,
-  })
+  const settle = () =>
+    page.evaluate(settleInBrowser, {
+      quietMs: storySettleQuietMs,
+      maxMs: storySettleMaxMs,
+    })
+  await settle()
+  // Editors only mount after the story renders, so check after settling. Key on
+  // the editor, not its loading box: Monaco can finish inside the first settle
+  // while its stylesheet is still in flight.
+  if (await page.$(codeEditorSelector)) {
+    await page.waitForSelector(pendingContentSelector, {
+      state: 'detached',
+      timeout: storyRenderTimeoutMs,
+    })
+    // Monaco's stylesheet comes from the CDN too and can land after the editor mounts.
+    await page.waitForLoadState('networkidle', { timeout: storyRenderTimeoutMs })
+    await settle()
+  }
 }
