@@ -464,6 +464,10 @@ def retry_backup_job(
             ),
         )
     )
+    # Built before the commit: the commit expires retry_job, and once it is
+    # committed a runner (woken, or on its own poll) may already have claimed
+    # it, so reading it back could report `running` for the job just created.
+    response = _backup_retry_response(retry_job)
     db.commit()
     wake_runner()
     logger.info(
@@ -472,7 +476,7 @@ def retry_backup_job(
         retry_job_id=retry_job.id,
         user=current_user.username,
     )
-    return _backup_retry_response(retry_job)
+    return response
 
 
 @router.get("/jobs")
