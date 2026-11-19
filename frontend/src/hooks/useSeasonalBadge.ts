@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAnalytics } from './useAnalytics'
 import { useAnnouncementsManifest } from './useAnnouncementsManifest'
@@ -18,7 +18,13 @@ export function useSeasonalBadge(): SeasonalBadgeState {
   const { trackAnnouncement } = useAnalytics()
   const { data: systemInfo } = useSystemInfo()
   const { data: manifest } = useAnnouncementsManifest()
-  const [now] = useState(() => new Date())
+  // The sidebar stays mounted for days, so re-check the window every minute
+  // or an expired sale link would outlive its ends_at.
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const badge = useMemo(() => {
     if (!systemInfo || !Array.isArray(manifest?.announcements)) return null
