@@ -63,6 +63,27 @@ describe('SeasonalBadge', () => {
     expect(screen.getByTestId('chunk-burst')).toBeInTheDocument()
   })
 
+  it('gives a badge swapped in mid-burst its own burst', () => {
+    vi.useFakeTimers()
+    const view = render(<SeasonalBadge badge={badge} showSale={false} />)
+    act(() => vi.advanceTimersByTime(3000))
+
+    // A plain badge replaces it: the old burst must not keep drawing.
+    view.rerender(
+      <SeasonalBadge badge={{ ...badge, id: 'plain', effect: 'none' }} showSale={false} />
+    )
+    expect(screen.queryByTestId('chunk-burst')).toBeNull()
+
+    // A new chunks badge plays for its full time, not the old one's remainder.
+    view.rerender(<SeasonalBadge badge={{ ...badge, id: 'next' }} showSale={false} />)
+    expect(screen.getByTestId('chunk-burst')).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(2000))
+    expect(screen.getByTestId('chunk-burst')).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(2500))
+    expect(screen.queryByTestId('chunk-burst')).toBeNull()
+    vi.useRealTimers()
+  })
+
   it('renders nothing without a badge', () => {
     const { container } = render(<SeasonalBadge badge={null} showSale />)
     expect(container).toBeEmptyDOMElement()

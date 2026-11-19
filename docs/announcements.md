@@ -101,7 +101,8 @@ corner of the sidebar logo while `starts_at` to `ends_at` covers today, for ever
   gated as Pro, so `["community"]` keeps the sale away from paying customers. Leave it out for no link.
 - When two badges overlap, the higher `priority` wins.
 
-App versions up to 2.4.9 skip this type, so the entry is safe in the shared feed.
+App versions up to 2.4.9 drop an entry with an unknown type one entry at a time, so a badge
+in the shared feed never hides their sale or update notices.
 
 `emoji` and `effect` also work on a normal announcement: the emoji replaces the icon in the modal
 and `"chunks"` drops the chunks over the modal header. Give a sale notice the same emoji as its

@@ -41,19 +41,23 @@ export default function SeasonalBadge({
 }: SeasonalBadgeProps) {
   const id = badge?.id
   const wantsBurst = badge?.effect === 'chunks'
-  const [burst, setBurst] = useState(false)
+  // The badge whose burst is playing, so a badge swapped in mid-burst gets
+  // its own timer and a stale burst never draws over it.
+  const [burstId, setBurstId] = useState<string | null>(null)
 
   // Claiming and ending are separate effects: a re-run of the claim (StrictMode)
   // finds the key taken, so the timer must not live in the same effect.
   useEffect(() => {
-    if (active && id && wantsBurst && claimBurst(id)) setBurst(true)
+    if (active && id && wantsBurst && claimBurst(id)) setBurstId(id)
   }, [active, id, wantsBurst])
 
   useEffect(() => {
-    if (!burst) return
-    const timer = window.setTimeout(() => setBurst(false), BURST_MS)
+    if (!burstId) return
+    const timer = window.setTimeout(() => setBurstId(null), BURST_MS)
     return () => window.clearTimeout(timer)
-  }, [burst])
+  }, [burstId])
+
+  const burst = burstId !== null && burstId === id && wantsBurst
 
   if (!badge?.emoji) return null
 
