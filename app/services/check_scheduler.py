@@ -114,12 +114,17 @@ def _start_due_scheduled_checks(db: Session, now: datetime) -> None:
         repositories=[repo.name for repo in repos],
     )
 
+    # plain ids: a rollback below expires the selected rows, and one may be
+    # deleted by the time it is read again
+    selected = [(repo.id, repo.name) for repo in repos]
     dispatched = 0
-    for repo in repos:
+    for repo_id, repo_name in selected:
         if dispatched >= available_slots:
             break
-        repo_id, repo_name = repo.id, repo.name
         try:
+            repo = db.get(Repository, repo_id)
+            if repo is None:
+                continue
             # Decided on the row under the repository's lock: the schedule
             # may have been switched off or moved since it was selected (the
             # pass runs in a thread, beside the requests that edit it).
@@ -202,7 +207,7 @@ def _start_due_scheduled_checks(db: Session, now: datetime) -> None:
             )
             continue
 
-    deferred = len(repos) - dispatched
+    deferred = len(selected) - dispatched
     if deferred > 0:
         logger.info(
             "Deferred due scheduled checks until capacity is available",

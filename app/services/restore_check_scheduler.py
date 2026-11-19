@@ -67,9 +67,13 @@ def _start_due_scheduled_restore_checks(db: Session, now: datetime) -> None:
         .all()
     )
 
-    for repo in repos:
-        repo_id = repo.id
+    # plain ids, as in the check scheduler: a rollback below expires the
+    # selected rows, and one may be deleted by the time it is read again
+    for repo_id in [repo.id for repo in repos]:
         try:
+            repo = db.get(Repository, repo_id)
+            if repo is None:
+                continue
             # Decided on the row under the repository's lock, as the check
             # scheduler does: the schedule may have changed since the select.
             lock_repository_scope(db, repo)

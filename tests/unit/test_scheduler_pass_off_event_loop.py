@@ -1784,3 +1784,91 @@ async def test_a_check_schedule_changed_after_the_select_is_left_alone(
             assert not getattr(repository, f"{prefix}check_schedule_enabled")
         else:
             assert getattr(repository, f"next_scheduled_{prefix}check") == later
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("kind", ["check", "restore_check"])
+async def test_a_skipped_and_a_deleted_repository_leave_the_next_one_due(
+    database, monkeypatch, kind
+):
+    """Three repositories are selected. The first is switched off before
+    its lock (its start rolls back), the second is deleted meanwhile; the
+    third is still started."""
+    import app.services.check_scheduler as check_scheduler
+
+    _settings(database)
+    now = datetime.utcnow()
+    columns = (
+        {
+            "check_cron_expression": "0 3 * * *",
+            "check_schedule_enabled": True,
+            "next_scheduled_check": now - PAST,
+        }
+        if kind == "check"
+        else {
+            "restore_check_cron_expression": "0 4 * * *",
+            "restore_check_schedule_enabled": True,
+            "restore_check_paths": json.dumps(["/etc/hostname"]),
+            "next_scheduled_restore_check": now - PAST,
+        }
+    )
+    first, second, third = _seed(
+        database,
+        *(_repository(name, **columns) for name in ("first", "second", "third")),
+    )
+    prefix = "" if kind == "check" else "restore_"
+    module = check_scheduler if kind == "check" else restore_check_scheduler
+    real = module.lock_repository_scope
+    edited: list[bool] = []
+
+    def edit_then_lock(db, repository):
+        if not edited:
+            with database.side.connect() as connection:
+                connection.execute(
+                    text(
+                        f"UPDATE repositories SET {prefix}check_schedule_enabled "
+                        "= false WHERE id = :id"
+                    ),
+                    {"id": first},
+                )
+                connection.execute(
+                    text("DELETE FROM repositories WHERE id = :id"), {"id": second}
+                )
+                connection.commit()
+            edited.append(True)
+        return real(db, repository)
+
+    monkeypatch.setattr(module, "lock_repository_scope", edit_then_lock)
+
+    await _one_pass(monkeypatch)
+
+    assert edited == [True]
+    assert _operations(database) == {(kind, third)}
+
+
+@pytest.mark.unit
+async def test_a_notification_whose_commit_fails_leaves_the_session_usable(
+    database,
+):
+    """The preparation's commit fails: the session is rolled back in the
+    worker thread, holds no connection, and the next notification works."""
+    from types import SimpleNamespace
+
+    from app.services.notification_service import _delivered
+
+    _settings(database)
+    setting = SimpleNamespace(id=1, name="channel", service_url="json://invalid")
+
+    @_delivered
+    def prepare(db, fail: bool):
+        if fail:
+            # a second settings row with the first one's id: the commit fails
+            db.add(SystemSettings(id=db.query(SystemSettings.id).scalar()))
+        yield setting, "title", "<p>body</p>", "body"
+
+    with database() as db:
+        with pytest.raises(Exception):
+            await prepare(db, True)
+        assert not db.in_transaction()
+        assert database.engine.pool.checkedout() == 0
+        await prepare(db, False)  # delivery of the second one is skipped
