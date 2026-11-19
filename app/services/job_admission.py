@@ -767,9 +767,9 @@ async def admit_repository_with_read_work_wait(
         )
 
 
-def _count_backups_holding_capacity(db: Session, *criteria) -> int:
-    """Active backups matching `criteria`, less those that wait for an agent
-    that is away: they hold no capacity (#1331)."""
+def _backups_holding_capacity(db: Session, *criteria) -> set[int]:
+    """The ids of the active backups matching `criteria`, less those that
+    wait for an agent that is away: they hold no capacity (#1331)."""
     ids = [
         operation_id
         for (operation_id,) in db.query(Operation.id).filter(
@@ -778,7 +778,11 @@ def _count_backups_holding_capacity(db: Session, *criteria) -> int:
             *criteria,
         )
     ]
-    return len(ids) - len(backups_waiting_for_offline_agent(db, ids))
+    return set(ids) - backups_waiting_for_offline_agent(db, ids)
+
+
+def _count_backups_holding_capacity(db: Session, *criteria) -> int:
+    return len(_backups_holding_capacity(db, *criteria))
 
 
 def count_active_manual_backup_jobs(db: Session) -> int:
@@ -810,8 +814,12 @@ def ensure_manual_backup_capacity(db: Session) -> None:
         )
 
 
+def scheduled_backups_holding_capacity(db: Session) -> set[int]:
+    return _backups_holding_capacity(db, Operation.scheduled_job_id.isnot(None))
+
+
 def count_active_scheduled_backup_jobs(db: Session) -> int:
-    return _count_backups_holding_capacity(db, Operation.scheduled_job_id.isnot(None))
+    return len(scheduled_backups_holding_capacity(db))
 
 
 def get_scheduled_backup_limit(db: Session) -> int:

@@ -6,6 +6,8 @@ from typing import Any, Callable, Coroutine, Dict, List, NoReturn, Optional
 from datetime import datetime, timedelta, timezone
 import structlog
 import asyncio
+import contextvars
+import itertools
 
 from app.database.database import (
     SessionLocal,
@@ -48,7 +50,7 @@ from app.services.restore_check_scheduler import run_due_scheduled_restore_check
 from app.services.rclone_mirror_scheduler import dispatch_due_scheduled_rclone_mirrors
 from app.services.job_admission import (
     OPERATION_BACKUP,
-    count_active_scheduled_backup_jobs,
+    scheduled_backups_holding_capacity,
     ensure_repository_admission,
     get_scheduled_backup_limit,
     lock_backup_capacity_scope,
@@ -78,7 +80,17 @@ from app.services.schedule_availability import (
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["schedule"], dependencies=[Depends(authorize_request)])
-_active_scheduled_backup_runs: set[str] = set()
+# This process's scheduled backup runs, by key, each with the id of the
+# backup operation it holds now. A schedule of linked repositories holds none
+# before its first backup, between two, and after its last, and a backup none
+# during its prune and compact; its run still takes a slot then.
+_active_scheduled_backup_runs: dict[str, Optional[int]] = {}
+# The key of the scheduled run a task belongs to, for the task to note the
+# backup it holds.
+_scheduled_run_key: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "scheduled_backup_run_key", default=None
+)
+_linked_run_numbers = itertools.count(1)
 
 
 def _record_availability_skip(
@@ -242,10 +254,25 @@ def _raise_invalid_schedule_timezone(exc: InvalidScheduleTimezone) -> NoReturn:
 
 
 def _count_active_scheduled_backup_runs(db: Optional[Session] = None) -> int:
-    in_memory_count = len(_active_scheduled_backup_runs)
+    """The scheduled backups that take a slot: the runs of this process, one
+    each, whatever their backup does now (none yet, one running or waiting,
+    one that has ended), and the active backups in the database that hold a
+    slot and that none of those runs names: one started by hand, or by
+    another process.
+
+    A run names its backup before it commits it, so a backup found in the
+    database is one its run already names. A run that moves on to its next
+    backup while the database is read would be counted with both: the
+    database is read again until the runs stay as they were around it."""
     if db is None:
-        return in_memory_count
-    return max(count_active_scheduled_backup_jobs(db), in_memory_count)
+        return len(_active_scheduled_backup_runs)
+    for _ in range(3):
+        before = dict(_active_scheduled_backup_runs)
+        holding = scheduled_backups_holding_capacity(db)
+        runs = dict(_active_scheduled_backup_runs)
+        if runs == before:
+            break
+    return len(runs) + len(holding - set(runs.values()))
 
 
 def _get_scheduler_concurrency_limits(db: Session) -> tuple[int, int]:
@@ -260,13 +287,22 @@ def _get_scheduler_concurrency_limits(db: Session) -> tuple[int, int]:
     return max_scheduled_backups, max_scheduled_checks
 
 
-def _track_scheduled_backup_task(task: asyncio.Task, run_key: str) -> None:
-    _active_scheduled_backup_runs.add(run_key)
+def _track_scheduled_backup_task(
+    task: asyncio.Task, run_key: str, operation_id: Optional[int] = None
+) -> None:
+    _active_scheduled_backup_runs[run_key] = operation_id
 
     def _cleanup(_task: asyncio.Task) -> None:
-        _active_scheduled_backup_runs.discard(run_key)
+        _active_scheduled_backup_runs.pop(run_key, None)
 
     task.add_done_callback(_cleanup)
+
+
+def _note_backup_of_scheduled_run(operation_id: int) -> None:
+    """The scheduled run of this task holds its slot with this backup now."""
+    run_key = _scheduled_run_key.get()
+    if run_key in _active_scheduled_backup_runs:
+        _active_scheduled_backup_runs[run_key] = operation_id
 
 
 def _dedupe_repository_ids(repository_ids: Optional[List[int]]) -> List[int]:
@@ -2233,6 +2269,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     "skip_hooks": not scheduled_job.run_repository_scripts,
                 },
                 scheduled_job_id=scheduled_job.id,
+                commit=False,
             )
             backup_jobs.append(backup_job)
 
@@ -2241,9 +2278,14 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
             # its own, so this one ends its transaction first: a connection
             # held idle for the whole backup is one the runner cannot use, and
             # one a database may close under it. The id is read first: the
-            # commit expires the row.
+            # commit expires the row. The run names its backup before the
+            # commit: the scheduler's count finds it in one place or both.
             operation_id = backup_job.id
+            _note_backup_of_scheduled_run(operation_id)
             db.commit()
+            from app.services.operations.enqueue import wake_runner
+
+            wake_runner()  # a queued operation is committed only now
             await wait_out_backup_operation(operation_id)
 
             # Run prune/compact if enabled and backup succeeded
@@ -2769,10 +2811,15 @@ def _dispatch_due_scheduled_job(
                     return None
                 raise
 
-        run_key = f"schedule:{job.id}"
+        # one key per run: a run may outlast the schedule's interval
+        run_key = f"schedule:{job.id}:{next(_linked_run_numbers)}"
 
         def start(job_id: int = job.id, run_key: str = run_key) -> None:
-            task = asyncio.create_task(execute_multi_repo_schedule_by_id(job_id))
+            context = contextvars.copy_context()
+            context.run(_scheduled_run_key.set, run_key)
+            task = asyncio.create_task(
+                execute_multi_repo_schedule_by_id(job_id), context=context
+            )
             _track_scheduled_backup_task(task, run_key)
 
     elif job.repository or job.repository_id:
@@ -2842,7 +2889,7 @@ def _dispatch_due_scheduled_job(
                     archive_name=archive_name,
                 )
             )
-            _track_scheduled_backup_task(task, run_key)
+            _track_scheduled_backup_task(task, run_key, backup_job_id)
 
     else:
         logger.error(
