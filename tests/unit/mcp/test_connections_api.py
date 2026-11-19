@@ -324,3 +324,11 @@ def test_non_admin_cannot_change_the_beta_switch(
     assert response.status_code == 403
     test_db.refresh(mcp_beta_on)
     assert mcp_beta_on.mcp_beta_enabled is True
+
+
+@pytest.mark.unit
+def test_non_admin_reads_the_beta_switch(test_client, auth_headers, mcp_beta_on):
+    # The MCP tab is for every user, so they must see the switch to find it.
+    response = test_client.get("/api/settings/system", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["settings"]["mcp_beta_enabled"] is True
