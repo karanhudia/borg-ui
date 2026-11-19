@@ -39,3 +39,24 @@ export async function runSnapshotWorkers(jobs, capture, { workers = 2, signal } 
   if (failed) throw firstError
   signal?.throwIfAborted()
 }
+
+// CI splits capture across runners with STORYBOOK_SNAPSHOT_SHARD=index/total.
+// Each runner keeps the same workers and waits, so a shot is taken exactly as
+// it would be unsharded.
+export function resolveSnapshotShard(env = process.env) {
+  const configured = env.STORYBOOK_SNAPSHOT_SHARD
+  if (configured === undefined) return { index: 1, total: 1 }
+  const match = /^([1-9]\d*)\/([1-9]\d*)$/.exec(configured)
+  const index = match && Number(match[1])
+  const total = match && Number(match[2])
+  if (!match || index > total || total > 16) {
+    throw new Error('STORYBOOK_SNAPSHOT_SHARD must be index/total, with 1 <= index <= total <= 16.')
+  }
+  return { index, total }
+}
+
+// Round-robin over the sorted stories, so neighbouring (similar) stories land
+// on different runners and every story lands on exactly one.
+export function selectSnapshotShard(stories, { index, total }) {
+  return stories.filter((_, position) => position % total === index - 1)
+}

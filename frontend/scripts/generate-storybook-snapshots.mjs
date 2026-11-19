@@ -8,7 +8,12 @@ import { waitForStoryRoot, waitForStoryToSettle } from './snapshot-capture-confi
 import { writeSnapshotIfChanged } from './snapshot-file-writer.mjs'
 import { resolveSnapshotOutputDir } from './snapshot-output-config.mjs'
 import { snapshotFileName, snapshotViewports } from './snapshot-viewport-config.mjs'
-import { resolveSnapshotWorkers, runSnapshotWorkers } from './snapshot-workers.mjs'
+import {
+  resolveSnapshotShard,
+  resolveSnapshotWorkers,
+  runSnapshotWorkers,
+  selectSnapshotShard,
+} from './snapshot-workers.mjs'
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0'
 
@@ -280,6 +285,7 @@ async function captureStorySnapshots(stories, baseUrl, workers) {
 
 async function main() {
   const workers = resolveSnapshotWorkers()
+  const shard = resolveSnapshotShard()
   prependLocalHostLibraries()
 
   const stories = await readStoryEntries()
@@ -288,12 +294,19 @@ async function main() {
       snapshotViewports.map((viewport) => snapshotFileName(story.id, viewport))
     )
   )
+  // Every story's files count as expected, so a shard keeps the others' shots.
   await removeStaleSnapshots(expectedFiles)
 
   const { server, baseUrl } = await startStaticServer(staticDir)
 
   try {
-    await captureStorySnapshots(stories, baseUrl, workers)
+    const shardStories = selectSnapshotShard(stories, shard)
+    if (shard.total > 1) {
+      console.log(
+        `Shard ${shard.index}/${shard.total}: ${shardStories.length} of ${stories.length} stories`
+      )
+    }
+    await captureStorySnapshots(shardStories, baseUrl, workers)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

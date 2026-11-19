@@ -1,4 +1,6 @@
-import { readFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -49,7 +51,7 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain('frontend/scripts/**')
     expect(workflow).toContain('visual-regression-state')
     expect(workflow).toContain('persist-credentials: false')
-    expect(workflow).toContain('npx playwright install --with-deps chromium')
+    expect(workflow).toContain('uses: ./source/.github/actions/install-playwright-chromium')
     expect(workflow).toContain('npm run visual:screenshots')
     expect(workflow).toContain('npm run visual:report')
     expect(workflow).toContain('Resolve pull request changed files')
@@ -89,10 +91,75 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(captureWorkflow).toContain('npm run visual:screenshots')
     expect(captureWorkflow).toContain('actions/upload-artifact@v7')
     expect(captureWorkflow).toContain('name: visual-actual')
+    // Shards upload visual-actual-N; only a run where every shard succeeded
+    // merges them into the single artifact visual-regression.yml downloads.
+    expect(captureWorkflow).toContain('STORYBOOK_SNAPSHOT_SHARD: ${{ matrix.shard }}/3')
+    expect(captureWorkflow).toContain('name: visual-actual-${{ matrix.shard }}')
+    expect(captureWorkflow).toContain('pattern: visual-actual-*')
+    expect(captureWorkflow).toContain('needs: capture')
+    // The merged upload, not a shard upload, must carry the exact name the
+    // report workflow downloads, and it must refuse a partial set of shards.
+    const mergeJob = captureWorkflow.slice(captureWorkflow.indexOf('\n  merge:\n'))
+    expect(mergeJob).toMatch(/^\s+name: visual-actual$/m)
+    expect(mergeJob).toContain('for shard in 1 2 3; do')
+    expect(mergeJob).toContain('Re-run all jobs, not only the failed ones.')
+    expect(captureWorkflow).not.toContain('actions: write')
     expect(captureWorkflow).not.toContain('pull-requests: write')
     expect(captureWorkflow).not.toContain('pages: write')
 
     expect(pagesWorkflow).toContain('visual-regression-state')
     expect(pagesWorkflow).toContain('docs/.vitepress/dist/visual')
+  })
+
+  it('merges snapshot shards only when every shard holds screenshots', async () => {
+    const captureWorkflow = await readText('.github/workflows/visual-snapshot-capture.yml')
+    const step = captureWorkflow.split('- name: Require every shard\n        run: |\n')[1]
+    expect(step, 'Require every shard step not found').toBeDefined()
+    // The run block is every line indented at least as far as its first line;
+    // blank lines inside it belong to the script too.
+    const lines = step.split('\n')
+    const indent = lines.find((line) => line.trim()).match(/^ */)[0]
+    const end = lines.findIndex((line) => line.trim() && !line.startsWith(indent))
+    const script = lines
+      .slice(0, end === -1 ? lines.length : end)
+      .map((line) => line.slice(indent.length))
+      .join('\n')
+
+    const dirs = []
+    async function runWithShards(filesByShard) {
+      const dir = await mkdtemp(path.join(tmpdir(), 'visual-merge-'))
+      dirs.push(dir)
+      for (const [shard, files] of Object.entries(filesByShard)) {
+        await mkdir(path.join(dir, 'shards', `visual-actual-${shard}`), { recursive: true })
+        for (const file of files) {
+          await writeFile(path.join(dir, 'shards', `visual-actual-${shard}`, file), 'x')
+        }
+      }
+      const result = spawnSync('bash', ['-eo', 'pipefail', '-c', script], { cwd: dir })
+      return { status: result.status, output: String(result.stdout), dir }
+    }
+
+    try {
+      const complete = await runWithShards({ 1: ['a.png'], 2: ['b.png'], 3: ['c.png'] })
+      expect(complete.status).toBe(0)
+      expect((await readdir(path.join(complete.dir, 'visual-actual'))).sort()).toEqual([
+        'a.png',
+        'b.png',
+        'c.png',
+      ])
+
+      // A shard directory without screenshots, or no directory at all, stops
+      // the merge with the step's own exit 1.
+      for (const shards of [
+        { 1: ['a.png'], 2: ['b.png'], 3: ['meta.json'] },
+        { 1: ['a.png'], 2: ['b.png'] },
+      ]) {
+        const partial = await runWithShards(shards)
+        expect(partial.status).toBe(1)
+        expect(partial.output).toContain('visual-actual-3 is missing. Re-run all jobs')
+      }
+    } finally {
+      await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })))
+    }
   })
 })
