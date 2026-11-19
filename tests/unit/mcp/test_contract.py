@@ -48,9 +48,99 @@ EXPECTED_TOOLS = {
     "list_notification_channels",
     "get_settings",
     "list_users",
+    # Phase 3, Task 3
+    "start_backup",
+    "run_backup_plan",
+    "run_schedule_now",
+    # Task 4
+    "cancel_job",
+    "retry_job",
+    # Task 5
+    "check_repository",
+    "compact_repository",
+    "run_restore_check",
+    "refresh_repository",
+    "preview_prune",
+    # Task 6
+    "preview_restore",
+    "restore_files",
+    # Task 7
+    "mount_archive",
+    "unmount_archive",
+    # Task 8
+    "test_ssh_connection",
+    "test_notification",
+    "test_script",
+    "discover_sources",
+    "pause_background_work",
+    "resume_background_work",
 }
 EM_DASH = "\u2014"
 READ_POST_ALLOWLIST = {"POST /api/schedule/validate-cron"}
+# Spec 5.4 and 5.6: only full tools may declare these.
+DESTRUCTIVE_EXACT = {
+    "POST /api/repositories/{repo_id}/prune",
+    "POST /api/v2/backup/prune",
+}
+DESTRUCTIVE_WORDS = ("wipe", "break-lock", "delete", "/rebuild")
+# Only restore_files, behind its destination rule (spec 5.5), may start a restore.
+RESTORE_START = "POST /api/restore/start"
+# Spec 5.2 rule 5: no tool at any level.
+FORBIDDEN_PREFIXES = (
+    "/api/auth/tokens",
+    "/api/settings/tokens",
+    "/api/settings/mcp",
+    "/api/system/licensing",
+)
+
+
+def _destructive(route: str) -> bool:
+    method, path = route.split(" ", 1)
+    if route in DESTRUCTIVE_EXACT or method == "DELETE":
+        return True
+    # cancelling a delete or wipe job stops it, which is not destructive
+    return (
+        method != "GET"
+        and not path.endswith("/cancel")
+        and any(word in path for word in DESTRUCTIVE_WORDS)
+    )
+
+
+def _forbidden(route: str) -> bool:
+    path = route.split(" ", 1)[1]
+    return path.startswith(FORBIDDEN_PREFIXES) or "password" in path
+
+
+@pytest.mark.unit
+def test_destructive_and_forbidden_checks_match():
+    assert _destructive("POST /api/repositories/{repo_id}/prune")
+    assert _destructive("POST /api/repositories/{repo_id}/wipe")
+    assert _destructive("DELETE /api/scripts/{script_id}")
+    assert not _destructive(
+        "POST /api/repositories/{repo_id}/wipe-jobs/{job_id}/cancel"
+    )
+    assert not _destructive("POST /api/repositories/{repo_id}/prune/preview")
+    assert _forbidden("POST /api/settings/mcp/connections")
+    assert _forbidden("POST /api/auth/change-password")
+    assert not _forbidden("GET /api/settings/system")
+
+
+@pytest.mark.unit
+def test_no_tool_below_full_declares_a_destructive_route():
+    for spec in REGISTRY.values():
+        if spec.level >= Level.FULL:
+            continue
+        for route in spec.routes:
+            assert not _destructive(route), f"{spec.name} declares {route}"
+            if route == RESTORE_START:
+                assert spec.name == "restore_files", f"{spec.name} starts restores"
+
+
+@pytest.mark.unit
+def test_no_tool_declares_a_forbidden_route():
+    for spec in REGISTRY.values():
+        for route in spec.routes:
+            assert not _forbidden(route), f"{spec.name} declares {route}"
 
 
 def _app_routes() -> set[str]:

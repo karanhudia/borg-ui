@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -399,5 +399,109 @@ async def check_cron(ctx, args: CronArgs) -> ToolResult:
             "cron_expression": result["cron_expression"],
             "timezone": result.get("timezone"),
             "next_runs": runs[:5],
+        },
+    )
+
+
+# Phase 3: discover_sources (operate)
+
+# The paths the backup plan wizard's database scan starts from.
+DATABASE_SCAN_PATHS = [
+    "/var/lib/postgresql",
+    "/var/lib/mysql",
+    "/var/lib/mongodb",
+    "/var/lib/redis",
+]
+
+
+class DiscoverArgs(BaseModel):
+    kind: Literal["databases", "containers", "both"] = Field(
+        "both", description="What to look for."
+    )
+    connection: Optional[str] = Field(
+        None,
+        description="SSH connection (user@host or id) to look on another server. Leave empty for the Borg UI server.",
+    )
+
+
+@tool(
+    name="discover_sources",
+    title="Find databases and containers",
+    description=(
+        "Looks for databases and Docker containers worth backing up, on the Borg "
+        "UI server or over an SSH connection, the way the backup plan wizard does."
+    ),
+    level=Level.OPERATE,
+    routes=(
+        "GET /api/ssh-keys/connections",
+        "POST /api/source-discovery/databases/scan",
+        "POST /api/source-discovery/containers/scan",
+    ),
+    read_only=False,
+)
+async def discover_sources(ctx, args: DiscoverArgs) -> ToolResult:
+    where, target = (
+        "this server",
+        {"source_type": "local", "source_ssh_connection_id": None},
+    )
+    if args.connection:
+        connection = await resolve.ssh_connection(ctx, args.connection)
+        where = resolve.ssh_label(connection)
+        target = {"source_type": "remote", "source_ssh_connection_id": connection["id"]}
+    databases, containers, warnings = [], [], []
+    if args.kind in ("databases", "both"):
+        found = await ctx.api.post(
+            "/api/source-discovery/databases/scan",
+            json={**target, "paths": DATABASE_SCAN_PATHS},
+        )
+        databases = [
+            d for d in found.get("detections") or [] if d.get("detected", True)
+        ]
+        warnings += found.get("warnings") or []
+    if args.kind in ("containers", "both"):
+        found = await ctx.api.post("/api/source-discovery/containers/scan", json=target)
+        containers = found.get("containers") or []
+        warnings += found.get("warnings") or []
+    counts = []
+    if databases:
+        counts.append(plural(len(databases), "database"))
+    if containers:
+        counts.append(plural(len(containers), "container"))
+    lines = [f"Found {' and '.join(counts) or 'nothing'} on {where}."]
+    if databases:
+        lines += ["", "Databases:"]
+        lines += [
+            f"- {d.get('display_name') or d.get('engine')} in {', '.join(d.get('source_directories') or []) or 'an unknown place'}"
+            for d in databases
+        ]
+    if containers:
+        lines += ["", "Containers:"]
+        for c in containers:
+            facts = ", ".join(x for x in (c.get("image"), c.get("state")) if x)
+            lines.append(f"- *{c.get('name')}*" + (f" ({facts})" if facts else ""))
+    for warning in warnings:
+        message = warning.get("message") if isinstance(warning, dict) else str(warning)
+        if message:
+            lines.append(f"⚠ {message}")
+    if databases or containers:
+        lines += [
+            "",
+            "A backup plan can protect these. Setting one up needs manage access.",
+        ]
+    keep = (
+        "id",
+        "engine",
+        "display_name",
+        "source_directories",
+        "name",
+        "image",
+        "state",
+        "status",
+    )
+    return ToolResult(
+        "\n".join(lines),
+        {
+            "databases": [{k: d.get(k) for k in keep if k in d} for d in databases],
+            "containers": [{k: c.get(k) for k in keep if k in c} for c in containers],
         },
     )

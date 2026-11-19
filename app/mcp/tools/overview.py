@@ -257,3 +257,45 @@ async def get_system_info(ctx, args: NoArgs) -> ToolResult:
         "feature_access": info.get("feature_access"),
     }
     return ToolResult(text, data)
+
+
+# Phase 3: background work (operate)
+
+
+@tool(
+    name="pause_background_work",
+    title="Pause background work",
+    description=(
+        "Pauses Borg UI's background work for every repository: archive "
+        "listing, retention comparisons, file history indexing and stats, as "
+        "the Operations page's main switch does. Running jobs finish. Admins only."
+    ),
+    level=Level.OPERATE,
+    routes=("POST /api/operations/pause",),
+    read_only=False,
+)
+async def pause_background_work(ctx, args: NoArgs) -> ToolResult:
+    ctx.target = "background work"
+    await ctx.api.post("/api/operations/pause")
+    return ToolResult(
+        "✓ Background work is paused. Running jobs finish; queued work waits "
+        "until it is resumed. Backups and schedules are not affected.",
+        {"paused": True},
+    )
+
+
+@tool(
+    name="resume_background_work",
+    title="Resume background work",
+    description="Resumes Borg UI's background work after pause_background_work. Admins only.",
+    level=Level.OPERATE,
+    routes=("POST /api/operations/resume",),
+    read_only=False,
+)
+async def resume_background_work(ctx, args: NoArgs) -> ToolResult:
+    ctx.target = "background work"
+    await ctx.api.post("/api/operations/resume")
+    return ToolResult(
+        "✓ Background work is running again. Queued work picks up where it stopped.",
+        {"paused": False},
+    )

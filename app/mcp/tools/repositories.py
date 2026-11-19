@@ -313,3 +313,217 @@ async def compare_retention(ctx, args: RepositoryRef) -> ToolResult:
                 "⚠ New archives arrived since; the numbers may be out of date.",
             ]
     return ToolResult("\n".join(lines), {"current": current, "comparison": comparison})
+
+
+# Phase 3: maintenance (operate)
+
+
+async def _start(ctx, repo: dict, what: str, job_type: str, path: str, body=None):
+    from app.mcp.tools.jobs import estimate
+    from app.mcp.tools.operate import started
+
+    answer = await ctx.api.post(path, json=body)
+    took = await estimate(ctx, job_type, repository_id=repo["id"])
+    return started(f"{what} of *{repo['name']}*", job_type, answer.get("job_id"), took)
+
+
+class CheckArgs(RepositoryRef):
+    max_duration: Optional[int] = Field(
+        None,
+        description="Stop after this many minutes for a partial check. Leave empty for a full check.",
+        ge=1,
+    )
+
+
+@tool(
+    name="check_repository",
+    title="Check a repository",
+    description=(
+        "Starts Borg's consistency check of a repository and answers at once with "
+        "the job id. A full check reads everything and can take hours on big "
+        "repositories; max_duration makes it a partial check."
+    ),
+    level=Level.OPERATE,
+    routes=(
+        "GET /api/repositories/",
+        "GET /api/activity/recent",
+        "POST /api/repositories/{repo_id}/check",
+        "POST /api/v2/backup/check",
+    ),
+    read_only=False,
+    idempotent=False,
+)
+async def check_repository(ctx, args: CheckArgs) -> ToolResult:
+    from app.mcp import borg_routes
+
+    repo = await resolve.repository(ctx, args.repository)
+    path, body = borg_routes.repository_check(repo, args.max_duration)
+    return await _start(ctx, repo, "Check", "check", path, body)
+
+
+@tool(
+    name="compact_repository",
+    title="Compact a repository",
+    description=(
+        "Starts a compact, which gives back the space that prunes and archive "
+        "deletes left behind. Nothing is deleted by compacting."
+    ),
+    level=Level.OPERATE,
+    routes=(
+        "GET /api/repositories/",
+        "GET /api/activity/recent",
+        "POST /api/repositories/{repo_id}/compact",
+        "POST /api/v2/backup/compact",
+    ),
+    read_only=False,
+    idempotent=False,
+)
+async def compact_repository(ctx, args: RepositoryRef) -> ToolResult:
+    from app.mcp import borg_routes
+
+    repo = await resolve.repository(ctx, args.repository)
+    path, body = borg_routes.repository_compact(repo)
+    return await _start(ctx, repo, "Compact", "compact", path, body)
+
+
+@tool(
+    name="run_restore_check",
+    title="Run a restore check",
+    description=(
+        "Proves files can be restored from a repository's latest archive, using "
+        "the restore check settings saved for that repository. Nothing is "
+        "written anywhere the user would see."
+    ),
+    level=Level.OPERATE,
+    routes=(
+        "GET /api/repositories/",
+        "GET /api/activity/recent",
+        "POST /api/repositories/{repo_id}/restore-check",
+    ),
+    read_only=False,
+    idempotent=False,
+)
+async def run_restore_check(ctx, args: RepositoryRef) -> ToolResult:
+    repo = await resolve.repository(ctx, args.repository)
+    path = f"/api/repositories/{repo['id']}/restore-check"
+    return await _start(ctx, repo, "Restore check", "restore_check", path)
+
+
+@tool(
+    name="refresh_repository",
+    title="Refresh repository info",
+    description=(
+        "Brings Borg UI's archive list and stats for a repository back in line "
+        "with the repository itself, for example after work done outside Borg UI."
+    ),
+    level=Level.OPERATE,
+    routes=("GET /api/repositories/", "POST /api/repositories/{repo_id}/resync"),
+    read_only=False,
+)
+async def refresh_repository(ctx, args: RepositoryRef) -> ToolResult:
+    repo = await resolve.repository(ctx, args.repository)
+    answer = await ctx.api.post(f"/api/repositories/{repo['id']}/resync") or {}
+    return ToolResult(
+        f"⏳ Refreshing the archive list and stats of *{repo['name']}*. "
+        "list_running_jobs shows it while it runs.",
+        {"repository_id": repo["id"], "operations": answer.get("operations") or []},
+    )
+
+
+RETENTION_FIELDS = (
+    "keep_within",
+    "keep_hourly",
+    "keep_daily",
+    "keep_weekly",
+    "keep_monthly",
+    "keep_quarterly",
+    "keep_yearly",
+)
+PRUNE_LISTED = 10
+
+
+class PruneArgs(RepositoryRef):
+    keep_within: Optional[str] = Field(
+        None, description="Keep everything newer than this, such as 2d or 1w."
+    )
+    keep_hourly: Optional[int] = Field(
+        None, ge=0, description="Hourly archives to keep."
+    )
+    keep_daily: Optional[int] = Field(None, ge=0, description="Daily archives to keep.")
+    keep_weekly: Optional[int] = Field(
+        None, ge=0, description="Weekly archives to keep."
+    )
+    keep_monthly: Optional[int] = Field(
+        None, ge=0, description="Monthly archives to keep."
+    )
+    keep_quarterly: Optional[int] = Field(
+        None, ge=0, description="Quarterly archives to keep."
+    )
+    keep_yearly: Optional[int] = Field(
+        None, ge=0, description="Yearly archives to keep."
+    )
+
+
+@tool(
+    name="preview_prune",
+    title="Preview a prune",
+    description=(
+        "Shows what pruning a repository with a retention policy would delete "
+        "and at least how much space it would free, from Borg's own dry run. "
+        "Nothing is deleted. compare_retention compares common policies."
+    ),
+    level=Level.OPERATE,
+    routes=("GET /api/repositories/", "POST /api/repositories/{repo_id}/prune/preview"),
+    read_only=False,
+)
+async def preview_prune(ctx, args: PruneArgs) -> ToolResult:
+    rules = {
+        key: getattr(args, key)
+        for key in RETENTION_FIELDS
+        if getattr(args, key) not in (None, 0, "")
+    }
+    if not rules:
+        return ToolResult(
+            "A prune preview needs at least one rule, such as keep_daily 7 or "
+            "keep_within 2w. compare_retention shows the current policy.",
+            is_error=True,
+        )
+    repo = await resolve.repository(ctx, args.repository)
+    preview = await ctx.api.post(
+        f"/api/repositories/{repo['id']}/prune/preview", json=rules
+    )
+    gone = [a for a in preview.get("archives") or [] if a.get("verdict") == "deleted"]
+    gone.sort(key=lambda a: str(a.get("start") or ""))
+    deleted, kept = preview.get("deleted_count") or 0, preview.get("kept_count") or 0
+    lines = [
+        f"Pruning *{repo['name']}* with {_retention(rules)} would delete "
+        f"{plural(deleted, 'archive')} and keep {kept}."
+    ]
+    if preview.get("sizes_available"):
+        partial = (
+            " Some of them are not measured yet, so it may be more."
+            if preview.get("partial_measure")
+            else ""
+        )
+        lines.append(
+            f"It would free at least {human_size(preview.get('freed_at_least'))}.{partial}"
+        )
+    else:
+        lines.append("How much space it frees is not known for this repository.")
+    if gone:
+        lines += ["", "Would delete, oldest first:"]
+        lines += [
+            f"- *{a['name']}* ({when(a.get('start'))})" for a in gone[:PRUNE_LISTED]
+        ]
+        if len(gone) > PRUNE_LISTED:
+            lines.append(f"- and {len(gone) - PRUNE_LISTED} more")
+    lost = preview.get("lost_files") or {}
+    if lost.get("total_count"):
+        lines += [
+            "",
+            f"⚠ {plural(lost['total_count'], 'file')} ({human_size(lost.get('total_size'))}) "
+            "exist only in archives this would delete.",
+        ]
+    lines += ["", "Nothing was deleted."]
+    data = {k: v for k, v in preview.items() if k != "log"}
+    return ToolResult("\n".join(lines), {"repository_id": repo["id"], "preview": data})

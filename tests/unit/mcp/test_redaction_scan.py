@@ -46,11 +46,37 @@ ARGS = {
     "list_notification_channels": {},
     "get_settings": {},
     "list_users": {},
+    "cancel_job": {"job_type": "backup", "job_id": "{failed}"},
+    "unmount_archive": {},
+}
+# Tools that would launch real Borg or system work inside the test process.
+# Their answers leave through the same render.finish redaction as every
+# other tool; their own tests run them against canned route answers.
+LAUNCHES_WORK = {
+    "start_backup",
+    "run_backup_plan",
+    "run_schedule_now",
+    "retry_job",
+    "check_repository",
+    "compact_repository",
+    "run_restore_check",
+    "refresh_repository",
+    "preview_prune",
+    "preview_restore",
+    "restore_files",
+    "mount_archive",
+    "test_ssh_connection",
+    "test_notification",
+    "test_script",
+    "discover_sources",
+    "pause_background_work",
+    "resume_background_work",
 }
 
 
 def test_every_tool_has_scan_arguments():
-    assert set(ARGS) == EXPECTED_TOOLS
+    assert set(ARGS) | LAUNCHES_WORK == EXPECTED_TOOLS
+    assert not set(ARGS) & LAUNCHES_WORK
 
 
 def _args(name, seeded):
@@ -69,7 +95,7 @@ def test_no_secrets_and_no_crashes(
     headers = request.getfixturevalue(
         f"{role}_headers" if role != "viewer" else "auth_headers"
     )
-    _, token = create_connection(headers, name=f"{role} scan", level="read")
+    _, token = create_connection(headers, name=f"{role} scan", level="operate")
     session = mcp(token)
     browse = [
         {
@@ -81,7 +107,7 @@ def test_no_secrets_and_no_crashes(
         }
     ]
     with patch("app.api.browse.archive_cache.get", new=AsyncMock(return_value=browse)):
-        for name in sorted(EXPECTED_TOOLS):
+        for name in sorted(ARGS):
             result = session.call(name, **_args(name, secrets_seeded))
             dumped = json.dumps(result)
             for secret in SECRET_VALUES:

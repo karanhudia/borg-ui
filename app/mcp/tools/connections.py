@@ -14,7 +14,15 @@ from pydantic import BaseModel, Field
 from app.mcp import resolve
 from app.mcp.levels import Level
 from app.mcp.registry import tool
-from app.mcp.render import ToolResult, ago, clamp_limit, human_size, more_line, page
+from app.mcp.render import (
+    ToolResult,
+    ago,
+    clamp_limit,
+    duration,
+    human_size,
+    more_line,
+    page,
+)
 from app.mcp.tools._common import NoArgs, plural
 
 
@@ -386,4 +394,143 @@ async def list_users(ctx, args: NoArgs) -> ToolResult:
     )
     return ToolResult(
         "\n".join(lines), {"users": [{k: u.get(k) for k in keep} for u in users]}
+    )
+
+
+# Phase 3: tests (operate)
+
+SCRIPT_TAIL = 50
+
+
+class ConnectionArg(BaseModel):
+    connection: str = Field(
+        description="SSH connection as user@host, or its id.",
+        examples=["borg@nas.example.com"],
+    )
+
+
+@tool(
+    name="test_ssh_connection",
+    title="Test an SSH connection",
+    description="Checks that Borg UI can still log in to a server over SSH, and records the result on the connection.",
+    level=Level.OPERATE,
+    routes=(
+        "GET /api/ssh-keys/connections",
+        "POST /api/ssh-keys/connections/{connection_id}/test",
+    ),
+    read_only=False,
+)
+async def test_ssh_connection(ctx, args: ConnectionArg) -> ToolResult:
+    connection = await resolve.ssh_connection(ctx, args.connection)
+    label = resolve.ssh_label(connection)
+    answer = await ctx.api.post(f"/api/ssh-keys/connections/{connection['id']}/test")
+    data = {"connection_id": connection["id"], "success": bool(answer.get("success"))}
+    if answer.get("success"):
+        return ToolResult(f"✓ {label} answered. The connection works.", data)
+    reason = answer.get("error") or "the test failed"
+    return ToolResult(f"✗ Could not connect to {label}: {reason}", data, is_error=True)
+
+
+class ChannelArg(BaseModel):
+    channel: str = Field(
+        description="Notification channel name or id.", examples=["Phone"]
+    )
+
+
+@tool(
+    name="test_notification",
+    title="Send a test notification",
+    description="Sends a test message through one of the saved notification channels, to check it still arrives.",
+    level=Level.OPERATE,
+    routes=("GET /api/notifications", "POST /api/notifications/test"),
+    read_only=False,
+    idempotent=False,
+)
+async def test_notification(ctx, args: ChannelArg) -> ToolResult:
+    channels = await ctx.api.get("/api/notifications")
+    channel = resolve.pick("notification channel", args.channel, channels)
+    ctx.target = f"notification channel {channel['name']}"[:200]
+    # The stored URL holds the service's token: it goes from one route to the
+    # other inside the server and never into the answer (spec 5.9).
+    answer = await ctx.api.post(
+        "/api/notifications/test", json={"service_url": channel["service_url"]}
+    )
+    data = {"channel_id": channel["id"], "success": bool(answer.get("success"))}
+    if answer.get("success"):
+        return ToolResult(f"✓ Sent a test message to *{channel['name']}*.", data)
+    return ToolResult(
+        f"✗ The test message to *{channel['name']}* did not go through. Check the "
+        "channel's settings in Borg UI under Settings > Notifications.",
+        data,
+        is_error=True,
+    )
+
+
+class ScriptArgs(BaseModel):
+    script: str = Field(description="Script name or id.", examples=["notify"])
+    repository: Optional[str] = Field(
+        None, description="Run it with this repository's context, as a hook would."
+    )
+
+
+@tool(
+    name="test_script",
+    title="Test a script",
+    description=(
+        "Runs a saved script once on the server and shows its exit code and the "
+        "end of its output. Nothing is recorded in the script's history. Admins only."
+    ),
+    level=Level.OPERATE,
+    routes=(
+        "GET /api/scripts",
+        "GET /api/repositories/",
+        "POST /api/scripts/{script_id}/test",
+    ),
+    read_only=False,
+    idempotent=False,
+)
+async def test_script(ctx, args: ScriptArgs) -> ToolResult:
+    script = resolve.pick("script", args.script, await ctx.api.get("/api/scripts"))
+    body = {}
+    if args.repository:
+        repo = await resolve.repository(ctx, args.repository)
+        body["repository_id"] = repo["id"]
+    ctx.target = f"script {script['name']}"[:200]
+    answer = await ctx.api.post(f"/api/scripts/{script['id']}/test", json=body)
+    took = duration(answer.get("execution_time"))
+    output = [
+        line
+        for line in (
+            (answer.get("stdout") or "") + "\n" + (answer.get("stderr") or "")
+        ).splitlines()
+        if line.strip()
+    ]
+    code = answer.get("exit_code")
+    ok = bool(answer.get("success"))
+    head = (
+        f"✓ *{script['name']}* ran in {took} and exited with {code}."
+        if ok
+        else f"✗ *{script['name']}* exited with {code} after {took}."
+    )
+    lines = [head]
+    if output:
+        tail = output[-SCRIPT_TAIL:]
+        lines += [
+            "",
+            f"Last {len(tail)} lines of output:"
+            if len(output) > SCRIPT_TAIL
+            else "Output:",
+            "```",
+            *tail,
+            "```",
+        ]
+    return ToolResult(
+        "\n".join(lines),
+        {
+            "script_id": script["id"],
+            "exit_code": code,
+            "success": ok,
+            "output": output[-SCRIPT_TAIL:],
+        },
+        is_error=not ok,
     )

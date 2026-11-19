@@ -494,3 +494,94 @@ async def compare_archives(ctx, args: CompareArgs) -> ToolResult:
             "incomplete": found.get("incomplete"),
         },
     )
+
+
+# Phase 3: mount and unmount (operate)
+
+
+class MountArgs(BaseModel):
+    repository: str = Field(description="Repository name or id.", examples=["Photos"])
+    archive: Optional[str] = Field(
+        None,
+        description='Archive name or id, or "latest". Leave empty to mount the whole repository.',
+    )
+
+
+@tool(
+    name="mount_archive",
+    title="Mount an archive",
+    description=(
+        "Mounts an archive, or a whole repository, read-only on the Borg UI "
+        "server so its files can be opened directly. Borg UI picks the mount "
+        "point. Unmount it with unmount_archive when done."
+    ),
+    level=Level.OPERATE,
+    routes=(
+        "GET /api/repositories/",
+        "GET /api/repositories/{repo_id}/archives",
+        "POST /api/mounts/borg",
+    ),
+    read_only=False,
+    idempotent=False,
+)
+async def mount_archive(ctx, args: MountArgs) -> ToolResult:
+    repo = await resolve.repository(ctx, args.repository)
+    archive = await resolve.archive(ctx, repo, args.archive) if args.archive else None
+    mounted = await ctx.api.post(
+        "/api/mounts/borg", json=borg_routes.mount_body(repo, archive)
+    )
+    name = archive["name"] if archive else repo["name"]
+    return ToolResult(
+        f"✓ Mounted *{name}* at {mounted['mount_point']}. It is read-only. "
+        "Ask me to unmount it (unmount_archive) when you are done.",
+        {
+            "mount_id": mounted["mount_id"],
+            "mount_point": mounted["mount_point"],
+            "repository_id": repo["id"],
+        },
+    )
+
+
+class UnmountArgs(BaseModel):
+    mount: Optional[str] = Field(
+        None,
+        description="Mount id or mount point. Leave empty when only one thing is mounted.",
+    )
+
+
+@tool(
+    name="unmount_archive",
+    title="Unmount an archive",
+    description="Unmounts something mount_archive mounted, by mount point or mount id.",
+    level=Level.OPERATE,
+    routes=("GET /api/mounts", "POST /api/mounts/borg/unmount/{mount_id}"),
+    read_only=False,
+)
+async def unmount_archive(ctx, args: UnmountArgs) -> ToolResult:
+    mounts = await ctx.api.get("/api/mounts") or []
+    if not mounts:
+        return ToolResult("Nothing is mounted.", {"mounts": []})
+    if args.mount:
+        wanted = args.mount.rstrip("/") or "/"
+        found = [
+            m
+            for m in mounts
+            if wanted in (m["mount_id"], m["mount_point"].rstrip("/") or "/")
+        ]
+        if not found:
+            raise resolve.NotFound(f"Nothing is mounted at {args.mount}.")
+    elif len(mounts) == 1:
+        found = mounts
+    else:
+        listed = "\n".join(f"- {m['mount_point']} ({m['source']})" for m in mounts)
+        return ToolResult(
+            f"There are {len(mounts)} mounts. Which one?\n{listed}",
+            {"mounts": mounts},
+            is_error=True,
+        )
+    mount = found[0]
+    ctx.target = f"mount {mount['mount_point']}"[:200]
+    await ctx.api.post(f"/api/mounts/borg/unmount/{mount['mount_id']}")
+    return ToolResult(
+        f"✓ Unmounted {mount['mount_point']}.", {"mount_id": mount["mount_id"]}
+    )

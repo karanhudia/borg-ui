@@ -32,18 +32,21 @@ def running_app(test_db):
     user = User(username="smoke", password_hash="x", is_active=True, role="admin")
     test_db.add(user)
     test_db.commit()
-    token = "borgui_" + secrets.token_urlsafe(32)
-    test_db.add(
-        ApiToken(
-            user_id=user.id,
-            name="smoke",
-            token_hash=get_password_hash(token),
-            prefix=token[:12],
-            created_at=datetime.now(timezone.utc),
-            kind="mcp",
-            access_level="read",
+    tokens = {}
+    for level in ("read", "operate"):
+        token = "borgui_" + secrets.token_urlsafe(32)
+        test_db.add(
+            ApiToken(
+                user_id=user.id,
+                name=f"smoke {level}",
+                token_hash=get_password_hash(token),
+                prefix=token[:12],
+                created_at=datetime.now(timezone.utc),
+                kind="mcp",
+                access_level=level,
+            )
         )
-    )
+        tokens[level] = token
     test_db.commit()
 
     port = _free_port()
@@ -56,12 +59,12 @@ def running_app(test_db):
     while not server.started:
         assert time.monotonic() < deadline, "uvicorn did not start"
         time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}/mcp", token
+    yield f"http://127.0.0.1:{port}/mcp", tokens
     server.should_exit = True
     thread.join(timeout=15)
 
 
-async def _session(url, token):
+async def _session(url, token, calls=(("get_overview", {}), ("list_repositories", {}))):
     from mcp import ClientSession
     from mcp.client.streamable_http import (
         create_mcp_http_client,
@@ -74,17 +77,31 @@ async def _session(url, token):
         async with ClientSession(read, write) as session:
             init = await session.initialize()
             tools = await session.list_tools()
-            overview = await session.call_tool("get_overview", {})
-            repos = await session.call_tool("list_repositories", {})
-            return init, tools, overview, repos
+            results = [await session.call_tool(name, args) for name, args in calls]
+            return init, tools, *results
 
 
 @pytest.mark.integration
 def test_official_client_round_trip(running_app):
-    url, token = running_app
-    init, tools, overview, repos = asyncio.run(_session(url, token))
+    url, tokens = running_app
+    init, tools, overview, repos = asyncio.run(_session(url, tokens["read"]))
     assert init.server_info.name == "borg-ui"
     assert len(tools.tools) == 36
     assert overview.is_error is False
     assert overview.content[0].text.startswith("No repositories yet.")
     assert repos.content[0].text == "No repositories yet."
+
+
+@pytest.mark.integration
+def test_operate_connection_over_the_official_client(running_app):
+    """Phase 3: answers are event streams now; the official client reads them,
+    and an operate connection sees and calls the operate tools."""
+    url, tokens = running_app
+    _, tools, unmount = asyncio.run(
+        _session(url, tokens["operate"], calls=(("unmount_archive", {}),))
+    )
+    names = {tool.name for tool in tools.tools}
+    assert len(names) == 56
+    assert {"start_backup", "restore_files", "wait_for_job"} <= names
+    assert unmount.is_error is False
+    assert unmount.content[0].text == "Nothing is mounted."

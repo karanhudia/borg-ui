@@ -2,6 +2,8 @@
 
 import pytest
 
+from tests.unit.mcp.test_tools_stubbed import run as _run
+
 
 @pytest.mark.unit
 def test_empty_states(admin_mcp):
@@ -43,3 +45,79 @@ def test_check_cron(admin_mcp):
     assert short["is_error"] and "five fields" in short["text"]
     bad = admin_mcp.call("check_cron", expression="99 2 * * *")
     assert bad["is_error"] and bad["text"].startswith("`99 2 * * *` does not work:")
+
+
+# Phase 3, Task 8: discover_sources
+
+_DB = {
+    "id": "pg",
+    "engine": "postgresql",
+    "display_name": "PostgreSQL",
+    "detected": True,
+    "source_directories": ["/var/lib/postgresql"],
+    "notes": [],
+}
+_CONTAINER = {
+    "id": "c1",
+    "name": "immich_postgres",
+    "image": "postgres:16",
+    "state": "running",
+    "export_path": "/x",
+    "notes": [],
+    "mounts": [],
+}
+
+
+@pytest.mark.unit
+def test_discover_sources_on_the_server():
+    routes = {
+        "POST /api/source-discovery/databases/scan": {
+            "detections": [_DB],
+            "templates": [],
+            "warnings": [],
+        },
+        "POST /api/source-discovery/containers/scan": {
+            "containers": [_CONTAINER],
+            "warnings": [],
+        },
+    }
+    result, api = _run("discover_sources", routes)
+    db_body = dict(api.posts)["/api/source-discovery/databases/scan"]
+    assert (
+        db_body["source_type"] == "local"
+        and db_body["source_ssh_connection_id"] is None
+    )
+    assert "/var/lib/postgresql" in db_body["paths"]
+    assert dict(api.posts)["/api/source-discovery/containers/scan"] == {
+        "source_type": "local",
+        "source_ssh_connection_id": None,
+    }
+    assert result.text.startswith("Found 1 database and 1 container on this server.")
+    assert "- PostgreSQL in /var/lib/postgresql" in result.text
+    assert "- *immich_postgres* (postgres:16, running)" in result.text
+
+
+@pytest.mark.unit
+def test_discover_containers_over_ssh():
+    routes = {
+        "/api/ssh-keys/connections": {
+            "connections": [
+                {"id": 4, "host": "nas.example.com", "username": "borg", "port": 22}
+            ]
+        },
+        "POST /api/source-discovery/containers/scan": {
+            "containers": [],
+            "warnings": [{"message": "docker not found"}],
+        },
+    }
+    result, api = _run(
+        "discover_sources", routes, kind="containers", connection="borg@nas.example.com"
+    )
+    assert api.posts == [
+        (
+            "/api/source-discovery/containers/scan",
+            {"source_type": "remote", "source_ssh_connection_id": 4},
+        )
+    ]
+    assert result.text.startswith("Found nothing on borg@nas.example.com.")
+    assert "⚠ docker not found" in result.text

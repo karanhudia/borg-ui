@@ -60,6 +60,10 @@ How to work
   see the tools that level allows. If the user asks for something you have no
   tool for, tell them it needs a higher access level, which they can change in
   Borg UI under Settings > MCP.
+- Starting a backup, check, compact, restore or plan run answers at once with
+  a job. Offer to wait for it with wait_for_job; ask again if it is still running.
+- At operate access, restore_files only writes into an empty or new folder. If
+  the user wants to restore over existing files, say that needs full access.
 - Never ask the user for a passphrase, password, private key or token. When one
   is needed, Borg UI gives you a link to the page where the user enters it."""
 
@@ -184,6 +188,9 @@ async def on_call_tool(ctx, params) -> types.CallToolResult:
             api=InternalClient(
                 app, user_id=conn.user_id, connection_id=conn.connection_id
             ),
+            progress=lambda percent, message=None: ctx.session.report_progress(
+                percent, 100, message
+            ),
         )
         from app.mcp.errors import outcome_for, render_error
 
@@ -276,7 +283,7 @@ class McpEndpoint:
 
     async def start(self) -> None:
         self.manager = StreamableHTTPSessionManager(
-            app=self.server, stateless=True, json_response=True
+            app=self.server, stateless=True, json_response=False
         )
         self._stack = AsyncExitStack()
         await self._stack.enter_async_context(self.manager.run())

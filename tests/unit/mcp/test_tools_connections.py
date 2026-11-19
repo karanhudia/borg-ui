@@ -1,9 +1,12 @@
 """Connections, scripts, notifications, settings and users (plan Task 11)."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from app.database.models import McpActivity
 from tests.unit.mcp.conftest import SECRET_VALUES
+from tests.unit.mcp.test_tools_stubbed import run as _run
 
 
 @pytest.mark.unit
@@ -59,3 +62,124 @@ def test_browse_server_folders(admin_mcp, monkeypatch, tmp_path):
     assert not result["is_error"], result["text"]
     assert "📁 photos/" in result["text"]
     assert "notes.txt  10 B" in result["text"]
+
+
+# Phase 3, Task 8: tests, sources, background work
+
+_SSH = {
+    "id": 4,
+    "host": "backups.example.com",
+    "username": "borg",
+    "port": 22,
+    "ssh_key_id": 6,
+}
+
+
+@pytest.mark.unit
+def test_ssh_connection_test_passes():
+    routes = {
+        "/api/ssh-keys/connections": {"connections": [_SSH]},
+        "POST /api/ssh-keys/connections/4/test": {
+            "success": True,
+            "status": "connected",
+            "error": None,
+        },
+    }
+    result, api = _run(
+        "test_ssh_connection", routes, connection="borg@backups.example.com"
+    )
+    assert api.posts == [("/api/ssh-keys/connections/4/test", None)]
+    assert result.text == "✓ borg@backups.example.com answered. The connection works."
+
+
+@pytest.mark.unit
+def test_ssh_connection_test_fails():
+    routes = {
+        "/api/ssh-keys/connections": {"connections": [_SSH]},
+        "POST /api/ssh-keys/connections/4/test": {
+            "success": False,
+            "status": "failed",
+            "error": "Permission denied (publickey)",
+        },
+    }
+    result, _ = _run(
+        "test_ssh_connection", routes, connection="borg@backups.example.com"
+    )
+    assert result.is_error
+    assert result.text.startswith(
+        "✗ Could not connect to borg@backups.example.com: Permission denied (publickey)"
+    )
+
+
+@pytest.mark.unit
+def test_notification_result_never_holds_the_url(
+    mcp, create_connection, admin_headers, secrets_seeded, test_db
+):
+    from app.database.models import McpActivity
+
+    sent = AsyncMock(return_value={"success": True, "message": "sent"})
+    _, token = create_connection(admin_headers, name="ops", level="operate")
+    with patch(
+        "app.api.notifications.notification_service.test_notification", new=sent
+    ):
+        result = mcp(token).call("test_notification", channel="Phone")
+    assert sent.await_args.args[0] == "tgram://123456:SECRET-BOT-TOKEN/987"
+    assert not result["is_error"]
+    assert result["text"] == "✓ Sent a test message to *Phone*."
+    dumped = repr(result)
+    assert "SECRET-BOT-TOKEN" not in dumped and "tgram://" not in dumped
+    row = test_db.query(McpActivity).order_by(McpActivity.id.desc()).first()
+    assert row.target == "notification channel Phone"
+    assert "SECRET" not in (row.target or "") + (row.error_key or "")
+
+
+@pytest.mark.unit
+def test_notification_needs_admin(mcp, create_connection, auth_headers, secrets_seeded):
+    _, token = create_connection(auth_headers, name="viewer", level="operate")
+    result = mcp(token).call("test_notification", channel="Phone")
+    assert result["is_error"] and "tgram" not in result["text"]
+    assert "no Borg UI tool" not in result["text"]
+
+
+@pytest.mark.unit
+def test_script_test_shows_output_tail():
+    routes = {
+        "/api/scripts": [{"id": 3, "name": "notify"}],
+        "POST /api/scripts/3/test": {
+            "success": True,
+            "stdout": "\n".join(f"out {i}" for i in range(80)),
+            "stderr": "",
+            "exit_code": 0,
+            "execution_time": 1.2,
+        },
+    }
+    result, api = _run("test_script", routes, script="notify")
+    assert api.posts == [("/api/scripts/3/test", {})]
+    assert result.text.startswith("✓ *notify* ran in 1 s and exited with 0.")
+    assert "out 79" in result.text and "out 29" not in result.text
+
+
+@pytest.mark.unit
+def test_script_test_with_repository_context():
+    routes = {
+        "/api/scripts": [{"id": 3, "name": "notify"}],
+        "/api/repositories/": {"repositories": [{"id": 1, "name": "Photos"}]},
+        "POST /api/scripts/3/test": {
+            "success": False,
+            "stdout": "",
+            "stderr": "boom",
+            "exit_code": 2,
+            "execution_time": 0.1,
+        },
+    }
+    result, api = _run("test_script", routes, script="notify", repository="Photos")
+    assert api.posts == [("/api/scripts/3/test", {"repository_id": 1})]
+    assert result.is_error and result.text.startswith("✗ *notify* exited with 2")
+
+
+@pytest.mark.unit
+def test_script_test_needs_admin(mcp, create_connection, auth_headers, secrets_seeded):
+    _, token = create_connection(auth_headers, name="viewer", level="operate")
+    result = mcp(token).call("test_script", script="notify")
+    assert result["is_error"]
+    assert "no Borg UI tool" not in result["text"]

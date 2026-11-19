@@ -8,6 +8,7 @@ Jobs are named the way /api/activity/recent names them: a type and an id
 from __future__ import annotations
 
 import asyncio
+import statistics
 import time
 from typing import Optional
 
@@ -86,6 +87,28 @@ def _took(job: dict) -> Optional[float]:
             _as_utc(job["completed_at"]) - _as_utc(job["started_at"])
         ).total_seconds()
     return None
+
+
+async def estimate(
+    ctx,
+    job_type: str,
+    *,
+    repository_id: Optional[int] = None,
+    backup_plan_id: Optional[int] = None,
+) -> Optional[float]:
+    """Median seconds of the last five completed runs like this one, or None
+    with fewer than two to go on (spec 5.7: an estimate, never a guess)."""
+    rows = await ctx.api.get(
+        "/api/activity/recent",
+        job_type=job_type,
+        status="completed",
+        repository_id=repository_id,
+        limit=50,
+    )
+    if backup_plan_id is not None:
+        rows = [row for row in rows if row.get("backup_plan_id") == backup_plan_id]
+    took = [t for t in map(_took, rows) if t is not None][:5]
+    return statistics.median(took) if len(took) >= 2 else None
 
 
 def _job_line(job: dict) -> str:
@@ -400,6 +423,8 @@ async def wait_for_job(ctx, args: JobRef) -> ToolResult:
         job.get("status") not in TERMINAL
         and time.monotonic() + POLL_SECONDS <= deadline
     ):
+        if job.get("progress_percent") is not None:
+            await ctx.progress(job["progress_percent"], job.get("progress_message"))
         await asyncio.sleep(POLL_SECONDS)
         job = await _job(ctx, args.job_type, args.job_id)
     if job.get("status") in TERMINAL:

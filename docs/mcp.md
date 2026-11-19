@@ -25,8 +25,8 @@ everything the levels above it can.
 | Manage | Also create and edit configuration: repositories, plans, schedules, scripts and connections. |
 | Full | Also destructive actions, always through a preview you confirm first. |
 
-This version has tools for **Read** only. The other levels arrive in later
-updates, and you cannot create a connection at a level that has no tools yet.
+This version has tools for **Read** and **Operate**. Manage and Full arrive in
+later updates, and you cannot create a connection at a level that has no tools yet.
 That way, a connection never gains new powers just because Borg UI was
 upgraded.
 
@@ -122,6 +122,31 @@ header. Use the URL `https://your-borg-ui/mcp` and the header
 
 Large answers are trimmed and paged, so a big file listing or a long log does
 not flood the conversation.
+
+## What the AI can do at Operate
+
+Everything at Read, plus running what already exists:
+
+- **Backups**: back up a repository now, run a backup plan, run a schedule now,
+  cancel a job, and retry a failed backup or plan run.
+- **Maintenance**: check a repository (fully, or for a set number of minutes),
+  compact it, run a restore check, refresh its archive list and stats, and
+  preview what a prune would delete. The preview deletes nothing; pruning
+  itself needs Full.
+- **Restores**: preview a restore, and restore files into a folder that is
+  empty or does not exist yet, on the server, over SSH or on an agent. At
+  Operate a restore never writes over existing files: a folder that already
+  has anything in it is refused.
+- **Mounts**: mount an archive or a whole repository read-only, and unmount
+  it. Borg UI picks the mount point.
+- **Tests**: test an SSH connection, send a test notification, and run a
+  script once (admins).
+- **Sources and background work**: find databases and Docker containers to
+  back up, and pause or resume background work (admins).
+
+Starting something answers at once with the job, and usually an estimate from
+earlier runs. Ask the AI to wait for it: clients that show progress get live
+updates while it runs.
 
 ## Activity
 

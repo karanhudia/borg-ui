@@ -60,6 +60,9 @@ class InternalClient:
     async def get(self, path: str, /, **params) -> Any:
         return await self.request("GET", path, params=params)
 
+    async def post(self, path: str, /, json: Any = None, **params) -> Any:
+        return await self.request("POST", path, params=params, json=json)
+
     async def request(
         self,
         method: str,

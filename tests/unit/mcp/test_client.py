@@ -102,3 +102,18 @@ def test_nested_detail_params_are_flattened():
     )
     assert ApiError.from_response(nested).params == {"error": "disk full"}
     assert ApiError.from_response(flat).params == {"feature": "mcp", "required": "pro"}
+
+
+@pytest.mark.unit
+async def test_post_sends_json_body(client_for):
+    answer = await client_for.post(
+        "/api/schedule/validate-cron",
+        json={
+            "minute": "0",
+            "hour": "3",
+            "day_of_month": "*",
+            "month": "*",
+            "day_of_week": "*",
+        },
+    )
+    assert answer["cron_expression"] == "0 3 * * *"
