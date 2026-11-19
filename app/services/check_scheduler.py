@@ -5,7 +5,9 @@ import structlog
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.database.database import run_transaction_off_loop
 from app.database.models import Operation, Repository, SystemSettings
+from app.services.job_admission import lock_repository_scope
 from app.services.operations.maintenance_start import start_maintenance
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -47,8 +49,25 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
 
     This helper is intentionally scheduler-loop agnostic so check schedules can
     run through the same minute-based scheduling engine as backup schedules.
+    It waits for the database in a thread: on the loop, a wait for the
+    repository's lock or for a connection would hold every request.
     """
     now = _utc_naive(now or datetime.utcnow())
+    await run_transaction_off_loop(db, _start_due_scheduled_checks, db, now)
+
+
+def _check_still_due(repo: Repository, now: datetime) -> bool:
+    return (
+        bool(repo.check_cron_expression)
+        and bool(repo.check_schedule_enabled)
+        and (
+            repo.next_scheduled_check is None
+            or _utc_naive(repo.next_scheduled_check) <= now
+        )
+    )
+
+
+def _start_due_scheduled_checks(db: Session, now: datetime) -> None:
     settings = db.query(SystemSettings).first()
     max_scheduled_checks = (
         settings.max_concurrent_scheduled_checks
@@ -95,11 +114,25 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
         repositories=[repo.name for repo in repos],
     )
 
+    # plain ids: a rollback below expires the selected rows, and one may be
+    # deleted by the time it is read again
+    selected = [(repo.id, repo.name) for repo in repos]
     dispatched = 0
-    for repo in repos:
+    for repo_id, repo_name in selected:
         if dispatched >= available_slots:
             break
         try:
+            repo = db.get(Repository, repo_id)
+            if repo is None:
+                continue
+            # Decided on the row under the repository's lock: the schedule
+            # may have been switched off or moved since it was selected (the
+            # pass runs in a thread, beside the requests that edit it).
+            lock_repository_scope(db, repo)
+            db.refresh(repo)
+            if not _check_still_due(repo, now):
+                db.rollback()
+                continue
             check_job = start_maintenance(
                 db,
                 repo,
@@ -165,15 +198,16 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
             dispatched += 1
 
         except Exception as exc:
+            db.rollback()
             logger.error(
                 "Failed to create scheduled check",
-                repo_id=repo.id,
-                repo_name=repo.name if repo else "Unknown",
+                repo_id=repo_id,
+                repo_name=repo_name,
                 error=str(exc),
             )
             continue
 
-    deferred = len(repos) - dispatched
+    deferred = len(selected) - dispatched
     if deferred > 0:
         logger.info(
             "Deferred due scheduled checks until capacity is available",

@@ -7,8 +7,9 @@ import structlog
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.database.database import SessionLocal
+from app.database.database import SessionLocal, run_transaction_off_loop
 from app.database.models import Repository
+from app.services.job_admission import lock_repository_scope
 from app.services.operations.maintenance_start import start_maintenance
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -30,8 +31,24 @@ def _scheduled_restore_check_is_canary(repo: Repository) -> bool:
 async def run_due_scheduled_restore_checks(
     db: Session, now: Optional[datetime] = None
 ) -> None:
-    """Dispatch due scheduled restore verification jobs."""
+    """Dispatch due scheduled restore verification jobs, waiting for the
+    database in a thread (see `run_due_scheduled_checks`)."""
     now = to_utc_naive(now or datetime.now(timezone.utc))
+    await run_transaction_off_loop(db, _start_due_scheduled_restore_checks, db, now)
+
+
+def _restore_check_still_due(repo: Repository, now: datetime) -> bool:
+    return (
+        bool(repo.restore_check_cron_expression)
+        and bool(repo.restore_check_schedule_enabled)
+        and (
+            repo.next_scheduled_restore_check is None
+            or to_utc_naive(repo.next_scheduled_restore_check) <= now
+        )
+    )
+
+
+def _start_due_scheduled_restore_checks(db: Session, now: datetime) -> None:
     repos = (
         db.query(Repository)
         .filter(
@@ -50,8 +67,20 @@ async def run_due_scheduled_restore_checks(
         .all()
     )
 
-    for repo in repos:
+    # plain ids, as in the check scheduler: a rollback below expires the
+    # selected rows, and one may be deleted by the time it is read again
+    for repo_id in [repo.id for repo in repos]:
         try:
+            repo = db.get(Repository, repo_id)
+            if repo is None:
+                continue
+            # Decided on the row under the repository's lock, as the check
+            # scheduler does: the schedule may have changed since the select.
+            lock_repository_scope(db, repo)
+            db.refresh(repo)
+            if not _restore_check_still_due(repo, now):
+                db.rollback()
+                continue
             if repo.mode == "observe" and _scheduled_restore_check_is_canary(repo):
                 repo.restore_check_canary_enabled = False
                 try:
@@ -100,9 +129,10 @@ async def run_due_scheduled_restore_checks(
                 repo.next_scheduled_restore_check = None
             db.commit()
         except Exception as exc:
+            db.rollback()
             logger.error(
                 "Failed to create scheduled restore check",
-                repo_id=repo.id,
+                repo_id=repo_id,
                 error=str(exc),
             )
             continue

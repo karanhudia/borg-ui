@@ -275,6 +275,30 @@ async def run_off_loop(function, *args):
         raise
 
 
+async def run_transaction_off_loop(db: Session, work, *args):
+    """Run `work(*args)`, which uses `db`, in a thread of `run_off_loop` and
+    end `db`'s transaction there, whether `work` returns or raises: a lock it
+    took is never kept across a turn of the loop (on SQLite the write lock is
+    the database's only one, and a write on the loop would wait for a thread
+    that waits for the loop), and no connection is held while the caller
+    awaits something else. `work` commits what it wants kept and returns
+    plain values: what it loaded expires with the transaction, and reading it
+    on the loop would query there again.
+
+    A pool of the tests keeps its connection in its thread; there `work`
+    runs here, ended the same way."""
+
+    def ended():
+        try:
+            return work(*args)
+        finally:
+            db.rollback()
+
+    if checkout_can_wait(db.get_bind()):
+        return await run_off_loop(ended)
+    return ended()
+
+
 async def connect_off_loop(engine):
     """A connection checked out from `engine` by `run_off_loop`. A session
     bound to it keeps it across its commits, so none of its statements waits
