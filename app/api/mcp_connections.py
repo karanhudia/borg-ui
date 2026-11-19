@@ -230,7 +230,10 @@ def create_connection(
     name = payload.name.strip()
     if not name:
         raise _error(422, "backend.errors.mcp.nameRequired")
-    cap = mcp_settings(db).mcp_max_access_level
+    settings = mcp_settings(db)
+    if not settings.mcp_beta_enabled:
+        raise _error(403, "backend.errors.mcp.betaDisabled")
+    cap = settings.mcp_max_access_level
     _check_rules(payload.access_level, payload.skip_routine_confirmations, cap)
 
     raw_token = API_TOKEN_PREFIX + secrets.token_urlsafe(32)

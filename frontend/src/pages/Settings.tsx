@@ -56,6 +56,7 @@ const Settings: React.FC = () => {
   })
   const systemSettings = systemSettingsData?.settings
   const mqttBetaEnabled = systemSettings?.mqtt_beta_enabled ?? false
+  const mcpBetaEnabled = systemSettings?.mcp_beta_enabled ?? false
 
   // Get tab order based on user role
   const getTabOrder = React.useCallback(() => {
@@ -65,7 +66,7 @@ const Settings: React.FC = () => {
       'appearance',
       'preferences',
       ...(canManageNotifications ? ['notifications'] : []),
-      'mcp',
+      ...(mcpBetaEnabled ? ['mcp'] : []),
     ]
     return [
       ...baseTabs,
@@ -97,6 +98,7 @@ const Settings: React.FC = () => {
     canManageExportImport,
     canManageNotifications,
     mqttBetaEnabled,
+    mcpBetaEnabled,
     canViewBackgroundWork,
   ])
 
@@ -147,7 +149,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* AI assistants (MCP) Tab */}
-      {currentTabId === 'mcp' && (
+      {currentTabId === 'mcp' && mcpBetaEnabled && (
         <TabContentLayout>
           <McpTab />
         </TabContentLayout>

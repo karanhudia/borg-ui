@@ -64,7 +64,9 @@ vi.mock('../../hooks/usePlan', () => ({
 
 vi.mock('../../services/api', () => ({
   settingsAPI: {
-    getSystemSettings: vi.fn().mockResolvedValue({ data: { settings: {} } }),
+    getSystemSettings: vi
+      .fn()
+      .mockResolvedValue({ data: { settings: { mcp_beta_enabled: true } } }),
     getUsers: vi.fn().mockResolvedValue({ data: { users: [] } }),
     changePassword: vi.fn(),
     createUser: vi.fn(),

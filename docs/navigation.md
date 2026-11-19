@@ -69,14 +69,14 @@ administration.
 | Appearance | Choose theme and display preferences. |
 | Preferences | Set personal UI behavior and default preferences. |
 | Notifications | Configure backup, restore, schedule, check, and report notifications. This appears for admins only. |
-| AI assistants (MCP) | Create and revoke MCP connections so an AI assistant (Claude Code, Claude Desktop, Cursor, VS Code) can use Borg UI for you, copy the client setup, and see each connection's activity. Pro, Lite and Enterprise. See [AI assistants (MCP)](mcp.md). |
+| AI assistants (MCP) | Appears once an admin turns on MCP under System > Beta. Create and revoke MCP connections so an AI assistant (Claude Code, Claude Desktop, Cursor, VS Code) can use Borg UI for you, copy the client setup, and see each connection's activity. Pro, Lite and Enterprise. See [AI assistants (MCP)](mcp.md). |
 
 ### System
 
 | Tab | Use it for |
 | --- | --- |
 | Licensing | Manage license status and plan-gated capabilities. |
-| System | Configure runtime settings, backup health thresholds, timeouts, and maintenance controls. The AI assistants (MCP) section turns MCP on or off and caps the level users may grant. Repository Monitoring holds the Automatic prune previews switch: turn it off and Borg UI stops comparing retention policies on its own, and the Prune Preview page runs one only when you press Compare now. |
+| System | Configure runtime settings, backup health thresholds, timeouts, and maintenance controls. The AI assistants (MCP) section (shown while the MCP beta is on) turns MCP on or off and caps the level users may grant. Repository Monitoring holds the Automatic prune previews switch: turn it off and Borg UI stops comparing retention policies on its own, and the Prune Preview page runs one only when you press Compare now. |
 | Monitoring & Reports | Configure backup reports, monitoring behavior, and recent activity included in reports. |
 | Background work | See how many repositories are in each background stage (connect, archive list, retention preview, file history, stats), click a stage to filter the table to its repositories, pause or resume a single stage or all of them, adjust index workers, and rebuild derived data. Retention preview reads Off while automatic prune previews are turned off. Visible to admins and operators. |
 | Repository settings, Advanced step | How much a repository indexes in the background (everything, archives only, or off) and the paths file history skips. Reached by editing a repository. |
@@ -97,7 +97,7 @@ administration.
 
 | Tab | Use it for |
 | --- | --- |
-| Beta | Enable or disable the beta features that still require an admin switch. |
+| Beta | Enable or disable the beta features that still require an admin switch, including MCP for AI assistants. |
 
 ## Where To Go Next
 

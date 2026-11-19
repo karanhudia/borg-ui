@@ -16,6 +16,7 @@ const BetaFeaturesTab: React.FC = () => {
   const [lockBreakingEnabled, setLockBreakingEnabled] = useState(true)
   const [borg2FastBrowseBetaEnabled, setBorg2FastBrowseBetaEnabled] = useState(false)
   const [mqttBetaEnabled, setMqttBetaEnabled] = useState(false)
+  const [mcpBetaEnabled, setMcpBetaEnabled] = useState(false)
 
   // Fetch system settings
   const { data: systemData, isLoading: systemLoading } = useQuery({
@@ -36,6 +37,7 @@ const BetaFeaturesTab: React.FC = () => {
       setLockBreakingEnabled(systemSettings.lock_breaking_enabled ?? true)
       setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
       setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
+      setMcpBetaEnabled(systemSettings.mcp_beta_enabled ?? false)
     }
   }, [systemSettings])
 
@@ -47,6 +49,7 @@ const BetaFeaturesTab: React.FC = () => {
       lock_breaking_enabled?: boolean
       borg2_fast_browse_beta_enabled?: boolean
       mqtt_beta_enabled?: boolean
+      mcp_beta_enabled?: boolean
     }) => {
       await settingsAPI.updateSystemSettings(settings)
     },
@@ -63,6 +66,7 @@ const BetaFeaturesTab: React.FC = () => {
         setLockBreakingEnabled(systemSettings.lock_breaking_enabled ?? true)
         setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
         setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
+        setMcpBetaEnabled(systemSettings.mcp_beta_enabled ?? false)
       }
     },
   })
@@ -115,6 +119,16 @@ const BetaFeaturesTab: React.FC = () => {
       enabled: checked,
     })
     saveSettingsMutation.mutate({ mqtt_beta_enabled: checked })
+  }
+
+  const handleMcpBetaToggle = (checked: boolean) => {
+    setMcpBetaEnabled(checked)
+    trackSettings(EventAction.EDIT, {
+      section: 'beta_features',
+      feature: 'mcp_beta_enabled',
+      enabled: checked,
+    })
+    saveSettingsMutation.mutate({ mcp_beta_enabled: checked })
   }
 
   if (systemLoading) {
@@ -332,6 +346,42 @@ const BetaFeaturesTab: React.FC = () => {
                     }}
                   >
                     {t('betaFeatures.mqttIntegrationDescription')}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
+
+          <Box>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: '1rem',
+                mb: 2,
+              }}
+            >
+              {t('betaFeatures.mcpTitle')}
+            </Typography>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={mcpBetaEnabled}
+                  onChange={(e) => handleMcpBetaToggle(e.target.checked)}
+                  disabled={saveSettingsMutation.isPending}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">{t('betaFeatures.enableMcp')}</Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
+                    {t('betaFeatures.mcpDescription')}
                   </Typography>
                 </Box>
               }

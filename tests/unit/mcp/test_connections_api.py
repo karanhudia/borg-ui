@@ -261,3 +261,54 @@ def test_skip_only_patch_keeps_the_stored_level(
     )
     assert response.status_code == 200, response.text
     assert response.json()["skip_routine_confirmations"] is True
+
+
+@pytest.mark.unit
+def test_beta_off_refuses_create_but_keeps_list_and_revoke(
+    test_client, test_db, admin_headers, create_connection, mcp_beta_on
+):
+    row, _ = create_connection(admin_headers)
+    mcp_beta_on.mcp_beta_enabled = False
+    test_db.commit()
+
+    response = test_client.post(
+        f"{BASE}/connections",
+        json={"name": "second", "access_level": "read"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["key"] == "backend.errors.mcp.betaDisabled"
+
+    listed = test_client.get(f"{BASE}/connections", headers=admin_headers).json()
+    assert [item["id"] for item in listed] == [row["id"]]
+    revoked = test_client.delete(
+        f"{BASE}/connections/{row['id']}", headers=admin_headers
+    )
+    assert revoked.status_code == 204
+
+
+@pytest.mark.unit
+def test_beta_switch_round_trips_through_system_settings(
+    test_client, test_db, admin_headers, mcp_beta_on
+):
+    mcp_beta_on.mcp_beta_enabled = False
+    test_db.commit()
+    url = "/api/settings/system"
+    assert (
+        test_client.get(url, headers=admin_headers).json()["settings"][
+            "mcp_beta_enabled"
+        ]
+        is False
+    )
+    assert (
+        test_client.put(
+            url, json={"mcp_beta_enabled": True}, headers=admin_headers
+        ).status_code
+        == 200
+    )
+    assert (
+        test_client.get(url, headers=admin_headers).json()["settings"][
+            "mcp_beta_enabled"
+        ]
+        is True
+    )

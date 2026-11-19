@@ -655,7 +655,10 @@ const SystemSettingsTab: React.FC = () => {
   }
 
   const proxyAuthHeaderRows = buildProxyAuthHeaderRows(proxyAuthConfig)
-  const sectionTabs = buildSectionTabs(t)
+  // MCP access is the last section; it stays hidden until the beta is on.
+  const mcpBetaEnabled = systemSettings?.mcp_beta_enabled ?? false
+  const allSectionTabs = buildSectionTabs(t)
+  const sectionTabs = mcpBetaEnabled ? allSectionTabs : allSectionTabs.slice(0, -1)
 
   const authEventStats = useMemo(() => {
     const events = authEventsData ?? []
@@ -834,7 +837,7 @@ const SystemSettingsTab: React.FC = () => {
             />
           )}
 
-          {activeSection === 6 && <McpAccessSection />}
+          {activeSection === 6 && mcpBetaEnabled && <McpAccessSection />}
 
           {activeSection === 5 && (
             <OidcSection

@@ -1736,6 +1736,10 @@ class SystemSettings(Base):
     mcp_max_access_level = Column(
         String(16), nullable=False, default="full", server_default="full"
     )
+    # Hides MCP until every phase is final; nothing works while it is off.
+    mcp_beta_enabled = Column(
+        Boolean, nullable=False, default=False, server_default=sa_false()
+    )
 
 
 class McpActivity(Base):

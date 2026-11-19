@@ -120,7 +120,13 @@ def _gate(app) -> Optional[str]:
                 f"MCP access is part of Borg UI {required}. This install is on "
                 f"{plan}. An admin can upgrade under Settings > Plan."
             )
-        if not mcp_settings(db).mcp_enabled:
+        settings = mcp_settings(db)
+        if not settings.mcp_beta_enabled:
+            return (
+                "MCP is an experimental feature. An administrator can turn it on "
+                "under Settings > Beta."
+            )
+        if not settings.mcp_enabled:
             return (
                 "MCP access is turned off on this Borg UI. An administrator can "
                 "turn it on under Settings > System."

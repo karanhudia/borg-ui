@@ -133,6 +133,15 @@ def test_admin_switch_answers_with_a_friendly_error(mcp, setup, test_db):
 
 
 @pytest.mark.unit
+def test_beta_switch_off_refuses_every_call(mcp, setup, test_db):
+    _, token = setup()
+    _settings(test_db).mcp_beta_enabled = False
+    test_db.commit()
+    result = mcp(token).call("zz_read_echo", word="hi")
+    assert result["is_error"] and "Settings > Beta" in result["text"]
+
+
+@pytest.mark.unit
 def test_revoked_connection_is_refused_next_call(
     test_client, mcp, setup, admin_headers
 ):
