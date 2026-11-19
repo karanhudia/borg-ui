@@ -46,11 +46,13 @@ def plan_includes(current: Plan, required: Plan) -> bool:
     return _RANK[current] >= _RANK[required]
 
 
-def get_current_plan(db: Session) -> Plan:
-    return Plan(get_effective_plan_value(db))
+def get_current_plan(db: Session, *, commit: bool = True) -> Plan:
+    """The plan in effect. With `commit=False` the lookup leaves the caller's
+    transaction open, with any lock it holds."""
+    return Plan(get_effective_plan_value(db, commit=commit))
 
 
-def has_feature(db: Session, feature: str) -> bool:
+def has_feature(db: Session, feature: str, *, commit: bool = True) -> bool:
     """Whether this install may use one feature right now.
 
     The plan rank is the usual answer, but not the only one: an entitlement
@@ -58,12 +60,15 @@ def has_feature(db: Session, feature: str) -> bool:
     not include it, which is what a feature trial is. Asking the rank alone
     left the trial granted in the summary the UI reads and refused by every
     gate behind it (spec 2026-09-21, section 3).
+
+    With `commit=False` the lookup leaves the caller's transaction open, with
+    any lock it holds.
     """
     if feature not in FEATURES:
         raise ValueError(
             f"Unknown feature: {feature!r}. Valid features: {list(FEATURES)}"
         )
-    return get_feature_access(db).get(feature, False)
+    return get_feature_access(db, commit=commit).get(feature, False)
 
 
 def require_feature_access(
