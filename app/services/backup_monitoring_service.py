@@ -504,13 +504,20 @@ def _reopen_report_window(
 
 def _record_report_sent(db: Session, now: datetime) -> None:
     """Record a report sent by hand, under the settings row's lock. A later
-    window a scheduler has claimed meanwhile stays recorded: moved back, it
-    would be found due again and sent a second time."""
+    window a scheduler has claimed meanwhile is not moved back: it would be
+    found due again and sent a second time. The window counts as served by
+    this report instead, recorded just after the claim: should the
+    scheduler's send fail, its reopen no longer finds its own claim, and
+    leaves the window recorded."""
     settings = _get_or_create_settings(db)
     lock_settings_row(db, settings)
     last_sent = settings.backup_reports_last_sent_at
     if last_sent is None or _to_utc_naive(last_sent) < now:
         settings.backup_reports_last_sent_at = now
+    else:
+        settings.backup_reports_last_sent_at = _to_utc_naive(last_sent) + timedelta(
+            microseconds=1
+        )
     db.commit()
 
 

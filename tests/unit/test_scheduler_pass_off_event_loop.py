@@ -2314,7 +2314,7 @@ async def test_a_report_sent_by_hand_keeps_a_later_claimed_window(
     database, monkeypatch
 ):
     """A report sent by hand finishes after a scheduler has claimed a later
-    window: the later window stays recorded, and is not sent again."""
+    window: the window is not moved back, and is not sent again."""
     from app.services import backup_monitoring_service as monitoring
 
     claimed_at = datetime.utcnow()
@@ -2337,4 +2337,46 @@ async def test_a_report_sent_by_hand_keeps_a_later_claimed_window(
     assert result["sent"] is True
     with database() as session:
         settings = session.query(SystemSettings).one()
-        assert settings.backup_reports_last_sent_at == claimed_at
+        assert settings.backup_reports_last_sent_at >= claimed_at
+
+
+@pytest.mark.unit
+async def test_a_report_sent_by_hand_serves_a_window_whose_scheduled_send_fails(
+    database, monkeypatch
+):
+    """A report sent by hand starts before a scheduler claims the window and
+    finishes while the scheduler sends; then the scheduler's send fails. The
+    window was served by the report sent by hand: it is not sent again."""
+    from app.services import backup_monitoring_service as monitoring
+
+    _settings(database, backup_reports_enabled=True, backup_reports_frequency="daily")
+    claimed_at = datetime.utcnow()
+    sent: list[str] = []
+
+    async def by_hand(db, *args, **kwargs) -> None:
+        sent.append("by hand")
+
+    async def scheduled_fails(db, *args, **kwargs) -> None:
+        monkeypatch.setattr(NotificationService, "send_backup_report", by_hand)
+        with database() as other:
+            await monitoring.send_backup_report_now(
+                other, claimed_at - timedelta(minutes=1), force=True
+            )
+        raise RuntimeError("the endpoint is down")
+
+    monkeypatch.setattr(NotificationService, "send_backup_report", scheduled_fails)
+    with database() as db:
+        with pytest.raises(RuntimeError):
+            await monitoring.send_backup_report_now(db, claimed_at, force=False)
+
+    async def again(db, *args, **kwargs) -> None:
+        sent.append("again")
+
+    monkeypatch.setattr(NotificationService, "send_backup_report", again)
+    with database() as db:
+        result = await monitoring.send_backup_report_now(
+            db, datetime.utcnow(), force=False
+        )
+
+    assert result == {"sent": False, "reason": "not_due", "repository_count": 0}
+    assert sent == ["by hand"]
