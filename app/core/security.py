@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 import jwt
@@ -853,14 +854,19 @@ def require_repository_access_by_path(
     return repo
 
 
-async def authenticate_user(
-    db: Session, username: str, password: str
-) -> Optional[User]:
-    """Authenticate a user with username and password"""
+def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+    """Authenticate a user with username and password. Blocking: the bcrypt
+    comparison takes about 175 ms. The user is read again after it, so that
+    the caller sees what was committed meanwhile (an enabled second factor);
+    a password changed meanwhile fails the login."""
     user = db.query(User).filter(User.username == username).first()
     if not user:
         return None
-    if not verify_password(password, user.password_hash):
+    checked_hash = user.password_hash
+    if not verify_password(password, checked_hash):
+        return None
+    user = db.query(User).filter(User.id == user.id).populate_existing().one_or_none()
+    if user is None or user.password_hash != checked_hash:
         return None
     return user
 
@@ -935,16 +941,42 @@ async def create_first_user():
         db.close()
 
 
+# User creations take turns from their checks (plan limit, duplicate username
+# or email) to their insert, so two of them cannot both pass a check only one
+# may pass. Taken after the password is hashed, before the first query.
+user_creation_turn = threading.Lock()
+
+
+def taken_user_key(db: Session, username: str, email: Optional[str]) -> Optional[str]:
+    """After a user insert failed on a unique key: "username" or "email",
+    whichever another writer, such as an account update, has taken meanwhile.
+    None when neither is taken."""
+    if db.query(User.id).filter(User.username == username).first() is not None:
+        return "username"
+    # NULL emails never collide; an empty string does.
+    if (
+        email is not None
+        and db.query(User.id).filter(User.email == email).first() is not None
+    ):
+        return "email"
+    return None
+
+
 def create_user(
-    db: Session, username: str, password: str, email: str = None, role: str = "viewer"
+    db: Session,
+    username: str,
+    password_hash: str,
+    email: str = None,
+    role: str = "viewer",
+    all_repositories_role: Optional[str] = None,
 ) -> User:
-    """Create a new user"""
-    hashed_password = get_password_hash(password)
+    """Create a new user with a password hashed by the caller, in one commit"""
     user = User(
         username=username,
-        password_hash=hashed_password,
+        password_hash=password_hash,
         email=email,
         role=role,
+        all_repositories_role=all_repositories_role,
     )
     db.add(user)
     db.commit()
@@ -952,15 +984,28 @@ def create_user(
     return user
 
 
-def update_user_password(db: Session, user_id: int, new_password: str) -> bool:
-    """Update a user's password"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return False
-
-    user.password_hash = get_password_hash(new_password)
+def update_user_password(
+    db: Session,
+    user_id: int,
+    checked_password_hash: str,
+    new_password_hash: str,
+    **columns,
+) -> bool:
+    """Replace a user's password hash, made by the caller, and set `columns`
+    in the same write, but only while the stored hash is still
+    `checked_password_hash`, the one the caller checked the current password
+    against. A password set meanwhile, such as an administrator's reset, is
+    not overwritten. False when nothing was replaced."""
+    replaced = (
+        db.query(User)
+        .filter(User.id == user_id, User.password_hash == checked_password_hash)
+        .update(
+            {"password_hash": new_password_hash, **columns},
+            synchronize_session=False,
+        )
+    )
     db.commit()
-    return True
+    return replaced == 1
 
 
 # Secret encryption/decryption utilities
