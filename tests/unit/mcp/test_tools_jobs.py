@@ -121,3 +121,113 @@ def test_log_cursor_survives_a_growing_log(admin_mcp, logged):
         cursor=first["data"]["next_cursor"],
     )
     assert earlier["text"].startswith("Lines 1101 to 1300 of 1700")
+
+
+def _running_then_done(monkeypatch):
+    from app.mcp.tools import jobs
+
+    answers = [
+        {
+            "type": "backup",
+            "status": "running",
+            "progress_percent": 40,
+            "progress_message": "Reading files",
+        },
+        {"type": "backup", "status": "completed"},
+    ]
+    calls = []
+
+    async def fake_job(ctx, job_type, job_id):
+        calls.append(job_id)
+        return answers[min(len(calls), len(answers)) - 1]
+
+    monkeypatch.setattr(jobs, "_job", fake_job)
+    monkeypatch.setattr(jobs, "POLL_SECONDS", 0)
+
+
+def _wait(session, token=None):
+    params = {"name": "wait_for_job", "arguments": {"job_type": "backup", "job_id": 7}}
+    if token is not None:
+        params["_meta"] = {"progressToken": token}
+    response = session.post("tools/call", params)
+    assert response.status_code == 200, response.text
+    return session.messages(response)
+
+
+@pytest.mark.unit
+def test_wait_for_job_reports_progress(admin_mcp, monkeypatch):
+    _running_then_done(monkeypatch)
+    messages = _wait(admin_mcp, token="t1")
+    progress = [m for m in messages if m.get("method") == "notifications/progress"]
+    assert progress, messages
+    assert progress[0]["params"]["progressToken"] == "t1"
+    assert progress[0]["params"]["progress"] == 40
+    assert progress[0]["params"]["message"] == "Reading files"
+    assert "id" in messages[-1]  # the result comes after the progress
+
+
+@pytest.mark.unit
+def test_wait_for_job_without_token_sends_no_notifications(admin_mcp, monkeypatch):
+    _running_then_done(monkeypatch)
+    messages = _wait(admin_mcp)
+    assert [m for m in messages if "method" in m] == []
+
+
+@pytest.mark.unit
+def test_wait_for_job_progress_only_increases(admin_mcp, monkeypatch):
+    """MCP: progress must increase with each notification, so a stalled job
+    sends nothing new."""
+    from app.mcp.tools import jobs
+
+    answers = [
+        {"type": "backup", "status": "running", "progress_percent": 40},
+        {"type": "backup", "status": "running", "progress_percent": 40},
+        {"type": "backup", "status": "running", "progress_percent": 60},
+        {"type": "backup", "status": "completed"},
+    ]
+
+    async def fake_job(ctx, job_type, job_id):
+        return answers.pop(0)
+
+    monkeypatch.setattr(jobs, "_job", fake_job)
+    monkeypatch.setattr(jobs, "POLL_SECONDS", 0)
+    messages = _wait(admin_mcp, token="t2")
+    values = [
+        m["params"]["progress"]
+        for m in messages
+        if m.get("method") == "notifications/progress"
+    ]
+    assert values == [40, 60]
+
+
+@pytest.mark.unit
+def test_progress_messages_are_redacted(admin_mcp, monkeypatch):
+    """Progress skips finish(), so it redacts on its own (PR #1575 review)."""
+    from app.mcp.tools import jobs
+
+    answers = [
+        {
+            "type": "backup",
+            "status": "running",
+            "progress_percent": 10,
+            "progress_message": "/data/password=example-secret/file",
+        },
+        {"type": "backup", "status": "completed"},
+    ]
+
+    async def fake_job(ctx, job_type, job_id):
+        return answers.pop(0)
+
+    monkeypatch.setattr(jobs, "_job", fake_job)
+    monkeypatch.setattr(jobs, "POLL_SECONDS", 0)
+    messages = _wait(admin_mcp, token="t3")
+    sent = [m for m in messages if m.get("method") == "notifications/progress"]
+    assert sent and "example-secret" not in sent[0]["params"]["message"]
+
+
+@pytest.mark.unit
+def test_job_type_must_be_a_plain_name(admin_mcp):
+    refused = admin_mcp.call(
+        "get_job_log", job_type="../repositories/1/prune#", job_id=9
+    )
+    assert refused["is_error"] and "job_type" in refused["text"]

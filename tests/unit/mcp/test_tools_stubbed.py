@@ -25,6 +25,8 @@ class StubApi:
     def __init__(self, routes):
         self.routes = routes
         self.calls = []
+        self.posts = []
+        self.timeouts = {}
 
     async def get(self, path, /, **params):
         self.calls.append((path, params))
@@ -32,6 +34,16 @@ class StubApi:
         if isinstance(answer, list) and answer and isinstance(answer[0], Turn):
             return answer.pop(0).value if len(answer) > 1 else answer[0].value
         return answer(params) if callable(answer) else answer
+
+    async def post(self, path, /, json=None, timeout=None, **params):
+        """Answers from `routes["POST " + path]`: a value, a callable taking
+        the body, or an exception to raise. Every body is kept in `posts`."""
+        self.posts.append((path, json))
+        self.timeouts[path] = timeout
+        answer = self.routes[f"POST {path}"]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer(json) if callable(answer) else answer
 
 
 class Turn:

@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from tests.unit.mcp.test_tools_stubbed import run as _run
+
 from app.database.models import Archive, ArchiveChange
 
 
@@ -159,3 +161,112 @@ def test_compare_archives(admin_mcp, history):
         in result["text"]
     )
     assert "~ home/alex/notes.md (250 B)" in result["text"]
+
+
+# Phase 3, Task 7: mount and unmount
+
+_V1 = {"id": 1, "name": "Photos", "path": "/data/example/photos", "borg_version": 1}
+_V2 = {"id": 2, "name": "Media", "path": "/data/example/media", "borg_version": 2}
+_ARCH = {
+    "id": 41,
+    "borg_id": "ab12cd",
+    "name": "media-2026-11-14",
+    "start": "2026-11-14T02:00:00Z",
+}
+_MOUNTED = {
+    "mount_id": "m-1",
+    "mount_point": "/data/example/mounts/media",
+    "mount_type": "borg",
+    "source": "media",
+}
+
+
+def _mount_routes(repo):
+    return {
+        "/api/repositories/": {"repositories": [_V1, _V2]},
+        f"/api/repositories/{repo['id']}/archives": {"archives": [_ARCH]},
+        "POST /api/mounts/borg": _MOUNTED,
+    }
+
+
+@pytest.mark.unit
+def test_mount_borg1_archive_by_name():
+    result, api = _run(
+        "mount_archive", _mount_routes(_V1), repository="Photos", archive="latest"
+    )
+    assert api.posts == [
+        ("/api/mounts/borg", {"repository_id": 1, "archive_name": "media-2026-11-14"})
+    ]
+    assert result.text.startswith(
+        "✓ Mounted *media-2026-11-14* at /data/example/mounts/media."
+    )
+    assert "unmount_archive" in result.text
+    assert result.data["mount_id"] == "m-1"
+
+
+@pytest.mark.unit
+def test_mount_borg2_sends_the_id():
+    _, api = _run(
+        "mount_archive", _mount_routes(_V2), repository="Media", archive="latest"
+    )
+    assert api.posts[0][1]["archive_id"] == "ab12cd"
+
+
+@pytest.mark.unit
+def test_mount_whole_repository():
+    result, api = _run("mount_archive", _mount_routes(_V1), repository="Photos")
+    assert api.posts == [("/api/mounts/borg", {"repository_id": 1})]
+    assert result.text.startswith("✓ Mounted *Photos* at ")
+
+
+@pytest.mark.unit
+def test_mount_takes_no_mount_point():
+    from app.mcp.registry import REGISTRY
+
+    assert "mount_point" not in REGISTRY["mount_archive"].input_model.model_fields
+
+
+_MOUNTS = [
+    {**_MOUNTED, "created_at": "2026-11-19T01:00:00Z"},
+    {
+        **_MOUNTED,
+        "mount_id": "m-2",
+        "mount_point": "/data/example/mounts/photos",
+        "source": "photos",
+        "created_at": "2026-11-19T02:00:00Z",
+    },
+]
+
+
+@pytest.mark.unit
+def test_unmount_by_mount_point():
+    routes = {
+        "/api/mounts": _MOUNTS,
+        "POST /api/mounts/borg/unmount/m-2": {"success": True},
+    }
+    result, api = _run("unmount_archive", routes, mount="/data/example/mounts/photos")
+    assert api.posts == [("/api/mounts/borg/unmount/m-2", None)]
+    assert result.text == "✓ Unmounted /data/example/mounts/photos."
+
+
+@pytest.mark.unit
+def test_unmount_only_mount_without_arguments():
+    routes = {
+        "/api/mounts": _MOUNTS[:1],
+        "POST /api/mounts/borg/unmount/m-1": {"success": True},
+    }
+    _, api = _run("unmount_archive", routes)
+    assert api.posts == [("/api/mounts/borg/unmount/m-1", None)]
+
+
+@pytest.mark.unit
+def test_unmount_with_several_mounts_asks():
+    result, api = _run("unmount_archive", {"/api/mounts": _MOUNTS})
+    assert api.posts == [] and result.is_error
+    assert "2 mounts" in result.text and "/data/example/mounts/photos" in result.text
+
+
+@pytest.mark.unit
+def test_unmount_with_nothing_mounted():
+    result, api = _run("unmount_archive", {"/api/mounts": []})
+    assert api.posts == [] and result.text == "Nothing is mounted."

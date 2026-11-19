@@ -43,6 +43,17 @@ explain_failure
   ...
   **Similar recent failures**: none in the last 30 days.
 
+start_backup
+  ⏳ Backup of *Photos* started (backup 412).
+  Usually takes ~6 min.
+
+  Want me to wait for it?
+
+restore_files into a folder with files
+  Restore stopped. /local/restore already has files in it, and restoring
+  at operate only goes into an empty or new folder. Pick one, or ask an
+  admin for a connection with full access to overwrite.
+
 Ambiguous name
   I found 2 repositories matching "photo": *Photos* and *Photos old*.
   Which one?

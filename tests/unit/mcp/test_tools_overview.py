@@ -82,3 +82,32 @@ def test_get_system_info_hides_licence_ids(admin_mcp):
         "entitlement_id",
     ):
         assert secret not in dumped
+
+
+# Phase 3, Task 8: background work
+
+
+@pytest.mark.unit
+def test_pause_and_resume_background_work(
+    mcp, create_connection, admin_headers, test_db
+):
+    from app.database.models import SystemSettings
+
+    _, token = create_connection(admin_headers, name="ops", level="operate")
+    session = mcp(token)
+    paused = session.call("pause_background_work")
+    assert paused["text"].startswith("✓ Background work is paused.")
+    test_db.expire_all()
+    assert test_db.query(SystemSettings).first().paused_stages
+    resumed = session.call("resume_background_work")
+    assert resumed["text"].startswith("✓ Background work is running again.")
+    test_db.expire_all()
+    assert not test_db.query(SystemSettings).first().paused_stages
+
+
+@pytest.mark.unit
+def test_pause_needs_admin(mcp, create_connection, auth_headers):
+    _, token = create_connection(auth_headers, name="viewer", level="operate")
+    result = mcp(token).call("pause_background_work")
+    assert result["is_error"]
+    assert "no Borg UI tool" not in result["text"]

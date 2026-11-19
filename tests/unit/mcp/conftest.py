@@ -71,6 +71,22 @@ class McpSession:
             },
         )
 
+    @staticmethod
+    def messages(response):
+        """Every JSON-RPC message in an answer, JSON or an event stream."""
+        import json
+
+        if response.headers.get("content-type", "").startswith("text/event-stream"):
+            return [
+                json.loads(line[5:])
+                for line in response.text.splitlines()
+                if line.startswith("data:") and line[5:].strip()
+            ]
+        return [response.json()]
+
+    def result(self, response):
+        return next(m for m in self.messages(response) if "id" in m)["result"]
+
     def initialize(self, client_name="claude-code", version="1.2.3"):
         response = self.post(
             "initialize",
@@ -81,17 +97,17 @@ class McpSession:
             },
         )
         assert response.status_code == 200, response.text
-        return response.json()["result"]
+        return self.result(response)
 
     def list_tools(self):
         response = self.post("tools/list")
         assert response.status_code == 200, response.text
-        return response.json()["result"]["tools"]
+        return self.result(response)["tools"]
 
     def call(self, name, **arguments):
         response = self.post("tools/call", {"name": name, "arguments": arguments})
         assert response.status_code == 200, response.text
-        result = response.json()["result"]
+        result = self.result(response)
         return {
             "text": "".join(c.get("text", "") for c in result["content"]),
             "data": result.get("structuredContent"),

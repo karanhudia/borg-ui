@@ -212,3 +212,13 @@ async def test_read_body_stops_at_the_limit():
 
     assert await _read_body(endless) is None
     assert reads <= MAX_BODY // 65536 + 1
+
+
+@pytest.mark.unit
+def test_answers_are_event_streams(admin_mcp):
+    """Progress rides on the call's own answer, which JSON mode cannot carry
+    (spec 5.8), so requests are answered as an event stream."""
+    response = admin_mcp.post("tools/list")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert admin_mcp.result(response)["tools"]

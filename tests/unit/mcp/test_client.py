@@ -102,3 +102,76 @@ def test_nested_detail_params_are_flattened():
     )
     assert ApiError.from_response(nested).params == {"error": "disk full"}
     assert ApiError.from_response(flat).params == {"feature": "mcp", "required": "pro"}
+
+
+@pytest.mark.unit
+async def test_post_sends_json_body(client_for):
+    answer = await client_for.post(
+        "/api/schedule/validate-cron",
+        json={
+            "minute": "0",
+            "hour": "3",
+            "day_of_month": "*",
+            "month": "*",
+            "day_of_week": "*",
+        },
+    )
+    assert answer["cron_expression"] == "0 3 * * *"
+
+
+@pytest.mark.unit
+async def test_slow_route_times_out():
+    """httpx's ASGI transport ignores client timeouts, so the client sets its
+    own deadline and raises the same timeout httpx would."""
+    import anyio
+    import httpx
+
+    async def slow_app(scope, receive, send):
+        await anyio.sleep(5)
+
+    client = InternalClient(slow_app, user_id=1, connection_id=1)
+    with anyio.fail_after(3):
+        with pytest.raises(httpx.TimeoutException):
+            await client.post("/slow", timeout=0.05)
+
+
+@pytest.mark.unit
+async def test_slow_sync_route_times_out_promptly():
+    """A sync route runs in a worker thread, which cancellation waits for; the
+    caller must still get its timeout on time (CodeRabbit, pre-PR)."""
+    import time
+
+    import anyio
+    import httpx
+    from fastapi import FastAPI
+
+    slow = FastAPI()
+
+    @slow.post("/slow")
+    def handler():
+        time.sleep(2)
+        return {}
+
+    client = InternalClient(slow, user_id=1, connection_id=1)
+    started = time.monotonic()
+    with anyio.fail_after(1.5):
+        with pytest.raises(httpx.TimeoutException):
+            await client.post("/slow", timeout=0.05)
+    assert time.monotonic() - started < 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/activity/../repositories/1/prune",
+        "/api/activity/x#/9/cancel",
+        "/api/x?y=1",
+    ],
+)
+async def test_paths_cannot_leave_their_route(path):
+    """One choke point for every tool: a name a tool puts into a path cannot
+    turn the request into another route (PR #1575 review)."""
+    client = InternalClient(None, user_id=1, connection_id=1)
+    with pytest.raises(ValueError):
+        await client.post(path)

@@ -69,6 +69,6 @@ def test_input_schema_is_the_model_schema(scratch_tools):
 def test_top_level_follows_the_registered_tools(scratch_tools):
     from app.mcp import tools  # noqa: F401  (the real catalog)
 
-    assert top_level() == Level.READ
+    assert top_level() == Level.OPERATE  # phase 3 ships operate tools
     register_pair()
     assert top_level() == Level.FULL

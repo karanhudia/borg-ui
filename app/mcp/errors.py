@@ -11,6 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+import httpx
 import structlog
 
 from app.mcp.client import ApiError
@@ -46,7 +47,17 @@ def _label(feature: str) -> str:
     return feature.replace("_", " ").capitalize()
 
 
+TIMED_OUT = (
+    "That took longer than Borg UI waits for an answer here. The work may "
+    "still be going on the server. Try again later, or narrow it down (a "
+    "smaller path, fewer rules)."
+)
+
+
 def render_error(exc: Exception, *, tool: str) -> ToolResult:
+    if isinstance(exc, httpx.TimeoutException):
+        logger.warning("MCP tool timed out", tool=tool)
+        return ToolResult(TIMED_OUT, is_error=True)
     text = getattr(exc, "text", None)  # resolve.NotFound / Ambiguous, BadCursor
     if isinstance(exc, BadCursor) or (text and not isinstance(exc, ApiError)):
         return ToolResult(text or BadCursor.text, is_error=True)
