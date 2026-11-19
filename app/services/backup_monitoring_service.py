@@ -9,7 +9,9 @@ from zoneinfo import ZoneInfo
 from croniter import croniter
 from sqlalchemy.orm import Session
 
+from app.database.database import run_transaction_off_loop
 from app.database.models import Repository, SystemSettings
+from app.services.job_admission import lock_settings_row
 from app.services.operations.backup_facade import backup_jobs_started_since
 from app.services.notification_service import NotificationService
 from app.utils.datetime_utils import serialize_datetime
@@ -173,35 +175,92 @@ def _alert_cooldown_elapsed(settings: SystemSettings, now: datetime) -> bool:
     )
 
 
+# The database work of the monitoring and the report runs in threads
+# (`run_transaction_off_loop`), each step ending its transaction: the alert or
+# the report is sent in between, and no lock or connection is held while it
+# is. The monitoring's check is recorded before its alert is sent (the
+# alert's preparation committed it there before), the alert and the report
+# after they were sent.
+
+
+def _monitoring_check(
+    db: Session, now: datetime, force: bool
+) -> Optional[tuple[list[StaleRepository], int, bool, Optional[datetime]]]:
+    """The stale repositories, the age they are stale after, and whether an
+    alert is due; None when the monitoring is not due. The check is recorded
+    here, under the settings row's lock and before any alert is sent: a
+    second scheduler (a process being replaced runs one until it is
+    stopped) then finds it not due, and sends no second alert."""
+    settings = _get_or_create_settings(db)
+    if not is_monitoring_due(settings, now, force=force):
+        return None  # without the lock: on SQLite it is the write lock
+    lock_settings_row(db, settings)
+    if not is_monitoring_due(settings, now, force=force):
+        return None
+    stale_after_days = (
+        settings.backup_monitoring_stale_after_days or DEFAULT_STALE_AFTER_DAYS
+    )
+    stale_repositories = find_stale_repositories(
+        db,
+        now,
+        stale_after_days=stale_after_days,
+        include_observe_repos=settings.backup_monitoring_include_observe_repos,
+    )
+    alert_due = bool(stale_repositories) and _alert_cooldown_elapsed(settings, now)
+    checked_before = settings.backup_monitoring_last_checked_at
+    settings.backup_monitoring_last_checked_at = now
+    db.commit()
+    return stale_repositories, stale_after_days, alert_due, checked_before
+
+
+def _reopen_monitoring_check(
+    db: Session, now: datetime, checked_before: Optional[datetime]
+) -> None:
+    """The alert could not be prepared: the check counts as not made, and
+    the next pass tries again (as when the check was recorded with the
+    alert). Unless a later check has been recorded meanwhile. The failed
+    preparation may have left its transaction aborted (PostgreSQL refuses
+    every statement in it): it is rolled back first."""
+    db.rollback()
+    settings = db.query(SystemSettings).first()
+    if settings is None:
+        return
+    lock_settings_row(db, settings)
+    if settings.backup_monitoring_last_checked_at == now:
+        settings.backup_monitoring_last_checked_at = checked_before
+        db.commit()
+
+
+def _record_alert_sent(db: Session, now: datetime) -> None:
+    settings = _get_or_create_settings(db)
+    settings.backup_monitoring_last_alert_sent_at = now
+    db.commit()
+
+
 async def run_backup_monitoring(
     db: Session, now: Optional[datetime] = None, *, force: bool = False
 ) -> dict:
     now_naive = _normalize_now(now)
-    settings = _get_or_create_settings(db)
-
-    if not is_monitoring_due(settings, now_naive, force=force):
-        return {"skipped": True, "reason": "not_due", "stale_count": 0}
-
-    stale_repositories = find_stale_repositories(
-        db,
-        now_naive,
-        stale_after_days=settings.backup_monitoring_stale_after_days
-        or DEFAULT_STALE_AFTER_DAYS,
-        include_observe_repos=settings.backup_monitoring_include_observe_repos,
+    checked = await run_transaction_off_loop(
+        db, _monitoring_check, db, now_naive, force
     )
+    if checked is None:
+        return {"skipped": True, "reason": "not_due", "stale_count": 0}
+    stale_repositories, stale_after_days, alert_due, checked_before = checked
 
-    settings.backup_monitoring_last_checked_at = now_naive
     alert_sent = False
-    if stale_repositories and _alert_cooldown_elapsed(settings, now_naive):
-        await NotificationService.send_stale_backup_alert(
-            db,
-            stale_repositories,
-            settings.backup_monitoring_stale_after_days or DEFAULT_STALE_AFTER_DAYS,
-        )
-        settings.backup_monitoring_last_alert_sent_at = now_naive
+    if alert_due:
+        try:
+            await NotificationService.send_stale_backup_alert(
+                db, stale_repositories, stale_after_days
+            )
+        except Exception:
+            await run_transaction_off_loop(
+                db, _reopen_monitoring_check, db, now_naive, checked_before
+            )
+            raise
         alert_sent = True
-
-    db.commit()
+        await run_transaction_off_loop(db, _record_alert_sent, db, now_naive)
     return {
         "skipped": False,
         "stale_count": len(stale_repositories),
@@ -385,18 +444,29 @@ def build_backup_report(
     )
 
 
+def _report_to_send(db: Session, now: datetime, force: bool) -> Optional[BackupReport]:
+    settings = _get_or_create_settings(db)
+    if not force and not is_report_due(settings, now):
+        return None
+    return build_backup_report(db, settings, now)
+
+
+def _record_report_sent(db: Session, now: datetime) -> None:
+    settings = _get_or_create_settings(db)
+    settings.backup_reports_last_sent_at = now
+    db.commit()
+
+
 async def send_backup_report_now(
     db: Session, now: Optional[datetime] = None, *, force: bool = True
 ) -> dict:
     now_naive = _normalize_now(now)
-    settings = _get_or_create_settings(db)
-    if not force and not is_report_due(settings, now_naive):
+    report = await run_transaction_off_loop(db, _report_to_send, db, now_naive, force)
+    if report is None:
         return {"sent": False, "reason": "not_due", "repository_count": 0}
 
-    report = build_backup_report(db, settings, now_naive)
     await NotificationService.send_backup_report(db, report.title, report.body)
-    settings.backup_reports_last_sent_at = now_naive
-    db.commit()
+    await run_transaction_off_loop(db, _record_report_sent, db, now_naive)
     return {
         "sent": True,
         "repository_count": report.repository_count,
@@ -411,8 +481,6 @@ async def run_backup_monitoring_and_reports(
 ) -> dict:
     now_naive = _normalize_now(now)
     monitoring_result = await run_backup_monitoring(db, now_naive)
-    settings = _get_or_create_settings(db)
-    report_result = {"sent": False, "reason": "not_due", "repository_count": 0}
-    if is_report_due(settings, now_naive):
-        report_result = await send_backup_report_now(db, now_naive, force=True)
+    # sent only when due: answers as a report that is not due otherwise
+    report_result = await send_backup_report_now(db, now_naive, force=False)
     return {"monitoring": monitoring_result, "report": report_result}

@@ -5,6 +5,7 @@ import structlog
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.database.database import run_transaction_off_loop
 from app.database.models import Operation, Repository, SystemSettings
 from app.services.operations.maintenance_start import start_maintenance
 from app.utils.schedule_time import (
@@ -47,8 +48,14 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
 
     This helper is intentionally scheduler-loop agnostic so check schedules can
     run through the same minute-based scheduling engine as backup schedules.
+    It waits for the database in a thread: on the loop, a wait for the
+    repository's lock or for a connection would hold every request.
     """
     now = _utc_naive(now or datetime.utcnow())
+    await run_transaction_off_loop(db, _start_due_scheduled_checks, db, now)
+
+
+def _start_due_scheduled_checks(db: Session, now: datetime) -> None:
     settings = db.query(SystemSettings).first()
     max_scheduled_checks = (
         settings.max_concurrent_scheduled_checks

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Iterable
 from sqlalchemy.orm import Session
 
+from app.database.database import run_transaction_off_loop
 from app.database.models import Repository, SSHConnection
 from app.services.agent_connection_manager import agent_connection_manager
 
@@ -42,7 +43,16 @@ def validate_availability_intervals(
         raise ValueError("min_success_interval_minutes must be between 0 and 525600")
 
 
-def _ssh_reachable(connection: SSHConnection) -> bool:
+@dataclass(frozen=True)
+class SSHAddress:
+    """Where an SSH source listens, read from its connection before the
+    probe: the probe holds no database session."""
+
+    host: str | None
+    port: int | None
+
+
+def _ssh_reachable(connection: SSHAddress) -> bool:
     if not connection.host:
         return False
     try:
@@ -54,26 +64,79 @@ def _ssh_reachable(connection: SSHConnection) -> bool:
         return False
 
 
+# A probe is ("agent", agent machine id, reason) or ("ssh", address, reason),
+# with the reason it gives when the source is unavailable. The connections are
+# read in a thread, and the read ends before any probe runs: an SSH probe
+# takes seconds, and the session would hold its pooled connection meanwhile.
+
+
+def _ssh_address(db: Session, connection_id) -> SSHAddress | None:
+    connection = db.get(SSHConnection, int(connection_id)) if connection_id else None
+    if connection is None:
+        return None
+    return SSHAddress(connection.host, connection.port)
+
+
+def _repository_probes(db: Session, repositories: list[Repository]) -> list[tuple]:
+    probes = []
+    for repository in repositories:
+        if repository.agent_machine_id is not None:
+            probes.append(
+                (
+                    "agent",
+                    repository.agent_machine_id,
+                    f"managed agent unavailable for {repository.name}",
+                )
+            )
+        elif repository.source_ssh_connection_id is not None:
+            probes.append(
+                (
+                    "ssh",
+                    _ssh_address(db, repository.source_ssh_connection_id),
+                    f"SSH source unavailable for {repository.name}",
+                )
+            )
+    return probes
+
+
+def _location_probes(db: Session, locations: list[dict]) -> list[tuple]:
+    probes = []
+    for location in locations:
+        source_type = location.get("source_type", "local")
+        if source_type == "agent":
+            probes.append(
+                ("agent", location.get("agent_machine_id"), "managed agent unavailable")
+            )
+        elif source_type == "remote":
+            probes.append(
+                (
+                    "ssh",
+                    _ssh_address(db, location.get("source_ssh_connection_id")),
+                    "SSH source unavailable",
+                )
+            )
+    return probes
+
+
+async def _probes_available(probes: list[tuple]) -> AvailabilityDecision:
+    """The first unavailable source decides, in the order given."""
+    for kind, target, reason in probes:
+        if kind == "agent":
+            if target is None or not agent_connection_manager.is_connected(int(target)):
+                return AvailabilityDecision(False, reason)
+        elif target is None or not await asyncio.to_thread(_ssh_reachable, target):
+            return AvailabilityDecision(False, reason)
+    return AvailabilityDecision(True)
+
+
 async def repositories_available(
     db: Session, repositories: Iterable[Repository]
 ) -> AvailabilityDecision:
     """Require every selected source to be available; local sources are available."""
-    for repository in repositories:
-        if repository.agent_machine_id is not None:
-            if not agent_connection_manager.is_connected(repository.agent_machine_id):
-                return AvailabilityDecision(
-                    False, f"managed agent unavailable for {repository.name}"
-                )
-            continue
-        if repository.source_ssh_connection_id is not None:
-            connection = db.get(SSHConnection, repository.source_ssh_connection_id)
-            if connection is None or not await asyncio.to_thread(
-                _ssh_reachable, connection
-            ):
-                return AvailabilityDecision(
-                    False, f"SSH source unavailable for {repository.name}"
-                )
-    return AvailabilityDecision(True)
+    probes = await run_transaction_off_loop(
+        db, _repository_probes, db, list(repositories)
+    )
+    return await _probes_available(probes)
 
 
 async def source_locations_available(
@@ -92,21 +155,5 @@ async def source_locations_available(
                 "source_ssh_connection_id": fallback_ssh_connection_id,
             }
         ]
-    for location in locations:
-        source_type = location.get("source_type", "local")
-        if source_type == "agent":
-            agent_id = location.get("agent_machine_id")
-            if agent_id is None or not agent_connection_manager.is_connected(
-                int(agent_id)
-            ):
-                return AvailabilityDecision(False, "managed agent unavailable")
-        elif source_type == "remote":
-            connection_id = location.get("source_ssh_connection_id")
-            connection = (
-                db.get(SSHConnection, int(connection_id)) if connection_id else None
-            )
-            if connection is None or not await asyncio.to_thread(
-                _ssh_reachable, connection
-            ):
-                return AvailabilityDecision(False, "SSH source unavailable")
-    return AvailabilityDecision(True)
+    probes = await run_transaction_off_loop(db, _location_probes, db, locations)
+    return await _probes_available(probes)

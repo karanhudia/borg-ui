@@ -7,7 +7,7 @@ import structlog
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.database.database import SessionLocal
+from app.database.database import SessionLocal, run_transaction_off_loop
 from app.database.models import Repository
 from app.services.operations.maintenance_start import start_maintenance
 from app.utils.schedule_time import (
@@ -30,8 +30,13 @@ def _scheduled_restore_check_is_canary(repo: Repository) -> bool:
 async def run_due_scheduled_restore_checks(
     db: Session, now: Optional[datetime] = None
 ) -> None:
-    """Dispatch due scheduled restore verification jobs."""
+    """Dispatch due scheduled restore verification jobs, waiting for the
+    database in a thread (see `run_due_scheduled_checks`)."""
     now = to_utc_naive(now or datetime.now(timezone.utc))
+    await run_transaction_off_loop(db, _start_due_scheduled_restore_checks, db, now)
+
+
+def _start_due_scheduled_restore_checks(db: Session, now: datetime) -> None:
     repos = (
         db.query(Repository)
         .filter(
