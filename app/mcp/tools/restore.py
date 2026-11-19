@@ -1,7 +1,8 @@
 """Restore tools (spec 5.5, phase 3): preview, and restore to a new place.
 
-At operate a restore never writes over anything: the destination must be
-empty or not exist yet. Overwriting is the full-level tool of phase 5.
+At operate the destination must be empty or not exist yet, checked once
+before the restore starts (Borg 2 also refuses existing files while it
+extracts; Borg 1 does not). Overwriting is the full-level tool of phase 5.
 """
 
 from __future__ import annotations
@@ -217,9 +218,8 @@ async def restore_files(ctx, args: RestoreArgs) -> ToolResult:
     if items:
         return ToolResult(
             f"Restore stopped. {args.destination} already has files in it, and "
-            "restoring at operate never writes over existing files. Pick an empty "
-            "or new folder, or ask an admin for a connection with full access to "
-            "overwrite.",
+            "restoring at operate only goes into an empty or new folder. Pick one, "
+            "or ask an admin for a connection with full access to overwrite.",
             is_error=True,
         )
     metadata = (
