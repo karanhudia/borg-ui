@@ -73,6 +73,7 @@ from app.utils.schedule_time import (
 from app.services.schedule_availability import (
     DEFAULT_AVAILABILITY_CHECK_INTERVAL_MINUTES,
     repositories_available,
+    repository_probe_targets,
     validate_availability_intervals,
 )
 
@@ -2700,6 +2701,31 @@ async def execute_scheduled_backup_with_maintenance(
         db.close()
 
 
+def _changed_since_screened(
+    db: Session, job: ScheduledJob, now: datetime, probed: Optional[tuple]
+) -> bool:
+    """Whether the availability schedule must stay due instead of starting:
+    asked after the repositories' admission, whose locks wait for an edit of
+    a repository in progress. Its sources may have been changed since they
+    were probed (`probed`, the targets of the probe), or a backup of it may
+    have succeeded since it was screened (a run started by hand). The next
+    pass probes the sources again, or records the skip."""
+    if probed is not None and probed != repository_probe_targets(
+        db, _availability_repository_ids(db, job)
+    ):
+        logger.info(
+            "Availability schedule sources changed during the probe", job_id=job.id
+        )
+        return True
+    allowed_at = _minimum_interval_ends_at(db, job)
+    if allowed_at is not None and now < allowed_at:
+        logger.info(
+            "Availability schedule succeeded since it was screened", job_id=job.id
+        )
+        return True
+    return False
+
+
 def _launch_now_or_later(start: Callable[[], None], launches: Optional[list]) -> None:
     if launches is None:
         start()
@@ -2712,6 +2738,8 @@ def _dispatch_due_scheduled_job(
     job: ScheduledJob,
     now: datetime,
     launches: Optional[list[Callable[[], None]]] = None,
+    *,
+    probed: Optional[tuple] = None,
 ) -> Optional[str]:
     """Dispatch one due scheduled backup job and return its runtime tracking key.
 
@@ -2849,6 +2877,12 @@ def _dispatch_due_scheduled_job(
             "Scheduled job has no repositories configured",
             job_id=job.id,
         )
+        return None
+
+    if job.schedule_mode == "availability" and _changed_since_screened(
+        db, job, now, probed
+    ):
+        db.rollback()
         return None
 
     job.last_run = now
@@ -3005,23 +3039,11 @@ def _claim_due_job(db: Session, job_id: int, now: datetime) -> Optional[Schedule
     return job if _still_due(job, now) else None
 
 
-def _screen_due_job(
-    db: Session, job_id: int, now: datetime, notices: list[tuple]
-) -> tuple[str, Optional[list[int]]]:
-    """What happens to the due job: `skipped` (recorded here), `dispatch`, or
-    `probe` with the ids of the repositories whose sources have to be
-    available first.
-    `gone` for a job that is no longer due."""
-    # Asked before the claim: on an install with no licensing row yet, the
-    # first look creates it and commits, which would end the claim.
-    has_feature(db, BORG2_FEATURE)
-    job = _claim_due_job(db, job_id, now)
-    if job is None:
-        return "gone", None
-    if _skip_if_plan_required(db, job, now, notices):
-        return "skipped", None
-    if job.schedule_mode != "availability":
-        return "dispatch", None
+def _minimum_interval_ends_at(db: Session, job: ScheduledJob) -> Optional[datetime]:
+    """When the availability schedule's minimum interval after its last
+    successful backup ends, or None without one."""
+    if not job.min_success_interval_minutes:
+        return None
     last_success = (
         db.query(Operation.completed_at)
         .filter(
@@ -3033,28 +3055,16 @@ def _screen_due_job(
         .order_by(Operation.completed_at.desc())
         .first()
     )
-    if last_success and job.min_success_interval_minutes:
-        allowed_at = to_utc_naive(last_success[0]) + timedelta(
-            minutes=job.min_success_interval_minutes
-        )
-        if now < allowed_at:
-            job.next_run = min(
-                allowed_at,
-                now + timedelta(minutes=job.availability_check_interval_minutes),
-            )
-            _record_availability_skip(
-                db,
-                job,
-                now,
-                reason="minimum_interval_not_elapsed",
-                detail="Minimum interval after the last successful backup has not elapsed.",
-            )
-            db.commit()
-            logger.info(
-                "Availability schedule skipped: minimum success interval",
-                job_id=job_id,
-            )
-            return "skipped", None
+    if not last_success:
+        return None
+    return to_utc_naive(last_success[0]) + timedelta(
+        minutes=job.min_success_interval_minutes
+    )
+
+
+def _availability_repository_ids(db: Session, job: ScheduledJob) -> list[int]:
+    """The repositories whose sources an availability schedule probes: the
+    links when there are any, the single repository otherwise."""
     linked_repositories = (
         db.query(Repository)
         .join(
@@ -3072,7 +3082,46 @@ def _screen_due_job(
             db.query(Repository).filter(Repository.path == job.repository).first()
         )
         linked_repositories = [repository] if repository else []
-    return "probe", [repository.id for repository in linked_repositories]
+    return [repository.id for repository in linked_repositories]
+
+
+def _screen_due_job(
+    db: Session, job_id: int, now: datetime, notices: list[tuple]
+) -> tuple[str, Optional[list[int]]]:
+    """What happens to the due job: `skipped` (recorded here), `dispatch`, or
+    `probe` with the ids of the repositories whose sources have to be
+    available first.
+    `gone` for a job that is no longer due."""
+    # Asked before the claim: on an install with no licensing row yet, the
+    # first look creates it and commits, which would end the claim.
+    has_feature(db, BORG2_FEATURE)
+    job = _claim_due_job(db, job_id, now)
+    if job is None:
+        return "gone", None
+    if _skip_if_plan_required(db, job, now, notices):
+        return "skipped", None
+    if job.schedule_mode != "availability":
+        return "dispatch", None
+    allowed_at = _minimum_interval_ends_at(db, job)
+    if allowed_at is not None and now < allowed_at:
+        job.next_run = min(
+            allowed_at,
+            now + timedelta(minutes=job.availability_check_interval_minutes),
+        )
+        _record_availability_skip(
+            db,
+            job,
+            now,
+            reason="minimum_interval_not_elapsed",
+            detail="Minimum interval after the last successful backup has not elapsed.",
+        )
+        db.commit()
+        logger.info(
+            "Availability schedule skipped: minimum success interval",
+            job_id=job_id,
+        )
+        return "skipped", None
+    return "probe", _availability_repository_ids(db, job)
 
 
 def _record_source_unavailable(
@@ -3102,19 +3151,24 @@ class _CapacityReached(Exception):
 
 
 def _dispatch_due_job_by_id(
-    db: Session, job_id: int, now: datetime, launches: list[Callable[[], None]]
+    db: Session,
+    job_id: int,
+    now: datetime,
+    launches: list[Callable[[], None]],
+    probed: Optional[tuple] = None,
 ) -> Optional[str]:
     """Dispatch the job if it is still due and a slot is free. The capacity
     is counted again under its lock, held to the dispatch's commit: a second
     pass (a process being replaced runs one until it is stopped) may have
-    started a backup since this pass counted at its start."""
+    started a backup since this pass counted at its start. `probed`: the
+    targets of the availability probe, compared after the admission."""
     max_scheduled_backups, _ = _get_scheduler_concurrency_limits(db)
     if _count_active_scheduled_backup_runs(db) >= max_scheduled_backups:
         raise _CapacityReached()
     job = _claim_due_job(db, job_id, now)
     if job is None:
         return None
-    return _dispatch_due_scheduled_job(db, job, now, launches)
+    return _dispatch_due_scheduled_job(db, job, now, launches, probed=probed)
 
 
 def _record_failed_dispatch(
@@ -3165,6 +3219,7 @@ async def dispatch_due_scheduled_backups(
             break
         notices: list[tuple] = []
         launches: list[Callable[[], None]] = []
+        probed: Optional[tuple] = None
         try:
             outcome, repository_ids = await run_transaction_off_loop(
                 db, _screen_due_job, db, job_id, now, notices
@@ -3178,6 +3233,7 @@ async def dispatch_due_scheduled_backups(
                 if repository_ids:
                     decision = await repositories_available(db, repository_ids)
                     sources_available = decision.available
+                    probed = decision.targets
                     decision_reason = (
                         decision.reason or "The backup source is unavailable."
                     )
@@ -3193,7 +3249,7 @@ async def dispatch_due_scheduled_backups(
                     skipped += 1
                     continue
             run_key = await run_transaction_off_loop(
-                db, _dispatch_due_job_by_id, db, job_id, now, launches
+                db, _dispatch_due_job_by_id, db, job_id, now, launches, probed
             )
             if run_key:
                 dispatched += 1

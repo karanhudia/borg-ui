@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database.database import SessionLocal, run_transaction_off_loop
 from app.database.models import Repository
 from app.services.job_admission import lock_repository_scope
+from app.services.operations.enqueue import wake_runner
 from app.services.operations.maintenance_start import start_maintenance
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -110,6 +111,9 @@ def _start_due_scheduled_restore_checks(db: Session, now: datetime) -> None:
                 },
                 user_id=None,
                 duplicate_error_key="backend.errors.repo.restoreCheckAlreadyRunning",
+                # committed below with the next run, under the repository's
+                # lock, as in the check scheduler
+                commit=False,
             )
             repo.last_scheduled_restore_check = now
             try:
@@ -128,6 +132,7 @@ def _start_due_scheduled_restore_checks(db: Session, now: datetime) -> None:
                 )
                 repo.next_scheduled_restore_check = None
             db.commit()
+            wake_runner()  # the queued restore check is committed only now
         except Exception as exc:
             db.rollback()
             logger.error(
