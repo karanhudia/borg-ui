@@ -7,6 +7,17 @@ import { mcpAPI } from '../../services/api'
 import { connection, connections, mcpConfig } from '../mcp/storyFixtures'
 
 const plan = { can: (_feature: string) => true }
+const backend = {
+  target: { id: 'local', kind: 'local', webBaseUrl: '' } as {
+    id: string
+    kind: 'local' | 'remote'
+    webBaseUrl: string
+  },
+}
+
+vi.mock('../../services/remoteBackends/context', () => ({
+  useActiveBackendTarget: () => backend.target,
+}))
 const auth = { user: { role: 'admin' } as { role: string } | null }
 
 vi.mock('../../hooks/usePlan', () => ({
@@ -35,6 +46,7 @@ vi.mock('../../services/api', async (importOriginal) => {
 const ok = <T,>(data: T) => ({ data }) as never
 
 beforeEach(() => {
+  backend.target = { id: 'local', kind: 'local', webBaseUrl: '' }
   vi.mocked(mcpAPI.getConfig).mockReset()
   vi.mocked(mcpAPI.list).mockReset()
   plan.can = () => true
@@ -105,5 +117,22 @@ describe('McpTab', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Copy token' }))
     await userEvent.click(screen.getByRole('button', { name: 'Done' }))
     await waitFor(() => expect(screen.queryByText(/borgui_EXAMPLE/)).not.toBeInTheDocument())
+  })
+
+  it('drops the one-time token when the active backend changes', async () => {
+    vi.mocked(mcpAPI.create).mockResolvedValue(
+      ok({ ...connection({ id: 9, name: 'laptop' }), token: 'borgui_EXAMPLE' })
+    )
+    const { rerender } = renderWithProviders(<McpTab />)
+    await userEvent.click(await screen.findByRole('button', { name: 'New connection' }))
+    await userEvent.type(screen.getByLabelText(/Name/), 'laptop')
+    await userEvent.click(screen.getByRole('button', { name: 'Create connection' }))
+    expect((await screen.findAllByText(/borgui_EXAMPLE/)).length).toBeGreaterThan(0)
+
+    backend.target = { id: 'remote-1', kind: 'remote', webBaseUrl: 'https://remote.example.com' }
+    rerender(<McpTab />)
+
+    await screen.findByText('Claude on my laptop')
+    expect(screen.queryByText(/borgui_EXAMPLE/)).not.toBeInTheDocument()
   })
 })

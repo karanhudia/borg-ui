@@ -187,9 +187,13 @@ function McpConnections() {
 
 /** Settings > AI assistants (MCP). */
 export default function McpTab() {
+  const backend = useActiveBackendTarget()
   return (
     <PlanGate feature="mcp" surface="settings_mcp">
-      <McpConnections />
+      {/* A token belongs to the backend that issued it. Remounting on a
+          switch drops it and any open dialog; a create still in flight
+          resolves into the unmounted copy and is ignored. */}
+      <McpConnections key={backend.id} />
     </PlanGate>
   )
 }
