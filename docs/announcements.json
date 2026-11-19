@@ -5,6 +5,8 @@
     {
       "id": "sale-black-friday-2026",
       "type": "custom_announcement",
+      "emoji": "🛍️",
+      "effect": "chunks",
       "priority": 100,
       "title": "Black Friday: 20% off Borg UI Lite and Pro",
       "title_localized": {
@@ -1237,6 +1239,34 @@
       "min_app_version": "2.0.0",
       "max_app_version": "2.0.0",
       "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "badge-black-friday-2026",
+      "type": "seasonal_badge",
+      "emoji": "🛍️",
+      "effect": "chunks",
+      "title": "Black Friday",
+      "title_localized": {
+        "es": "Black Friday",
+        "de": "Black Friday",
+        "it": "Black Friday"
+      },
+      "message": "Happy Black Friday from Borg UI.",
+      "message_localized": {
+        "es": "Feliz Black Friday de parte de Borg UI.",
+        "de": "Einen schönen Black Friday von Borg UI.",
+        "it": "Buon Black Friday da Borg UI."
+      },
+      "cta_label": "20% off Lite and Pro, lifetime included",
+      "cta_label_localized": {
+        "es": "20% de descuento en Lite y Pro, licencias vitalicias incluidas",
+        "de": "20% Rabatt auf Lite und Pro, auch dauerhafte Lizenzen",
+        "it": "20% di sconto su Lite e Pro, licenze a vita incluse"
+      },
+      "cta_url": "https://borgui.com/buy?src=app-black-friday-badge",
+      "cta_plans": ["community"],
+      "starts_at": "2026-11-23T00:00:00Z",
+      "ends_at": "2026-12-01T23:59:59Z"
     }
   ]
 }

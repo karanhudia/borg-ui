@@ -7,6 +7,8 @@ export type AnnouncementType =
   | 'maintenance_notice'
   | 'migration_notice'
   | 'custom_announcement'
+  /** Festive emoji on the sidebar logo, never shown in the modal. */
+  | 'seasonal_badge'
 
 export type AnnouncementLocalizedText = Record<string, string>
 export type AnnouncementLocalizedHighlights = Record<string, string[]>
@@ -31,6 +33,12 @@ export interface Announcement {
   min_app_version?: string
   max_app_version?: string
   target_plans?: Plan[]
+  /** seasonal_badge only: the emoji drawn on the logo tile. */
+  emoji?: string
+  /** seasonal_badge only: animation over the sidebar header. Unknown values draw nothing. */
+  effect?: string
+  /** seasonal_badge only: plans that get the sale line and the cta_url link. */
+  cta_plans?: Plan[]
 }
 
 export interface AnnouncementManifest {

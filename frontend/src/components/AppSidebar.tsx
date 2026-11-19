@@ -39,6 +39,8 @@ import { useAuthorization } from '../hooks/useAuthorization'
 import NavItem from './NavItem'
 import NavGroup from './NavGroup'
 import SidebarVersionInfo from './SidebarVersionInfo'
+import SeasonalBadge from './SeasonalBadge'
+import { useSeasonalBadge } from '../hooks/useSeasonalBadge'
 
 const drawerWidth = 240
 
@@ -400,6 +402,8 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     fetchSystemInfo()
   }, [])
 
+  const seasonal = useSeasonalBadge()
+
   const toggleMenu = (menuName: string) => {
     setExpandedMenus((prev) => ({ ...prev, [menuName]: !prev[menuName] }))
   }
@@ -407,7 +411,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   const content = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box>
-        <Toolbar sx={{ gap: 1.5, pl: { xs: 2, sm: 2 } }}>
+        <Toolbar sx={{ gap: 1.5, pl: { xs: 2, sm: 2 }, position: 'relative' }}>
           <Box
             component={Link}
             to="/dashboard"
@@ -460,6 +464,11 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
               </Box>
             </Box>
           </Box>
+          <SeasonalBadge
+            badge={seasonal.badge}
+            showSale={seasonal.showSale}
+            onSaleClick={seasonal.trackSaleClick}
+          />
         </Toolbar>
         <Divider />
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}

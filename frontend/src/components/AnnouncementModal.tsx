@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { Announcement } from '../types/announcements'
 import ResponsiveDialog from './shared/ResponsiveDialog'
+import ChunkBurst from './ChunkBurst'
 
 interface AnnouncementModalProps {
   announcement: Announcement | null
@@ -171,8 +172,9 @@ export default function AnnouncementModal({
         },
       }}
     >
-      <Box sx={{ px: { xs: 2.25, sm: 3 }, pt: 2.25, pb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+      <Box sx={{ position: 'relative', px: { xs: 2.25, sm: 3 }, pt: 2.25, pb: 1.5 }}>
+        {announcement.effect === 'chunks' ? <ChunkBurst fall={160} /> : null}
+        <Box sx={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
           <Box
             sx={{
               width: 44,
@@ -188,7 +190,13 @@ export default function AnnouncementModal({
               boxShadow: `inset 0 1px 0 ${glintTop}`,
             }}
           >
-            {icon}
+            {announcement.emoji ? (
+              <Box component="span" aria-hidden="true" sx={{ fontSize: 24, lineHeight: 1 }}>
+                {announcement.emoji}
+              </Box>
+            ) : (
+              icon
+            )}
           </Box>
 
           <Box sx={{ flex: 1, minWidth: 0 }}>

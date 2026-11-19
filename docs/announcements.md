@@ -71,6 +71,42 @@ Resolution order is:
 3. `default`
 4. the base field
 
+## Seasonal Badges
+
+An entry with `"type": "seasonal_badge"` never opens the modal. It puts a festive emoji on the
+corner of the sidebar logo while `starts_at` to `ends_at` covers today, for every plan in
+`target_plans` (all plans when omitted). Use it for sales and for festivals with no sale.
+
+```json
+{
+  "id": "badge-black-friday-2026",
+  "type": "seasonal_badge",
+  "emoji": "🛍️",
+  "effect": "chunks",
+  "title": "Black Friday",
+  "message": "Happy Black Friday from Borg UI.",
+  "cta_label": "20% off Lite and Pro, lifetime included",
+  "cta_url": "https://borgui.com/buy?src=app-black-friday-badge",
+  "cta_plans": ["community"],
+  "starts_at": "2026-11-23T00:00:00Z",
+  "ends_at": "2026-12-01T23:59:59Z"
+}
+```
+
+- `emoji` is required. One emoji, e.g. 🎃 for Halloween or 🪔 for Diwali.
+- `effect`: `"chunks"` drops the borgui.com sale-bar chunks over the sidebar header once per
+  browser session. Leave it out, or use `"none"`, for no animation. Reduced-motion users never see it.
+- `title` and `message` fill the tooltip and take `_localized` maps like any entry.
+- `cta_plans` lists the plans that also get `cta_label` and a click-through to `cta_url`. Lite is
+  gated as Pro, so `["community"]` keeps the sale away from paying customers. Leave it out for no link.
+- When two badges overlap, the higher `priority` wins.
+
+App versions up to 2.4.9 skip this type, so the entry is safe in the shared feed.
+
+`emoji` and `effect` also work on a normal announcement: the emoji replaces the icon in the modal
+and `"chunks"` drops the chunks over the modal header. Give a sale notice the same emoji as its
+badge so both feel like one event. Older app versions ignore both fields.
+
 ## Local Development
 
 Local frontend development does not use the published announcement feed automatically.

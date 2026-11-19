@@ -85,3 +85,12 @@ export const Release246Update: Story = {
     ) as Announcement,
   },
 }
+
+/** The Black Friday sale notice as the feed ships it: festive emoji and chunks. */
+export const BlackFridaySale: Story = {
+  args: {
+    announcement: manifest.announcements.find(
+      (announcement) => announcement.id === 'sale-black-friday-2026'
+    ) as Announcement,
+  },
+}

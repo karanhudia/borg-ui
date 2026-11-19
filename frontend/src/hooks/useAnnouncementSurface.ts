@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAnalytics } from './useAnalytics'
 import { useSystemInfo } from './useSystemInfo'
 import type { Announcement } from '../types/announcements'
-import {
-  DEFAULT_ANNOUNCEMENTS_MANIFEST,
-  fetchAnnouncementsManifest,
-  getAnnouncementsUrl,
-} from '../services/announcements'
+import { useAnnouncementsManifest } from './useAnnouncementsManifest'
 import {
   acknowledgeAnnouncement,
   getAnnouncementSnoozeDays,
@@ -32,21 +27,9 @@ export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
   const { i18n } = useTranslation()
   const { trackAnnouncement, EventAction } = useAnalytics()
   const { data: systemInfo } = useSystemInfo()
-  const announcementsUrl = getAnnouncementsUrl()
   const lastTrackedAnnouncementIdRef = useRef<string | null>(null)
 
-  const {
-    data: manifest,
-    dataUpdatedAt,
-    errorUpdatedAt,
-  } = useQuery({
-    queryKey: ['announcements-manifest', announcementsUrl],
-    queryFn: () => fetchAnnouncementsManifest(announcementsUrl),
-    initialData: DEFAULT_ANNOUNCEMENTS_MANIFEST,
-    initialDataUpdatedAt: 0,
-    staleTime: 60 * 60 * 1000,
-    retry: false,
-  })
+  const { data: manifest, dataUpdatedAt, errorUpdatedAt } = useAnnouncementsManifest()
 
   const [now] = useState(() => new Date())
   const announcement = useMemo(() => {
