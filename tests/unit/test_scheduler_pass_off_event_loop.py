@@ -1722,3 +1722,65 @@ async def test_a_failed_notification_preparation_ends_its_read_in_its_thread(
             await prepare(db)
         assert not db.in_transaction()
         assert database.engine.pool.checkedout() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("kind", ["check", "restore_check"])
+@pytest.mark.parametrize("change", ["switched-off", "moved"])
+async def test_a_check_schedule_changed_after_the_select_is_left_alone(
+    database, monkeypatch, kind, change
+):
+    """The pass selects the due repositories, then starts each under the
+    repository's lock. A request (on the loop, beside the pass's thread) may
+    switch the schedule off or move it in between: the start reads the row
+    again under the lock, queues nothing, and leaves the new values."""
+    import app.services.check_scheduler as check_scheduler
+
+    _settings(database)
+    now = datetime.utcnow()
+    columns = (
+        {
+            "check_cron_expression": "0 3 * * *",
+            "check_schedule_enabled": True,
+            "next_scheduled_check": now - PAST,
+        }
+        if kind == "check"
+        else {
+            "restore_check_cron_expression": "0 4 * * *",
+            "restore_check_schedule_enabled": True,
+            "restore_check_paths": json.dumps(["/etc/hostname"]),
+            "next_scheduled_restore_check": now - PAST,
+        }
+    )
+    [repository_id] = _seed(database, _repository("checked", **columns))
+    prefix = "" if kind == "check" else "restore_"
+    later = datetime(2999, 1, 1)
+    edit = (
+        f"UPDATE repositories SET {prefix}check_schedule_enabled = false WHERE id = :id"
+        if change == "switched-off"
+        else f"UPDATE repositories SET next_scheduled_{prefix}check = :later WHERE id = :id"
+    )
+    module = check_scheduler if kind == "check" else restore_check_scheduler
+    real = module.lock_repository_scope
+    edited: list[bool] = []
+
+    def edit_then_lock(db, repository):
+        if not edited:
+            with database.side.connect() as connection:
+                connection.execute(text(edit), {"id": repository_id, "later": later})
+                connection.commit()
+            edited.append(True)
+        return real(db, repository)
+
+    monkeypatch.setattr(module, "lock_repository_scope", edit_then_lock)
+
+    await _one_pass(monkeypatch)
+
+    assert edited == [True]
+    assert _operations(database) == set()
+    with database() as session:
+        repository = session.get(Repository, repository_id)
+        if change == "switched-off":
+            assert not getattr(repository, f"{prefix}check_schedule_enabled")
+        else:
+            assert getattr(repository, f"next_scheduled_{prefix}check") == later

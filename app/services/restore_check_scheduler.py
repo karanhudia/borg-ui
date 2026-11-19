@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database.database import SessionLocal, run_transaction_off_loop
 from app.database.models import Repository
+from app.services.job_admission import lock_repository_scope
 from app.services.operations.maintenance_start import start_maintenance
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -36,6 +37,17 @@ async def run_due_scheduled_restore_checks(
     await run_transaction_off_loop(db, _start_due_scheduled_restore_checks, db, now)
 
 
+def _restore_check_still_due(repo: Repository, now: datetime) -> bool:
+    return (
+        bool(repo.restore_check_cron_expression)
+        and bool(repo.restore_check_schedule_enabled)
+        and (
+            repo.next_scheduled_restore_check is None
+            or to_utc_naive(repo.next_scheduled_restore_check) <= now
+        )
+    )
+
+
 def _start_due_scheduled_restore_checks(db: Session, now: datetime) -> None:
     repos = (
         db.query(Repository)
@@ -56,7 +68,15 @@ def _start_due_scheduled_restore_checks(db: Session, now: datetime) -> None:
     )
 
     for repo in repos:
+        repo_id = repo.id
         try:
+            # Decided on the row under the repository's lock, as the check
+            # scheduler does: the schedule may have changed since the select.
+            lock_repository_scope(db, repo)
+            db.refresh(repo)
+            if not _restore_check_still_due(repo, now):
+                db.rollback()
+                continue
             if repo.mode == "observe" and _scheduled_restore_check_is_canary(repo):
                 repo.restore_check_canary_enabled = False
                 try:
@@ -105,9 +125,10 @@ def _start_due_scheduled_restore_checks(db: Session, now: datetime) -> None:
                 repo.next_scheduled_restore_check = None
             db.commit()
         except Exception as exc:
+            db.rollback()
             logger.error(
                 "Failed to create scheduled restore check",
-                repo_id=repo.id,
+                repo_id=repo_id,
                 error=str(exc),
             )
             continue
