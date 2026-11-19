@@ -46,6 +46,16 @@ describe('installTranslationDomGuard', () => {
     expect(parent.lastChild).toBe(added)
   })
 
+  it('appends a translator-wrapped node when the reference was replaced', () => {
+    const parent = document.createElement('div')
+    const font = parent.appendChild(document.createElement('font'))
+    const moved = font.appendChild(document.createTextNode('moved'))
+    const trailing = parent.appendChild(document.createElement('button'))
+
+    expect(parent.insertBefore(moved, document.createTextNode('replaced'))).toBe(moved)
+    expect(Array.from(parent.childNodes)).toEqual([font, trailing, moved])
+  })
+
   it('leaves nodes under other parents to the browser', () => {
     const parent = document.createElement('div')
     const other = document.createElement('div')

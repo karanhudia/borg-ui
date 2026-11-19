@@ -46,9 +46,14 @@ export const installTranslationDomGuard = (): void => {
       const wrapper = translationWrapper(this, reference)
       if (wrapper) return insertBefore.call(this, node, wrapper) as T
       // Replaced by the translator: append a node React is placing here (new,
-      // or already a child), as no position is left to keep. A node from
-      // another container is not moved.
-      if (reference.parentNode === null && (node.parentNode === null || node.parentNode === this)) {
+      // already a child, or a child the translator wrapped), as no position is
+      // left to keep. A node from another container is not moved.
+      if (
+        reference.parentNode === null &&
+        (node.parentNode === null ||
+          node.parentNode === this ||
+          translationWrapper(this, node) !== null)
+      ) {
         return insertBefore.call(this, node, null) as T
       }
     }
