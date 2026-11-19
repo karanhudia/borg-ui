@@ -358,7 +358,8 @@ async def check_repository(ctx, args: CheckArgs) -> ToolResult:
     from app.mcp import borg_routes
 
     repo = await resolve.repository(ctx, args.repository)
-    path, body = borg_routes.repository_check(repo, args.max_duration)
+    seconds = (args.max_duration or 0) * 60
+    path, body = borg_routes.repository_check(repo, seconds)
     return await _start(ctx, repo, "Check", "check", path, body)
 
 

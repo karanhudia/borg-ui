@@ -120,26 +120,16 @@ async def test_post_sends_json_body(client_for):
 
 
 @pytest.mark.unit
-async def test_post_passes_its_timeout(client_for, monkeypatch):
+async def test_slow_route_times_out():
+    """httpx's ASGI transport ignores client timeouts, so the client sets its
+    own deadline and raises the same timeout httpx would."""
+    import anyio
     import httpx
 
-    seen = {}
-    real = httpx.AsyncClient.request
+    async def slow_app(scope, receive, send):
+        await anyio.sleep(5)
 
-    async def spy(self, *args, **kwargs):
-        seen["timeout"] = self.timeout.read
-        return await real(self, *args, **kwargs)
-
-    monkeypatch.setattr(httpx.AsyncClient, "request", spy)
-    await client_for.post(
-        "/api/schedule/validate-cron",
-        json={
-            "minute": "0",
-            "hour": "3",
-            "day_of_month": "*",
-            "month": "*",
-            "day_of_week": "*",
-        },
-        timeout=321,
-    )
-    assert seen["timeout"] == 321
+    client = InternalClient(slow_app, user_id=1, connection_id=1)
+    with anyio.fail_after(3):
+        with pytest.raises(httpx.TimeoutException):
+            await client.post("/slow", timeout=0.05)

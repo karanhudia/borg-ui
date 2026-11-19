@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+import anyio
 import httpx
 
 from app.core.security import MCP_INTERNAL_HEADER, create_mcp_internal_token
@@ -88,14 +89,20 @@ class InternalClient:
         }
         # A crashing route answers 500 here, as it would over the network.
         transport = httpx.ASGITransport(app=self._app, raise_app_exceptions=False)
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url=INTERNAL_BASE_URL,
-            timeout=timeout or DEFAULT_TIMEOUT,
-        ) as client:
-            response = await client.request(
-                method, path, params=clean, json=json, headers=headers
-            )
+        limit = timeout or DEFAULT_TIMEOUT
+        # The ASGI transport ignores httpx timeouts (only network transports
+        # enforce them), so the deadline is ours. Cancelling the route is what
+        # a client that hung up does; a sync route's thread runs to its end.
+        try:
+            with anyio.fail_after(limit):
+                async with httpx.AsyncClient(
+                    transport=transport, base_url=INTERNAL_BASE_URL
+                ) as client:
+                    response = await client.request(
+                        method, path, params=clean, json=json, headers=headers
+                    )
+        except TimeoutError:
+            raise httpx.ReadTimeout(f"{method} {path} took over {limit} s") from None
         if response.is_success:
             if response.status_code == 204 or not response.content:
                 return None

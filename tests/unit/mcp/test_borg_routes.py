@@ -72,16 +72,24 @@ def test_backup_run():
 
 @pytest.mark.unit
 def test_repository_check():
-    assert borg_routes.repository_check(V1) == ("/api/repositories/7/check", {})
-    assert borg_routes.repository_check(V1, max_duration=30) == (
+    # The v1 route treats a missing max_duration as 3600 s (a partial check);
+    # 0 is the explicit full check. The value is seconds.
+    assert borg_routes.repository_check(V1) == (
         "/api/repositories/7/check",
-        {"max_duration": 30},
+        {"max_duration": 0},
     )
-    assert borg_routes.repository_check(V2, max_duration=30) == (
+    assert borg_routes.repository_check(V1, max_duration=1800) == (
+        "/api/repositories/7/check",
+        {"max_duration": 1800},
+    )
+    assert borg_routes.repository_check(V2, max_duration=1800) == (
         "/api/v2/backup/check",
-        {"repository_id": 7, "max_duration": 30},
+        {"repository_id": 7, "max_duration": 1800},
     )
-    assert borg_routes.repository_check(AGENT_V2) == ("/api/repositories/7/check", {})
+    assert borg_routes.repository_check(AGENT_V2) == (
+        "/api/repositories/7/check",
+        {"max_duration": 0},
+    )
 
 
 @pytest.mark.unit

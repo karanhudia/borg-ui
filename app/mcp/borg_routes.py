@@ -61,8 +61,10 @@ def backup_run(repo: dict) -> tuple[str, dict]:
     return "/api/backup/start", {"repository": repo["path"]}
 
 
-def repository_check(repo: dict, max_duration: int | None = None) -> tuple[str, dict]:
-    body = {} if max_duration is None else {"max_duration": max_duration}
+def repository_check(repo: dict, max_duration: int = 0) -> tuple[str, dict]:
+    """`max_duration` in seconds; 0 is a full check. Always sent: the v1 route
+    reads a missing value as 3600, which is a partial check."""
+    body = {"max_duration": max_duration}
     if _v(repo) == "/v2":
         return "/api/v2/backup/check", {"repository_id": repo["id"], **body}
     return f"/api/repositories/{repo['id']}/check", body

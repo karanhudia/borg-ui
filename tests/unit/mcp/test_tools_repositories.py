@@ -84,8 +84,18 @@ _JOB = {"job_id": 77, "status": "pending"}
 @pytest.mark.parametrize(
     "name,repo,route,body",
     [
-        ("check_repository", "Photos", "/api/repositories/1/check", {}),
-        ("check_repository", "Media", "/api/v2/backup/check", {"repository_id": 2}),
+        (
+            "check_repository",
+            "Photos",
+            "/api/repositories/1/check",
+            {"max_duration": 0},
+        ),
+        (
+            "check_repository",
+            "Media",
+            "/api/v2/backup/check",
+            {"repository_id": 2, "max_duration": 0},
+        ),
         ("compact_repository", "Photos", "/api/repositories/1/compact", None),
         ("compact_repository", "Media", "/api/v2/backup/compact", {"repository_id": 2}),
         ("run_restore_check", "Media", "/api/repositories/2/restore-check", None),
@@ -103,7 +113,8 @@ def test_maintenance_starts_the_right_route(name, repo, route, body):
 def test_partial_check_passes_max_duration():
     routes = {**_REPOS, "POST /api/repositories/1/check": _JOB}
     _, api = _run("check_repository", routes, repository="Photos", max_duration=30)
-    assert api.posts == [("/api/repositories/1/check", {"max_duration": 30})]
+    # minutes in, seconds to the route
+    assert api.posts == [("/api/repositories/1/check", {"max_duration": 1800})]
 
 
 @pytest.mark.unit
