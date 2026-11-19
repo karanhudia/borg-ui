@@ -1640,6 +1640,13 @@ def _refuse_unsupported_scoped_prune(
         return False
     if PRUNE_MATCH_CAPABILITY in (capabilities or []):
         return False
+    # Take it off the queue first, conditional on `queued`: if another
+    # transport claimed or started it since it was read, that run is left
+    # alone. Either way it is not this caller's to hand out.
+    if not _mark_agent_job_claimed(job, db):
+        return True
+    db.commit()
+    db.refresh(job)
     _fail_agent_job(
         job,
         db,

@@ -3897,6 +3897,23 @@ class TestScopedPruneNeedsTheCapability:
 
         assert [j["id"] for j in response.json()["jobs"]] == [job.id]
 
+    def test_a_job_another_transport_took_is_left_alone(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        from app.api.agents import _refuse_unsupported_scoped_prune
+
+        _, agent = self._agent(test_client, test_db, admin_headers, [])
+        job = _scoped_prune_job(test_db, agent)
+        # claimed elsewhere after this caller read it as queued
+        test_db.query(AgentJob).filter(AgentJob.id == job.id).update(
+            {AgentJob.status: "running"}, synchronize_session=False
+        )
+        assert job.status == "queued"
+
+        assert _refuse_unsupported_scoped_prune(job, [], test_db)
+        test_db.refresh(job)
+        assert job.status == "running"
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("session_has_it", [False, True])
     async def test_session_dispatch_checks_the_connected_session(
