@@ -3897,6 +3897,35 @@ class TestScopedPruneNeedsTheCapability:
 
         assert [j["id"] for j in response.json()["jobs"]] == [job.id]
 
+    def test_it_never_commits_as_claimed(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """A committed `claimed` would let an agent that polled the job earlier
+        claim and start it before it fails: go from queued to failed at once."""
+        from sqlalchemy import event, text
+
+        from app.api.agents import _refuse_unsupported_scoped_prune
+
+        _, agent = self._agent(test_client, test_db, admin_headers, [])
+        job = _scoped_prune_job(test_db, agent)
+        seen = []
+
+        def record(session):
+            seen.append(
+                session.execute(
+                    text("SELECT status FROM agent_jobs WHERE id = :id"),
+                    {"id": job.id},
+                ).scalar()
+            )
+
+        event.listen(test_db, "before_commit", record)
+        try:
+            assert _refuse_unsupported_scoped_prune(job, [], test_db)
+        finally:
+            event.remove(test_db, "before_commit", record)
+        assert seen and "claimed" not in seen
+        assert seen[-1] == "failed"
+
     def test_a_job_another_transport_took_is_left_alone(
         self, test_client: TestClient, test_db, admin_headers
     ):
