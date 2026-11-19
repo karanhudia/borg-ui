@@ -1,137 +1,29 @@
 {
-  "generatedAt": "2026-11-16T05:41:24.874Z",
+  "generatedAt": "2026-11-19T13:51:37.682Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1551 visual report",
-    "commitSha": "ef25b8973251",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/43811746363"
+    "commitSha": "2fbd31fad5c4",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44537532760"
   },
   "totals": {
-    "baseline": 1300,
-    "actual": 1300,
-    "compared": 1300,
-    "changed": 7,
-    "added": 0,
+    "baseline": 1350,
+    "actual": 1358,
+    "compared": 1350,
+    "changed": 1,
+    "added": 8,
     "removed": 0,
-    "unchanged": 1293
+    "unchanged": 1349
   },
   "changed": [
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-template-detail.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-template-detail.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-template-detail.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-template-detail.png",
-      "diffPixels": 204010,
-      "totalPixels": 1024000,
-      "diffRatio": 0.199228515625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--create-error.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--create-error.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--create-error.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--create-error.png",
-      "diffPixels": 171690,
-      "totalPixels": 1024000,
-      "diffRatio": 0.167666015625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing--mobile.png",
-      "diffPixels": 59730,
-      "totalPixels": 329160,
-      "diffRatio": 0.18146190302588408,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote-setup-missing.png",
-      "diffPixels": 171690,
-      "totalPixels": 1024000,
-      "diffRatio": 0.167666015625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "pages-cloudstorage--add-guided-remote.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--add-guided-remote.png",
-      "actualPath": "images/actual/pages-cloudstorage--add-guided-remote.png",
-      "diffPath": "images/diff/pages-cloudstorage--add-guided-remote.png",
-      "diffPixels": 171690,
-      "totalPixels": 1024000,
-      "diffRatio": 0.167666015625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "pages-cloudstorage--editing-remote.png",
-      "baselinePath": "images/baseline/pages-cloudstorage--editing-remote.png",
-      "actualPath": "images/actual/pages-cloudstorage--editing-remote.png",
-      "diffPath": "images/diff/pages-cloudstorage--editing-remote.png",
-      "diffPixels": 171690,
-      "totalPixels": 1024000,
-      "diffRatio": 0.167666015625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
     {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 460,
+      "diffPixels": 422,
       "totalPixels": 329160,
-      "diffRatio": 0.0013974966581601653,
+      "diffRatio": 0.001282051282051282,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -143,7 +35,40 @@
       }
     }
   ],
-  "added": [],
+  "added": [
+    {
+      "fileName": "components-announcementmodal--black-friday-sale--mobile.png",
+      "actualPath": "images/actual/components-announcementmodal--black-friday-sale--mobile.png"
+    },
+    {
+      "fileName": "components-announcementmodal--black-friday-sale.png",
+      "actualPath": "images/actual/components-announcementmodal--black-friday-sale.png"
+    },
+    {
+      "fileName": "components-seasonalbadge--community-sale--mobile.png",
+      "actualPath": "images/actual/components-seasonalbadge--community-sale--mobile.png"
+    },
+    {
+      "fileName": "components-seasonalbadge--community-sale.png",
+      "actualPath": "images/actual/components-seasonalbadge--community-sale.png"
+    },
+    {
+      "fileName": "components-seasonalbadge--no-sale-no-effect--mobile.png",
+      "actualPath": "images/actual/components-seasonalbadge--no-sale-no-effect--mobile.png"
+    },
+    {
+      "fileName": "components-seasonalbadge--no-sale-no-effect.png",
+      "actualPath": "images/actual/components-seasonalbadge--no-sale-no-effect.png"
+    },
+    {
+      "fileName": "components-seasonalbadge--paid-plan--mobile.png",
+      "actualPath": "images/actual/components-seasonalbadge--paid-plan--mobile.png"
+    },
+    {
+      "fileName": "components-seasonalbadge--paid-plan.png",
+      "actualPath": "images/actual/components-seasonalbadge--paid-plan.png"
+    }
+  ],
   "removed": [],
   "unchanged": [
     {
@@ -621,6 +546,12 @@
       "fileName": "backup-plans-schedulestep--check-flag-conflict.png"
     },
     {
+      "fileName": "backup-plans-schedulestep--prune-scoped-to-plan--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-schedulestep--prune-scoped-to-plan.png"
+    },
+    {
       "fileName": "backup-plans-schedulestep--when-available--mobile.png"
     },
     {
@@ -754,6 +685,9 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-template-detail--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-template-detail.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded--mobile.png"
@@ -952,6 +886,12 @@
     },
     {
       "fileName": "components-appsidebar--community-plan.png"
+    },
+    {
+      "fileName": "components-appsidebar--mcp-route--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--mcp-route.png"
     },
     {
       "fileName": "components-appsidebar--viewer-settings--mobile.png"
@@ -2628,6 +2568,18 @@
       "fileName": "components-storagebrowserdialog--with-title-action.png"
     },
     {
+      "fileName": "components-systemsettings-mcpaccesssection--off-and-capped--mobile.png"
+    },
+    {
+      "fileName": "components-systemsettings-mcpaccesssection--off-and-capped.png"
+    },
+    {
+      "fileName": "components-systemsettings-mcpaccesssection--on--mobile.png"
+    },
+    {
+      "fileName": "components-systemsettings-mcpaccesssection--on.png"
+    },
+    {
       "fileName": "components-systemsettings-repositorymonitoringsection--automatic-prune-previews-off--mobile.png"
     },
     {
@@ -2779,6 +2731,9 @@
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--create-error--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-error.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png"
@@ -3249,6 +3204,96 @@
       "fileName": "managed-agents-agentupgradestatechip--upgrading.png"
     },
     {
+      "fileName": "mcp-mcpactivitypanel--empty--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpactivitypanel--empty.png"
+    },
+    {
+      "fileName": "mcp-mcpactivitypanel--every-outcome--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpactivitypanel--every-outcome.png"
+    },
+    {
+      "fileName": "mcp-mcpactivitypanel--more-to-load--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpactivitypanel--more-to-load.png"
+    },
+    {
+      "fileName": "mcp-mcpconnecteddialog--default--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpconnecteddialog--default.png"
+    },
+    {
+      "fileName": "mcp-mcpconnecteddialog--under-base-path--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpconnecteddialog--under-base-path.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectiondialog--backend-error--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectiondialog--backend-error.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectiondialog--create--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectiondialog--create.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectiondialog--edit--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectiondialog--edit.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectionslist--admin-with-owners--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectionslist--admin-with-owners.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectionslist--empty--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectionslist--empty.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectionslist--rows--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectionslist--rows.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectionslist--turned-off--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcpconnectionslist--turned-off.png"
+    },
+    {
+      "fileName": "mcp-mcplevelcards--all-available--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcplevelcards--all-available.png"
+    },
+    {
+      "fileName": "mcp-mcplevelcards--capped-at-operate--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcplevelcards--capped-at-operate.png"
+    },
+    {
+      "fileName": "mcp-mcplevelcards--read-only-available--mobile.png"
+    },
+    {
+      "fileName": "mcp-mcplevelcards--read-only-available.png"
+    },
+    {
       "fileName": "pages-activity-activityfilters--all-activity--mobile.png"
     },
     {
@@ -3294,6 +3339,15 @@
       "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
     },
     {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote.png"
+    },
+    {
       "fileName": "pages-cloudstorage--browse-dialog--mobile.png"
     },
     {
@@ -3307,6 +3361,9 @@
     },
     {
       "fileName": "pages-cloudstorage--editing-remote--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--editing-remote.png"
     },
     {
       "fileName": "pages-cloudstorage--empty--mobile.png"
@@ -4018,6 +4075,42 @@
     },
     {
       "fileName": "settings-backgroundworktab--paused.png"
+    },
+    {
+      "fileName": "settings-mcptab--community--mobile.png"
+    },
+    {
+      "fileName": "settings-mcptab--community.png"
+    },
+    {
+      "fileName": "settings-mcptab--empty--mobile.png"
+    },
+    {
+      "fileName": "settings-mcptab--empty.png"
+    },
+    {
+      "fileName": "settings-mcptab--load-failed--mobile.png"
+    },
+    {
+      "fileName": "settings-mcptab--load-failed.png"
+    },
+    {
+      "fileName": "settings-mcptab--turned-off--mobile.png"
+    },
+    {
+      "fileName": "settings-mcptab--turned-off.png"
+    },
+    {
+      "fileName": "settings-mcptab--viewer--mobile.png"
+    },
+    {
+      "fileName": "settings-mcptab--viewer.png"
+    },
+    {
+      "fileName": "settings-mcptab--with-connections--mobile.png"
+    },
+    {
+      "fileName": "settings-mcptab--with-connections.png"
     },
     {
       "fileName": "shared-schedulepicker--availability-trigger--mobile.png"
