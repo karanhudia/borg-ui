@@ -22,7 +22,7 @@ from app.core.agent_constants import (
     AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
 )
 from app.core.security import get_current_admin_user, get_password_hash
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.database.models import (
     AgentEnrollmentToken,
     AgentJob,
@@ -401,7 +401,8 @@ def _enrollment_expires_at(
     response_model=AgentEnrollmentTokenCreated,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_enrollment_token(
+@ends_read_on_return
+def create_enrollment_token(
     payload: AgentEnrollmentTokenCreate,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
@@ -414,10 +415,11 @@ async def create_enrollment_token(
         )
 
     raw_token = "borgui_enroll_" + secrets.token_urlsafe(32)
+    token_hash = get_password_hash(raw_token)
     now = _now_utc()
     token = AgentEnrollmentToken(
         name=name,
-        token_hash=get_password_hash(raw_token),
+        token_hash=token_hash,
         token_prefix=raw_token[:AGENT_TOKEN_PREFIX_LENGTH],
         default_path=_optional_trimmed(payload.default_path),
         created_by_user_id=current_user.id,

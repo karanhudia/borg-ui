@@ -32,7 +32,6 @@ import base64
 import binascii
 import hashlib
 import os
-import shutil
 import subprocess
 import tempfile
 import time
@@ -561,8 +560,3 @@ def describe_host_key_status(connection, observed: Optional[str]) -> str:
     if host_keys_match(stored, observed):
         return HOST_KEY_STATUS_TRUSTED
     return HOST_KEY_STATUS_CHANGED
-
-
-def ssh_keyscan_available() -> bool:
-    """Whether ``ssh-keyscan`` exists in this image."""
-    return shutil.which("ssh-keyscan") is not None

@@ -6,9 +6,12 @@ write `status = "online"` unconditionally, which undid the revocation and
 made the agent's token valid again.
 """
 
+import threading
 from datetime import datetime, timedelta, timezone
 
 import pytest
+
+import app.api.agents as agents_api
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -70,6 +73,22 @@ def _hello() -> dict:
         "capabilities": ["session.commands", "backup.create"],
         "running_job_ids": [],
     }
+
+
+def _session_started(monkeypatch) -> threading.Event:
+    """Set once a session's start is done: it sends what is queued after the
+    ack, from a read in a thread, so a job queued afterwards is left to the
+    session's messages."""
+    started = threading.Event()
+    original = agents_api._send_queued_agent_jobs
+
+    async def send_and_tell(db, jobs, *, source):
+        await original(db, jobs, source=source)
+        if source == "session_reconnect":
+            started.set()
+
+    monkeypatch.setattr(agents_api, "_send_queued_agent_jobs", send_and_tell)
+    return started
 
 
 def _queue_undelivered_job(test_db, agent: AgentMachine) -> AgentJob:
@@ -145,9 +164,10 @@ async def test_session_heartbeat_keeps_an_active_agent_online(test_db):
 
 @pytest.mark.unit
 def test_open_session_is_closed_when_the_agent_is_revoked(
-    test_client: TestClient, test_db
+    test_client: TestClient, test_db, monkeypatch
 ):
     agent = _create_agent(test_db, status="offline")
+    started = _session_started(monkeypatch)
 
     with pytest.raises(WebSocketDisconnect) as exc_info:
         with test_client.websocket_connect(
@@ -156,6 +176,8 @@ def test_open_session_is_closed_when_the_agent_is_revoked(
             websocket.send_json(_hello())
             assert websocket.receive_json()["type"] == "hello_ack"
             assert _status(test_db, agent) == "online"
+
+            assert started.wait(5)
 
             # Without the fix the heartbeat hands this job to the revoked agent
             # (and the receive below returns it) instead of closing the session.
@@ -211,11 +233,12 @@ def test_rest_heartbeat_authenticated_before_a_revocation_is_refused(test_db):
 
 @pytest.mark.unit
 def test_any_session_message_after_a_revocation_is_refused(
-    test_client: TestClient, test_db
+    test_client: TestClient, test_db, monkeypatch
 ):
     """A revoked agent that stops sending heartbeats is closed by whatever it
     sends next, before the message is applied."""
     agent = _create_agent(test_db, status="offline")
+    started = _session_started(monkeypatch)
     claimed_at = datetime.now(timezone.utc) - timedelta(seconds=5)
     claimed = AgentJob(
         agent_machine_id=agent.id,
@@ -237,6 +260,8 @@ def test_any_session_message_after_a_revocation_is_refused(
             hello["running_job_ids"] = [claimed.id]
             websocket.send_json(hello)
             assert websocket.receive_json()["type"] == "hello_ack"
+
+            assert started.wait(5)
 
             # Without the per-message check the start report is applied, and
             # without any check the heartbeat hands this job out.

@@ -28,10 +28,17 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  # Shots are independent, so stories are split round-robin across runners.
+  # Each runner keeps the default 2 workers and the same readiness waits:
+  # more workers on one runner did not give reliable pixel equivalence.
   capture:
-    name: Capture Storybook snapshots
+    name: Capture Storybook snapshots (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       # No ref: pull_request checks out refs/pull/N/merge, so the snapshots show
@@ -53,16 +60,53 @@ jobs:
         run: npm ci
 
       - name: Install Playwright Chromium
-        working-directory: frontend
-        run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
+        uses: ./.github/actions/install-playwright-chromium
+        with:
+          working-directory: frontend
+          browsers-path: "0"
 
       - name: Capture Storybook snapshots
         working-directory: frontend
         run: npm run visual:screenshots
         env:
           STORYBOOK_SNAPSHOTS_DIR: ${{ github.workspace }}/visual-actual
+          STORYBOOK_SNAPSHOT_SHARD: ${{ matrix.shard }}/3
 
-      - name: Upload visual snapshots
+      - name: Upload visual snapshot shard
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-actual-${{ matrix.shard }}
+          path: visual-actual
+          if-no-files-found: error
+          retention-days: 1
+
+  # visual-regression.yml downloads one visual-actual artifact. This job runs
+  # only when every shard succeeded, and also checks that all three shard
+  # artifacts exist: re-running one failed shard after the others' artifacts
+  # expired would otherwise publish a partial set.
+  merge:
+    name: Merge Storybook snapshots
+    runs-on: ubuntu-latest
+    needs: capture
+    steps:
+      - name: Download visual snapshot shards
+        uses: actions/download-artifact@v8
+        with:
+          pattern: visual-actual-*
+          path: shards
+
+      - name: Require every shard
+        run: |
+          for shard in 1 2 3; do
+            if ! find "shards/visual-actual-$shard" -name '*.png' -print -quit 2>/dev/null | grep -q .; then
+              echo "::error::visual-actual-$shard is missing. Re-run all jobs, not only the failed ones."
+              exit 1
+            fi
+          done
+          mkdir visual-actual
+          cp -R shards/visual-actual-1/. shards/visual-actual-2/. shards/visual-actual-3/. visual-actual/
+
+      - name: Upload merged visual snapshots
         uses: actions/upload-artifact@v7
         with:
           name: visual-actual

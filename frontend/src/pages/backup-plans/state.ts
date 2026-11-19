@@ -1,10 +1,9 @@
 import { getDefaultRepositoryEncryption } from '../../components/wizard'
+import { normalizeSourceLocationList } from '../../utils/backupPlanPayload'
 import { getBrowserTimeZone } from '../../utils/dateUtils'
 import type {
   BackupPlan,
   BackupPlanScriptHook,
-  SourceContainerSelection,
-  SourceDatabaseSelection,
   SourceLocation,
   SourceType,
   UploadRatelimitSchedulePolicy,
@@ -43,6 +42,7 @@ export const createInitialState = (): WizardState => ({
   scriptHooks: [],
   runRepositoryScripts: true,
   runPruneAfter: false,
+  pruneScopeToPlan: false,
   runCompactAfter: false,
   runCheckAfter: false,
   runRestoreCheckAfter: false,
@@ -83,157 +83,7 @@ function normalizeUploadRatelimitSchedulePolicies(
 }
 
 function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
-  const normalizeScriptId = (value?: number | null): number | null => {
-    const parsed = Number(value)
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-  }
-
-  const normalizeScriptParameters = (
-    parameters?: Record<string, string> | null
-  ): Record<string, string> => {
-    return Object.fromEntries(
-      Object.entries(parameters || {})
-        .map(([key, value]) => [key.trim(), String(value).trim()] as const)
-        .filter(([key]) => key.length > 0)
-    )
-  }
-
-  const normalizeScriptExecutionTarget = (
-    value?: SourceDatabaseSelection['script_execution_target'] | string | null
-  ): SourceDatabaseSelection['script_execution_target'] => {
-    return value === 'server' ? 'server' : 'source'
-  }
-
-  const normalizeDatabase = (
-    location: SourceLocation,
-    paths: string[]
-  ): SourceDatabaseSelection | undefined => {
-    if (!location.database) return undefined
-    const backupPaths = (location.database.backup_paths || paths)
-      .map((path) => path.trim())
-      .filter(Boolean)
-    if (backupPaths.length === 0) return undefined
-    const captureMode = location.database.capture_mode === 'original' ? 'original' : 'dump'
-    const normalized: SourceDatabaseSelection = {
-      template_id: location.database.template_id?.trim() || 'database',
-      engine: location.database.engine?.trim() || 'Database',
-      display_name:
-        location.database.display_name?.trim() || location.database.engine?.trim() || 'Database',
-      backup_strategy: location.database.backup_strategy?.trim() || 'logical_dump',
-      detected_source_path: location.database.detected_source_path?.trim() || null,
-      detection_label: location.database.detection_label?.trim() || null,
-      capture_mode: captureMode,
-      dump_path:
-        captureMode === 'dump' ? location.database.dump_path?.trim() || backupPaths[0] : null,
-      backup_paths: backupPaths,
-      script_execution_target: normalizeScriptExecutionTarget(
-        location.database.script_execution_target
-      ),
-    }
-    const preScriptId = normalizeScriptId(location.database.pre_backup_script_id)
-    const postScriptId = normalizeScriptId(location.database.post_backup_script_id)
-    if (preScriptId) normalized.pre_backup_script_id = preScriptId
-    if (postScriptId) normalized.post_backup_script_id = postScriptId
-    if (preScriptId || location.database.pre_backup_script_parameters) {
-      normalized.pre_backup_script_parameters = normalizeScriptParameters(
-        location.database.pre_backup_script_parameters
-      )
-    }
-    if (postScriptId || location.database.post_backup_script_parameters) {
-      normalized.post_backup_script_parameters = normalizeScriptParameters(
-        location.database.post_backup_script_parameters
-      )
-    }
-    const scriptExecutionOrder = normalizeScriptId(location.database.script_execution_order)
-    if (scriptExecutionOrder) normalized.script_execution_order = scriptExecutionOrder
-    return normalized
-  }
-
-  const normalizeContainer = (
-    location: SourceLocation,
-    paths: string[]
-  ): SourceContainerSelection | undefined => {
-    if (!location.container) return undefined
-    const containerName = location.container.container_name?.trim()
-    const exportPath = location.container.export_path?.trim() || paths[0]
-    if (!containerName || !exportPath) return undefined
-    const normalized: SourceContainerSelection = {
-      container_name: containerName,
-      display_name: location.container.display_name?.trim() || containerName,
-      image: location.container.image?.trim() || null,
-      backup_mode: 'export',
-      export_path: exportPath,
-      script_execution_target: normalizeScriptExecutionTarget(
-        location.container.script_execution_target
-      ),
-    }
-    const preScriptId = normalizeScriptId(location.container.pre_backup_script_id)
-    const postScriptId = normalizeScriptId(location.container.post_backup_script_id)
-    if (preScriptId) normalized.pre_backup_script_id = preScriptId
-    if (postScriptId) normalized.post_backup_script_id = postScriptId
-    if (preScriptId || location.container.pre_backup_script_parameters) {
-      normalized.pre_backup_script_parameters = normalizeScriptParameters(
-        location.container.pre_backup_script_parameters
-      )
-    }
-    if (postScriptId || location.container.post_backup_script_parameters) {
-      normalized.post_backup_script_parameters = normalizeScriptParameters(
-        location.container.post_backup_script_parameters
-      )
-    }
-    const scriptExecutionOrder = normalizeScriptId(location.container.script_execution_order)
-    if (scriptExecutionOrder) normalized.script_execution_order = scriptExecutionOrder
-    return normalized
-  }
-
-  const grouped: SourceLocation[] = (plan.source_locations || [])
-    .map<SourceLocation | null>((location) => {
-      const paths = (location.paths || []).map((path) => path.trim()).filter(Boolean)
-      if (paths.length === 0) return null
-      if (location.source_type === 'remote') {
-        const connectionId = location.source_ssh_connection_id
-        if (!connectionId) return null
-        const database = normalizeDatabase(location, paths)
-        const container = normalizeContainer(location, paths)
-        return {
-          source_type: 'remote' as const,
-          source_ssh_connection_id: Number(connectionId),
-          agent_machine_id: null,
-          paths,
-          ...(database ? { database } : {}),
-          ...(container ? { container } : {}),
-          ...(location.app ? { app: location.app } : {}),
-        }
-      }
-      if (location.source_type === 'agent') {
-        const agentMachineId = location.agent_machine_id
-        if (!agentMachineId) return null
-        const database = normalizeDatabase(location, paths)
-        const container = normalizeContainer(location, paths)
-        return {
-          source_type: 'agent' as const,
-          source_ssh_connection_id: null,
-          agent_machine_id: Number(agentMachineId),
-          paths,
-          ...(database ? { database } : {}),
-          ...(container ? { container } : {}),
-          ...(location.app ? { app: location.app } : {}),
-        }
-      }
-      const database = normalizeDatabase(location, paths)
-      const container = normalizeContainer(location, paths)
-      return {
-        source_type: 'local' as const,
-        source_ssh_connection_id: null,
-        agent_machine_id: null,
-        paths,
-        ...(database ? { database } : {}),
-        ...(container ? { container } : {}),
-        ...(location.app ? { app: location.app } : {}),
-      }
-    })
-    .filter((location): location is SourceLocation => location !== null)
-
+  const grouped = normalizeSourceLocationList(plan.source_locations)
   if (grouped.length > 0) return grouped
   if (!plan.source_directories?.length) return []
   if (plan.source_type === 'remote' || plan.source_ssh_connection_id) {
@@ -375,6 +225,7 @@ export function planToState(plan: BackupPlan): WizardState {
     scriptHooks,
     runRepositoryScripts: plan.run_repository_scripts ?? true,
     runPruneAfter: Boolean(plan.run_prune_after),
+    pruneScopeToPlan: Boolean(plan.prune_scope_to_plan),
     runCompactAfter: Boolean(plan.run_compact_after),
     runCheckAfter: Boolean(plan.run_check_after),
     runRestoreCheckAfter: Boolean(plan.run_restore_check_after),

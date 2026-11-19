@@ -429,6 +429,7 @@ export interface BackupPlan {
   script_hooks?: BackupPlanScriptHook[]
   run_repository_scripts?: boolean
   run_prune_after?: boolean
+  prune_scope_to_plan?: boolean
   run_compact_after?: boolean
   run_check_after?: boolean
   run_restore_check_after?: boolean
@@ -523,6 +524,7 @@ export interface BackupPlanData {
   script_hooks?: BackupPlanScriptHook[]
   run_repository_scripts: boolean
   run_prune_after: boolean
+  prune_scope_to_plan?: boolean
   run_compact_after: boolean
   run_check_after: boolean
   run_restore_check_after: boolean

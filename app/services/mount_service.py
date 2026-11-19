@@ -27,6 +27,7 @@ import structlog
 import base64
 from cryptography.fernet import Fernet
 
+from app.utils.ssh_paths import login_relative_remote_path_candidate
 from app.core.borg_major import borg_major, is_borg2
 from app.utils.ssh_host_validation import ssh_destination
 from app.config import settings
@@ -171,24 +172,6 @@ def _sshfs_has_contain_symlinks() -> bool:
 def _sshfs_missing_remote_path(error_message: str) -> bool:
     normalized = (error_message or "").lower()
     return any(marker in normalized for marker in SSHFS_NO_SUCH_FILE_MARKERS)
-
-
-def _sshfs_login_relative_candidate(
-    remote_path: str, default_path: Optional[str] = None
-) -> Optional[str]:
-    normalized = (remote_path or "").strip()
-    if not normalized.startswith("/") or normalized == "/":
-        return None
-    if normalized.startswith("/./"):
-        relative_path = normalized.lstrip("/")
-        return relative_path or None
-
-    normalized_default_path = (default_path or "").strip()
-    if normalized_default_path not in {"", "/"}:
-        return None
-
-    relative_path = normalized.lstrip("/")
-    return relative_path or None
 
 
 _SYNOLOGY_VOLUME_PREFIX = re.compile(r"^/volume\d+/(?=.)")
@@ -1542,7 +1525,7 @@ class MountService:
         default_path = getattr(connection, "default_path", None)
         candidates = [
             remote_path,
-            _sshfs_login_relative_candidate(
+            login_relative_remote_path_candidate(
                 remote_path, default_path if isinstance(default_path, str) else None
             ),
             _sshfs_volume_stripped_candidate(remote_path),

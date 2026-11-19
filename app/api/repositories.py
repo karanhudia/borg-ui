@@ -17,7 +17,7 @@ import shutil
 import uuid
 
 from app.core.borg_major import borg_major, is_borg2
-from app.database.database import get_db, SessionLocal
+from app.database.database import SessionLocal, ends_read_on_return, get_db
 from app.database.models import (
     AgentMachine,
     Archive,
@@ -155,8 +155,9 @@ from app.utils.schedule_time import (
     normalize_schedule_timezone,
 )
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
+from app.utils import fs
 from app.utils.ssh_paths import apply_ssh_command_prefix
-from app.utils.repository_paths import build_ssh_repository_path, strip_ssh_url_path
+from app.utils.repository_paths import build_ssh_repository_path
 from app.utils.source_locations import (
     decode_source_locations,
     legacy_source_fields,
@@ -182,18 +183,6 @@ from app.utils.ssh_utils import (
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"], dependencies=[Depends(authorize_request)])
-
-
-def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
-    # BorgRouter routes on executor_type (with the legacy execution_target
-    # fallback). Keep those in the snapshot so the router's agent gate stays
-    # functional even though these endpoints branch on the executor earlier.
-    return SimpleNamespace(
-        id=repository.id,
-        borg_version=repository.borg_version,
-        executor_type=repository.executor_type,
-        execution_target=repository.execution_target,
-    )
 
 
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
@@ -2522,10 +2511,6 @@ def _normalize_repository_executor(
         getattr(repo_data, "executor_type", None),
         execution_target=getattr(repo_data, "execution_target", None),
     )
-
-
-def _strip_ssh_url_path(path: str) -> str:
-    return strip_ssh_url_path(path)
 
 
 def _build_repository_path_from_connection(
@@ -6244,8 +6229,30 @@ async def permanently_delete_repository(
         repository_wipe_service._ensure_no_conflicting_operations(db, repository)
         target = _permanent_delete_target(repository)
 
+        # rmtree can delete a mounted repository's contents before failing to
+        # remove its mount root. Refuse before touching any files, including
+        # when a bind mount or nested mount is present, or when the mount
+        # table cannot be read to prove there is none.
+        mounted = fs.mount_points_at_or_under(str(target))
+        if mounted is None or mounted:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "key": "backend.errors.repo.permanentDeleteUnsafePath",
+                    "message": (
+                        "Cannot verify active mounts; repository files were not removed."
+                        if mounted is None
+                        else "A filesystem is mounted at or inside this repository; "
+                        "repository files were not removed."
+                    ),
+                },
+            )
+
         try:
-            shutil.rmtree(target)
+            if not fs.remove_tree_without_crossing_mounts(str(target)):
+                raise OSError(
+                    "Repository removal was refused or could not be completed"
+                )
         except OSError as exc:
             logger.error(
                 "Failed to remove repository files",
@@ -6284,7 +6291,8 @@ async def permanently_delete_repository(
 
 
 @router.post("/{repo_id}/check")
-async def check_repository(
+@ends_read_on_return
+def check_repository(
     repo_id: int,
     request: dict = None,
     current_user: User = Depends(get_current_user),
@@ -6349,7 +6357,8 @@ async def check_repository(
 
 
 @router.post("/{repo_id}/restore-check")
-async def restore_check_repository(
+@ends_read_on_return
+def restore_check_repository(
     repo_id: int,
     request: dict = None,
     current_user: User = Depends(get_current_user),
@@ -6419,7 +6428,8 @@ async def restore_check_repository(
 
 
 @router.post("/{repo_id}/compact")
-async def compact_repository(
+@ends_read_on_return
+def compact_repository(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

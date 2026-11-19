@@ -145,9 +145,11 @@ def lead_with_cause(diagnostic: str, *, lock_contention: bool = False) -> str:
     lines = [line.strip() for line in diagnostic.splitlines()]
     start = next((i for i, line in enumerate(lines) if line in _CRASH_WRAPPERS), None)
     if start is None:
-        if not lines or lines[0] != _TRACEBACK_HEADER:
+        # A remote crash can follow a progress line ("Remote: Replaying
+        # segments...") with no wrapper (dashboard 024bc4c80c39ebca).
+        if _TRACEBACK_HEADER not in lines:
             return diagnostic
-        start = 0
+        start = lines.index(_TRACEBACK_HEADER)
     from app.services.repository_executor import _tail_reason_line
 
     cause = _tail_reason_line(
@@ -173,14 +175,70 @@ def bounded_operation_diagnostic(reason: str) -> str:
 _REMOTE_BORG_MISSING = _re.compile(r"\bborg[\w./-]*'?: (?:command )?not found")
 
 
+_LOCK_TIMEOUT_LINE = _re.compile(
+    r"failed to create/acquire the lock .*\(timeout\)\.?[ \t]*$", _re.M
+)
+_DATA_INTEGRITY_LINE = _re.compile(r"^(?:remote: )?data integrity error:", _re.M)
+
+
+def _log_json_messages(text: str) -> str:
+    """Borg's --log-json lines, as stored with a stream prefix ("[stderr] {...}"),
+    reduced to their message so the line matches below work on them too."""
+    lines = []
+    for line in text.splitlines():
+        start = line.find("{")
+        if start != -1:
+            try:
+                record = _json.loads(line[start:])
+            except (ValueError, RecursionError):
+                record = None
+            if isinstance(record, dict) and isinstance(record.get("message"), str):
+                line = record["message"]
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def repository_failure_status(result: dict) -> int:
     """Classify evidenced refusals only; unknown Borg failures remain 500."""
     reason = "\n".join(
-        str(result.get(key) or "") for key in ("error", "stderr")
+        _log_json_messages(str(result.get(key) or "")) for key in ("error", "stderr")
     ).lower()
+    return_code = result.get("return_code")
+    # Another process holds the lock (a running backup, a stale lock), on the
+    # repository or on its cache (dashboard a4b2fad0603467e8, 0a89530469ffaa5d).
+    # Borg 2 also answers 73 when another process killed our own lock: that
+    # run failed, the repository is not held by anyone.
+    if "our lock was killed by another borg" not in reason and (
+        is_lock_contention_exit_code(return_code)
+        # The reason ends the line; "(timeout)" in the lock path does not count.
+        or _LOCK_TIMEOUT_LINE.search(reason)
+    ):
+        return 423
+    if return_code in (13, 31) or any(
+        _re.fullmatch(r"archive .+ does not exist\.?", line.strip())
+        # Wrapped as "Borg mount failed: Repository /r does not exist."
+        # (dashboard bea738bcdf5f61ae).
+        or _re.search(r"(?:^|: )repository .+ does not exist\.?$", line.strip())
+        for line in reason.splitlines()
+    ):
+        # The archive or repository is gone, e.g. pruned while the page was
+        # open (dashboard 59a11c4953c3d968, 774c24917f83b4cf). Ahead of the
+        # 422 matches, which a repository path can contain.
+        return 404
     # 422, not 403: the frontend reads 403 as a role refusal and toasts so.
     if (
-        result.get("return_code") in (21, 42, 44)
+        # 83: borg serve's --restrict-to-path refused the path; 90: damaged
+        # repository data, which `borg check --repair` is for.
+        return_code in (21, 42, 44, 83, 90)
+        # An encrypted repository with no passphrase stored (a2d56195f9ae231c).
+        or "cannot acquire a passphrase" in reason
+        # Damaged repository data (e7d070c0c0f0d0a6), as Borg's own prefix
+        # and not inside a repository path.
+        or _DATA_INTEGRITY_LINE.search(reason)
+        or "repository path not allowed" in reason
+        # The SSH host's key changed or is not trusted (6374772928f444e2).
+        or "remote host identification has changed" in reason
+        or "host key verification failed" in reason
         # A keyfile repository whose key is not where Borg looks, or a
         # directory where Borg expects key files (dashboard a4b2fad0603467e8,
         # ed36651bb055713a).
@@ -198,7 +256,7 @@ def repository_failure_status(result: dict) -> int:
     ):
         return 422
     if (
-        result.get("return_code") in (19, REPOSITORY_EXISTS_EXIT_CODE)
+        return_code in (19, REPOSITORY_EXISTS_EXIT_CODE)
         # Init where a repository already is, e.g. a repository whose path
         # was edited (dashboard 2bf3c31b30712233).
         or any(
@@ -214,13 +272,6 @@ def repository_failure_status(result: dict) -> int:
         )
     ):
         return 409
-    if result.get("return_code") == 31 or any(
-        _re.fullmatch(r"archive .+ does not exist\.?", line.strip())
-        for line in reason.splitlines()
-    ):
-        # The archive is gone, e.g. pruned while the page was open
-        # (dashboard 59a11c4953c3d968, 774c24917f83b4cf).
-        return 404
     return 500
 
 

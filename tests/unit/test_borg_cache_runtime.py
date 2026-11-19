@@ -23,8 +23,8 @@ def test_entrypoint_ensures_borg_cache_volume_is_writable() -> None:
 def test_runtime_base_precreates_documented_borg_cache_dir() -> None:
     dockerfile = (ROOT / "Dockerfile.runtime-base").read_text(encoding="utf-8")
 
-    assert f"/home/borg/.ssh {EXPECTED_CACHE_DIR} /etc/cron.d" in dockerfile
-    assert "/home/borg/.cache /etc/cron.d" in dockerfile
+    assert f"mkdir -p /home/borg/.ssh {EXPECTED_CACHE_DIR} &&" in dockerfile
+    assert "/home/borg/.ssh /home/borg/.cache &&" in dockerfile
     assert f"chmod 700 /home/borg/.ssh {EXPECTED_CACHE_DIR}" in dockerfile
 
 
@@ -40,3 +40,15 @@ def test_entrypoint_persists_borg_ssh_home() -> None:
     assert 'ln -sfn "$PERSISTENT_SSH_DIR" "$SSH_HOME_DIR"' in entrypoint
     assert 'chown -R borg:borg "$PERSISTENT_SSH_DIR"' in entrypoint
     assert 'chmod 700 "$PERSISTENT_SSH_DIR"' in entrypoint
+
+
+def test_entrypoint_makes_data_dir_writable_before_creating_the_database() -> None:
+    # A root-owned bind mount with the default PUID left the database
+    # uncreatable (dashboard 827fb9588a967d8c).
+    entrypoint = (ROOT / "entrypoint.sh").read_text(encoding="utf-8")
+
+    check = entrypoint.index(
+        'if [ "$PUID" != "0" ] && ! gosu borg test -w "$DATA_DIR"; then'
+    )
+    assert 'chown borg:borg "$DATA_DIR"' in entrypoint[check:]
+    assert check < entrypoint.index("app.database.db_upgrade")

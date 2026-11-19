@@ -112,6 +112,40 @@ def ensure_restore_canary(repository: Repository) -> Path:
     return root / CANARY_DIRNAME
 
 
+def _staged_canary_files(repository: Repository) -> dict[str, bytes]:
+    """The canary files and their manifest, keyed by the path below the
+    repository's canary root."""
+    entries = _build_canary_entries(repository)
+    return {
+        **entries,
+        f"{CANARY_DIRNAME}/{CANARY_MANIFEST}": _canary_manifest_bytes(entries),
+    }
+
+
+def agent_restore_canary_payload(repository: Repository) -> dict[str, Any] | None:
+    """The managed canary for a managed agent's backup job.
+
+    Borg runs on the agent's host, so the canary payload has to exist there.
+    ``files`` maps each path to its base64 content; the agent writes them
+    below a directory of its own and has Borg archive ``source_path`` from
+    there under that same name, so the archive keeps the hidden
+    ``.borg-ui/restore-canaries`` namespace the restore check extracts. Every
+    path is relative and built from constants and the integer repository id.
+    Returns None when the repository does not use canary mode.
+    """
+    if not should_include_restore_canary(repository):
+        return None
+
+    archive_root = _canary_archive_root(repository)
+    return {
+        "source_path": f"{archive_root}/{CANARY_DIRNAME}",
+        "files": {
+            f"{archive_root}/{relative_path}": base64.b64encode(content).decode("ascii")
+            for relative_path, content in _staged_canary_files(repository).items()
+        },
+    }
+
+
 def remote_restore_canary_staging(
     repository: Repository,
 ) -> tuple[str, str, str] | None:
@@ -140,11 +174,7 @@ def remote_restore_canary_staging(
     # .borg-ui/restore-canaries/repository-<id> namespace in the archive.
     canary_root = "$HOME"
     canary_dir = f"$HOME/{archive_root}"
-    entries = _build_canary_entries(repository)
-    files = {
-        **entries,
-        f"{CANARY_DIRNAME}/{CANARY_MANIFEST}": _canary_manifest_bytes(entries),
-    }
+    files = _staged_canary_files(repository)
 
     commands = []
     for relative_path, content in files.items():

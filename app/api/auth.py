@@ -1,17 +1,21 @@
+import asyncio
 import base64
+import functools
 from datetime import timedelta, datetime, timezone
 import hmac
 import json
 from typing import Any, Optional
 from urllib.parse import urlencode, urlparse
+import weakref
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import structlog
 
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db, run_off_loop
 from app.database.models import (
     AuthEvent,
     OidcExchangeGrant,
@@ -62,7 +66,10 @@ from app.core.security import (
     create_user,
     decrypt_secret,
     encrypt_secret,
+    get_password_hash,
     update_user_password,
+    taken_user_key,
+    user_creation_turn,
     verify_login_challenge_token,
     verify_password,
     verify_totp_setup_token,
@@ -345,6 +352,32 @@ def _consume_recovery_code(user: User, code: str) -> bool:
     remaining = [item for item in existing_hashes if item != normalized_hash]
     _store_recovery_code_hashes(user, remaining)
     return True
+
+
+def _use_up_recovery_code(db: Session, user: User, checked_hashes: str) -> bool:
+    """Store what `_consume_recovery_code` left on `user`, only while the
+    factor is enabled and its recovery codes are the ones it checked: a
+    disable or another login may have committed meanwhile."""
+    remaining = user.totp_recovery_codes_hashes
+    db.expire(user, ["totp_recovery_codes_hashes"])
+    stored = (
+        db.query(User)
+        .filter(
+            User.id == user.id,
+            User.totp_enabled.is_(True),
+            User.totp_recovery_codes_hashes == checked_hashes,
+        )
+        .update({"totp_recovery_codes_hashes": remaining}, synchronize_session=False)
+    )
+    return stored == 1
+
+
+def _matches_totp_or_recovery_code(user: User, code: str) -> bool:
+    """`_verify_totp_or_recovery_code` without using the recovery code up."""
+    totp_secret = _get_totp_secret(user)
+    if totp_secret and verify_totp_code(totp_secret, code):
+        return True
+    return hash_recovery_code(code) in _get_recovery_code_hashes(user)
 
 
 def _verify_totp_or_recovery_code(user: User, code: str) -> bool:
@@ -767,6 +800,25 @@ def get_authorization_model():
     return serialize_authorization_model()
 
 
+# A password login ran on the event loop from its rate-limit check to the record
+# of its outcome with nothing in between. In a worker thread, logins would
+# overlap there: a burst of guesses could all pass the check before the first
+# failure is recorded. They take turns instead, in the order they arrive, as
+# they did on the loop; the loop stays free meanwhile. One lock, for the
+# running loop; a new loop (a restart in the same process) gets a new one.
+_password_login_turn_of_loop: tuple = (lambda: None, None)
+
+
+def _password_login_turn() -> asyncio.Lock:
+    global _password_login_turn_of_loop
+    loop = asyncio.get_running_loop()
+    loop_of_turn, turn = _password_login_turn_of_loop
+    if loop_of_turn() is not loop:
+        turn = asyncio.Lock()
+        _password_login_turn_of_loop = (weakref.ref(loop), turn)
+    return turn
+
+
 @router.post("/login", response_model=Token)
 async def login(
     request: Request,
@@ -774,6 +826,23 @@ async def login(
     db: Session = Depends(get_db),
 ):
     """Authenticate user and return access token"""
+    # In a thread: the bcrypt comparison, and the queries, which would
+    # otherwise wait for a connection on the loop. A login that is cancelled
+    # keeps its turn until the thread is done with it.
+    async with _password_login_turn():
+        return await run_off_loop(
+            functools.partial(
+                ends_read_on_return(_password_login),
+                request=request,
+                form_data=form_data,
+                db=db,
+            )
+        )
+
+
+def _password_login(
+    request: Request, form_data: OAuth2PasswordRequestForm, db: Session
+):
     _ensure_local_login_allowed(_get_auth_settings_row(db))
     client_ip = get_request_client_ip(request)
     password_subject = form_data.username.strip().lower() or "unknown"
@@ -784,7 +853,7 @@ async def login(
         client_ip=client_ip,
         policy=get_password_login_policy(),
     )
-    user = await authenticate_user(db, form_data.username, form_data.password)
+    user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         logger.warning("Failed login attempt", username=form_data.username)
         _record_rate_limit_failure(
@@ -818,6 +887,9 @@ async def login(
             detail={"key": "backend.errors.auth.inactiveUser"},
         )
 
+    # As read with the checked password: the cleanup may commit, and the user
+    # would be read again after it.
+    totp_enabled = user.totp_enabled
     clear_auth_rate_limit(
         db,
         scope="password_login",
@@ -825,7 +897,7 @@ async def login(
         client_ip=client_ip,
     )
 
-    if user.totp_enabled:
+    if totp_enabled:
         challenge_token = create_login_challenge_token(user.username)
         logger.info("Password verified, awaiting TOTP", username=user.username)
         return {
@@ -1609,7 +1681,11 @@ async def complete_login_with_totp(
             detail={"key": "backend.errors.auth.invalidTotpCode"},
         )
 
-    if not _verify_totp_or_recovery_code(user, payload.code):
+    checked_recovery_hashes = user.totp_recovery_codes_hashes
+    verified = _verify_totp_or_recovery_code(user, payload.code)
+    if verified and user.totp_recovery_codes_hashes != checked_recovery_hashes:
+        verified = _use_up_recovery_code(db, user, checked_recovery_hashes)
+    if not verified:
         db.commit()
         _record_rate_limit_failure(
             db,
@@ -1789,7 +1865,7 @@ def get_totp_status(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/totp/setup", response_model=TotpSetupResponse)
-async def begin_totp_setup(
+def begin_totp_setup(
     payload: TotpSetupRequest,
     current_user: User = Depends(get_current_user),
 ):
@@ -1847,7 +1923,8 @@ async def enable_totp(
 
 
 @router.post("/totp/disable")
-async def disable_totp(
+@ends_read_on_return
+def disable_totp(
     payload: TotpDisableRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1860,23 +1937,49 @@ async def disable_totp(
             detail={"key": "backend.errors.auth.totpNotEnabled"},
         )
 
-    if not verify_password(payload.current_password, current_user.password_hash):
+    checked = {
+        "password_hash": current_user.password_hash,
+        "totp_secret_encrypted": current_user.totp_secret_encrypted,
+        "totp_recovery_codes_hashes": current_user.totp_recovery_codes_hashes,
+    }
+    if not verify_password(payload.current_password, checked["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
         )
 
-    if not _verify_totp_or_recovery_code(current_user, payload.code):
-        db.commit()
+    # The recovery codes go with the factor: a matching one is not used up
+    # first.
+    if not _matches_totp_or_recovery_code(current_user, payload.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"key": "backend.errors.auth.invalidTotpCode"},
         )
 
-    current_user.totp_secret_encrypted = None
-    current_user.totp_enabled = False
-    current_user.totp_enabled_at = None
-    current_user.totp_recovery_codes_hashes = None
+    # Only while the password, the factor and its recovery codes are still
+    # the ones checked: a factor set up or a code used up meanwhile stays.
+    cleared = (
+        db.query(User)
+        .filter(
+            User.id == current_user.id,
+            *(getattr(User, column) == value for column, value in checked.items()),
+        )
+        .update(
+            {
+                "totp_secret_encrypted": None,
+                "totp_enabled": False,
+                "totp_enabled_at": None,
+                "totp_recovery_codes_hashes": None,
+            },
+            synchronize_session=False,
+        )
+    )
+    if not cleared:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.invalidTotpCode"},
+        )
     db.commit()
 
     logger.info("TOTP disabled", username=current_user.username)
@@ -1894,10 +1997,13 @@ def list_passkeys(current_user: User = Depends(get_current_user)):
 @router.post(
     "/passkeys/register/options", response_model=PasskeyBeginRegistrationResponse
 )
-async def begin_passkey_registration(
+@ends_read_on_return
+def begin_passkey_registration(
     payload: PasskeyBeginRegistrationRequest,
     request: Request,
     current_user: User = Depends(get_current_user),
+    # The session that loads the user's passkeys, ended on return.
+    db: Session = Depends(get_db),
 ):
     _ensure_local_password_user(current_user)
     if not verify_password(payload.current_password, current_user.password_hash):
@@ -2198,46 +2304,72 @@ def get_users(
 
 
 @router.post("/users", response_model=UserResponse)
-async def create_new_user(
+@ends_read_on_return
+def create_new_user(
     user_data: UserCreate,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     """Create a new user (admin only)"""
-    # Check if username already exists
-    existing_user = db.query(User).filter(User.username == user_data.username).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"key": "backend.errors.auth.usernameAlreadyRegistered"},
-        )
+    created_by = current_user.username
+    password_hash = get_password_hash(user_data.password)
 
-    # Check if email already exists (if provided)
-    if user_data.email:
-        existing_email = db.query(User).filter(User.email == user_data.email).first()
-        if existing_email:
+    with user_creation_turn:
+        # Check if username already exists
+        existing_user = (
+            db.query(User).filter(User.username == user_data.username).first()
+        )
+        if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"key": "backend.errors.auth.emailAlreadyRegistered"},
+                detail={"key": "backend.errors.auth.usernameAlreadyRegistered"},
             )
 
-    resolved_role = _resolve_legacy_role(user_data.role, user_data.is_admin)
+        # Check if email already exists (if provided; an empty one counts)
+        if user_data.email is not None:
+            existing_email = (
+                db.query(User).filter(User.email == user_data.email).first()
+            )
+            if existing_email:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"key": "backend.errors.auth.emailAlreadyRegistered"},
+                )
 
-    user = create_user(
-        db=db,
-        username=user_data.username,
-        password=user_data.password,
-        email=user_data.email,
-        role=resolved_role,
-    )
-    user.all_repositories_role = default_repository_role_for_global_role(resolved_role)
-    db.commit()
+        resolved_role = _resolve_legacy_role(user_data.role, user_data.is_admin)
+
+        try:
+            user = create_user(
+                db=db,
+                username=user_data.username,
+                password_hash=password_hash,
+                email=user_data.email,
+                role=resolved_role,
+                # In the insert: a role change committed after it stays.
+                all_repositories_role=default_repository_role_for_global_role(
+                    resolved_role
+                ),
+            )
+        except IntegrityError:
+            # An account update can take the username or email after the
+            # checks; the turn above is only taken by creations.
+            db.rollback()
+            taken = taken_user_key(db, user_data.username, user_data.email)
+            if taken is None:
+                raise
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "key": "backend.errors.auth.usernameAlreadyRegistered"
+                    if taken == "username"
+                    else "backend.errors.auth.emailAlreadyRegistered"
+                },
+            )
     db.refresh(user)
+    created = UserResponse.model_validate(user)
 
-    logger.info(
-        "User created", username=user.username, created_by=current_user.username
-    )
-    return user
+    logger.info("User created", username=created.username, created_by=created_by)
+    return created
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
@@ -2318,32 +2450,34 @@ async def delete_user(
 
 
 @router.post("/change-password")
-async def change_password(
+@ends_read_on_return
+def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Change user password"""
-    from app.core.security import verify_password
-
     # Verify current password
-    if not verify_password(password_data.current_password, current_user.password_hash):
+    checked_hash = current_user.password_hash
+    if not verify_password(password_data.current_password, checked_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
         )
 
-    # Update password
-    success = update_user_password(db, current_user.id, password_data.new_password)
-    if not success:
+    # Update password, unless it was changed since the check, and clear the
+    # must_change_password flag with it
+    if not update_user_password(
+        db,
+        current_user.id,
+        checked_hash,
+        get_password_hash(password_data.new_password),
+        must_change_password=False,
+    ):
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.auth.failedUpdatePassword"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
         )
-
-    # Clear must_change_password flag after successful password change
-    current_user.must_change_password = False
-    db.commit()
 
     logger.info("Password changed", username=current_user.username)
     return {"message": "backend.success.auth.passwordChanged"}

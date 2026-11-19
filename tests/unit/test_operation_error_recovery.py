@@ -57,6 +57,91 @@ from fastapi import HTTPException
         ({"return_code": 2, "stderr": "Path /etc/x does not exist in archive"}, 500),
         ({"return_code": 2, "stderr": "unexplained failure"}, 500),
         ({"return_code": 73, "stderr": "Our lock was killed by another borg"}, 500),
+        # Another process holds the lock (a4b2fad0603467e8, 0a89530469ffaa5d).
+        ({"return_code": 73}, 423),
+        (
+            {
+                "error": "Failed to create/acquire the lock "
+                "/home/borg/.cache/borg/x/lock.exclusive (timeout)."
+            },
+            423,
+        ),
+        (
+            {
+                "stderr": '{"message": "Failed to create/acquire the lock '
+                '/r/lock (timeout).", "msgid": "LockTimeout"}'
+            },
+            423,
+        ),
+        # No passphrase stored for an encrypted repository (a2d56195f9ae231c).
+        (
+            {
+                "return_code": 2,
+                "stderr": "Enter passphrase for key /r: Cannot acquire a "
+                "passphrase: BORG_PASSPHRASE is not set.",
+            },
+            422,
+        ),
+        # The repository's data is damaged (e7d070c0c0f0d0a6).
+        ({"return_code": 90}, 422),
+        (
+            {
+                "return_code": 2,
+                "stderr": "Data integrity error: Segment entry data short read",
+            },
+            422,
+        ),
+        # borg serve --restrict-to-path refuses it (859daa3dfb3863ec, 2.4.9).
+        ({"return_code": 83}, 422),
+        (
+            {"error": "Repository path not allowed: /srv/repos/x/vaultwarden"},
+            422,
+        ),
+        # The SSH host's key changed or is not trusted (6374772928f444e2).
+        (
+            {
+                "return_code": 2,
+                "stderr": "Remote: @    WARNING: REMOTE HOST IDENTIFICATION "
+                "HAS CHANGED!     @",
+            },
+            422,
+        ),
+        ({"return_code": 2, "stderr": "Host key verification failed."}, 422),
+        # The repository is gone (bea738bcdf5f61ae).
+        ({"return_code": 13}, 404),
+        ({"error": "Borg mount failed: Repository /mnt/r does not exist."}, 404),
+        # A line too deeply nested to decode keeps its exit code.
+        ({"return_code": 21, "stderr": '{"a": ' + "[" * 100000}, 422),
+        # "(timeout)" in a lock path is not a timeout; the lock could not be
+        # created for lack of permission.
+        (
+            {
+                "stderr": "Failed to create/acquire the lock /backups/photos "
+                "(timeout)/lock.exclusive ([Errno 13] Permission denied)."
+            },
+            422,
+        ),
+        # A repository named like a diagnostic is still just missing.
+        (
+            {"error": "Repository /backups/data integrity error does not exist."},
+            404,
+        ),
+        (
+            {"error": "Repository /backups/permission denied does not exist."},
+            404,
+        ),
+        (
+            {"stderr": "Remote: Data integrity error: Invalid segment magic"},
+            422,
+        ),
+        # A stored --log-json line, as prune preview passes it on.
+        (
+            {
+                "stderr": '[stderr] {"type": "log_message", "message": '
+                '"Repository /r does not exist.", "msgid": "Repository.DoesNotExist"}'
+            },
+            404,
+        ),
     ],
 )
 def test_repository_refusal_status(result, status):

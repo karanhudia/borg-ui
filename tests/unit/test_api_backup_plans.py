@@ -359,6 +359,7 @@ class TestBackupPlanRoutes:
                 [repo.id],
                 run_check_after=True,
                 run_restore_check_after=True,
+                prune_scope_to_plan=True,
                 check_max_duration=0,
                 check_extra_flags=" --verify-data ",
             ),
@@ -368,11 +369,21 @@ class TestBackupPlanRoutes:
         assert create_response.status_code == 201
         created = create_response.json()
         assert created["run_restore_check_after"] is True
+        assert created["prune_scope_to_plan"] is True
         assert created["name"] == "Nightly project plan"
         assert created["source_directories"] == ["/srv/project"]
         assert created["repository_count"] == 1
         assert created["check_extra_flags"] == "--verify-data"
         assert created["repositories"][0]["repository_id"] == repo.id
+
+        # an update that leaves the field out keeps it (an older client)
+        omitted = _payload([repo.id])
+        omitted.pop("prune_scope_to_plan", None)
+        kept = test_client.put(
+            f"/api/backup-plans/{created['id']}", json=omitted, headers=admin_headers
+        )
+        assert kept.status_code == 200
+        assert kept.json()["prune_scope_to_plan"] is True
 
         list_response = test_client.get("/api/backup-plans/", headers=admin_headers)
         assert list_response.status_code == 200
@@ -3237,7 +3248,7 @@ class TestBackupPlanRoutes:
         with (
             patch.object(
                 backup_plan_execution_service,
-                "start_run",
+                "create_run",
                 side_effect=RuntimeError("database blip"),
             ),
             patch.object(
@@ -3329,6 +3340,122 @@ class TestBackupPlanRoutes:
         assert skipped.skip_reason == "minimum_interval_not_elapsed"
         assert len(skipped.repositories) == 1
         assert skipped.repositories[0].status == "skipped"
+
+    @pytest.mark.asyncio
+    async def test_availability_plan_asks_for_the_minimum_interval_again_after_the_probe(
+        self, test_db
+    ):
+        """A run started by hand that succeeds while the source probe is
+        awaited counts: the scheduled run does not start, and the plan stays
+        due, so the next minute records the skip as usual (#1543)."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        now = datetime(2026, 1, 2, 12, 0)
+        due_at = now - timedelta(minutes=1)
+        plan = _create_scheduled_plan(test_db, [repo], next_run=due_at)
+        plan.schedule_mode = "availability"
+        plan.cron_expression = None
+        plan.availability_check_interval_minutes = 30
+        plan.min_success_interval_minutes = 20 * 60
+        test_db.commit()
+
+        async def probe_while_a_manual_run_succeeds(*_args, **_kwargs):
+            test_db.add(
+                BackupPlanRun(
+                    backup_plan_id=plan.id,
+                    trigger="manual",
+                    status="completed",
+                    started_at=now - timedelta(minutes=5),
+                    completed_at=now,
+                    created_at=now - timedelta(minutes=5),
+                )
+            )
+            test_db.commit()
+            return AvailabilityDecision(True)
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.source_locations_available",
+                new=AsyncMock(side_effect=probe_while_a_manual_run_succeeds),
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.asyncio.create_task",
+                side_effect=lambda coro: coro.close(),
+            ) as mock_create_task,
+        ):
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
+
+        assert dispatched == 0
+        mock_create_task.assert_not_called()
+        runs = test_db.query(BackupPlanRun).filter_by(backup_plan_id=plan.id).all()
+        assert [(run.trigger, run.status) for run in runs] == [("manual", "completed")]
+        test_db.refresh(plan)
+        assert plan.next_run == due_at
+        assert plan.last_run is None
+
+        # the next minute takes the usual way: a skip, and the next check
+        later = now + timedelta(minutes=1)
+        assert (
+            await backup_plan_execution_service.dispatch_due_runs(test_db, later) == 0
+        )
+        skipped = (
+            test_db.query(BackupPlanRun)
+            .filter_by(backup_plan_id=plan.id, status="skipped")
+            .one()
+        )
+        assert skipped.skip_reason == "minimum_interval_not_elapsed"
+        test_db.refresh(plan)
+        assert plan.next_run == later + timedelta(minutes=30)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "schedule_mode, status, hours_ago",
+        [
+            ("availability", "failed", 0),
+            ("cron", "completed", 0),
+            ("availability", "completed", 21),
+        ],
+    )
+    async def test_only_a_recent_success_of_an_availability_plan_holds_the_scheduled_run_back(
+        self, test_db, schedule_mode, status, hours_ago
+    ):
+        _set_plan(test_db, "community")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        now = datetime(2026, 1, 2, 12, 0)
+        plan = _create_scheduled_plan(
+            test_db, [repo], next_run=now - timedelta(minutes=1)
+        )
+        plan.schedule_mode = schedule_mode
+        plan.availability_check_interval_minutes = 30
+        plan.min_success_interval_minutes = 20 * 60
+        test_db.add(
+            BackupPlanRun(
+                backup_plan_id=plan.id,
+                trigger="manual",
+                status=status,
+                started_at=now - timedelta(hours=hours_ago, minutes=5),
+                completed_at=now - timedelta(hours=hours_ago),
+                created_at=now - timedelta(hours=hours_ago, minutes=5),
+            )
+        )
+        test_db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.source_locations_available",
+                new=AsyncMock(return_value=AvailabilityDecision(True)),
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.asyncio.create_task",
+                side_effect=lambda coro: coro.close(),
+            ),
+        ):
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
+
+        assert dispatched == 1
 
     @pytest.mark.asyncio
     async def test_dispatch_due_runs_skips_and_advances_paid_only_plan_after_downgrade(
@@ -6209,6 +6336,81 @@ class TestBackupPlanRoutes:
         assert "compact" not in by_kind
         backup_job = BackupJobFacade(test_db, by_kind["backup"])
         assert backup_job.maintenance_status == "prune_failed"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scoped", [False, True])
+    async def test_plan_prune_filters_to_its_archives_only_when_asked(
+        self, test_db, scoped
+    ):
+        """Issue #1549: with the toggle on the prune gets the plan's glob,
+        with it off the prune covers the repository as before."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(
+            test_db, [repo], run_prune_after=True, prune_scope_to_plan=scoped
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        prune = AsyncMock()
+        with (
+            patch(
+                "app.services.operations.backup_facade.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch.object(BorgRouter, "prune", new=prune),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        expected = "Plan-execution-Primary-[0-9]*" if scoped else None
+        assert prune.await_args.kwargs["match_archives"] == expected
+
+    @pytest.mark.asyncio
+    async def test_plan_prune_refuses_when_another_plan_shares_its_names(self, test_db):
+        """Another plan writing names the filter matches would be pruned under
+        this plan's retention: the prune fails with the reason, Borg never
+        runs (issue #1549)."""
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            run_prune_after=True,
+            prune_scope_to_plan=True,
+            archive_name_template="shared-{now}",
+        )
+        _create_execution_plan(
+            test_db, [repo], name="Other plan", archive_name_template="shared-{now}"
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = resolve_backup_job(db, job_id)
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        prune = AsyncMock()
+        with (
+            patch(
+                "app.services.operations.backup_facade.wait_for_backup_operation",
+                new=_plan_backup_seam(fake_execute_backup),
+            ),
+            patch.object(BorgRouter, "prune", new=prune),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        prune.assert_not_awaited()
+        test_db.expire_all()
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        assert "Other plan" in run.repositories[0].error_message
+        prune_op = (
+            test_db.query(Operation)
+            .filter(Operation.repository_id == repo.id, Operation.kind == "prune")
+            .one()
+        )
+        assert prune_op.status == "failed"
 
     @pytest.mark.asyncio
     async def test_maintenance_failure_marks_repository_warning(self, test_db):

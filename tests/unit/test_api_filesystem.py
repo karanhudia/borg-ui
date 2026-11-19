@@ -1449,6 +1449,21 @@ class TestSshLoginRelativeRetryBoundaries:
         ),
         ("@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@", 422),
         ("user@host: Permission denied (password).", 422),
+        # The login shell prints output, which breaks the SFTP protocol
+        # (dashboard 231181a75000f29f).
+        (
+            "Received message too long 1970495847\n"
+            "Ensure the remote shell produces no output for non-interactive sessions.",
+            422,
+        ),
+        # Wrong host or port: nothing listens there, or it is not SSH
+        # (dashboard 06c87184963eec1e, 0950052be6b5027e).
+        (
+            "ssh: connect to host 10.0.0.87 port 3000: Connection refused\n"
+            "Connection closed",
+            422,
+        ),
+        ("Connection closed by 10.0.0.87 port 3000\nConnection closed", 422),
         ('remote readdir("/x"): Permission denied', 500),
         ('remote readdir("/x"): Failure', 500),
         # A remote path that is not there, in sftp's own words, is a 404 ...

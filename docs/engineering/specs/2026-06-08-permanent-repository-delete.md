@@ -47,8 +47,17 @@ Failure behavior:
 
 - `400` for unsupported repository types or unsafe filesystem targets.
 - `404` for missing repository records or missing filesystem paths.
-- `409` for running repository operations.
+- `409` for running repository operations, a filesystem mounted at or inside
+  the repository directory, or a mount table that cannot be read. Mount
+  refusals leave all files and the repository record untouched; use
+  metadata-only removal when the directory is a mount root.
 - `500` for filesystem removal failures.
+
+Filesystem removal uses the shared mount-aware deletion helper, which checks the
+mount table again and avoids descending into directories on another device. A
+removal that cannot be completed keeps the repository record. Filesystem deletion
+is not transactional: an I/O failure during removal can still leave a partially
+removed directory.
 
 ## Acceptance Criteria
 

@@ -707,6 +707,19 @@ class BorgRouter:
 
         return is_agent_executor(self.repo)
 
+    def _require_agent_capability(self, capability: str, message: str) -> None:
+        """Raise `message` unless the repository's agent advertises it."""
+        from app.database.database import SessionLocal
+        from app.database.models import AgentMachine
+
+        db = SessionLocal()
+        try:
+            agent = db.get(AgentMachine, getattr(self.repo, "agent_machine_id", None))
+            if agent is None or capability not in (agent.capabilities or []):
+                raise RuntimeError(message)
+        finally:
+            db.close()
+
     async def _run_agent_maintenance(
         self,
         *,
@@ -1189,11 +1202,17 @@ class BorgRouter:
         dry_run: bool = False,
         keep_within: str | None = None,
         *,
+        match_archives: str | None = None,
         is_cancelled: Optional[Callable[[], bool]] = None,
         wait_for_read_work: bool = False,
         raise_busy: bool = False,
     ) -> None:
         """Run repository pruning through the version-aware service layer.
+
+        `match_archives` limits the prune to matching archives: a Borg 1
+        `--glob-archives` pattern or a Borg 2 `-a` pattern (issue #1549).
+        An agent that does not advertise PRUNE_MATCH_CAPABILITY would drop
+        it and prune every archive, so it is refused instead.
 
         `wait_for_read_work` lets an agent prune wait out a listing that is
         refusing it (a plan's post-backup step, see
@@ -1203,6 +1222,25 @@ class BorgRouter:
         `_run_agent_maintenance`.
         """
         if self._is_agent():
+            operation = {
+                "keep_hourly": keep_hourly,
+                "keep_daily": keep_daily,
+                "keep_weekly": keep_weekly,
+                "keep_monthly": keep_monthly,
+                "keep_quarterly": keep_quarterly,
+                "keep_yearly": keep_yearly,
+                "keep_within": keep_within,
+                "dry_run": dry_run,
+            }
+            if match_archives:
+                from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
+
+                self._require_agent_capability(
+                    PRUNE_MATCH_CAPABILITY,
+                    "Prune limited to this plan needs a newer agent on "
+                    "this machine. Update the agent and run the plan again.",
+                )
+                operation["match_archives"] = match_archives
             await self._run_agent_maintenance(
                 job_kind="repository.prune",
                 maintenance_kind="prune",
@@ -1210,16 +1248,7 @@ class BorgRouter:
                 is_cancelled=is_cancelled,
                 wait_for_read_work=wait_for_read_work,
                 raise_busy=raise_busy,
-                operation={
-                    "keep_hourly": keep_hourly,
-                    "keep_daily": keep_daily,
-                    "keep_weekly": keep_weekly,
-                    "keep_monthly": keep_monthly,
-                    "keep_quarterly": keep_quarterly,
-                    "keep_yearly": keep_yearly,
-                    "keep_within": keep_within,
-                    "dry_run": dry_run,
-                },
+                operation=operation,
             )
             return
 
@@ -1236,6 +1265,8 @@ class BorgRouter:
         }
         if keep_within is not None:
             kwargs["keep_within"] = keep_within
+        if match_archives:
+            kwargs["match_archives"] = match_archives
 
         if self.is_v2:
             from app.services.v2.prune_service import prune_v2_service

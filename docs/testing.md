@@ -62,6 +62,9 @@ Capture uses two isolated browser workers by default and still covers every
 story at desktop and mobile sizes. Set `STORYBOOK_SNAPSHOT_WORKERS=1` for a
 serial diagnostic run, or an integer up to 16 to tune available CPU/memory.
 Keep readiness checks enabled when changing capture scheduling.
+`STORYBOOK_SNAPSHOT_SHARD=index/total` (for example `2/3`) captures one
+round-robin share of the stories; pull request CI runs three shards and
+merges them.
 
 Do not commit generated PNGs from `frontend/visual-screenshots/` or
 `frontend/storybook-snapshots/`.

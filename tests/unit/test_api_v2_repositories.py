@@ -542,6 +542,37 @@ class TestV2RepositoryRoutes:
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.initFailed"
 
+    def test_create_repository_unwritable_parent_is_422(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        # The host's permissions, not a Borg UI fault (dashboard 0470d9c20a8eb136).
+        _enable_borg_v2(test_db)
+
+        with patch(
+            "app.api.v2.repositories._rcreate",
+            new=AsyncMock(
+                return_value={
+                    "success": False,
+                    "already_existed": False,
+                    "stdout": "",
+                    "stderr": "Local Exception\n\nPermissionError: [Errno 13] "
+                    "Permission denied: '/local/borg-backups'",
+                }
+            ),
+        ):
+            response = test_client.post(
+                "/api/v2/repositories/",
+                json={
+                    "name": "Unwritable Repo",
+                    "path": "/tmp/v2-init-denied",
+                    "encryption": "authenticated",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == "backend.errors.repo.initFailed"
+
     def test_create_repository_reports_friendly_borg2_remote_protocol_mismatch(
         self, test_client: TestClient, admin_headers, test_db
     ):

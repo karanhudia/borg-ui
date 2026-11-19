@@ -3822,3 +3822,156 @@ class TestAgentBackupProgressWithoutTotal:
         backup_job = resolve_backup_job(test_db, backup_id)
         assert backup_job.original_size == 1024
         assert backup_job.progress == 0
+
+
+def _scoped_prune_job(test_db, agent: AgentMachine) -> AgentJob:
+    job = _create_agent_job(test_db, agent)
+    job.job_type = "repository"
+    job.payload = {
+        "schema_version": 1,
+        "job_kind": "repository.prune",
+        "repository": {"id": 7},
+        "operation": {"match_archives": "nas-[0-9]*"},
+    }
+    test_db.commit()
+    return job
+
+
+@pytest.mark.unit
+class TestScopedPruneNeedsTheCapability:
+    """A scoped prune queued while the agent supported the filter must not
+    reach it once it reports an older version (issue #1549): an old agent
+    ignores the filter and prunes the whole repository."""
+
+    def _agent(self, test_client, test_db, admin_headers, capabilities):
+        registered = _register_agent(
+            test_client, _create_enrollment_token(test_client, admin_headers)["token"]
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        agent.capabilities = capabilities
+        test_db.commit()
+        return registered, agent
+
+    @pytest.mark.parametrize("stored", [[], ["repository.prune.match_archives"]])
+    def test_http_never_hands_it_out(
+        self, test_client: TestClient, test_db, admin_headers, stored
+    ):
+        """Poll and claim leave it queued for a session, even when the stored
+        capabilities say yes: another process with the same token may have
+        written them, so they do not vouch for this caller."""
+        registered, agent = self._agent(test_client, test_db, admin_headers, stored)
+        job = _scoped_prune_job(test_db, agent)
+        headers = _agent_headers(registered["agent_token"])
+
+        poll = test_client.get("/api/agents/jobs/poll", headers=headers)
+        claim = test_client.post(f"/api/agents/jobs/{job.id}/claim", headers=headers)
+
+        assert poll.status_code == 200
+        assert poll.json()["jobs"] == []
+        assert claim.status_code == 409
+        test_db.refresh(job)
+        assert job.status == "queued"
+
+    def test_poll_returns_the_job_behind_it(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered, agent = self._agent(test_client, test_db, admin_headers, [])
+        _scoped_prune_job(test_db, agent)
+        behind = _create_agent_job(test_db, agent)
+
+        poll = test_client.get(
+            "/api/agents/jobs/poll?limit=1",
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert [j["id"] for j in poll.json()["jobs"]] == [behind.id]
+
+    def test_it_never_commits_as_claimed(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """A committed `claimed` would let an agent that polled the job earlier
+        claim and start it before it fails: go from queued to failed at once."""
+        from sqlalchemy import event, text
+
+        from app.api.agents import _refuse_unsupported_scoped_prune
+
+        _, agent = self._agent(test_client, test_db, admin_headers, [])
+        job = _scoped_prune_job(test_db, agent)
+        seen = []
+
+        def record(session):
+            seen.append(
+                session.execute(
+                    text("SELECT status FROM agent_jobs WHERE id = :id"),
+                    {"id": job.id},
+                ).scalar()
+            )
+
+        event.listen(test_db, "before_commit", record)
+        try:
+            assert _refuse_unsupported_scoped_prune(job, [], test_db)
+        finally:
+            event.remove(test_db, "before_commit", record)
+        assert seen and "claimed" not in seen
+        assert seen[-1] == "failed"
+
+    def test_a_job_another_transport_took_is_left_alone(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        from app.api.agents import _refuse_unsupported_scoped_prune
+
+        _, agent = self._agent(test_client, test_db, admin_headers, [])
+        job = _scoped_prune_job(test_db, agent)
+        # claimed elsewhere after this caller read it as queued
+        test_db.query(AgentJob).filter(AgentJob.id == job.id).update(
+            {AgentJob.status: "running"}, synchronize_session=False
+        )
+        assert job.status == "queued"
+
+        assert _refuse_unsupported_scoped_prune(job, [], test_db)
+        test_db.refresh(job)
+        assert job.status == "running"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("session_has_it", [False, True])
+    async def test_session_dispatch_checks_the_connected_session(
+        self,
+        test_client: TestClient,
+        test_db,
+        admin_headers,
+        monkeypatch,
+        session_has_it,
+    ):
+        """Covers every push: reconnect, heartbeat, and the router's own send
+        after an older agent connected while the prune waited for reads. The
+        stored record says the agent supports the filter (another process's
+        heartbeat); what counts is the session the job goes to."""
+        from types import SimpleNamespace
+
+        from app.services import agent_job_dispatcher
+        from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
+
+        _, agent = self._agent(
+            test_client, test_db, admin_headers, [PRUNE_MATCH_CAPABILITY]
+        )
+        job = _scoped_prune_job(test_db, agent)
+        manager = agent_job_dispatcher.agent_connection_manager
+        hello = {"capabilities": [PRUNE_MATCH_CAPABILITY] if session_has_it else []}
+        monkeypatch.setattr(manager, "is_connected", lambda _id: True)
+        monkeypatch.setattr(manager, "get", lambda _id: SimpleNamespace(metadata=hello))
+        sent = []
+
+        async def fake_send(*args, **kwargs):
+            sent.append(kwargs.get("job_id"))
+
+        monkeypatch.setattr(manager, "send_command", fake_send)
+
+        result = await agent_job_dispatcher.dispatch_agent_job_if_connected(
+            test_db, job
+        )
+        test_db.refresh(job)
+        if session_has_it:
+            assert result and sent == [job.id]
+        else:
+            assert not result and sent == []
+            assert job.status == "failed"

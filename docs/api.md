@@ -45,6 +45,40 @@ The token inherits the signed-in user's permissions:
   the repository
 - admins have access to every repository
 
+## MCP connections (Pro)
+
+MCP connections are tokens for AI clients such as Claude Code or Cursor. Each
+one has an access level (`read`, `operate`, `manage`, `full`) and only works on
+the MCP endpoint: the REST API refuses it with 401
+`backend.errors.auth.mcpTokenNotForApi`. Routes, all behind the `mcp` feature:
+
+| Route | Who | Does |
+| --- | --- | --- |
+| `GET /api/settings/mcp/config` | any user | `{enabled, max_access_level, endpoint_path, available_levels}`; `available_levels` lists the levels this version has tools for |
+| `PUT /api/settings/mcp/config` | admin | Turn MCP on or off, set the highest level users may grant |
+| `GET /api/settings/mcp/connections` | any user (`?all=true` admins) | The caller's connections, with `access_level`, the capped `effective_level` and `calls_today` (UTC day) |
+| `POST /api/settings/mcp/connections` | any user | `{name, access_level, skip_routine_confirmations}`; the token is in the response once. A level with no tools in this version is refused (`levelNotAvailable`) |
+| `PATCH /api/settings/mcp/connections/{id}` | owner or admin | Rename, change level |
+| `DELETE /api/settings/mcp/connections/{id}` | owner or admin | Revoke |
+| `GET /api/settings/mcp/connections/{id}/activity` | owner or admin | Recent tool calls, `?limit=50&before_id=<id>` (the last id of the previous page); arguments are never stored |
+
+### The MCP endpoint
+
+AI clients connect to `POST {BASE_URL}/mcp` (below `BASE_PATH` when one is set)
+with `Authorization: Bearer borgui_...`, using an MCP connection's token. It
+speaks the MCP Streamable HTTP transport in stateless mode, so any worker
+answers any call; `GET` and `DELETE` answer 405. Personal API tokens and login
+tokens are refused there, and a browser `Origin` other than the install's own
+host is refused too. Each connection sees only the tools its effective level
+allows; tool calls run as the connection's user, so the user's role and
+repository permissions still apply. A user guide for connecting clients comes
+with the settings page.
+
+```bash
+claude mcp add --transport http borg-ui "$BASE_URL/mcp" \
+  --header "Authorization: Bearer $MCP_TOKEN"
+```
+
 ## Start a manual backup
 
 Start an existing repository backup with `POST /api/backup/start`:

@@ -38,7 +38,7 @@ usage() {
 # Check if pytest is available
 if ! python3 -m pytest --version > /dev/null 2>&1; then
     echo -e "${RED}Error: pytest not found${NC}"
-    echo "Install dependencies: pip install -r requirements.txt"
+    echo "Install dependencies: pip install -r requirements-dev.txt"
     exit 1
 fi
 

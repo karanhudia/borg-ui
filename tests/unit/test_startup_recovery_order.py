@@ -20,9 +20,11 @@ from app.database.models import (
     BackupPlanRun,
     BackupPlanRunRepository,
     Repository,
+    ScriptExecution,
     SystemSettings,
 )
 from app.services.operations.runner import OperationRunner
+from app.utils.process_utils import POST_BACKUP_HOOKS_AFTER_CANCEL
 
 
 @pytest.fixture()
@@ -148,6 +150,12 @@ def _startup_patches(stack, session_factory, runner):
             "backup_plan_execution_service.live_run_ids",
             {"new": set(), "create": True},
         ),
+        # nor their startup: this one's sweep has not run
+        (
+            "app.services.backup_plan_execution_service."
+            "backup_plan_execution_service.startup_sweep_ran",
+            {"new": False},
+        ),
         ("app.services.operations.runner.operation_runner", {"new": runner}),
         (
             "app.services.operations.reconcile.reconcile_scheduler",
@@ -266,6 +274,143 @@ async def test_manual_plan_run_in_the_lease_wait_survives_the_startup_sweep(
     assert _plan_runs(session_factory, due_plan) == [("manual", "pending")]
 
 
+def _cancelled_run_with_post_hooks_to_run(session_factory, plan_id):
+    """A run cancelled after its pre-backup scripts ran, whose process ended
+    before its post-backup scripts started."""
+    db = session_factory()
+    try:
+        plan = db.get(BackupPlan, plan_id)
+        plan.schedule_enabled = False
+        run = BackupPlanRun(
+            backup_plan_id=plan_id,
+            trigger="manual",
+            status="cancelled",
+            error_message=POST_BACKUP_HOOKS_AFTER_CANCEL,
+            created_at=datetime.utcnow(),
+        )
+        db.add(run)
+        db.flush()
+        db.add(
+            ScriptExecution(
+                backup_plan_id=plan_id,
+                backup_plan_run_id=run.id,
+                hook_type="pre-backup",
+                status="completed",
+                started_at=datetime.utcnow(),
+                triggered_by="backup_plan",
+            )
+        )
+        db.commit()
+        return run.id
+    finally:
+        db.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_plan_is_busy_from_the_startup_on_until_its_post_hooks_ran(
+    session_factory, due_plan, lease_db
+):
+    """A finished run's post-backup scripts are still to run. The sweep
+    launches them once the runner has its lease; a start by hand is refused
+    in the wait for the lease as well, and while they run, and admitted
+    after them (#1543)."""
+    from fastapi import HTTPException
+
+    run_id = _cancelled_run_with_post_hooks_to_run(session_factory, due_plan)
+    old = OperationRunner(session_factory=session_factory, registry={})
+    assert old.acquire_lease(lease_db)
+    runner = OperationRunner(
+        session_factory=session_factory, registry={}, poll_interval=0.01
+    )
+    scripts_may_end = asyncio.Event()
+    scripts_of: list[int] = []
+
+    async def post_hooks(run_id):
+        scripts_of.append(run_id)
+        await scripts_may_end.wait()
+
+    def refused() -> bool:
+        db = session_factory()
+        try:
+            service.refuse_active_run(db, due_plan)
+        except HTTPException as exc:
+            assert exc.status_code == 409
+            return True
+        finally:
+            db.rollback()
+            db.close()
+        return False
+
+    with ExitStack() as stack:
+        finish_runs = _startup_patches(stack, session_factory, runner)
+        from app.main import app, startup_event
+        from app.services.backup_plan_execution_service import (
+            backup_plan_execution_service as service,
+        )
+
+        stack.enter_context(
+            patch.object(service, "_run_post_hooks_after_restart", new=post_hooks)
+        )
+        app.state.background_tasks = []
+        await startup_event()
+        try:
+            await asyncio.sleep(0.05)
+            assert not service.startup_sweep_ran and not service.live_run_ids
+            assert refused()
+
+            old.release_lease(lease_db)
+            assert await _wait_for(lambda: service.startup_sweep_ran)
+            assert await _wait_for(lambda: scripts_of == [run_id])
+            assert service.live_run_ids == {run_id}
+            assert refused()
+
+            scripts_may_end.set()
+            assert await _wait_for(lambda: not service.live_run_ids)
+            assert not refused()
+        finally:
+            scripts_may_end.set()
+            await _stop(app, runner, finish_runs)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_failing_startup_sweep_does_not_keep_a_plan_busy(
+    session_factory, due_plan
+):
+    """Nothing launches the post-backup scripts after a sweep that failed:
+    a plan that waited for them would wait until the next restart."""
+    _cancelled_run_with_post_hooks_to_run(session_factory, due_plan)
+    runner = OperationRunner(
+        session_factory=session_factory, registry={}, poll_interval=0.01
+    )
+
+    with ExitStack() as stack:
+        finish_runs = _startup_patches(stack, session_factory, runner)
+        from app.main import app, startup_event
+        from app.services.backup_plan_execution_service import (
+            backup_plan_execution_service as service,
+        )
+
+        stack.enter_context(
+            patch(
+                "app.main._recover_interrupted_work",
+                side_effect=RuntimeError("database unavailable"),
+            )
+        )
+        app.state.background_tasks = []
+        await startup_event()
+        try:
+            assert await _wait_for(lambda: service.startup_sweep_ran)
+            db = session_factory()
+            try:
+                assert not service.has_active_run(db, due_plan)
+            finally:
+                db.close()
+        finally:
+            await _stop(app, runner, finish_runs)
+
+
 @pytest.mark.unit
 def test_startup_sweep_fails_only_plan_runs_this_process_is_not_executing(
     session_factory, due_plan
@@ -317,6 +462,9 @@ async def test_the_scheduler_runs_when_the_runner_ends_before_its_recovery(
     with ExitStack() as stack:
         finish_runs = _startup_patches(stack, session_factory, runner)
         from app.main import app, startup_event
+        from app.services.backup_plan_execution_service import (
+            backup_plan_execution_service,
+        )
 
         app.state.background_tasks = []
         await startup_event()
@@ -324,6 +472,8 @@ async def test_the_scheduler_runs_when_the_runner_ends_before_its_recovery(
             assert await _wait_for(lambda: _plan_runs(session_factory, due_plan)), (
                 "the scheduler dispatched nothing"
             )
+            # nor does a start by hand wait for one
+            assert backup_plan_execution_service.startup_sweep_ran
         finally:
             await _stop(app, runner, finish_runs)
 

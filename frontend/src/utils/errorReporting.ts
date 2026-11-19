@@ -256,7 +256,13 @@ export const reportError = (error: unknown, ctx: ErrorContext): void => {
 export const isCancelled = (reason: unknown): boolean => {
   try {
     const r = reason as { code?: unknown; name?: unknown } | null
-    return axios.isCancel(reason) || r?.code === 'ERR_CANCELED' || r?.name === 'AbortError'
+    return (
+      axios.isCancel(reason) ||
+      r?.code === 'ERR_CANCELED' ||
+      r?.name === 'AbortError' ||
+      // Monaco's CancellationError when an editor is disposed (dashboard da035b28a9e069d2).
+      r?.name === 'Canceled'
+    )
   } catch {
     return false
   }

@@ -20,7 +20,7 @@ from app.core.security import (
     get_current_user,
     require_any_role,
 )
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.database.models import (
     AgentMachine,
     Archive,
@@ -31,6 +31,7 @@ from app.database.models import (
     UserRepositoryPermission,
     utc_now,
 )
+from app.services.job_admission import lock_settings_row
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.operations.followups import (
     HistoryCapability,
@@ -697,7 +698,8 @@ def get_repository_hub_detail(
 
 
 @router.post("/reconcile")
-async def reconcile_now(
+@ends_read_on_return
+def reconcile_now(
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -716,7 +718,8 @@ def _paused_stages(settings) -> list[str]:
 
 
 @router.post("/pause")
-async def pause_background(
+@ends_read_on_return
+def pause_background(
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -727,7 +730,8 @@ async def pause_background(
 
 
 @router.post("/resume")
-async def resume_background(
+@ends_read_on_return
+def resume_background(
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -746,18 +750,23 @@ def _set_stage_paused(db: Session, stage: str, paused: bool) -> dict:
             status_code=404, detail={"key": "backend.errors.operations.unknownStage"}
         )
     settings = _settings_row(db)
+    # The list is read, changed and written back: two stages changed at once
+    # each keep the other's change.
+    lock_settings_row(db, settings)
     stored = set(settings.paused_stages or [])
     stored = stored | {stage} if paused else stored - {stage}
     # A new list, so the JSON column registers the change.
-    settings.paused_stages = [s for s in STAGES if s in stored]
+    paused_stages = [s for s in STAGES if s in stored]
+    settings.paused_stages = paused_stages
     db.commit()
     if not paused:
         operation_runner.wake()
-    return {"paused_stages": settings.paused_stages}
+    return {"paused_stages": paused_stages}
 
 
 @router.post("/stages/{stage}/pause")
-async def pause_stage(
+@ends_read_on_return
+def pause_stage(
     stage: str,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
@@ -766,7 +775,8 @@ async def pause_stage(
 
 
 @router.post("/stages/{stage}/resume")
-async def resume_stage(
+@ends_read_on_return
+def resume_stage(
     stage: str,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
@@ -775,7 +785,8 @@ async def resume_stage(
 
 
 @router.put("/limits", response_model=QueueLimits)
-async def update_limits(
+@ends_read_on_return
+def update_limits(
     body: LimitsUpdate,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),

@@ -9,8 +9,9 @@ from typing import Optional
 import structlog
 from sqlalchemy.orm import Session
 
-from app.database.database import SessionLocal
+from app.database.database import SessionLocal, checkout_can_wait, run_off_loop
 from app.database.models import Operation, Repository, SystemSettings, utc_now
+from app.services.job_admission import lock_reconcile_scope
 from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.executors import registered_kinds
 from app.services.operations.followups import (
@@ -170,6 +171,7 @@ def enqueue_reconcile_runs(db: Session) -> int:
     # No early return on an empty chain: the chain now differs per
     # repository (spec 6.8), so it is resolved inside the loop, and the
     # kinds are left out of the log for the same reason.
+    lock_reconcile_scope(db)
     count = 0
     for repo in db.query(Repository).all():
         if enqueue_reconcile_run(db, repo.id, commit=False):
@@ -282,6 +284,15 @@ class ReconcileScheduler:
         finally:
             db.close()
 
+    async def _tick_off_loop(self, now: datetime) -> None:
+        """The tick for the scheduler's coroutine. It runs in a thread: it
+        waits for the lock of a request that queues reconcile runs, and on
+        the loop that wait would hold every request."""
+        if checkout_can_wait(getattr(SessionLocal, "kw", {}).get("bind")):
+            await run_off_loop(self._tick, now)
+        else:  # a pool of the tests: its connection stays in its thread
+            self._tick(now)
+
     def stop(self) -> None:
         self.running = False
 
@@ -317,7 +328,7 @@ class ReconcileScheduler:
             # Kept in memory as well, so a tick that failed waits a full
             # interval within this process, as it always has.
             last_tick = now
-            self._tick(now)
+            await self._tick_off_loop(now)
             # A tick that outlasts the interval leaves the next one due at
             # once; give way to the event loop in between.
             await asyncio.sleep(0)

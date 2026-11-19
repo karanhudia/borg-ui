@@ -115,10 +115,13 @@ jobs:
         working-directory: source/frontend
         run: npm ci
 
+      # Main's baseline run also fills the package cache every PR capture reads.
       - name: Install Playwright Chromium
         if: ${{ (steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline') && github.event_name != 'workflow_run' }}
-        working-directory: source/frontend
-        run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
+        uses: ./source/.github/actions/install-playwright-chromium
+        with:
+          working-directory: source/frontend
+          browsers-path: "0"
 
       - name: Capture Storybook snapshots
         if: ${{ (steps.visual_mode.outputs.mode == 'pr' || steps.visual_mode.outputs.mode == 'baseline') && github.event_name != 'workflow_run' }}

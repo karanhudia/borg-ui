@@ -1007,6 +1007,40 @@ def test_borg1_prune_keeps_the_old_keep_within_spelling():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("version", "path", "flag", "pattern"),
+    [
+        (1, "/agent/repo", "--glob-archives", "nas-[0-9]*"),
+        (2, "/agent/repo2", "-a", "id:nas"),
+    ],
+)
+def test_prune_applies_the_plan_archive_filter(version, path, flag, pattern):
+    """A plan-scoped prune (issue #1549) must reach Borg, or the agent would
+    prune every archive in the repository."""
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.prune",
+            "repository": {"path": path, "borg_version": version},
+            "operation": {"keep_daily": 7, "match_archives": pattern},
+        }
+    )
+
+    command = payload.build_command()
+
+    assert command[command.index(flag) + 1] == pattern
+    if version == 1:
+        assert command[-1] == path
+
+
+@pytest.mark.unit
+def test_agent_advertises_the_prune_filter_capability():
+    from agent.borg_ui_agent.runtime import get_capabilities
+    from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
+
+    assert PRUNE_MATCH_CAPABILITY in get_capabilities()
+
+
+@pytest.mark.unit
 def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch):
     from agent.borg_ui_agent.session import AgentSessionRuntime
 

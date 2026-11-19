@@ -21,11 +21,10 @@ from app.api.archives import (
     _stream_agent_archive_tar,
     _tar_strip_components,
 )
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.database.models import User, Repository, SystemSettings
-from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import resolve_maintenance_job
-from app.services.operations.maintenance_start import active_delete_for_archive
+from app.services.operations.maintenance_start import start_archive_delete
 from app.core.security import (
     require_role_dependency,
     check_repo_access,
@@ -565,7 +564,8 @@ async def get_archive_contents(
 
 
 @router.delete("/{archive_id}", dependencies=[BORG2])
-async def delete_archive(
+@ends_read_on_return
+def delete_archive(
     repository: str,
     archive_id: str,
     current_user: User = Depends(
@@ -599,24 +599,7 @@ async def delete_archive(
     # Deletes are rejected per archive, not per repository (spec section 13
     # phase 5): two different archives may be removed at once, the same one
     # may not.
-    running_job = active_delete_for_archive(db, repo.id, archive_name)
-    if running_job:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "key": "backend.errors.archives.deleteAlreadyRunning",
-                "params": {"jobId": running_job.id},
-            },
-        )
-
-    delete_job = enqueue(
-        db,
-        "delete_archive",
-        repository_id=repo.id,
-        trigger="manual",
-        params={"archive_name": archive_name},
-        triggered_by_user_id=current_user.id,
-    )
+    delete_job = start_archive_delete(db, repo, archive_name, user_id=current_user.id)
 
     logger.info(
         "Borg2 delete archive operation queued",

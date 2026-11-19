@@ -1,3 +1,4 @@
+import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import { AuthProvider, useAuth } from '../useAuth'
@@ -452,6 +453,27 @@ describe('AuthProvider', () => {
         )
       ).toBeInTheDocument()
     })
+  })
+
+  it('drops cached data on logout so the next account starts clean', async () => {
+    localStorage.setItem('access_token', 'persisted-token')
+    logoutApiMock.mockResolvedValue({ data: {} })
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['mcp-connections', false], [{ id: 1 }])
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+      { queryClient }
+    )
+
+    await screen.findByText('authenticated:true')
+    await user.click(screen.getByRole('button', { name: 'Logout' }))
+
+    await waitFor(() => expect(screen.getByText('user:none')).toBeInTheDocument())
+    expect(queryClient.getQueryData(['mcp-connections', false])).toBeUndefined()
   })
 
   it('clears auth state on logout even when the API call fails', async () => {

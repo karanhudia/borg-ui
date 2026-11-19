@@ -1,4 +1,5 @@
 import React, { useState, useEffect, createContext, useContext } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   authAPI,
   setAuthTransportMode,
@@ -62,6 +63,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
   const activeBackendTarget = useActiveBackendTarget()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -406,6 +408,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearRecentPasswordLogin()
     clearRecentPasskeyEnrollmentState()
     setUser(null)
+    // Cached responses belong to the account that fetched them; the next
+    // account must not see them, even for a moment.
+    queryClient.clear()
     if (logoutUrl) {
       window.location.assign(logoutUrl)
     }

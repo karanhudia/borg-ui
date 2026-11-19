@@ -355,13 +355,19 @@ def create_backup_operation(
     `repository` None the caller passes the path it was given and is
     expected to fail the row itself before committing."""
     from app.core.borg_major import is_borg2
-    from app.core.features import require_feature_access
+    from app.core.features import has_feature, require_feature_access
     from app.services.backup_route_planner import apply_repository_route_to_backup_job
     from app.services.operations.enqueue import enqueue, wake_runner
 
     # Every backup is created here, so this is where a Borg 2 backup is
     # refused once the plan no longer includes Borg 2, whoever asked for it.
-    if repository is not None and is_borg2(repository):
+    # Asked with the lookup that only reads: the refusal's commits, and the
+    # caller holds its admission locks, which a commit would give back.
+    if (
+        repository is not None
+        and is_borg2(repository)
+        and not has_feature(db, "borg_v2")
+    ):
         require_feature_access(db, "borg_v2")
 
     stored = {k: v for k, v in (params or {}).items() if v is not None}

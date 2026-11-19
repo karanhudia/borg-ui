@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 import jwt
@@ -123,6 +124,52 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
+# MCP tools call the app's own routes in-process as the connection's user
+# (spec 2026-11-14-mcp-server, 5.4). The credential rides on its own header,
+# is checked before every other auth mode, and is never a Bearer token.
+MCP_INTERNAL_HEADER = "X-Borg-MCP-Internal"
+MCP_INTERNAL_PURPOSE = "mcp_internal"
+MCP_INTERNAL_LIFETIME = timedelta(seconds=60)
+
+
+def create_mcp_internal_token(user_id: int, connection_id: int) -> str:
+    claims = {
+        "sub": str(user_id),
+        "conn": connection_id,
+        "purpose": MCP_INTERNAL_PURPOSE,
+        "exp": datetime.utcnow() + MCP_INTERNAL_LIFETIME,
+    }
+    return jwt.encode(claims, settings.secret_key, algorithm=settings.algorithm)
+
+
+def _get_mcp_internal_user(credential: str, request: Request, db: Session) -> User:
+    refused = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={"key": "backend.errors.auth.invalidToken"},
+    )
+    payload = decode_token(credential)
+    if not payload or payload.get("purpose") != MCP_INTERNAL_PURPOSE:
+        raise refused
+    try:
+        user_id, connection_id = int(payload["sub"]), int(payload["conn"])
+    except (KeyError, TypeError, ValueError):
+        raise refused from None
+    connection = (
+        db.query(ApiToken.id)
+        .filter(
+            ApiToken.id == connection_id,
+            ApiToken.kind == "mcp",
+            ApiToken.user_id == user_id,
+        )
+        .first()
+    )
+    user = db.query(User).filter(User.id == user_id).first()
+    if connection is None or user is None or not user.is_active:
+        raise refused
+    request.state.mcp_connection_id = connection_id
+    return user
+
+
 def decode_token(token: str) -> Optional[dict]:
     """Decode a JWT token and return its payload."""
     try:
@@ -210,6 +257,21 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)) -> U
     return user
 
 
+async def refuse_mcp_internal(
+    request: Request, _user: User = Depends(get_current_user)
+) -> None:
+    """Refuse a route to tools calling in-process for an MCP connection.
+
+    Token management, MCP settings and secret reveals stay out of an AI's
+    reach whatever its level (spec 2026-11-14-mcp-server, 5.2 rule 5).
+    """
+    if getattr(request.state, "mcp_connection_id", None) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"key": "backend.errors.auth.notAvailableOverMcp"},
+        )
+
+
 async def _look_up_off_loop(load, request: Request, db: Session) -> User:
     """Run the user lookup in a worker thread.
 
@@ -236,6 +298,10 @@ def _load_current_user(request: Request, db: Session, may_release: bool) -> User
 
 
 def _authenticate_user(request: Request, db: Session) -> User:
+    mcp_credential = request.headers.get(MCP_INTERNAL_HEADER)
+    if mcp_credential:
+        return _get_mcp_internal_user(mcp_credential, request, db)
+
     if settings.allow_insecure_no_auth:
         return _get_current_user_insecure_no_auth(db)
 
@@ -533,6 +599,13 @@ def _resolve_api_token_user(token: str, db: Session) -> Optional[User]:
     candidates = db.query(ApiToken).filter(ApiToken.prefix == prefix).all()
     for api_token in candidates:
         if verify_password(token, api_token.token_hash):
+            if api_token.kind == "mcp":
+                # An MCP connection is limited to its access level, which only
+                # the MCP endpoint enforces; on REST it would have full power.
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail={"key": "backend.errors.auth.mcpTokenNotForApi"},
+                )
             user = db.query(User).filter(User.id == api_token.user_id).first()
             if user is None:
                 return None
@@ -781,14 +854,19 @@ def require_repository_access_by_path(
     return repo
 
 
-async def authenticate_user(
-    db: Session, username: str, password: str
-) -> Optional[User]:
-    """Authenticate a user with username and password"""
+def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+    """Authenticate a user with username and password. Blocking: the bcrypt
+    comparison takes about 175 ms. The user is read again after it, so that
+    the caller sees what was committed meanwhile (an enabled second factor);
+    a password changed meanwhile fails the login."""
     user = db.query(User).filter(User.username == username).first()
     if not user:
         return None
-    if not verify_password(password, user.password_hash):
+    checked_hash = user.password_hash
+    if not verify_password(password, checked_hash):
+        return None
+    user = db.query(User).filter(User.id == user.id).populate_existing().one_or_none()
+    if user is None or user.password_hash != checked_hash:
         return None
     return user
 
@@ -863,16 +941,42 @@ async def create_first_user():
         db.close()
 
 
+# User creations take turns from their checks (plan limit, duplicate username
+# or email) to their insert, so two of them cannot both pass a check only one
+# may pass. Taken after the password is hashed, before the first query.
+user_creation_turn = threading.Lock()
+
+
+def taken_user_key(db: Session, username: str, email: Optional[str]) -> Optional[str]:
+    """After a user insert failed on a unique key: "username" or "email",
+    whichever another writer, such as an account update, has taken meanwhile.
+    None when neither is taken."""
+    if db.query(User.id).filter(User.username == username).first() is not None:
+        return "username"
+    # NULL emails never collide; an empty string does.
+    if (
+        email is not None
+        and db.query(User.id).filter(User.email == email).first() is not None
+    ):
+        return "email"
+    return None
+
+
 def create_user(
-    db: Session, username: str, password: str, email: str = None, role: str = "viewer"
+    db: Session,
+    username: str,
+    password_hash: str,
+    email: str = None,
+    role: str = "viewer",
+    all_repositories_role: Optional[str] = None,
 ) -> User:
-    """Create a new user"""
-    hashed_password = get_password_hash(password)
+    """Create a new user with a password hashed by the caller, in one commit"""
     user = User(
         username=username,
-        password_hash=hashed_password,
+        password_hash=password_hash,
         email=email,
         role=role,
+        all_repositories_role=all_repositories_role,
     )
     db.add(user)
     db.commit()
@@ -880,15 +984,28 @@ def create_user(
     return user
 
 
-def update_user_password(db: Session, user_id: int, new_password: str) -> bool:
-    """Update a user's password"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return False
-
-    user.password_hash = get_password_hash(new_password)
+def update_user_password(
+    db: Session,
+    user_id: int,
+    checked_password_hash: str,
+    new_password_hash: str,
+    **columns,
+) -> bool:
+    """Replace a user's password hash, made by the caller, and set `columns`
+    in the same write, but only while the stored hash is still
+    `checked_password_hash`, the one the caller checked the current password
+    against. A password set meanwhile, such as an administrator's reset, is
+    not overwritten. False when nothing was replaced."""
+    replaced = (
+        db.query(User)
+        .filter(User.id == user_id, User.password_hash == checked_password_hash)
+        .update(
+            {"password_hash": new_password_hash, **columns},
+            synchronize_session=False,
+        )
+    )
     db.commit()
-    return True
+    return replaced == 1
 
 
 # Secret encryption/decryption utilities

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
 import { toast } from 'react-hot-toast'
-import api, { operationsAPI, archivesAPI as archivesApiClient } from '../api'
+import api, { mcpAPI, operationsAPI, archivesAPI as archivesApiClient } from '../api'
 
 describe('api response interceptor', () => {
   let toastErrorSpy: ReturnType<typeof vi.spyOn>
@@ -199,6 +199,45 @@ describe('archivesAPI stored-archive methods', () => {
     })
     await archivesApiClient.search(7, 'invoices', 25)
     expect(mock.history.get[0].params).toEqual({ q: 'invoices', limit: 25 })
+    mock.restore()
+  })
+})
+
+describe('mcpAPI', () => {
+  it('lists everyone when asked', async () => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/settings/mcp/connections').reply(200, [])
+    await mcpAPI.list(true)
+    await mcpAPI.list()
+    expect(mock.history.get[0].params).toEqual({ all: true })
+    expect(mock.history.get[1].params).toBeUndefined()
+    mock.restore()
+  })
+
+  it('pages activity by the last id', async () => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/settings/mcp/connections/4/activity').reply(200, [])
+    await mcpAPI.activity(4, 90)
+    await mcpAPI.activity(4)
+    expect(mock.history.get[0].params).toEqual({ limit: 50, before_id: 90 })
+    expect(mock.history.get[1].params).toEqual({ limit: 50 })
+    mock.restore()
+  })
+
+  it('creates, updates and revokes', async () => {
+    const mock = new MockAdapter(api)
+    mock.onPost('/settings/mcp/connections').reply(201, { token: 'borgui_EXAMPLE' })
+    mock.onPatch('/settings/mcp/connections/3').reply(200, {})
+    mock.onDelete('/settings/mcp/connections/3').reply(204)
+    mock.onPut('/settings/mcp/config').reply(200, {})
+    await mcpAPI.create({ name: 'laptop', access_level: 'read' })
+    await mcpAPI.update(3, { name: 'renamed' })
+    await mcpAPI.revoke(3)
+    await mcpAPI.updateConfig({ enabled: false })
+    expect(JSON.parse(mock.history.post[0].data)).toEqual({ name: 'laptop', access_level: 'read' })
+    expect(JSON.parse(mock.history.patch[0].data)).toEqual({ name: 'renamed' })
+    expect(mock.history.delete).toHaveLength(1)
+    expect(JSON.parse(mock.history.put[0].data)).toEqual({ enabled: false })
     mock.restore()
   })
 })

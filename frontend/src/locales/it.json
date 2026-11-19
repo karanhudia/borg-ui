@@ -163,7 +163,8 @@
       "users": "Utenti",
       "exportImport": "Esporta/Importa",
       "beta": "Beta",
-      "backgroundWork": "Lavoro in background"
+      "backgroundWork": "Lavoro in background",
+      "mcp": "Assistenti IA (MCP)"
     },
     "menu": {
       "openDrawer": "Apri navigazione",
@@ -1934,7 +1935,9 @@
         "runCheckAfter": "Esegui check dopo backup repository riusciti",
         "runRestoreCheckAfter": "Esegui test di ripristino sul nuovo archivio dopo backup repository riusciti",
         "checkMaxDurationHelper": "Secondi. Usa 0 per nessun limite.",
-        "checkExtraFlagsHelper": "Opzioni aggiuntive di borg check aggiunte ai check di manutenzione del piano."
+        "checkExtraFlagsHelper": "Opzioni aggiuntive di borg check aggiunte ai check di manutenzione del piano.",
+        "pruneScopeToPlan": "Esegui prune solo sugli archivi creati da questo piano",
+        "pruneScopeToPlanHelper": "Consigliato quando più piani eseguono il backup nello stesso repository. Senza questa opzione, prune applica la conservazione di questo piano a tutti gli archivi del repository, compresi quelli di altri piani. Gli archivi vengono riconosciuti dal nome secondo il modello del nome archivio di questo piano, quindi dopo un cambio di modello quelli precedenti subiscono prune solo se il nome corrisponde ancora. Se anche i nomi di un altro piano o pianificazione corrispondono, prune viene saltato con un errore."
       },
       "review": {
         "plan": "Piano",
@@ -1970,7 +1973,10 @@
         "pathCount_other": "{{count}} percorsi",
         "selectedCount_one": "{{count}} selezionato",
         "selectedCount_other": "{{count}} selezionati",
-        "manualOnlyHint": "Viene eseguito solo se avviato manualmente."
+        "manualOnlyHint": "Viene eseguito solo se avviato manualmente.",
+        "pruneScope": "Ambito di prune",
+        "pruneScopePlan": "Archivi di questo piano",
+        "pruneScopeRepository": "Intero repository"
       },
       "fileExplorer": {
         "sourceTitle": "Seleziona percorsi sorgente",
@@ -3710,7 +3716,16 @@
     "statsRefreshCompleted": "Aggiornamento statistiche completato",
     "failedToStartStatsRefresh": "Impossibile avviare l'aggiornamento delle statistiche",
     "autoPrunePreviewLabel": "Anteprime di prune automatiche",
-    "autoPrunePreviewHelper": "Confronta le regole di conservazione da solo quando cambia l'elenco degli archivi e quando si apre la pagina di anteprima del prune. Se disattivato, il confronto viene eseguito solo quando premi Confronta ora."
+    "autoPrunePreviewHelper": "Confronta le regole di conservazione da solo quando cambia l'elenco degli archivi e quando si apre la pagina di anteprima del prune. Se disattivato, il confronto viene eseguito solo quando premi Confronta ora.",
+    "mcpTitle": "Assistenti IA (MCP)",
+    "mcpDescription": "Attiva o disattiva l'accesso MCP e limita il livello che gli utenti possono concedere.",
+    "mcpEnabled": "Consenti connessioni MCP",
+    "mcpEnabledHelp": "Se disattivato, ogni chiamata MCP viene rifiutata con un messaggio cortese. Le connessioni restano.",
+    "mcpMaxLevel": "Livello di accesso massimo",
+    "mcpMaxLevelHelp": "Le connessioni sopra questo livello mantengono la loro impostazione e funzionano a questo livello finché non lo rialzi.",
+    "mcpToolsToday": "Questa versione di Borg UI ha strumenti per: {{levels}}.",
+    "mcpSave": "Salva",
+    "mcpSaved": "Impostazioni MCP salvate"
   },
   "monitoringReports": {
     "title": "Monitoraggio e report",
@@ -5911,7 +5926,9 @@
         "oidcIdentityConflict": "Questa identità single sign-on è in conflitto con un account Borg UI esistente.",
         "oidcEmailAlreadyInUse": "Questa email single sign-on è già utilizzata da un altro account Borg UI.",
         "oidcPendingApproval": "Il tuo account single sign-on è in attesa dell'approvazione di un amministratore",
-        "oidcTemplateUserNotFound": "L'utente modello configurato per il single sign-on non è stato trovato"
+        "oidcTemplateUserNotFound": "L'utente modello configurato per il single sign-on non è stato trovato",
+        "mcpTokenNotForApi": "Questo token è per i client MCP e non può essere usato con l'API.",
+        "notAvailableOverMcp": "Questa azione non è disponibile per le connessioni MCP."
       },
       "plan": {
         "featureNotAvailable": "Questa funzionalità non è disponibile nel tuo piano attuale."
@@ -6400,6 +6417,13 @@
       },
       "operations": {
         "unknownStage": "Fase in background sconosciuta."
+      },
+      "mcp": {
+        "levelAboveCap": "Il tuo amministratore consente connessioni MCP fino all'accesso {{max}}.",
+        "skipNeedsFull": "Saltare le conferme richiede l'accesso Completo.",
+        "nameRequired": "Dai un nome alla connessione.",
+        "connectionNotFound": "Connessione MCP non trovata.",
+        "levelNotAvailable": "Questa versione di Borg UI non ha ancora strumenti {{level}}, quindi l'accesso {{level}} non può essere scelto."
       }
     },
     "success": {
@@ -7001,5 +7025,103 @@
     "claimed": "La tua offerta del {{percent}}% è su ogni link di acquisto fino al {{date}}.",
     "unavailable": "Questa offerta non è disponibile per questa installazione.",
     "failed": "Non è stato possibile ottenere l'offerta in questo momento. Riprova tra poco."
+  },
+  "mcp": {
+    "levels": {
+      "read": {
+        "title": "Lettura",
+        "body": "Guarda soltanto: stato, problemi, repository, archivi, file, job, log, piani e impostazioni."
+      },
+      "operate": {
+        "title": "Esecuzione",
+        "body": "In più avvia ciò che esiste: backup, controlli, compattazioni, ripristini in un nuovo percorso, mount."
+      },
+      "manage": {
+        "title": "Gestione",
+        "body": "In più crea e modifica la configurazione: repository, piani, pianificazioni, script e connessioni."
+      },
+      "full": {
+        "title": "Completo",
+        "body": "In più azioni distruttive, sempre tramite un'anteprima che confermi prima."
+      },
+      "comingSoon": "In arrivo",
+      "aboveCap": "Oltre il limite del tuo amministratore",
+      "groupLabel": "Livello di accesso"
+    },
+    "dialog": {
+      "createTitle": "Nuova connessione MCP",
+      "editTitle": "Modifica connessione",
+      "name": "Nome",
+      "namePlaceholder": "Claude sul mio portatile",
+      "nameHelp": "Per distinguere le tue connessioni.",
+      "skip": "Salta le conferme di routine",
+      "skipHelp": "L'IA chiede comunque prima di qualsiasi cosa che elimini dati.",
+      "create": "Crea connessione",
+      "save": "Salva",
+      "cancel": "Annulla"
+    },
+    "connected": {
+      "title": "Connessione creata",
+      "tokenLabel": "Token",
+      "once": "Copia questo token ora. Non verrà mostrato di nuovo.",
+      "copyToken": "Copia token",
+      "copied": "Copiato",
+      "connectTitle": "Collega il tuo client",
+      "runInTerminal": "Esegui questo comando in un terminale.",
+      "pasteInto": "Aggiungi questo a {{file}}.",
+      "generic": "Altri client",
+      "genericHint": "Qualsiasi client MCP che supporti Streamable HTTP con un header personalizzato.",
+      "copySnippet": "Copia",
+      "done": "Fatto",
+      "closeConfirmTitle": "Chiudere senza copiare il token?",
+      "closeConfirmBody": "Non potrai più vederlo. Puoi revocare questa connessione e crearne una nuova.",
+      "closeAnyway": "Chiudi comunque",
+      "keepOpen": "Lascia aperto"
+    },
+    "list": {
+      "empty": "Ancora nessuna connessione MCP",
+      "emptyBody": "Creane una per usare Borg UI da Claude Code, Claude Desktop, Cursor o VS Code.",
+      "appliesAs": "vale come {{level}}",
+      "notConnected": "Non ancora collegato",
+      "lastSeen": "{{client}}, {{when}}",
+      "callsToday_one": "{{count}} chiamata oggi (UTC)",
+      "callsToday_other": "{{count}} chiamate oggi (UTC)",
+      "owner": "Proprietario: {{name}}",
+      "edit": "Modifica",
+      "revoke": "Revoca",
+      "activity": "Attività",
+      "revokeTitle": "Revocare {{name}}?",
+      "revokeBody": "I client che usano questa connessione smettono subito di funzionare. Non si può annullare.",
+      "cancel": "Annulla"
+    },
+    "activity": {
+      "title": "Attività",
+      "empty": "Ancora nessuna chiamata",
+      "emptyBody": "Qui compaiono le chiamate agli strumenti di questa connessione. Gli argomenti non vengono mai salvati.",
+      "loadMore": "Carica altro",
+      "durationMs": "{{ms}} ms",
+      "outcome": {
+        "ok": "OK",
+        "error": "Errore",
+        "denied_level": "Oltre il livello",
+        "denied_rbac": "Non consentito",
+        "needs_confirmation": "Serve conferma",
+        "confirmed": "Confermato"
+      }
+    },
+    "tab": {
+      "title": "Assistenti IA (MCP)",
+      "description": "Lascia che un assistente IA usi Borg UI per te tramite il Model Context Protocol. Ogni connessione ha il proprio token e livello di accesso.",
+      "newConnection": "Nuova connessione",
+      "everyone": "Connessioni di tutti",
+      "turnedOff": "Il tuo amministratore ha disattivato MCP. Le connessioni esistenti non sono utilizzabili finché non viene riattivato.",
+      "created": "Connessione creata",
+      "updated": "Connessione aggiornata",
+      "revoked": "Connessione revocata",
+      "closeActivity": "Chiudi attività",
+      "activityFor": "Attività di {{name}}",
+      "loadFailed": "Impossibile caricare le tue connessioni MCP.",
+      "retry": "Riprova"
+    }
   }
 }

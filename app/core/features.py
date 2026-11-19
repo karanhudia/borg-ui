@@ -28,6 +28,7 @@ FEATURES: dict[str, Plan] = {
     "backup_reports": Plan.PRO,
     "alerting_monitoring": Plan.PRO,
     "archive_history": Plan.PRO,  # change deltas, file history, search, outlier flags
+    "mcp": Plan.PRO,  # MCP server for AI clients (Lite is gated as Pro)
     "multi_user": Plan.COMMUNITY,  # up to 5 users
     "extra_users": Plan.PRO,  # >5 users (up to 10 on Pro)
     "rbac": Plan.ENTERPRISE,  # role-based access control
@@ -91,5 +92,9 @@ def require_feature(feature: str):
 
     def _check(db: Session = Depends(get_db)):
         require_feature_access(db, feature)
+        # The check is over and nothing of it is kept. Its read would leave
+        # the request holding a connection, through the user lookup, while it
+        # waits for the worker thread of a plain `def` handler.
+        db.rollback()
 
     return Depends(_check)

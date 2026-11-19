@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
+from app.utils.proc_stat import get_process_start_time
 from app.database.models import Repository
 from app.database.database import SessionLocal
 from app.config import settings
@@ -24,24 +25,6 @@ from app.services.process_cancel import (
 )
 
 logger = structlog.get_logger()
-
-
-def get_process_start_time(pid: int) -> int:
-    """
-    Read process start time from /proc/[pid]/stat
-    Returns: jiffies since system boot (unique per process)
-    """
-    try:
-        with open(f"/proc/{pid}/stat", "r") as f:
-            stat_data = f.read()
-        # Parse: pid (comm) state ppid ... starttime (22nd field)
-        # Split by ) to handle process names with spaces/parens
-        fields = stat_data.split(")")[1].split()
-        starttime = int(fields[19])  # 22nd field overall
-        return starttime
-    except Exception as e:
-        logger.error("Failed to read process start time", pid=pid, error=str(e))
-        return 0
 
 
 class CompactService:

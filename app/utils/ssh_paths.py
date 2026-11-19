@@ -84,3 +84,27 @@ def apply_ssh_command_prefix(path: str, ssh_path_prefix: Optional[str] = None) -
         return normalized_path
 
     return _join_command_prefix(normalized_prefix, normalized_path)
+
+
+def login_relative_remote_path_candidate(
+    remote_path: str, default_path: Optional[str] = None
+) -> Optional[str]:
+    """An absolute path retried relative to the SSH login directory, or None.
+
+    Some SFTP servers root the session at the login directory, so "/data" only
+    exists as "data". There is no candidate when the connection has its own
+    default path, unless the path is spelled "/./..." to ask for it.
+    """
+    normalized = (remote_path or "").strip()
+    if not normalized.startswith("/") or normalized == "/":
+        return None
+    if normalized.startswith("/./"):
+        relative_path = normalized.lstrip("/")
+        return relative_path or None
+
+    normalized_default_path = (default_path or "").strip()
+    if normalized_default_path not in {"", "/"}:
+        return None
+
+    relative_path = normalized.lstrip("/")
+    return relative_path or None

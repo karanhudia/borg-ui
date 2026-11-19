@@ -17,7 +17,7 @@ from app.database.models import (
     ScheduledJob,
     ScheduledJobRepository,
 )
-from app.utils.archive_names import build_archive_name
+from app.utils.archive_names import TIME_PLACEHOLDER_PATTERN, build_archive_name
 
 DEFAULT_SERIES = "default"
 
@@ -68,9 +68,158 @@ def template_prefix(
     return prefix or None
 
 
+# Stand-ins for time placeholders while a template renders: the rendered
+# literal text is tokenized, then these become wildcard tokens.
+_DIGITS_MARK = "\ue000"
+_ANY_MARK = "\ue001"
+# Glob tokens besides a literal character: one digit, and any run of text.
+_DIGIT = ("digit",)
+_ANY = ("any",)
+
+_UNRESOLVED_PLACEHOLDER = re.compile(r"\{[^{}]*\}")
+
+
+class PruneScopeError(ValueError):
+    """A plan-scoped prune cannot be limited to the plan's own archives."""
+
+
+def _archive_tokens(
+    template: Optional[str], *, job_name: str, repo_name: Optional[str]
+) -> list:
+    """The names this template gives backups, as glob tokens: literal
+    characters, `_DIGIT` and `_ANY`. Time placeholders become digit-then-any
+    so plan "nas" does not match plan "nas-docs"; a formatted one (`{now:%a}`)
+    and Borg's own placeholders (`{hostname}`) can be anything."""
+    # A name carrying a marker character itself would turn into a wildcard.
+    for text in (template, job_name, repo_name):
+        if text and (_DIGITS_MARK in text or _ANY_MARK in text):
+            raise PruneScopeError(
+                "Prune limited to this plan was not run: the archive name "
+                "holds a reserved character."
+            )
+    for text in (job_name, repo_name):
+        if text and ("{" in text or "}" in text):
+            # The template renders names first, so `{utcnow}` in a plan name
+            # would expand to a fixed time instead of a wildcard.
+            raise PruneScopeError(
+                "Prune limited to this plan was not run: a plan, schedule or "
+                "repository name holds a brace."
+            )
+    if template and ("{{" in template or "}}" in template):
+        # Borg reads `{{` as a literal brace; a glob cannot keep it apart
+        # from a placeholder.
+        raise PruneScopeError(
+            "Prune limited to this plan was not run: the archive name "
+            "template has a literal brace ({{ or }})."
+        )
+    marked = (
+        TIME_PLACEHOLDER_PATTERN.sub(
+            lambda m: _ANY_MARK if ":" in m.group(0) else _DIGITS_MARK, template
+        )
+        if template
+        else template
+    )
+    name = build_archive_name(job_name, repo_name, marked, timestamp=_DIGITS_MARK)
+    tokens: list = []
+
+    def add(token) -> None:
+        if not (token is _ANY and tokens and tokens[-1] is _ANY):
+            tokens.append(token)
+
+    for index, piece in enumerate(_UNRESOLVED_PLACEHOLDER.split(name)):
+        if index:
+            add(_ANY)  # the placeholder before this piece
+        for char in piece:
+            if char == _DIGITS_MARK:
+                add(_DIGIT)
+                add(_ANY)
+            elif char == _ANY_MARK:
+                add(_ANY)
+            else:
+                add(char)
+    return tokens
+
+
+def _render_glob(tokens: list) -> str:
+    """Glob characters in the literal text are escaped as one-character
+    classes (`[[]`, `[*]`, `[?]`), so they match only themselves."""
+    return "".join(
+        "[0-9]"
+        if token is _DIGIT
+        else "*"
+        if token is _ANY
+        else f"[{token}]"
+        if token in "*?["
+        else token
+        for token in tokens
+    )
+
+
+def _may_overlap(a: list, b: list) -> bool:
+    """False only when no name can match both token lists: a position fixed
+    from the start or the end of both (no `_ANY` before it) that no single
+    character satisfies. Anything else might overlap."""
+
+    def compatible(x, y) -> bool:
+        if x is _DIGIT or y is _DIGIT:
+            other = y if x is _DIGIT else x
+            return other is _DIGIT or other in "0123456789"
+        return x == y
+
+    if _ANY not in a and _ANY not in b:
+        return len(a) == len(b) and all(map(compatible, a, b))
+    for seq_a, seq_b in ((a, b), (a[::-1], b[::-1])):
+        for x, y in zip(seq_a, seq_b):
+            if x is _ANY or y is _ANY:
+                break
+            if not compatible(x, y):
+                return False
+    return True
+
+
+_CHECKPOINT = list(".checkpoint")
+
+
+def _with_checkpoints(tokens: list) -> list:
+    """The names and the checkpoint names a template gives archives."""
+    # ponytail: checkpoint ordinals up to 999; a token for "digits" would
+    # cover more, add it if a run ever writes a thousand checkpoints.
+    return [
+        tokens,
+        tokens + _CHECKPOINT,
+        *(tokens + _CHECKPOINT + ["."] + [_DIGIT] * n for n in (1, 2, 3)),
+    ]
+
+
+def plan_archive_glob(
+    template: Optional[str], *, job_name: str, repo_name: Optional[str]
+) -> str:
+    """Borg 1 `--glob-archives` pattern matching the names this template
+    gives backups (issue #1549)."""
+    return _render_glob(
+        _archive_tokens(template, job_name=job_name, repo_name=repo_name)
+    )
+
+
 def _schedules_for(db: Session, repository: Repository) -> list[ScheduledJob]:
+    # A legacy schedule names its repository by path only; dispatch resolves
+    # it by `Repository.path`, unless it has links, which win.
+    has_links = (
+        db.query(ScheduledJobRepository.id)
+        .filter(ScheduledJobRepository.scheduled_job_id == ScheduledJob.id)
+        .exists()
+    )
     direct = (
-        db.query(ScheduledJob).filter(ScheduledJob.repository_id == repository.id).all()
+        db.query(ScheduledJob)
+        .filter(
+            (ScheduledJob.repository_id == repository.id)
+            | (
+                ScheduledJob.repository_id.is_(None)
+                & (ScheduledJob.repository == repository.path)
+                & ~has_links
+            )
+        )
+        .all()
     )
     linked_ids = [
         row.scheduled_job_id
@@ -131,6 +280,87 @@ def series_prefixes_for_repository(db: Session, repository: Repository) -> list[
         if prefix:
             prefixes.add(prefix)
     return sorted(prefixes, key=len, reverse=True)
+
+
+def plan_prune_match(db: Session, plan: BackupPlan, repository: Repository) -> str:
+    """The archive filter that limits this plan's prune to its own archives:
+    a `--glob-archives` pattern on Borg 1, an exact `-a id:<series>` on
+    Borg 2. Raises PruneScopeError when another plan or schedule targeting
+    the repository writes names the filter also matches, since pruning
+    those under this plan's retention is the loss the scope exists to stop.
+    """
+    borg2 = getattr(repository, "borg_version", 1) == 2
+    siblings = [("schedule", s) for s in _schedules_for(db, repository)] + [
+        ("plan", p) for p in _plans_for(db, repository) if p.id != plan.id
+    ]
+    if borg2:
+        series = template_prefix(
+            plan.archive_name_template, job_name=plan.name, repo_name=repository.name
+        )
+        if not series or _UNRESOLVED_PLACEHOLDER.search(series):
+            # Borg fills placeholders in at create time; the exact selector
+            # would not match the real name, and a sibling's could expand to
+            # it. An empty series would select nothing in particular.
+            raise PruneScopeError(
+                f"Prune limited to this plan was not run: its archive name "
+                f"'{series or ''}' has a placeholder Borg fills in or no fixed "
+                "text, so its archives cannot be selected by name. Use a "
+                "template with fixed text and no Borg placeholder."
+            )
+        result = f"id:{series}"
+        for kind, source in siblings:
+            sample = template_prefix(
+                source.archive_name_template,
+                job_name=source.name,
+                repo_name=repository.name,
+            )
+            if sample and _UNRESOLVED_PLACEHOLDER.search(sample):
+                raise PruneScopeError(
+                    f"Prune limited to this plan was not run: {kind} "
+                    f"'{source.name}' names its archives with a placeholder "
+                    "Borg fills in, so its archives cannot be told apart "
+                    "from this plan's."
+                )
+            if sample == series:
+                raise PruneScopeError(
+                    f"Prune limited to this plan was not run: archives of "
+                    f"{kind} '{source.name}' also match '{result}'. Use "
+                    "different archive name templates for the two."
+                )
+        return result
+
+    own = _archive_tokens(
+        plan.archive_name_template, job_name=plan.name, repo_name=repository.name
+    )
+    result = _render_glob(own)
+    if not any(isinstance(token, str) for token in own):
+        # `{now}` alone renders as `[0-9]*`: every archive in the repository.
+        raise PruneScopeError(
+            f"Prune limited to this plan was not run: '{result}' has no fixed "
+            "text, so it matches every archive in the repository. Add the "
+            "plan name or other fixed text to the archive name template."
+        )
+    for kind, source in siblings:
+        theirs = _archive_tokens(
+            source.archive_name_template,
+            job_name=source.name,
+            repo_name=repository.name,
+        )
+        # Borg 1 checkpoints (`<name>.checkpoint`, `.checkpoint.N`): Borg
+        # matches them with the plan's glob, and a sibling writes them too,
+        # so compare both sides with and without the suffix.
+        pairs = [
+            (mine, other)
+            for mine in _with_checkpoints(own)
+            for other in _with_checkpoints(theirs)
+        ]
+        if any(_may_overlap(mine, other) for mine, other in pairs):
+            raise PruneScopeError(
+                f"Prune limited to this plan was not run: archives of {kind} "
+                f"'{source.name}' may also match '{result}'. Use archive name "
+                "templates that differ in fixed text."
+            )
+    return result
 
 
 def crons_for_repository(

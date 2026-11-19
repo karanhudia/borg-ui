@@ -1,8 +1,10 @@
 import asyncio
+import functools
 import json
 import math
 import os
 import secrets
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -38,7 +40,12 @@ from app.core.agent_constants import DEFAULT_AGENT_POLL_INTERVAL_SECONDS
 from app.core.agent_versions import borg_pin_satisfied, hello_lists_running_jobs
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.core.security import get_password_hash, verify_password
-from app.database.database import ends_read_on_return, get_db, run_off_loop
+from app.database.database import (
+    end_read_keeping_loaded,
+    ends_read_on_return,
+    get_db,
+    run_off_loop,
+)
 from app.database.models import (
     AgentEnrollmentToken,
     AgentJob,
@@ -1255,7 +1262,7 @@ def _mark_agent_job_claimed(job: AgentJob, db: Session) -> bool:
     if job.status != "queued":
         # The usual acknowledgement: the dispatch claimed the job before it
         # sent it. Even an UPDATE that matches no row waits for SQLite's write
-        # lock, and the session handler runs on the loop.
+        # lock.
         return False
     now = _now_utc()
     claimed = (
@@ -1625,6 +1632,43 @@ def _fail_agent_job(
     return True
 
 
+def _is_scoped_prune(job: AgentJob) -> bool:
+    operation = (job.payload or {}).get("operation") or {}
+    return isinstance(operation, dict) and bool(operation.get("match_archives"))
+
+
+def _refuse_unsupported_scoped_prune(
+    job: AgentJob, capabilities: Optional[list], db: Session
+) -> bool:
+    """Fail a plan-scoped prune whose agent no longer advertises the archive
+    filter, and say so. The router checks when it queues the job, but an
+    agent reinstalled at an older version would ignore the filter and prune
+    the whole repository (issue #1549). Called wherever a queued job reaches
+    an agent: the shared session dispatcher. Poll and claim never hand one
+    out (see `poll_jobs`)."""
+    from app.services.repository_executor import PRUNE_MATCH_CAPABILITY
+
+    if not _is_scoped_prune(job):
+        return False
+    if PRUNE_MATCH_CAPABILITY in (capabilities or []):
+        return False
+    # Take it off the queue first, conditional on `queued`: if another
+    # transport claimed or started it since it was read, that run is left
+    # alone. Either way it is not this caller's to hand out. No commit until
+    # it has failed: a committed `claimed` would let an agent that polled it
+    # earlier claim and start it in between.
+    if not _mark_agent_job_claimed(job, db):
+        return True
+    _fail_agent_job(
+        job,
+        db,
+        error_message="Prune limited to this plan needs a newer agent on this "
+        "machine. Update the agent and run the plan again.",
+    )
+    db.commit()
+    return True
+
+
 def _lock_failure_is_deferred(job: Any, db: Session) -> bool:
     """Whether the runner will defer this lock failure (see
     `lock_contention_defers`); `job` carries the payload and the failure
@@ -1726,15 +1770,11 @@ def _cancel_agent_job(
     )
 
 
-async def _dispatch_queued_agent_jobs(
-    db: Session,
-    agent_machine_id: int,
-    *,
-    source: str = "session_reconnect",
-    older_than: Optional[timedelta] = None,
-) -> None:
-    """Send the agent every queued job of its own over its session, oldest
-    first; with `older_than`, only the jobs queued for at least that long."""
+def _queued_agent_jobs(
+    db: Session, agent_machine_id: int, older_than: Optional[timedelta] = None
+) -> list[AgentJob]:
+    """The agent's queued jobs its session sends, oldest first; with
+    `older_than`, only the jobs queued for at least that long."""
     query = db.query(AgentJob).filter(
         AgentJob.agent_machine_id == agent_machine_id,
         AgentJob.status == "queued",
@@ -1743,10 +1783,19 @@ async def _dispatch_queued_agent_jobs(
         # Naive UTC, the form the column stores (see `utc_now`).
         query = query.filter(AgentJob.created_at <= utc_now() - older_than)
     jobs = query.order_by(AgentJob.created_at.asc(), AgentJob.id.asc()).all()
+    return [job for job in jobs if live_agent_job_kind(job) != "filesystem.browse"]
+
+
+async def _send_queued_agent_jobs(
+    db: Session, jobs: list[AgentJob], *, source: str
+) -> None:
+    """Send the agent `jobs` over its session. Read in a thread; each send,
+    with its claim, stays on the loop."""
     for job in jobs:
-        if live_agent_job_kind(job) == "filesystem.browse":
-            continue
         await dispatch_agent_job_best_effort(db, job, source=source)
+    if jobs:
+        # A claim reads the job back.
+        await _end_session_read(db)
 
 
 def _cancel_requested_running_jobs(
@@ -1768,20 +1817,18 @@ def _cancel_requested_running_jobs(
     )
 
 
-async def _dispatch_owed_agent_cancels(
-    db: Session,
-    connection: AgentConnection,
-    running_job_ids: Optional[list[int]],
+async def _send_owed_agent_cancels(
+    connection: AgentConnection, jobs: list[AgentJob]
 ) -> None:
     """Send the session agent the cancel of every job it runs that someone
-    asked to stop. The cancel is sent once when it is asked for, and goes
-    nowhere while the session is down; the REST heartbeat repeats it in
-    `cancel_job_ids`, and this is the session's counterpart. A cancel the
-    agent already has is a no-op there. The list is `connection`'s, so the
-    pass stops once a newer session replaces it."""
-    agent_machine_id = connection.agent_machine_id
-    for job in _cancel_requested_running_jobs(db, agent_machine_id, running_job_ids):
-        if agent_connection_manager.get(agent_machine_id) is not connection:
+    asked to stop (`_cancel_requested_running_jobs`, read in a thread). The
+    cancel is sent once when it is asked for, and goes nowhere while the
+    session is down; the REST heartbeat repeats it in `cancel_job_ids`, and
+    this is the session's counterpart. A cancel the agent already has is a
+    no-op there. The list is `connection`'s, so the pass stops once a newer
+    session replaces it."""
+    for job in jobs:
+        if agent_connection_manager.get(connection.agent_machine_id) is not connection:
             return
         await dispatch_agent_cancel_if_connected(job)
 
@@ -1809,151 +1856,321 @@ class AgentSessionRevoked(Exception):
     """The agent was revoked, disabled or deleted while its session was open."""
 
 
-async def _handle_agent_session_message(
+# On the loop, the database work of an agent's sessions ran one step at a
+# time. In threads, the sessions of one agent (an old and a new process during
+# a rollout) take this lock for each step: which session speaks for the agent
+# is decided on the loop, from the connection manager, and acted on in the
+# thread (the requeue at a hello or a heartbeat, the offline mark at a
+# disconnect), and a message of the old session does not interleave with the
+# new one's requeue. Sessions of different agents do not wait for each other.
+# Weak values: a lock exists only while a session holds or waits for it.
+_AGENT_SESSION_LOCKS: "weakref.WeakValueDictionary[int, asyncio.Lock]" = (
+    weakref.WeakValueDictionary()
+)
+
+
+def _agent_session_lock(agent_machine_id: int) -> asyncio.Lock:
+    lock = _AGENT_SESSION_LOCKS.get(agent_machine_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _AGENT_SESSION_LOCKS[agent_machine_id] = lock
+    return lock
+
+
+_SESSION_PROGRESS_FIELDS = frozenset(
+    {
+        "progress_percent",
+        "current_file",
+        "original_size",
+        "compressed_size",
+        "deduplicated_size",
+        "nfiles",
+        "backup_speed",
+        "total_expected_size",
+        "estimated_time_remaining",
+    }
+)
+
+
+def _ends_its_transaction_on_error(work):
+    """For a session's database step that writes, run in a thread under the
+    agent's session lock: when it fails, its transaction ends right there.
+    Left open, its row or write locks would outlive the agent's lock, and
+    the next step of the agent (a new session's hello) would wait for them
+    while this session's end waits for the agent's lock."""
+
+    @functools.wraps(work)
+    def wrapper(db: Session, *args):
+        try:
+            return work(db, *args)
+        except BaseException:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            raise
+
+    return wrapper
+
+
+def _require_active_agent(db: Session, agent_machine_id: int) -> None:
+    """The session authenticated once, at connect: nothing a revoked or
+    deleted agent sends is taken any more."""
+    if not agent_is_active(db, agent_machine_id):
+        db.rollback()
+        raise AgentSessionRevoked()
+
+
+def _check_session_agent(db: Session, agent_machine_id: int) -> None:
+    """For a message the session ignores: refuse it from a revoked agent,
+    and end the read."""
+    _require_active_agent(db, agent_machine_id)
+    db.rollback()
+
+
+def _record_session_heartbeat(
     db: Session,
     agent_machine_id: int,
     message: dict[str, Any],
-    *,
-    connection: Optional[AgentConnection] = None,
-) -> None:
-    message_type = str(message.get("type") or "")
-    command_id = str(message.get("command_id") or "")
-    job_id = message.get("job_id")
-
-    if message_type == "heartbeat":
-        # Idle-liveness signal. The agent stays in recv() and sends this on a
-        # timer (even while a job runs in a worker thread), so it is the one
-        # signal that keeps last_seen_at fresh when the agent is not actively
-        # POSTing /heartbeat during a job. Protocol-level WS pings keep the
-        # socket alive but never reach here, so without this an idle-but-healthy
-        # agent looks stale.
-        now = _now_utc()
-        if not mark_agent_online(db, agent_machine_id, now):
-            db.rollback()
-            raise AgentSessionRevoked()
-        db.commit()
-        # From agent 0.1.21 the heartbeat lists the jobs the process runs,
-        # and a started job that has left the list is settled as on the REST
-        # heartbeat, inside the same window, instead of by the reaper; a job
-        # on the list counts as active. Only
-        # the agent's current session speaks for it: a session its newer
-        # connection replaced belongs to another process.
-        running_job_ids = _reported_running_job_ids(message)
-        if (
-            running_job_ids is not None
-            and connection is not None
-            and agent_connection_manager.get(agent_machine_id) is connection
-        ):
-            current_agent = db.get(AgentMachine, agent_machine_id)
-            if current_agent is not None:
-                _requeue_stale_agent_jobs(
-                    db, current_agent, now=now, running_job_ids=running_job_ids
-                )
-                if running_job_ids:
-                    # A listed job is not orphaned, however silent: a hook
-                    # that prints nothing, or an outcome the agent keeps
-                    # while its report does not get through. The reaper
-                    # must not fail it meanwhile.
-                    db.query(AgentJob).filter(
-                        AgentJob.agent_machine_id == agent_machine_id,
-                        AgentJob.id.in_(running_job_ids),
-                        AgentJob.status.in_(("claimed", "running", "cancel_requested")),
-                    ).update({AgentJob.updated_at: now}, synchronize_session=False)
-                db.commit()
-                await _dispatch_owed_agent_cancels(db, connection, running_job_ids)
-        # The agent is idle and listening: a job left queued past the grace
-        # has no other sender in this process before the next reconnect.
-        await _dispatch_queued_agent_jobs(
-            db,
-            agent_machine_id,
-            source="session_heartbeat",
-            older_than=UNDELIVERED_AGENT_JOB_REDISPATCH_AFTER,
-        )
-        # The pass reads even when nothing is queued; end that transaction
-        # here, or the session holds a pooled connection until the next
-        # message, once per idle agent.
-        db.commit()
-        return
-
-    job = _load_session_job(db, agent_machine_id, job_id)
-
-    if message_type == "command_ack":
-        if job:
-            _mark_agent_job_claimed(job, db)
-            db.commit()
-        return
-
-    if message_type == "job_started":
-        if job:
-            started_backup_job = _mark_agent_job_started(
-                job, db, started_at=_parse_optional_datetime(message.get("started_at"))
+    speaks_for_agent: bool,
+) -> SimpleNamespace:
+    # Idle-liveness signal. The agent stays in recv() and sends this on a
+    # timer (even while a job runs in a worker thread), so it is the one
+    # signal that keeps last_seen_at fresh when the agent is not actively
+    # POSTing /heartbeat during a job. Protocol-level WS pings keep the
+    # socket alive but never reach here, so without this an idle-but-healthy
+    # agent looks stale.
+    now = _now_utc()
+    if not mark_agent_online(db, agent_machine_id, now):
+        db.rollback()
+        raise AgentSessionRevoked()
+    db.commit()
+    cancel_jobs: list[AgentJob] = []
+    # From agent 0.1.21 the heartbeat lists the jobs the process runs, and a
+    # started job that has left the list is settled as on the REST heartbeat,
+    # inside the same window, instead of by the reaper; a job on the list
+    # counts as active. Only the agent's current session speaks for it: a
+    # session its newer connection replaced belongs to another process.
+    running_job_ids = _reported_running_job_ids(message)
+    if running_job_ids is not None and speaks_for_agent:
+        current_agent = db.get(AgentMachine, agent_machine_id)
+        if current_agent is not None:
+            _requeue_stale_agent_jobs(
+                db, current_agent, now=now, running_job_ids=running_job_ids
             )
+            if running_job_ids:
+                # A listed job is not orphaned, however silent: a hook that
+                # prints nothing, or an outcome the agent keeps while its
+                # report does not get through. The reaper must not fail it
+                # meanwhile.
+                db.query(AgentJob).filter(
+                    AgentJob.agent_machine_id == agent_machine_id,
+                    AgentJob.id.in_(running_job_ids),
+                    AgentJob.status.in_(("claimed", "running", "cancel_requested")),
+                ).update({AgentJob.updated_at: now}, synchronize_session=False)
             db.commit()
-            if started_backup_job is not None:
-                await notify_backup_job_started(db, job, started_backup_job)
-        return
+            cancel_jobs = _cancel_requested_running_jobs(
+                db, agent_machine_id, running_job_ids
+            )
+    # The agent is idle and listening: a job left queued past the grace has no
+    # other sender in this process before the next reconnect.
+    queued_jobs = _queued_agent_jobs(
+        db, agent_machine_id, UNDELIVERED_AGENT_JOB_REDISPATCH_AFTER
+    )
+    # The sends on the loop read these jobs; the read itself ends here, or
+    # the session holds a pooled connection until the next message, once per
+    # idle agent.
+    end_read_keeping_loaded(db, *cancel_jobs, *queued_jobs)
+    return SimpleNamespace(cancel_jobs=cancel_jobs, queued_jobs=queued_jobs)
 
-    if message_type == "progress":
-        if job:
-            progress = {
-                key: value
-                for key, value in message.items()
-                if key
-                in {
-                    "progress_percent",
-                    "current_file",
-                    "original_size",
-                    "compressed_size",
-                    "deduplicated_size",
-                    "nfiles",
-                    "backup_speed",
-                    "total_expected_size",
-                    "estimated_time_remaining",
-                }
-            }
-            _apply_agent_job_progress(job, db, progress)
-            db.commit()
-        return
 
-    if message_type == "log":
-        text = str(message.get("message") or "")
-        stream = str(message.get("stream") or "stdout")
-        sequence = _parse_int(message.get("sequence"), default=0)
-        agent_connection_manager.append_log(
-            agent_machine_id,
-            message=text,
-            stream=stream,
-            command_id=command_id or None,
-            job_id=_parse_int(job_id, default=0) or None,
+@_ends_its_transaction_on_error
+def _record_session_message(
+    db: Session,
+    agent_machine_id: int,
+    message: dict[str, Any],
+    check_active: bool,
+    speaks_for_agent: bool,
+) -> SimpleNamespace:
+    """The database work of one session message, in a thread: a message holds
+    the loop only for what has to stay there (the connection manager, sends,
+    notifications), never for a write lock or a pooled connection. Returns
+    what the loop does next."""
+    message_type = str(message.get("type") or "")
+    outcome = SimpleNamespace(job=None, started_backup_job=None, transitioned=False)
+    if check_active:
+        _require_active_agent(db, agent_machine_id)
+    if message_type == "heartbeat":
+        return _record_session_heartbeat(
+            db, agent_machine_id, message, speaks_for_agent
         )
-        if job and _is_superseded_attempt(job, message.get("attempt")):
-            # End the read's transaction: the session would hold its
-            # connection until the next message otherwise.
-            db.rollback()
-        elif job:
+
+    job = _load_session_job(db, agent_machine_id, message.get("job_id"))
+    outcome.job = job
+    if job is None:
+        pass
+    elif message_type == "command_ack":
+        _mark_agent_job_claimed(job, db)
+        db.commit()
+    elif message_type == "job_started":
+        outcome.started_backup_job = _mark_agent_job_started(
+            job, db, started_at=_parse_optional_datetime(message.get("started_at"))
+        )
+        db.commit()
+    elif message_type == "progress":
+        progress = {
+            key: value
+            for key, value in message.items()
+            if key in _SESSION_PROGRESS_FIELDS
+        }
+        _apply_agent_job_progress(job, db, progress)
+        db.commit()
+    elif message_type == "log":
+        if not _is_superseded_attempt(job, message.get("attempt")):
+            text = str(message.get("message") or "")
+            sequence = _parse_int(message.get("sequence"), default=0)
             agent_job_id = job.id
             job_payload = job.payload
             appended = _append_agent_job_log(
                 job,
                 db,
                 sequence=sequence,
-                stream=stream,
+                stream=str(message.get("stream") or "stdout"),
                 message=text,
                 created_at=_parse_optional_datetime(message.get("created_at")),
             )
             db.commit()
             if appended:
+                # Writes the operation's log file: in this thread too.
                 _complete_finished_operation_log(
                     db, agent_job_id, sequence, text, payload=job_payload
                 )
+    elif message_type == "command_result":
+        result = message.get("result")
+        # The linked job's log file is written as the job finishes, as on
+        # the REST report.
+        outcome.transitioned = _complete_agent_job(
+            job,
+            db,
+            result=result if isinstance(result, dict) else {},
+            completed_at=_parse_optional_datetime(message.get("completed_at")),
+        )
+        db.commit()
+    elif message_type == "command_error":
+        error_payload = _session_error_payload(message)
+        stderr_tail = error_payload.get("stderr_tail")
+        failure_kind = error_payload.get("failure_kind")
+        deleted_archives = error_payload.get("deleted_archives")
+        outcome.transitioned = _fail_agent_job(
+            job,
+            db,
+            error_message=_session_error_message(message, error_payload),
+            return_code=error_payload.get("return_code"),
+            completed_at=_parse_optional_datetime(message.get("completed_at")),
+            stderr_tail=stderr_tail if isinstance(stderr_tail, str) else None,
+            failure_kind=failure_kind if isinstance(failure_kind, str) else None,
+            deleted_archives=(
+                deleted_archives
+                if type(deleted_archives) is int  # not a bool
+                else None
+            ),
+        )
+        db.commit()
+    elif message_type == "job_canceled":
+        _cancel_agent_job(
+            job,
+            db,
+            completed_at=_parse_optional_datetime(message.get("completed_at")),
+        )
+        db.commit()
+    # Every write above is committed; end what is left of the read, or the
+    # session holds a pooled connection until the next message. The loop
+    # only hands the job on to notifications, which read in threads.
+    db.rollback()
+    return outcome
+
+
+def _session_error_payload(message: dict[str, Any]) -> dict[str, Any]:
+    error = message.get("error")
+    return error if isinstance(error, dict) else {}
+
+
+def _session_error_message(message: dict[str, Any], error_payload: dict) -> str:
+    return str(
+        error_payload.get("message") or message.get("message") or "Command failed"
+    )
+
+
+async def _end_session_read(db: Session) -> None:
+    """End a read on the session's database session that a notification or
+    a dispatch left open, or the session holds a pooled connection until
+    the next message."""
+    await run_off_loop(db.rollback)
+
+
+async def _handle_agent_session_message(
+    db: Session,
+    agent_machine_id: int,
+    message: dict[str, Any],
+    *,
+    connection: Optional[AgentConnection] = None,
+    check_active: bool = False,
+) -> None:
+    """Handle one message of an agent's session. With `check_active`, a
+    message from an agent revoked since it connected raises
+    `AgentSessionRevoked` and changes nothing."""
+    message_type = str(message.get("type") or "")
+    command_id = str(message.get("command_id") or "")
+    job_id = message.get("job_id")
+
+    async with _agent_session_lock(agent_machine_id):
+        speaks_for_agent = (
+            connection is not None
+            and agent_connection_manager.get(agent_machine_id) is connection
+        )
+        outcome = await run_off_loop(
+            _record_session_message,
+            db,
+            agent_machine_id,
+            message,
+            check_active,
+            speaks_for_agent,
+        )
+
+    if message_type == "heartbeat":
+        if connection is not None:
+            await _send_owed_agent_cancels(connection, outcome.cancel_jobs)
+        await _send_queued_agent_jobs(
+            db, outcome.queued_jobs, source="session_heartbeat"
+        )
+        return
+
+    job = outcome.job
+
+    if message_type in ("command_ack", "progress", "job_canceled"):
+        return
+
+    if message_type == "job_started":
+        if outcome.started_backup_job is not None:
+            await notify_backup_job_started(db, job, outcome.started_backup_job)
+            await _end_session_read(db)
+        return
+
+    if message_type == "log":
+        agent_connection_manager.append_log(
+            agent_machine_id,
+            message=str(message.get("message") or ""),
+            stream=str(message.get("stream") or "stdout"),
+            command_id=command_id or None,
+            job_id=_parse_int(job_id, default=0) or None,
+        )
         return
 
     if message_type == "command_result":
         result = message.get("result")
-        result_payload = result if isinstance(result, dict) else {}
         if command_id:
             agent_connection_manager.resolve_command(
-                agent_machine_id, command_id, result_payload
+                agent_machine_id, command_id, result if isinstance(result, dict) else {}
             )
         agent_connection_manager.append_log(
             agent_machine_id,
@@ -1962,25 +2179,14 @@ async def _handle_agent_session_message(
             command_id=command_id or None,
             job_id=int(job_id) if job_id else None,
         )
-        if job:
-            transitioned = _complete_agent_job(
-                job,
-                db,
-                result=result_payload,
-                completed_at=_parse_optional_datetime(message.get("completed_at")),
-            )
-            db.commit()
-            if transitioned:
-                await _notify_agent_job_outcome(db, job)
+        if outcome.transitioned:
+            await _notify_agent_job_outcome(db, job)
+            await _end_session_read(db)
         return
 
     if message_type == "command_error":
-        error_payload = (
-            message.get("error") if isinstance(message.get("error"), dict) else {}
-        )
-        error_message = str(
-            error_payload.get("message") or message.get("message") or "Command failed"
-        )
+        error_payload = _session_error_payload(message)
+        error_message = _session_error_message(message, error_payload)
         if command_id:
             agent_connection_manager.reject_command(
                 agent_machine_id,
@@ -1996,37 +2202,9 @@ async def _handle_agent_session_message(
             command_id=command_id or None,
             job_id=int(job_id) if job_id else None,
         )
-        if job:
-            stderr_tail = error_payload.get("stderr_tail")
-            failure_kind = error_payload.get("failure_kind")
-            deleted_archives = error_payload.get("deleted_archives")
-            transitioned = _fail_agent_job(
-                job,
-                db,
-                error_message=error_message,
-                return_code=error_payload.get("return_code"),
-                completed_at=_parse_optional_datetime(message.get("completed_at")),
-                stderr_tail=stderr_tail if isinstance(stderr_tail, str) else None,
-                failure_kind=failure_kind if isinstance(failure_kind, str) else None,
-                deleted_archives=(
-                    deleted_archives
-                    if type(deleted_archives) is int  # not a bool
-                    else None
-                ),
-            )
-            db.commit()
-            if transitioned:
-                await _notify_agent_job_outcome(db, job)
-        return
-
-    if message_type == "job_canceled":
-        if job:
-            _cancel_agent_job(
-                job,
-                db,
-                completed_at=_parse_optional_datetime(message.get("completed_at")),
-            )
-            db.commit()
+        if outcome.transitioned:
+            await _notify_agent_job_outcome(db, job)
+            await _end_session_read(db)
         return
 
     agent_connection_manager.append_log(
@@ -2166,13 +2344,104 @@ def heartbeat(
     )
 
 
+def _authenticate_session(
+    token: Optional[str], db: Session
+) -> tuple[AgentMachine, int, str]:
+    """The token check of a session (a bcrypt comparison and a query), in a
+    thread. Returns the agent with its id and agent id as plain values: a
+    commit expires the row, and reading them later on the loop would load it
+    again there. The read ends here, so the session holds no connection
+    while it waits for the hello."""
+    agent = resolve_agent_from_token(token, db)
+    agent_pk, agent_id = agent.id, agent.agent_id
+    end_read_keeping_loaded(db, agent)
+    return agent, agent_pk, agent_id
+
+
+@_ends_its_transaction_on_error
+def _record_session_hello(
+    db: Session,
+    current_agent: AgentMachine,
+    hello: AgentSessionHello,
+    running_job_ids_complete: bool,
+) -> bool:
+    """The hello's writes, in a thread. False when the agent was revoked,
+    disabled or deleted since its token was checked."""
+    now = _now_utc()
+    # The token was checked before the hello wait; a revocation committed
+    # since then wins.
+    if not mark_agent_online(db, current_agent.id, now):
+        db.rollback()
+        return False
+    current_agent.hostname = hello.hostname or current_agent.hostname
+    current_agent.agent_version = hello.agent_version or current_agent.agent_version
+    current_agent.timezone = (
+        _validated_timezone(hello.timezone) or current_agent.timezone
+    )
+    current_agent.borg_versions = hello.borg_versions
+    # After borg_versions: an endpoint with a Borg pin is only up to date
+    # once this report's binaries include the pinned major.
+    resolve_agent_upgrade(current_agent)
+    current_agent.capabilities = hello.capabilities
+    current_agent.last_error = None
+    _requeue_stale_agent_jobs(
+        db,
+        current_agent,
+        now=now,
+        running_job_ids=hello.running_job_ids,
+        at_hello=True,
+        running_job_ids_complete=running_job_ids_complete,
+    )
+    db.commit()
+    return True
+
+
+def _jobs_owed_at_hello(
+    db: Session, agent_machine_id: int, running_job_ids: Optional[list[int]]
+) -> tuple[list[AgentJob], list[AgentJob]]:
+    """The cancels owed to a new session, and its queued jobs; read in a
+    thread, kept loaded for the sends on the loop. Nothing is sent to an
+    agent revoked since its hello."""
+    _require_active_agent(db, agent_machine_id)
+    cancel_jobs = _cancel_requested_running_jobs(db, agent_machine_id, running_job_ids)
+    queued_jobs = _queued_agent_jobs(db, agent_machine_id)
+    end_read_keeping_loaded(db, *cancel_jobs, *queued_jobs)
+    return cancel_jobs, queued_jobs
+
+
+@_ends_its_transaction_on_error
+def _mark_session_agent_offline(db: Session, agent_machine_id: int) -> None:
+    # The session may end on a failed read (one that ended no transaction of
+    # its own): start from a clean one.
+    db.rollback()
+    # Guarded: a revocation committed meanwhile stays
+    db.query(AgentMachine).filter(
+        AgentMachine.id == agent_machine_id,
+        AgentMachine.status == "online",
+    ).update(
+        {
+            AgentMachine.status: "offline",
+            AgentMachine.updated_at: _now_utc(),
+        },
+        synchronize_session=False,
+    )
+    db.commit()
+
+
 @router.websocket("/session")
 async def session(websocket: WebSocket, db: Session = Depends(get_db)):
+    # The session's database work runs in threads (`run_off_loop`), one call
+    # at a time: the loop never waits for a write lock or a pooled
+    # connection, and the messages of a session are still handled in order.
     connection: Optional[AgentConnection] = None
+    # Set once the hello has marked the agent online, in its thread: a
+    # session cancelled after that (the server shuts down) still marks it
+    # offline again.
+    hello_state: dict[str, bool] = {}
     try:
         try:
-            current_agent = resolve_agent_from_token(
-                _get_agent_token_from_websocket(websocket), db
+            current_agent, agent_pk, agent_id = await run_off_loop(
+                _authenticate_session, _get_agent_token_from_websocket(websocket), db
             )
         except HTTPException as exc:
             await websocket.close(code=1008, reason=str(exc.detail))
@@ -2193,96 +2462,77 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
             await websocket.close(code=1003, reason="Invalid hello")
             return
 
-        if hello.type != "hello" or hello.agent_id != current_agent.agent_id:
+        if hello.type != "hello" or hello.agent_id != agent_id:
             await websocket.close(code=1008, reason="Agent identity mismatch")
             return
 
-        now = _now_utc()
-        # The token was checked before the hello wait; a revocation committed
-        # since then wins.
-        if not mark_agent_online(db, current_agent.id, now):
-            db.rollback()
-            await websocket.close(code=1008, reason="Agent disabled")
-            return
-        current_agent.hostname = hello.hostname or current_agent.hostname
-        current_agent.agent_version = hello.agent_version or current_agent.agent_version
-        current_agent.timezone = (
-            _validated_timezone(hello.timezone) or current_agent.timezone
-        )
-        current_agent.borg_versions = hello.borg_versions
-        # After borg_versions: an endpoint with a Borg pin is only up to date
-        # once this report's binaries include the pinned major.
-        resolve_agent_upgrade(current_agent)
-        current_agent.capabilities = hello.capabilities
-        current_agent.last_error = None
-        _requeue_stale_agent_jobs(
-            db,
-            current_agent,
-            now=now,
-            running_job_ids=hello.running_job_ids,
-            at_hello=True,
+        async with _agent_session_lock(agent_pk):
             # Judged on this hello alone: a version kept from an earlier
-            # report, or a list the hello left out, proves nothing about
-            # what this process runs. Nor does the list speak for another
-            # process while that one still holds a session for this agent,
-            # as during a rollout that starts the new one first.
-            running_job_ids_complete=(
+            # report, or a list the hello left out, proves nothing about what
+            # this process runs. Nor does the list speak for another process
+            # while that one still holds a session for this agent, as during
+            # a rollout that starts the new one first.
+            running_job_ids_complete = (
                 "running_job_ids" in hello.model_fields_set
                 and hello_lists_running_jobs(hello.agent_version)
-                and not agent_connection_manager.is_connected(current_agent.id)
-            ),
-        )
-        db.commit()
+                and not agent_connection_manager.is_connected(agent_pk)
+            )
 
-        connection = AgentConnection(
-            agent_machine_id=current_agent.id,
-            agent_id=current_agent.agent_id,
-            websocket=websocket,
-            metadata=hello.model_dump(),
-        )
-        await agent_connection_manager.register(connection)
-        await websocket.send_json(
-            {
-                "type": "hello_ack",
-                "server_time": serialize_datetime(_now_utc()),
-            }
+            def record_hello() -> bool:
+                hello_state["online"] = _record_session_hello(
+                    db, current_agent, hello, running_job_ids_complete
+                )
+                return hello_state["online"]
+
+            if not await run_off_loop(record_hello):
+                await websocket.close(code=1008, reason="Agent disabled")
+                return
+            connection = AgentConnection(
+                agent_machine_id=agent_pk,
+                agent_id=agent_id,
+                websocket=websocket,
+                metadata=hello.model_dump(),
+            )
+            # The ack is the session's first frame: a command sent to the
+            # registered session waits for this lock until the ack is out.
+            # Nothing in it waits for the database.
+            async with connection.send_lock:
+                await agent_connection_manager.register(connection)
+                await websocket.send_json(
+                    {
+                        "type": "hello_ack",
+                        "server_time": serialize_datetime(_now_utc()),
+                    }
+                )
+        # Read once the session is registered: a job queued before that is in
+        # the list, one queued after it is sent by whoever queued it.
+        cancel_jobs, queued_jobs = await run_off_loop(
+            _jobs_owed_at_hello, db, agent_pk, hello.running_job_ids
         )
         # A job cancelled while the session was down still runs on the agent.
-        await _dispatch_owed_agent_cancels(db, connection, hello.running_job_ids)
-        await _dispatch_queued_agent_jobs(db, current_agent.id)
+        await _send_owed_agent_cancels(connection, cancel_jobs)
+        await _send_queued_agent_jobs(db, queued_jobs, source="session_reconnect")
 
         while True:
             message = await websocket.receive_json()
-            # The session authenticated once, at connect: nothing a revoked
-            # or deleted agent sends is taken any more.
-            if not agent_is_active(db, current_agent.id):
-                raise AgentSessionRevoked()
             if isinstance(message, dict):
                 await _handle_agent_session_message(
-                    db, current_agent.id, message, connection=connection
+                    db, agent_pk, message, connection=connection, check_active=True
                 )
+            else:
+                await run_off_loop(_check_session_agent, db, agent_pk)
     except AgentSessionRevoked:
         await websocket.close(code=1008, reason="Agent disabled")
     except WebSocketDisconnect:
         pass
     finally:
-        if connection is not None:
-            disconnected = await agent_connection_manager.disconnect(
-                connection.agent_machine_id, connection
-            )
-            if disconnected:
-                # Guarded: a revocation committed meanwhile stays
-                db.query(AgentMachine).filter(
-                    AgentMachine.id == connection.agent_machine_id,
-                    AgentMachine.status == "online",
-                ).update(
-                    {
-                        AgentMachine.status: "offline",
-                        AgentMachine.updated_at: _now_utc(),
-                    },
-                    synchronize_session=False,
-                )
-                db.commit()
+        if hello_state.get("online"):
+            async with _agent_session_lock(agent_pk):
+                if connection is not None:
+                    await agent_connection_manager.disconnect(agent_pk, connection)
+                # Not while a newer session of the agent is registered.
+                if not agent_connection_manager.is_connected(agent_pk):
+                    await run_off_loop(_mark_session_agent_offline, db, agent_pk)
 
 
 @router.post("/unregister", status_code=status.HTTP_204_NO_CONTENT)
@@ -2316,9 +2566,15 @@ def poll_jobs(
             AgentJob.status == "queued",
         )
         .order_by(AgentJob.created_at.asc(), AgentJob.id.asc())
-        .limit(limit)
         .all()
     )
+    # A scoped prune goes out only over a session, checked against that
+    # session's hello: the stored capabilities are shared by every process
+    # with this agent's token, so they cannot vouch for this caller. Skipped
+    # before the limit, so one at the head does not hide the jobs behind it.
+    # ponytail: filters in Python over the agent's queue (a handful of jobs);
+    # move it into SQL if queues ever grow long.
+    jobs = [job for job in jobs if not _is_scoped_prune(job)][:limit]
     return AgentJobPollResponse(jobs=[_serialize_agent_job(job) for job in jobs])
 
 
@@ -2333,6 +2589,12 @@ def claim_job(
     _reject_final_job(job)
 
     if job.status == "queued":
+        if _is_scoped_prune(job):
+            # Left queued for a session (see `poll_jobs`).
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"key": "backend.errors.agents.jobNotStartable"},
+            )
         claimed = _mark_agent_job_claimed(job, db)
         db.commit()
         db.refresh(job)

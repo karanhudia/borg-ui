@@ -9,6 +9,17 @@ from uuid import uuid4
 
 from fastapi import WebSocket
 
+# Closes of replaced sessions still in flight. Strong references: the loop
+# only holds weak ones.
+_CLOSING_REPLACED: set[asyncio.Task] = set()
+
+
+async def _close_replaced(connection: "AgentConnection") -> None:
+    try:
+        await connection.websocket.close(code=1012)
+    except Exception:
+        pass
+
 
 class AgentConnectionUnavailable(RuntimeError):
     pass
@@ -137,10 +148,13 @@ class AgentConnectionManager:
             self._connections[connection.agent_machine_id] = connection
         if previous is not None and previous is not connection:
             previous.reject_pending("Agent session was replaced by a new connection")
-            try:
-                await previous.websocket.close(code=1012)
-            except Exception:
-                pass
+            # Not awaited: a client that stopped reading can keep the close
+            # waiting for writes, and the new session (registered under its
+            # agent's lock) must not wait with it. The close still finishes,
+            # and ends the old session's handler, once the client reads.
+            closing = asyncio.ensure_future(_close_replaced(previous))
+            _CLOSING_REPLACED.add(closing)
+            closing.add_done_callback(_CLOSING_REPLACED.discard)
         self.append_log(
             connection.agent_machine_id,
             level="info",

@@ -1,0 +1,62 @@
+name: Install Playwright Chromium
+description: >-
+  Install Playwright's Chromium and its system packages. The packages (mostly
+  fonts, ~22 MB) come from an Ubuntu mirror that often serves them at ~70 kB/s,
+  which took over 5 minutes, so their .debs are cached per runner image and
+  Playwright version. Any failure installing from the cache falls back to the
+  normal `playwright install --with-deps`.
+
+inputs:
+  working-directory:
+    description: Directory with node_modules/playwright installed.
+    required: true
+  browsers-path:
+    description: PLAYWRIGHT_BROWSERS_PATH value; empty keeps Playwright's default.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # ImageOS/ImageVersion are runner shell variables, absent from the env
+    # context, so they reach the cache key through a step output.
+    - name: Read runner image and Playwright versions
+      id: versions
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        version=$(node -p "require('playwright/package.json').version")
+        echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+        echo "playwright=${version}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore cached Playwright system packages
+      id: debs
+      uses: actions/cache@v5
+      with:
+        path: ~/playwright-debs
+        key: playwright-debs-${{ steps.versions.outputs.image }}-${{ steps.versions.outputs.playwright }}-v2
+
+    - name: Install Chromium and system packages
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}
+        BROWSERS_PATH: ${{ inputs.browsers-path }}
+      run: |
+        if [ -n "$BROWSERS_PATH" ]; then export PLAYWRIGHT_BROWSERS_PATH="$BROWSERS_PATH"; fi
+        if [ "$CACHE_HIT" = true ] && sudo dpkg -i ~/playwright-debs/*.deb; then
+          npx playwright install chromium
+          exit 0
+        fi
+        # Cache only what this install downloaded: a job may have fetched
+        # other packages (E2E installs borgbackup) under the same key.
+        archives=/var/cache/apt/archives
+        find "$archives" -maxdepth 1 -name '*.deb' | sort > /tmp/debs-before
+        npx playwright install --with-deps chromium
+        # Chromium is installed; failing to stage the cache must not fail the job.
+        if ! { mkdir -p ~/playwright-debs &&
+          find "$archives" -maxdepth 1 -name '*.deb' | sort | comm -13 /tmp/debs-before - \
+            | xargs -r cp -t ~/playwright-debs; }; then
+          echo "::warning::Could not stage Playwright packages for the cache; the next run installs them from apt."
+          rm -rf ~/playwright-debs || true
+        fi

@@ -757,8 +757,6 @@ export const authAPI = {
 
 export const dashboardAPI = {
   getStatus: () => api.get('/dashboard/status'),
-  getMetrics: () => api.get('/dashboard/metrics'),
-  getSchedule: () => api.get('/dashboard/schedule'),
   // The timeline is bucketed by day in the viewer's time zone; the server
   // falls back to UTC for a zone it does not know.
   getOverview: (timezone?: string) =>
@@ -810,8 +808,6 @@ export const archivesAPI = {
   listArchives: (repository: string) => api.get(`/archives/${repository}`),
   getArchiveInfo: (repository: string, archive: string) =>
     api.get(`/archives/${repository}/${archive}`),
-  listContents: (repository: string, archive: string, path?: string) =>
-    api.get(`/archives/${repository}/${archive}/contents`, { params: { path } }),
   deleteArchive: (repository: string, archive: string) =>
     api.delete(
       `/archives/${encodeURIComponent(archive)}?repository=${encodeURIComponent(repository)}`
@@ -899,8 +895,6 @@ export const operationsAPI = {
 }
 
 export const restoreAPI = {
-  previewRestore: (repository: string, archive: string, paths: string[]) =>
-    api.post('/restore/preview', { repository, archive, paths }),
   startRestore: (
     repository: string,
     archive: string,
@@ -952,9 +946,6 @@ export const settingsAPI = {
   // User preferences
   getPreferences: () => api.get('/settings/preferences'),
   updatePreferences: (preferences: ApiData) => api.put('/settings/preferences', preferences),
-
-  // System maintenance
-  cleanupSystem: () => api.post('/settings/system/cleanup'),
 
   // Log management
   getLogStorageStats: () => api.get('/settings/system/logs/storage'),
@@ -1008,6 +999,76 @@ export const tokensAPI = {
       { name }
     ),
   revoke: (id: number) => api.delete(`/settings/tokens/${id}`),
+}
+
+export type McpLevel = 'read' | 'operate' | 'manage' | 'full'
+
+export interface McpConfig {
+  enabled: boolean
+  max_access_level: McpLevel
+  endpoint_path: string
+  available_levels: McpLevel[]
+}
+
+export interface McpConnection {
+  id: number
+  name: string
+  prefix: string
+  access_level: McpLevel
+  effective_level: McpLevel
+  skip_routine_confirmations: boolean
+  last_client_name: string | null
+  last_client_version: string | null
+  last_used_at: string | null
+  created_at: string
+  username: string | null
+  calls_today: number
+}
+
+export interface McpConnectionCreated extends McpConnection {
+  token: string
+}
+
+export type McpOutcome =
+  'ok' | 'error' | 'denied_level' | 'denied_rbac' | 'needs_confirmation' | 'confirmed'
+
+export interface McpActivityRow {
+  id: number
+  tool: string
+  effective_level: McpLevel
+  outcome: McpOutcome
+  error_key: string | null
+  target: string | null
+  duration_ms: number
+  created_at: string
+}
+
+export interface McpConnectionInput {
+  name?: string
+  access_level?: McpLevel
+  skip_routine_confirmations?: boolean
+}
+
+export const MCP_ACTIVITY_PAGE = 50
+
+export const mcpAPI = {
+  getConfig: () => api.get<McpConfig>('/settings/mcp/config'),
+  updateConfig: (body: Partial<Pick<McpConfig, 'enabled' | 'max_access_level'>>) =>
+    api.put<McpConfig>('/settings/mcp/config', body),
+  list: (all?: boolean) =>
+    api.get<McpConnection[]>('/settings/mcp/connections', all ? { params: { all: true } } : {}),
+  create: (body: McpConnectionInput & { name: string; access_level: McpLevel }) =>
+    api.post<McpConnectionCreated>('/settings/mcp/connections', body),
+  update: (id: number, body: McpConnectionInput) =>
+    api.patch<McpConnection>(`/settings/mcp/connections/${id}`, body),
+  revoke: (id: number) => api.delete(`/settings/mcp/connections/${id}`),
+  activity: (id: number, beforeId?: number) =>
+    api.get<McpActivityRow[]>(`/settings/mcp/connections/${id}/activity`, {
+      params:
+        beforeId === undefined
+          ? { limit: MCP_ACTIVITY_PAGE }
+          : { limit: MCP_ACTIVITY_PAGE, before_id: beforeId },
+    }),
 }
 
 interface PermissionResponse {
@@ -1068,17 +1129,7 @@ export const repositoriesAPI = {
   getStatus: (id: number) => api.get(`/repositories/${id}/status`),
   createRepository: (data: RepositoryData) => api.post('/repositories/', data),
   importRepository: (data: RepositoryData) => api.post('/repositories/import', data),
-  uploadKeyfile: (id: number, keyfile: File) => {
-    const formData = new FormData()
-    formData.append('keyfile', keyfile)
-    return api.post(`/repositories/${id}/keyfile`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
-  },
   downloadKeyfile: (id: number) => api.get(`/repositories/${id}/keyfile`, { responseType: 'blob' }),
-  getRepository: (id: number) => api.get(`/repositories/${id}`),
   // The stored size figures and pending index kinds alone (#981, #1063):
   // no live Borg call, unlike the detail.
   getStorage: (id: number) => api.get<RepositoryStorageResponse>(`/repositories/${id}/storage`),
@@ -1095,7 +1146,6 @@ export const repositoriesAPI = {
       full_archive?: boolean
     }
   ) => api.post(`/repositories/${id}/restore-check`, data || {}),
-  compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
   pruneRepository: (id: number, data: ApiData) => api.post(`/repositories/${id}/prune`, data),
   prunePreview: (id: number, data: PruneRetention, previewRunId?: string) =>
     api.post<PrunePreviewResponse>(`/repositories/${id}/prune/preview`, {
@@ -1122,13 +1172,9 @@ export const repositoriesAPI = {
   cancelRepositoryWipeJob: (id: number, jobId: number) =>
     api.post<RepositoryWipeJob>(`/repositories/${id}/wipe-jobs/${jobId}/cancel`),
   breakLock: (id: number) => api.post(`/repositories/${id}/break-lock`),
-  getRepositoryStats: (id: number) => api.get(`/repositories/${id}/stats`),
   listRepositoryArchives: (id: number) => api.get(`/repositories/${id}/archives/live`),
   syncRcloneRepository: (id: number) => api.post(`/repositories/${id}/rclone/sync`),
   hydrateRcloneRepository: (id: number) => api.post(`/repositories/${id}/rclone/hydrate`),
-  getRcloneStatus: (id: number) => api.get(`/repositories/${id}/rclone/status`),
-  // Check/Compact job management
-  getCheckJobStatus: (jobId: number) => api.get(`/repositories/check-jobs/${jobId}`),
   getRepositoryCheckJobs: (id: number, limit?: number, scheduledOnly: boolean = false) =>
     api.get(`/repositories/${id}/check-jobs`, {
       params: { limit, scheduled_only: scheduledOnly },
@@ -1136,7 +1182,6 @@ export const repositoriesAPI = {
   getRestoreCheckJobStatus: (jobId: number) => api.get(`/repositories/restore-check-jobs/${jobId}`),
   getRepositoryRestoreCheckJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/restore-check-jobs`, { params: { limit } }),
-  getCompactJobStatus: (jobId: number) => api.get(`/repositories/compact-jobs/${jobId}`),
   getRepositoryCompactJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),
   getRepositoryPruneJobs: (id: number, limit?: number) =>
@@ -1150,7 +1195,6 @@ export const repositoriesAPI = {
   updateRestoreCheckSchedule: (id: number, data: ApiData) =>
     api.put(`/repositories/${id}/restore-check-schedule`, data),
   list: () => api.get('/repositories/'),
-  startCheck: (id: number, data: ApiData) => api.post(`/repositories/${id}/check`, data),
 }
 
 export const rcloneAPI = {
@@ -1167,8 +1211,6 @@ export const rcloneAPI = {
   }) => api.post<RcloneOAuthSession>('/rclone/oauth/sessions', data),
   getOAuthSession: (sessionId: string) =>
     api.get<RcloneOAuthSession>(`/rclone/oauth/sessions/${sessionId}`),
-  cancelOAuthSession: (sessionId: string) =>
-    api.delete<void>(`/rclone/oauth/sessions/${sessionId}`),
   listRemotes: () => api.get<{ remotes: RcloneRemote[] }>('/rclone/remotes'),
   createRemote: (data: CreateRcloneRemoteRequest) =>
     api.post<RcloneRemote>('/rclone/remotes', data),
@@ -1211,10 +1253,8 @@ export const backupPlansAPI = {
     api.post(`/backup-plans/${id}/repositories/${repositoryId}/toggle`),
   run: (id: number) => api.post(`/backup-plans/${id}/run`),
   listRuns: () => api.get('/backup-plans/runs'),
-  getRun: (id: number) => api.get(`/backup-plans/runs/${id}`),
   cancelRun: (id: number) => api.post(`/backup-plans/runs/${id}/cancel`),
   retryRun: (id: number) => api.post(`/backup-plans/runs/${id}/retry`),
-  listRunsForPlan: (id: number) => api.get(`/backup-plans/${id}/runs`),
 }
 
 export interface SSHConnectionDiagnosticsTargetRequest {
@@ -1280,9 +1320,6 @@ export const sshKeysAPI = {
   // Legacy multi-key endpoints (deprecated)
   getSSHKeys: () => api.get('/ssh-keys'),
   createSSHKey: (data: ApiData) => api.post('/ssh-keys', data),
-  quickSetup: (data: ApiData) => api.post('/ssh-keys/quick-setup', data),
-  getSSHKey: (id: number) => api.get(`/ssh-keys/${id}`),
-  updateSSHKey: (id: number, data: ApiData) => api.put(`/ssh-keys/${id}`, data),
   deleteSSHKey: (id: number) => api.delete(`/ssh-keys/${id}`),
 
   // Connection management
@@ -1573,14 +1610,11 @@ export const managedAgentsAPI = {
 export const scheduleAPI = {
   getScheduledJobs: () => api.get('/schedule/'),
   createScheduledJob: (data: ApiData) => api.post('/schedule/', data),
-  getScheduledJob: (id: number) => api.get(`/schedule/${id}`),
   updateScheduledJob: (id: number, data: ApiData) => api.put(`/schedule/${id}`, data),
   deleteScheduledJob: (id: number) => api.delete(`/schedule/${id}`),
   toggleScheduledJob: (id: number) => api.post(`/schedule/${id}/toggle`),
   runScheduledJobNow: (id: number) => api.post(`/schedule/${id}/run-now`),
   duplicateScheduledJob: (id: number) => api.post(`/schedule/${id}/duplicate`),
-  validateCronExpression: (data: ApiData) => api.post('/schedule/validate-cron', data),
-  getCronPresets: () => api.get('/schedule/cron-presets'),
   getUpcomingJobs: (hours?: number) => api.get('/schedule/upcoming-jobs', { params: { hours } }),
 }
 
@@ -1706,9 +1740,6 @@ export const mountsAPI = {
 
   // List all active mounts
   listMounts: () => api.get('/mounts'),
-
-  // Get specific mount info
-  getMountInfo: (mountId: string) => api.get(`/mounts/${mountId}`),
 }
 
 export default api

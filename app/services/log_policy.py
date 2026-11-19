@@ -113,16 +113,3 @@ def _text_parts(output_text: Any) -> list[str]:
     if isinstance(output_text, Iterable):
         return [str(part) for part in output_text if part is not None]
     return [str(output_text)]
-
-
-def script_execution_has_logs(execution: Any, *, log_save_policy: str) -> bool:
-    return job_has_logs_by_policy(
-        execution,
-        log_save_policy,
-        output_text=[
-            getattr(execution, "stdout", None),
-            getattr(execution, "stderr", None),
-            getattr(execution, "error_message", None),
-        ],
-        exit_code=getattr(execution, "exit_code", None),
-    )

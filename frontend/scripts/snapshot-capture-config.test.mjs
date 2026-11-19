@@ -6,6 +6,7 @@ import {
   storyReadySelectors,
   storyRootSelector,
   waitForStoryRoot,
+  waitForStoryToSettle,
 } from './snapshot-capture-config.mjs'
 
 describe('waitForStoryRoot', () => {
@@ -78,5 +79,45 @@ describe('settleInBrowser', () => {
     await vi.advanceTimersByTimeAsync(100)
     await settling
     expect(settled).toBe(true)
+  })
+})
+
+describe('waitForStoryToSettle', () => {
+  const fakePage = (hasEditor) => {
+    const calls = []
+    return {
+      calls,
+      async $(selector) {
+        calls.push(['$', selector])
+        return hasEditor ? {} : null
+      },
+      async waitForSelector(selector, options) {
+        calls.push(['waitForSelector', selector, options])
+      },
+      async evaluate() {
+        calls.push(['evaluate'])
+      },
+      async waitForLoadState(state, options) {
+        calls.push(['waitForLoadState', state, options])
+      },
+    }
+  }
+
+  it('waits for any code editor and its stylesheet, then settles again', async () => {
+    const page = fakePage(true)
+    await waitForStoryToSettle(page)
+    expect(page.calls).toEqual([
+      ['evaluate'],
+      ['$', '[data-code-editor]'],
+      ['waitForSelector', '[data-code-editor-loading]', { state: 'detached', timeout: 120_000 }],
+      ['waitForLoadState', 'networkidle', { timeout: 120_000 }],
+      ['evaluate'],
+    ])
+  })
+
+  it('settles once when the story has no code editor', async () => {
+    const page = fakePage(false)
+    await waitForStoryToSettle(page)
+    expect(page.calls).toEqual([['evaluate'], ['$', '[data-code-editor]']])
   })
 })

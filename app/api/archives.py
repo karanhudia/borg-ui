@@ -18,7 +18,6 @@ from app.core.borg import borg
 from app.core.borg2 import normalize_repo_info_encryption
 from app.core.borg_errors import (
     LOCK_CONTENTION_DETAIL_KEY,
-    is_lock_contention_exit_code,
     repository_failure_status,
 )
 from app.core.security import (
@@ -27,7 +26,7 @@ from app.core.security import (
     get_current_user,
     require_repository_access_by_path,
 )
-from app.database.database import get_db
+from app.database.database import ends_read_on_return, get_db
 from app.database.models import AgentMachine, Repository, User
 from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_job_dispatcher import (
@@ -35,9 +34,8 @@ from app.services.agent_job_dispatcher import (
     dispatch_agent_job_best_effort,
 )
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
-from app.services.operations.enqueue import enqueue
 from app.services.operations.job_facade import resolve_maintenance_job
-from app.services.operations.maintenance_start import active_delete_for_archive
+from app.services.operations.maintenance_start import start_archive_delete
 from app.services.repository_executor import (
     abandon_agent_repository_operation_job,
     agent_operation_failed_detail,
@@ -259,6 +257,22 @@ async def _take_back_streamed_agent_job(db: Session, agent_job_id: int) -> None:
             )
 
 
+async def _agent_download_body(first_chunk, stream, db: Session, agent_job_id: int):
+    """The chunks of a streamed agent download, first one included."""
+    delivered = False
+    try:
+        if first_chunk is not None:
+            yield first_chunk
+        async for chunk in stream:
+            yield chunk
+        delivered = True
+    finally:
+        # After the end of the stream the agent reports its completion;
+        # a cancel then would turn a delivered download into a failure.
+        if not delivered:
+            await _take_back_streamed_agent_job(db, agent_job_id)
+
+
 async def _stream_agent_archive_file(
     db: Session, repo: Repository, archive: str, file_path: str
 ) -> StreamingResponse:
@@ -318,23 +332,9 @@ async def _stream_agent_archive_file(
             detail=agent_operation_failed_detail(str(exc)),
         ) from exc
 
-    async def body():
-        delivered = False
-        try:
-            if first_chunk is not None:
-                yield first_chunk
-            async for chunk in stream:
-                yield chunk
-            delivered = True
-        finally:
-            # After the end of the stream the agent reports its completion;
-            # a cancel then would turn a delivered download into a failure.
-            if not delivered:
-                await _take_back_streamed_agent_job(db, agent_job.id)
-
     filename = os.path.basename(file_path) or "download"
     return _AgentDownloadResponse(
-        body(),
+        _agent_download_body(first_chunk, stream, db, agent_job.id),
         media_type="application/octet-stream",
         headers={"Content-Disposition": _content_disposition_attachment(filename)},
     )
@@ -403,23 +403,9 @@ async def _stream_agent_archive_tar(
             detail=agent_operation_failed_detail(str(exc)),
         ) from exc
 
-    async def body():
-        delivered = False
-        try:
-            if first_chunk is not None:
-                yield first_chunk
-            async for chunk in stream:
-                yield chunk
-            delivered = True
-        finally:
-            # After the end of the stream the agent reports its completion;
-            # a cancel then would turn a delivered download into a failure.
-            if not delivered:
-                await _take_back_streamed_agent_job(db, agent_job.id)
-
     filename = f"{os.path.basename(directory_path.rstrip('/')) or 'archive'}.tar"
     return _AgentDownloadResponse(
-        body(),
+        _agent_download_body(first_chunk, stream, db, agent_job.id),
         media_type="application/x-tar",
         headers={"Content-Disposition": _content_disposition_attachment(filename)},
     )
@@ -500,21 +486,6 @@ async def _agent_read_result(
             # comes back; one the agent claimed runs to its end.
             cancel_unclaimed_agent_repository_job(db, agent_job.id)
         raise
-
-
-def _archive_contents_failure_status(result: dict) -> int:
-    """423 while another process holds the repository's lock (a backup is
-    running; dashboard 2024cc496c8bcb8f), the classified refusal otherwise."""
-    stderr = str(result.get("stderr") or "").lower()
-    # Borg 2 also answers 73 when another process killed our own lock: that
-    # run failed, the repository is not held by anyone.
-    lost_our_lock = "our lock was killed by another borg" in stderr
-    if not lost_our_lock and (
-        is_lock_contention_exit_code(result.get("return_code"))
-        or ("failed to create/acquire the lock" in stderr and "(timeout)" in stderr)
-    ):
-        return status.HTTP_423_LOCKED
-    return repository_failure_status(result)
 
 
 def _read_succeeded(result: dict) -> bool:
@@ -811,7 +782,7 @@ async def get_archive_contents(
                 cleanup_temp_key_file(temp_key_file)
         if not _read_succeeded(result):
             raise HTTPException(
-                status_code=_archive_contents_failure_status(result),
+                status_code=repository_failure_status(result),
                 detail=f"Failed to get archive contents: {result.get('stderr', '')}",
             )
 
@@ -827,7 +798,8 @@ async def get_archive_contents(
 
 
 @router.delete("/{archive_id}")
-async def delete_archive(
+@ends_read_on_return
+def delete_archive(
     repository: str,
     archive_id: str,
     current_user: User = Depends(get_current_user),
@@ -847,28 +819,11 @@ async def delete_archive(
         # exactly one archive; a bare series name matches N → borg errors. The
         # frontend sends the archive id for Borg 2; Borg 1 names are unique.
         archive_id = _archive_extract_selector(archive_id, repo)
-        # Check if there's already a running delete job for this archive.
+        # Refused while a delete of this archive is queued or running.
         # Deletes are rejected per archive, not per repository (spec section
         # 13 phase 5): two different archives may be removed at once, the
         # same one may not.
-        running_job = active_delete_for_archive(db, repo.id, archive_id)
-        if running_job:
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "key": "backend.errors.archives.deleteAlreadyRunning",
-                    "params": {"jobId": running_job.id},
-                },
-            )
-
-        delete_job = enqueue(
-            db,
-            "delete_archive",
-            repository_id=repo.id,
-            trigger="manual",
-            params={"archive_name": archive_id},
-            triggered_by_user_id=current_user.id,
-        )
+        delete_job = start_archive_delete(db, repo, archive_id, user_id=current_user.id)
 
         logger.info(
             "Delete archive operation queued",

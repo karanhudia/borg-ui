@@ -13,6 +13,7 @@ import structlog
 from app.database.database import get_db
 from app.database.models import User, Repository
 from app.core.authorization import authorize_request
+from app.core.borg_errors import repository_failure_status
 from app.core.security import get_current_user, check_repo_access
 from app.services.mount_service import (
     MountPointNotAllowed,
@@ -78,12 +79,6 @@ class MountResponse(BaseModel):
     mount_point: str
     mount_type: str
     source: str
-
-
-class UnmountRequest(BaseModel):
-    """Request to unmount"""
-
-    force: bool = False
 
 
 class MountListItem(BaseModel):
@@ -216,7 +211,7 @@ async def mount_borg_archive(
             error=str(e),
         )
         raise HTTPException(
-            status_code=500,
+            status_code=repository_failure_status({"error": str(e)}),
             detail={
                 "key": "backend.errors.mounts.failedMountArchive",
                 "params": {"error": str(e)},

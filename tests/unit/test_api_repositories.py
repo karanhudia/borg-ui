@@ -4634,6 +4634,45 @@ class TestRepositoriesDelete:
             test_db.query(Repository).filter(Repository.id == repo_id).first() is None
         )
 
+    @pytest.mark.parametrize("mount_location", ["root", "nested", "unavailable"])
+    def test_permanent_delete_refuses_mounts_before_removing_any_files(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path, mount_location
+    ):
+        repo_path = tmp_path / "mounted-repository"
+        _create_borg_like_repository_dir(repo_path)
+        sentinel = repo_path / "data" / "keep"
+        sentinel.write_text("repository data")
+        repo = Repository(
+            name="Mounted Repository",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            execution_target="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        repo_id = repo.id
+        mount_points = {
+            "root": {str(repo_path)},
+            "nested": {str(repo_path / "data")},
+            "unavailable": None,
+        }[mount_location]
+
+        with patch("app.utils.fs.active_mount_points", return_value=mount_points):
+            response = test_client.post(
+                f"/api/repositories/{repo_id}/permanent-delete",
+                json={"confirmation_phrase": repo.name, "understood": True},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.permanentDeleteUnsafePath"
+        )
+        assert sentinel.read_text() == "repository data"
+        assert (repo_path / "config").is_file()
+        assert test_db.get(Repository, repo_id) is not None
+
     def test_permanent_delete_keeps_record_when_filesystem_removal_fails(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):
@@ -4654,7 +4693,7 @@ class TestRepositoriesDelete:
         repo_id = repo.id
 
         with patch(
-            "app.api.repositories.shutil.rmtree",
+            "app.utils.fs.os.scandir",
             side_effect=OSError("permission denied"),
         ):
             response = test_client.post(

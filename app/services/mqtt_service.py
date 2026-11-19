@@ -1037,19 +1037,6 @@ class MQTTService:
     # Home Assistant Discovery
     # ------------------------------------------------------------------
 
-    def _get_home_assistant_device_info(
-        self,
-        is_repository: bool = False,
-        repo_id: Optional[int] = None,
-        repository_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Get device information for Home Assistant MQTT discovery."""
-        return self._discovery_publisher.get_home_assistant_device_info(
-            is_repository=is_repository,
-            repo_id=repo_id,
-            repository_name=repository_name,
-        )
-
     def publish_home_assistant_discovery(
         self,
         component: str,
@@ -1421,17 +1408,6 @@ class MQTTService:
     def _fetch_running_backup_jobs_by_repository(self, db: Session) -> Dict[str, Any]:
         """Return latest running backup job row per repository path."""
         return self._job_query_service.fetch_running_backup_jobs_by_repository(db)
-
-    def _get_repository_status(
-        self,
-        repository: Repository,
-        failed_repository_ids: Optional[Set[int]] = None,
-    ) -> str:
-        """Determine repository health from DB-derived fields."""
-        return self._repository_state_publisher.get_repository_status(
-            repository,
-            failed_repository_ids=failed_repository_ids,
-        )
 
     # ------------------------------------------------------------------
     # Disconnect

@@ -1,11 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional, Dict, Any, NoReturn
+from functools import partial
+from typing import Any, Callable, Coroutine, Dict, List, NoReturn, Optional
 from datetime import datetime, timedelta, timezone
 import structlog
 import asyncio
 
-from app.database.database import get_db, SessionLocal
+from app.database.database import (
+    SessionLocal,
+    get_db,
+    queries_in_threads,
+    run_off_loop,
+    run_transaction_off_loop,
+)
 from app.database.models import (
     Operation,
     User,
@@ -210,6 +218,17 @@ def _next_scheduled_job_run(job: ScheduledJob, now: datetime) -> Optional[dateti
         now,
         job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
     )
+
+
+def _schedule_state(job: ScheduledJob) -> tuple:
+    if job.schedule_mode == "availability":
+        timing = (
+            job.availability_check_interval_minutes,
+            job.min_success_interval_minutes,
+        )
+    else:
+        timing = (job.cron_expression, job.timezone or DEFAULT_SCHEDULE_TIMEZONE)
+    return (job.schedule_mode, timing)
 
 
 def _raise_invalid_schedule_timezone(exc: InvalidScheduleTimezone) -> NoReturn:
@@ -1218,14 +1237,15 @@ async def update_scheduled_job(
                 )
             job.name = job_data.name
 
-        schedule_definition_changed = (
+        schedule_fields_sent = (
             job_data.cron_expression is not None
             or "timezone" in job_data.model_fields_set
             or job_data.schedule_mode is not None
             or job_data.availability_check_interval_minutes is not None
             or job_data.min_success_interval_minutes is not None
         )
-        if schedule_definition_changed:
+        next_run_recomputed = False
+        if schedule_fields_sent:
             next_schedule_mode = job_data.schedule_mode or job.schedule_mode
             next_check_interval = (
                 job_data.availability_check_interval_minutes
@@ -1284,12 +1304,17 @@ async def update_scheduled_job(
                     },
                 )
 
+            previous_schedule = _schedule_state(job)
             job.cron_expression = next_cron_expression
             job.schedule_mode = next_schedule_mode
             job.availability_check_interval_minutes = next_check_interval
             job.min_success_interval_minutes = next_min_success_interval
             job.timezone = next_schedule_timezone
-            job.next_run = next_run
+            # An unchanged schedule keeps its next_run: recomputing it from now
+            # would skip a run that is already due but not yet dispatched.
+            if job.next_run is None or _schedule_state(job) != previous_schedule:
+                job.next_run = next_run
+                next_run_recomputed = True
 
         if job_data.repository is not None:
             job.repository = job_data.repository
@@ -1298,7 +1323,7 @@ async def update_scheduled_job(
 
         if job_data.enabled is not None:
             job.enabled = job_data.enabled
-            if job.enabled and not was_enabled and not schedule_definition_changed:
+            if job.enabled and not was_enabled and not next_run_recomputed:
                 try:
                     job.next_run = (
                         to_utc_naive(datetime.now(timezone.utc))
@@ -1712,13 +1737,20 @@ async def duplicate_scheduled_job(
 
 
 @router.post("/{job_id}/run-now")
+@queries_in_threads
 async def run_scheduled_job_now(
     job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Run a scheduled job immediately"""
-    try:
+    # The database work runs in a thread, which leaves the work it committed
+    # in `to_launch`. The tasks start on the loop they belong to, once the
+    # thread is done: also when it failed after the commit, or this request
+    # was cancelled meanwhile.
+    to_launch: list[Callable[[], Coroutine[Any, Any, None]]] = []
+
+    def prepare() -> dict[str, Any]:
         from app.database.models import Repository
 
         job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
@@ -1748,7 +1780,7 @@ async def run_scheduled_job_now(
             db.commit()
 
             # Pass job_id instead of job object to avoid session issues
-            asyncio.create_task(execute_multi_repo_schedule_by_id(job_id))
+            to_launch.append(partial(execute_multi_repo_schedule_by_id, job_id))
 
             return {
                 "message": "backend.success.schedule.scheduledJobStartedMulti",
@@ -1798,9 +1830,13 @@ async def run_scheduled_job_now(
             )
 
             # Execute backup with optional prune/compact asynchronously (non-blocking)
-            asyncio.create_task(
-                execute_scheduled_backup_with_maintenance(
-                    backup_job.id, repo.path, job.id, archive_name=archive_name
+            to_launch.append(
+                partial(
+                    execute_scheduled_backup_with_maintenance,
+                    backup_job.id,
+                    repo.path,
+                    job.id,
+                    archive_name=archive_name,
                 )
             )
 
@@ -1816,17 +1852,29 @@ async def run_scheduled_job_now(
                 backup_job_id=backup_job.id,
             )
 
-            return {
+            started = {
                 "job_id": backup_job.id,
                 "status": "pending",
                 "message": "backend.success.schedule.scheduledJobStarted",
             }
+            db.rollback()  # the read is over: the connection goes back
+            return started
         else:
             raise HTTPException(
                 status_code=400,
                 detail={"key": "backend.errors.schedule.noRepositoriesConfigured"},
             )
 
+    def prepare_in_one_transaction() -> dict[str, Any]:
+        try:
+            return prepare()
+        except BaseException:
+            # the admission's lock is not kept across a turn of the loop
+            db.rollback()
+            raise
+
+    try:
+        return await run_off_loop(prepare_in_one_transaction)
     except HTTPException:
         raise
     except Exception as e:
@@ -1838,6 +1886,9 @@ async def run_scheduled_job_now(
                 "params": {"error": str(e)},
             },
         )
+    finally:
+        for work in to_launch:
+            asyncio.create_task(work())
 
 
 @router.post("/validate-cron")
@@ -2649,10 +2700,28 @@ async def execute_scheduled_backup_with_maintenance(
         db.close()
 
 
+def _launch_now_or_later(start: Callable[[], None], launches: Optional[list]) -> None:
+    if launches is None:
+        start()
+    else:
+        launches.append(start)
+
+
 def _dispatch_due_scheduled_job(
-    db: Session, job: ScheduledJob, now: datetime
+    db: Session,
+    job: ScheduledJob,
+    now: datetime,
+    launches: Optional[list[Callable[[], None]]] = None,
 ) -> Optional[str]:
-    """Dispatch one due scheduled backup job and return its runtime tracking key."""
+    """Dispatch one due scheduled backup job and return its runtime tracking key.
+
+    The backup's operation and the schedule's next run are committed
+    together: a job claimed by `_claim_due_job` stays locked until both are
+    written, and a second pass never finds it due with its backup already
+    queued (or already over). The task that runs the backup is created only
+    after that commit. With `launches`, it is not created here: a function
+    that creates it is appended, for the scheduler to call on the event loop
+    once this, run in a thread, has returned."""
     from app.database.models import Repository
 
     now = to_utc_naive(now)
@@ -2701,8 +2770,11 @@ def _dispatch_due_scheduled_job(
                 raise
 
         run_key = f"schedule:{job.id}"
-        task = asyncio.create_task(execute_multi_repo_schedule_by_id(job.id))
-        _track_scheduled_backup_task(task, run_key)
+
+        def start(job_id: int = job.id, run_key: str = run_key) -> None:
+            task = asyncio.create_task(execute_multi_repo_schedule_by_id(job_id))
+            _track_scheduled_backup_task(task, run_key)
+
     elif job.repository or job.repository_id:
         if job.repository_id:
             repo = db.query(Repository).filter_by(id=job.repository_id).first()
@@ -2751,18 +2823,27 @@ def _dispatch_due_scheduled_job(
             executor=_backup_executor(repo),
             params={"archive_name": archive_name},
             scheduled_job_id=job.id,
+            commit=False,
         )
 
         run_key = f"backup:{backup_job.id}"
-        task = asyncio.create_task(
-            execute_scheduled_backup_with_maintenance(
-                backup_job.id,
-                repo.path,
-                job.id,
-                archive_name=archive_name,
+
+        def start(
+            backup_job_id: int = backup_job.id,
+            repository_path: str = repo.path,
+            job_id: int = job.id,
+            run_key: str = run_key,
+        ) -> None:
+            task = asyncio.create_task(
+                execute_scheduled_backup_with_maintenance(
+                    backup_job_id,
+                    repository_path,
+                    job_id,
+                    archive_name=archive_name,
+                )
             )
-        )
-        _track_scheduled_backup_task(task, run_key)
+            _track_scheduled_backup_task(task, run_key)
+
     else:
         logger.error(
             "Scheduled job has no repositories configured",
@@ -2773,6 +2854,10 @@ def _dispatch_due_scheduled_job(
     job.last_run = now
     job.next_run = _next_scheduled_job_run(job, now)
     db.commit()
+    from app.services.operations.enqueue import wake_runner
+
+    wake_runner()  # a queued operation is committed only now
+    _launch_now_or_later(start, launches)
     logger.info("Scheduled job started", job_id=job.id, name=job.name, run_key=run_key)
     return run_key
 
@@ -2790,12 +2875,15 @@ async def _send_schedule_failure(
         db.close()
 
 
-def _skip_if_plan_required(db: Session, job: ScheduledJob, now: datetime) -> bool:
+def _skip_if_plan_required(
+    db: Session, job: ScheduledJob, now: datetime, notices: list[tuple]
+) -> bool:
     """Skip, visibly, a due job whose Borg 2 repository the plan no longer covers.
 
     The run is recorded in Activity every time and announced once, on the
     first skip since the job last ran: a backup that stops must not stop
-    silently.
+    silently. The announcement's arguments are appended to `notices`, for
+    the scheduler to send from the event loop.
     """
     # the repositories `_dispatch_due_scheduled_job` would back up: the links
     # when there are any, the single repository otherwise
@@ -2838,20 +2926,27 @@ def _skip_if_plan_required(db: Session, job: ScheduledJob, now: datetime) -> boo
     db.commit()
     logger.info("Scheduled job skipped: plan does not include Borg 2", job_id=job.id)
     if first_refusal:
-        asyncio.create_task(_send_schedule_failure(job.name, borg2[0].path, message))
+        notices.append((job.name, borg2[0].path, message))
     return True
 
 
-async def dispatch_due_scheduled_backups(
-    db: Session, now: Optional[datetime] = None
-) -> None:
-    """Dispatch due scheduled backup jobs through the shared scheduler."""
-    now = to_utc_naive(now or datetime.now(timezone.utc))
+# The scheduled backups' database work runs in threads, one step at a time,
+# each ending its transaction (`run_transaction_off_loop`): on the loop, a
+# wait for a lock or a connection would hold every request. Between the steps
+# the dispatcher probes sources and starts tasks on the loop, and holds
+# neither a lock nor a connection while it does. Rows are passed on by id.
+
+
+def _due_scheduled_jobs(
+    db: Session, now: datetime
+) -> Optional[tuple[int, int, list[int]]]:
+    """The limit, the free slots and the ids of the due jobs, in order; None
+    when no backup may start."""
     max_scheduled_backups, _ = _get_scheduler_concurrency_limits(db)
 
     if max_scheduled_backups <= 0:
         logger.info("Scheduled backup dispatch disabled", limit=max_scheduled_backups)
-        return
+        return None
 
     active_runs = _count_active_scheduled_backup_runs(db)
     available_slots = max_scheduled_backups - active_runs
@@ -2861,133 +2956,280 @@ async def dispatch_due_scheduled_backups(
             limit=max_scheduled_backups,
             active=active_runs,
         )
-        return
+        return None
 
-    jobs = (
-        db.query(ScheduledJob)
+    job_ids = [
+        job_id
+        for (job_id,) in db.query(ScheduledJob.id)
         .filter(
             ScheduledJob.enabled == True,
             ScheduledJob.next_run <= now,
         )
         .order_by(ScheduledJob.next_run.asc(), ScheduledJob.id.asc())
         .all()
+    ]
+    return max_scheduled_backups, available_slots, job_ids
+
+
+def _still_due(job: Optional[ScheduledJob], now: datetime) -> bool:
+    """Read again in each step: a job switched off, moved or deleted since
+    it was found due is left alone, and its new timing is not overwritten."""
+    return (
+        job is not None
+        and bool(job.enabled)
+        and job.next_run is not None
+        and to_utc_naive(job.next_run) <= now
     )
 
-    if not jobs:
+
+def _claim_due_job(db: Session, job_id: int, now: datetime) -> Optional[ScheduledJob]:
+    """The job, locked until the step's transaction ends and read under the
+    lock, if it is still due. A step that writes the job decides on it here:
+    a request may have switched it off, moved or deleted it since the pass
+    found it due, and a second pass (a process being replaced runs one until
+    it is stopped) waits here until this one has committed the job's next
+    run, and then finds it no longer due."""
+    if db.get_bind().dialect.name == "sqlite":
+        # the database's one write lock
+        db.execute(
+            text("UPDATE scheduled_jobs SET id = id WHERE id = :job_id"),
+            {"job_id": job_id},
+        )
+        query = db.query(ScheduledJob)
+    else:
+        # FOR NO KEY UPDATE: two claims exclude each other, but an insert
+        # that refers to the job (a run-now's operation, under the
+        # repository's lock this claim waits for next) is not held up
+        query = db.query(ScheduledJob).with_for_update(key_share=True)
+    job = query.filter(ScheduledJob.id == job_id).populate_existing().one_or_none()
+    return job if _still_due(job, now) else None
+
+
+def _screen_due_job(
+    db: Session, job_id: int, now: datetime, notices: list[tuple]
+) -> tuple[str, Optional[list[int]]]:
+    """What happens to the due job: `skipped` (recorded here), `dispatch`, or
+    `probe` with the ids of the repositories whose sources have to be
+    available first.
+    `gone` for a job that is no longer due."""
+    # Asked before the claim: on an install with no licensing row yet, the
+    # first look creates it and commits, which would end the claim.
+    has_feature(db, BORG2_FEATURE)
+    job = _claim_due_job(db, job_id, now)
+    if job is None:
+        return "gone", None
+    if _skip_if_plan_required(db, job, now, notices):
+        return "skipped", None
+    if job.schedule_mode != "availability":
+        return "dispatch", None
+    last_success = (
+        db.query(Operation.completed_at)
+        .filter(
+            Operation.kind == "backup",
+            Operation.scheduled_job_id == job.id,
+            Operation.status.in_(["completed", "completed_with_warnings"]),
+            Operation.completed_at.isnot(None),
+        )
+        .order_by(Operation.completed_at.desc())
+        .first()
+    )
+    if last_success and job.min_success_interval_minutes:
+        allowed_at = to_utc_naive(last_success[0]) + timedelta(
+            minutes=job.min_success_interval_minutes
+        )
+        if now < allowed_at:
+            job.next_run = min(
+                allowed_at,
+                now + timedelta(minutes=job.availability_check_interval_minutes),
+            )
+            _record_availability_skip(
+                db,
+                job,
+                now,
+                reason="minimum_interval_not_elapsed",
+                detail="Minimum interval after the last successful backup has not elapsed.",
+            )
+            db.commit()
+            logger.info(
+                "Availability schedule skipped: minimum success interval",
+                job_id=job_id,
+            )
+            return "skipped", None
+    linked_repositories = (
+        db.query(Repository)
+        .join(
+            ScheduledJobRepository,
+            ScheduledJobRepository.repository_id == Repository.id,
+        )
+        .filter(ScheduledJobRepository.scheduled_job_id == job.id)
+        .all()
+    )
+    if not linked_repositories and job.repository_id:
+        repository = db.get(Repository, job.repository_id)
+        linked_repositories = [repository] if repository else []
+    if not linked_repositories and job.repository:
+        repository = (
+            db.query(Repository).filter(Repository.path == job.repository).first()
+        )
+        linked_repositories = [repository] if repository else []
+    return "probe", [repository.id for repository in linked_repositories]
+
+
+def _record_source_unavailable(
+    db: Session, job_id: int, now: datetime, reason: str
+) -> None:
+    job = _claim_due_job(db, job_id, now)
+    if job is None or job.schedule_mode != "availability":
+        return
+    job.next_run = now + timedelta(minutes=job.availability_check_interval_minutes)
+    _record_availability_skip(
+        db,
+        job,
+        now,
+        reason="source_unavailable",
+        detail=reason,
+    )
+    db.commit()
+    logger.info(
+        "Availability schedule skipped: source unavailable",
+        job_id=job_id,
+        reason=reason,
+    )
+
+
+class _CapacityReached(Exception):
+    """No scheduled backup may start now: the limit is reached."""
+
+
+def _dispatch_due_job_by_id(
+    db: Session, job_id: int, now: datetime, launches: list[Callable[[], None]]
+) -> Optional[str]:
+    """Dispatch the job if it is still due and a slot is free. The capacity
+    is counted again under its lock, held to the dispatch's commit: a second
+    pass (a process being replaced runs one until it is stopped) may have
+    started a backup since this pass counted at its start."""
+    max_scheduled_backups, _ = _get_scheduler_concurrency_limits(db)
+    if _count_active_scheduled_backup_runs(db) >= max_scheduled_backups:
+        raise _CapacityReached()
+    job = _claim_due_job(db, job_id, now)
+    if job is None:
+        return None
+    return _dispatch_due_scheduled_job(db, job, now, launches)
+
+
+def _record_failed_dispatch(
+    db: Session, job_id: int, now: datetime
+) -> Optional[tuple[str, Optional[str]]]:
+    """Mark the job as run, unless another pass has dispatched it since,
+    and return what its failure notice names."""
+    job = _claim_due_job(db, job_id, now)
+    if job is None:
+        job = db.get(ScheduledJob, job_id)
+        return (job.name, job.repository) if job is not None else None
+    name, repository = job.name, job.repository
+    job.last_run = now
+    db.commit()
+    return name, repository
+
+
+def _send_schedule_failure_later(
+    name: str, repository: Optional[str], error: str
+) -> None:
+    try:
+        asyncio.create_task(_send_schedule_failure(name, repository, error))
+    except Exception as notif_error:
+        logger.warning(
+            "Failed to send schedule failure notification",
+            error=str(notif_error),
+        )
+
+
+async def dispatch_due_scheduled_backups(
+    db: Session, now: Optional[datetime] = None
+) -> None:
+    """Dispatch due scheduled backup jobs through the shared scheduler."""
+    now = to_utc_naive(now or datetime.now(timezone.utc))
+    # The capacity is counted here for the pass, and again under its lock in
+    # each dispatch, which holds it to its commit.
+    due = await run_transaction_off_loop(db, _due_scheduled_jobs, db, now)
+    if due is None:
+        return
+    max_scheduled_backups, available_slots, job_ids = due
+    if not job_ids:
         return
 
     dispatched = 0
     skipped = 0
-    for job in jobs:
+    for job_id in job_ids:
         if dispatched >= available_slots:
             break
+        notices: list[tuple] = []
+        launches: list[Callable[[], None]] = []
         try:
-            if _skip_if_plan_required(db, job, now):
+            outcome, repository_ids = await run_transaction_off_loop(
+                db, _screen_due_job, db, job_id, now, notices
+            )
+            if outcome in ("skipped", "gone"):
                 skipped += 1
                 continue
-            if job.schedule_mode == "availability":
-                last_success = (
-                    db.query(Operation.completed_at)
-                    .filter(
-                        Operation.kind == "backup",
-                        Operation.scheduled_job_id == job.id,
-                        Operation.status.in_(["completed", "completed_with_warnings"]),
-                        Operation.completed_at.isnot(None),
-                    )
-                    .order_by(Operation.completed_at.desc())
-                    .first()
-                )
-                if last_success and job.min_success_interval_minutes:
-                    allowed_at = to_utc_naive(last_success[0]) + timedelta(
-                        minutes=job.min_success_interval_minutes
-                    )
-                    if now < allowed_at:
-                        job.next_run = min(
-                            allowed_at,
-                            now
-                            + timedelta(
-                                minutes=job.availability_check_interval_minutes
-                            ),
-                        )
-                        _record_availability_skip(
-                            db,
-                            job,
-                            now,
-                            reason="minimum_interval_not_elapsed",
-                            detail="Minimum interval after the last successful backup has not elapsed.",
-                        )
-                        db.commit()
-                        skipped += 1
-                        logger.info(
-                            "Availability schedule skipped: minimum success interval",
-                            job_id=job.id,
-                        )
-                        continue
-                linked_repositories = (
-                    db.query(Repository)
-                    .join(
-                        ScheduledJobRepository,
-                        ScheduledJobRepository.repository_id == Repository.id,
-                    )
-                    .filter(ScheduledJobRepository.scheduled_job_id == job.id)
-                    .all()
-                )
-                if not linked_repositories and job.repository_id:
-                    repository = db.get(Repository, job.repository_id)
-                    linked_repositories = [repository] if repository else []
-                if not linked_repositories and job.repository:
-                    repository = (
-                        db.query(Repository)
-                        .filter(Repository.path == job.repository)
-                        .first()
-                    )
-                    linked_repositories = [repository] if repository else []
+            if outcome == "probe":
                 sources_available = False
                 decision_reason = "No repositories are configured for this automation."
-                if linked_repositories:
-                    decision = await repositories_available(db, linked_repositories)
+                if repository_ids:
+                    decision = await repositories_available(db, repository_ids)
                     sources_available = decision.available
                     decision_reason = (
                         decision.reason or "The backup source is unavailable."
                     )
                 if not sources_available:
-                    job.next_run = now + timedelta(
-                        minutes=job.availability_check_interval_minutes
-                    )
-                    _record_availability_skip(
+                    await run_transaction_off_loop(
                         db,
-                        job,
+                        _record_source_unavailable,
+                        db,
+                        job_id,
                         now,
-                        reason="source_unavailable",
-                        detail=decision_reason,
+                        decision_reason,
                     )
-                    db.commit()
                     skipped += 1
-                    logger.info(
-                        "Availability schedule skipped: source unavailable",
-                        job_id=job.id,
-                        reason=decision_reason,
-                    )
                     continue
-            run_key = _dispatch_due_scheduled_job(db, job, now)
+            run_key = await run_transaction_off_loop(
+                db, _dispatch_due_job_by_id, db, job_id, now, launches
+            )
             if run_key:
                 dispatched += 1
+        except _CapacityReached:
+            logger.info(
+                "Scheduled backup capacity reached",
+                limit=max_scheduled_backups,
+            )
+            break
         except Exception as e:
-            logger.error("Failed to run scheduled job", job_id=job.id, error=str(e))
-            job.last_run = now
-            db.commit()
-
+            logger.error("Failed to run scheduled job", job_id=job_id, error=str(e))
+            if launches:
+                # its backup was committed before the failure, and runs
+                dispatched += 1
             try:
-                asyncio.create_task(
-                    _send_schedule_failure(job.name, job.repository, str(e))
+                failed = await run_transaction_off_loop(
+                    db, _record_failed_dispatch, db, job_id, now
                 )
-            except Exception as notif_error:
-                logger.warning(
-                    "Failed to send schedule failure notification",
-                    error=str(notif_error),
+            except Exception as record_error:
+                # the next jobs and the rest of the pass still run
+                logger.error(
+                    "Failed to record a failed scheduled job",
+                    job_id=job_id,
+                    error=str(record_error),
                 )
+                failed = None
+            if failed is not None:
+                _send_schedule_failure_later(*failed, str(e))
+        finally:
+            # on the loop, after the thread
+            for start in launches:
+                start()
+            for notice in notices:
+                asyncio.create_task(_send_schedule_failure(*notice))
 
-    deferred = len(jobs) - dispatched - skipped
+    deferred = len(job_ids) - dispatched - skipped
     if deferred > 0:
         logger.info(
             "Deferred due scheduled backups until capacity is available",
@@ -3011,7 +3253,9 @@ async def check_scheduled_jobs():
             await backup_plan_execution_service.dispatch_due_runs(db, now)
             await run_due_scheduled_checks(db, now)
             await run_due_scheduled_restore_checks(db, now)
-            dispatch_due_scheduled_rclone_mirrors(db, now)
+            await run_transaction_off_loop(
+                db, dispatch_due_scheduled_rclone_mirrors, db, now
+            )
             await run_backup_monitoring_and_reports(db, now)
 
         except Exception as e:

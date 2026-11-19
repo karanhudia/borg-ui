@@ -14,6 +14,7 @@ import structlog
 import tempfile
 from datetime import datetime, timezone
 
+from app.utils.ssh_paths import login_relative_remote_path_candidate
 from app.core.security import (
     decrypt_secret,
     get_current_user,
@@ -247,24 +248,6 @@ def _resolve_ssh_target(
     return host, username, connection
 
 
-def _login_relative_remote_path_candidate(
-    remote_path: str, default_path: Optional[str] = None
-) -> Optional[str]:
-    normalized = (remote_path or "").strip()
-    if not normalized.startswith("/") or normalized == "/":
-        return None
-    if normalized.startswith("/./"):
-        relative_path = normalized.lstrip("/")
-        return relative_path or None
-
-    normalized_default_path = (default_path or "").strip()
-    if normalized_default_path not in {"", "/"}:
-        return None
-
-    relative_path = normalized.lstrip("/")
-    return relative_path or None
-
-
 SFTP_PWD_PREFIX = "Remote working directory:"
 
 
@@ -379,15 +362,25 @@ def _remote_file_exists_error(result) -> bool:
     return "file exists" in output
 
 
-# The SSH server refused the login or its host key is not trusted: the user
-# fixes the connection, so this is not a server fault (no 500).
+# The SSH server refused the login, its host key is not trusted, or the
+# connection settings are wrong: the user fixes the connection, so this is not
+# a server fault (no 500).
 _SSH_REFUSAL_MARKERS = (
     "host key verification failed",
     "remote host identification has changed",
+    # The login shell prints output, which breaks SFTP (231181a75000f29f).
+    "received message too long",
+    # Wrong host or port (06c87184963eec1e).
+    "connection refused",
 )
 # OpenSSH's login refusal lists whatever methods the server offers, e.g.
 # "(publickey)", "(password)" or "(publickey,password,keyboard-interactive)".
-_SSH_AUTH_REFUSAL = re.compile(r"permission denied \([a-z0-9@.,-]+\)")
+_SSH_AUTH_REFUSAL = re.compile(
+    r"permission denied \([a-z0-9@.,-]+\)"
+    # OpenSSH closing before the login, e.g. a port that is not SSH
+    # (dashboard 0950052be6b5027e). Not a session the remote end dropped.
+    r"|connection closed by \S+ port \d+"
+)
 
 
 def _ssh_failure_status(error_msg: str | None) -> int:
@@ -703,7 +696,7 @@ async def browse_ssh_filesystem(
             and sftp_listing_failed(result)
             and _remote_path_missing_error(result)
         ):
-            relative_path = _login_relative_remote_path_candidate(
+            relative_path = login_relative_remote_path_candidate(
                 path, connection_default_path
             )
             if relative_path:
@@ -1017,7 +1010,7 @@ def validate_path(
                 connection_default_path = getattr(ssh_connection, "default_path", None)
                 command_path = path
                 result = run_ssh_stat(command_path)
-                retry_path = _login_relative_remote_path_candidate(
+                retry_path = login_relative_remote_path_candidate(
                     path, connection_default_path
                 )
                 if (
@@ -1232,7 +1225,7 @@ def create_folder(
                 if _remote_path_command_failed(result) and _remote_path_missing_error(
                     result
                 ):
-                    retry_path = _login_relative_remote_path_candidate(
+                    retry_path = login_relative_remote_path_candidate(
                         full_path, connection_default_path
                     )
                     if retry_path:

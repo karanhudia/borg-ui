@@ -203,6 +203,21 @@ fi
 #
 # A failure here stops the boot on purpose -- serving from a database in an
 # unknown state is worse than not starting.
+# The database is created in DATA_DIR as the borg user. A bind mount Docker
+# created for a fresh install is root-owned, and the ownership update above runs
+# only when PUID/PGID change, so the database could not be created ("unable to
+# open database file", dashboard 827fb9588a967d8c).
+DATA_DIR=${DATA_DIR:-/data}
+mkdir -p "$DATA_DIR"
+if [ "$PUID" != "0" ] && ! gosu borg test -w "$DATA_DIR"; then
+    echo "[$(date)] $DATA_DIR is not writable by borg (${PUID}:${PGID}); taking ownership of it"
+    chown borg:borg "$DATA_DIR" 2>/dev/null || true
+    if ! gosu borg test -w "$DATA_DIR"; then
+        echo "[$(date)] ERROR: $DATA_DIR is not writable by ${PUID}:${PGID}. On the host, run chown ${PUID}:${PGID} on the folder mounted at $DATA_DIR, or set PUID/PGID to its owner."
+        exit 1
+    fi
+fi
+
 echo "[$(date)] Checking database..."
 if [ "$PUID" = "0" ]; then
     DB_UPGRADE_CMD="python3 -m app.database.db_upgrade"

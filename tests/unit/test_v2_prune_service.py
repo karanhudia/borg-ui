@@ -62,9 +62,16 @@ async def test_execute_prune_marks_job_complete_and_updates_repo(db_engine):
         patch(
             "app.services.v2.prune_service.asyncio.create_subprocess_exec",
             new=AsyncMock(return_value=FakeProcess(0, stdout=b"pruned")),
-        ),
+        ) as create_subprocess,
     ):
-        await service.execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1, dry_run=False)
+        await service.execute_prune(
+            job_id, repo_id, 0, 7, 4, 6, 0, 1, dry_run=False, match_archives="id:nas"
+        )
+
+    # a plan-scoped prune (issue #1549) reaches Borg as -a
+    create_subprocess.assert_awaited_once()
+    cmd = list(create_subprocess.await_args.args)
+    assert cmd[cmd.index("-a") + 1] == "id:nas"
 
     verification = testing_session_local()
     refreshed_job = resolve_maintenance_job(verification, job_id, "prune")

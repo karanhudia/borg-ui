@@ -191,6 +191,7 @@ def _plan_run_context(**overrides):
         script_hooks=[],
         run_repository_scripts=False,
         run_prune_after=False,
+        prune_scope_to_plan=False,
         run_compact_after=False,
         run_check_after=False,
         run_restore_check_after=False,

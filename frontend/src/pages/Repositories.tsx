@@ -699,14 +699,23 @@ export default function Repositories() {
       action === 'sync'
         ? repositoriesAPI.syncRcloneRepository(repository.id)
         : repositoriesAPI.hydrateRcloneRepository(repository.id),
-    onSuccess: (_response, variables) => {
+    onSuccess: (response, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
+      // A failed run is recorded and answered with its status, not an HTTP error.
+      if (response?.data?.sync_status === 'failed') {
+        toast.error(
+          variables.action === 'sync'
+            ? t('repositories.toasts.rcloneSyncFailed')
+            : t('repositories.toasts.rcloneHydrateFailed')
+        )
+        return
+      }
       toast.success(
         variables.action === 'sync'
           ? t('repositories.toasts.rcloneSyncCompleted')
           : t('repositories.toasts.rcloneHydrateCompleted')
       )
-      queryClient.invalidateQueries({ queryKey: ['repositories'] })
-      queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any, variables) => {

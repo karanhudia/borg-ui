@@ -18,6 +18,7 @@ import {
   FileCode,
   Settings as SettingsIcon,
   Bell,
+  Bot,
   Package,
   Palette,
   Users,
@@ -122,6 +123,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Appearance: t('navigation.settings.appearance'),
       Preferences: t('navigation.settings.preferences'),
       Notifications: t('navigation.settings.notifications'),
+      'AI assistants (MCP)': t('navigation.settings.mcp'),
       'Monitoring & Reports': t('navigation.settings.monitoringReports'),
       'Background work': t('navigation.settings.backgroundWork'),
       MQTT: t('navigation.settings.mqtt'),
@@ -257,6 +259,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
               ...(canManageNotifications
                 ? [{ name: 'Notifications', href: '/settings/notifications', icon: Bell }]
                 : []),
+              { name: 'AI assistants (MCP)', href: '/settings/mcp', icon: Bot },
             ],
           },
           // The System group also carries Background work, which operators
@@ -361,7 +364,8 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
         path.includes('/account') ||
         path.includes('/appearance') ||
         path.includes('/preferences') ||
-        path.includes('/notifications')
+        path.includes('/notifications') ||
+        path.includes('/mcp')
       ) {
         setExpandedMenus((prev) => ({ ...prev, Personal: true }))
       } else if (
