@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient } from '@tanstack/react-query'
 import { AxiosResponse } from 'axios'
 
 import SystemSettingsTab from '../SystemSettingsTab'
@@ -18,6 +19,10 @@ vi.mock('../../services/api', () => ({
   authAPI: {
     getAuthConfig: vi.fn(),
   },
+}))
+
+vi.mock('../system-settings/McpAccessSection', () => ({
+  default: () => <div>MCP access section</div>,
 }))
 
 vi.mock('react-hot-toast', async () => {
@@ -54,6 +59,7 @@ const defaultSystemSettings = {
   dashboard_observe_freshness_critical_days: 7,
   metrics_enabled: false,
   metrics_require_auth: false,
+  mcp_beta_enabled: false,
 }
 
 const buildSystemSettingsResponse = (
@@ -264,5 +270,32 @@ describe('SystemSettingsTab', () => {
       expect(screen.getByLabelText('Backup Warning Age (days)')).toHaveValue(15)
       expect(screen.getByLabelText('Backup Critical Age (days)')).toHaveValue(32)
     })
+  })
+
+  it('falls back to the first section when the MCP beta is turned off while open', async () => {
+    const user = userEvent.setup()
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue(
+      buildSystemSettingsResponse({ mcp_beta_enabled: true })
+    )
+    renderWithProviders(<SystemSettingsTab />, { queryClient })
+
+    await user.click(await screen.findByRole('tab', { name: 'AI assistants (MCP)' }))
+    expect(screen.getByText('MCP access section')).toBeInTheDocument()
+
+    // Another admin turns the beta off; the next refetch drops the section.
+    vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue(buildSystemSettingsResponse())
+    await act(() => queryClient.invalidateQueries({ queryKey: ['systemSettings'] }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('tab', { name: 'AI assistants (MCP)' })).not.toBeInTheDocument()
+    })
+    expect(screen.queryByText('MCP access section')).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Operation Timeouts' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
   })
 })
