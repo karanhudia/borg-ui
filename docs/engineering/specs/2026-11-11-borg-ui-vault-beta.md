@@ -541,8 +541,9 @@ instead of skipping the warning.
 
 Deletion starts with a claim, one conditional update that sets `deleted_at`,
 `status = 'deleted'` and `delete_steps = '{}'` only where the row is still
-exactly the row the rules were evaluated on: same `updated_at` (every write
-to an account sets it, so it works as a row version), still not deleted, and
+exactly the row the rules were evaluated on: same `row_version` (an integer
+that every write to an account increases by one, so it changes on every
+write, however close together), still not deleted, and
 no hold in the future. Any change since the evaluation, such as a webhook
 that cleared `cancel_at`, a renewal that attached (8.6) or a renewal order
 that placed a hold, makes the claim fail; nothing is deleted and the next
@@ -829,7 +830,12 @@ day 7 would remove it. So nothing a compaction removes is gone at once.
   disk is only really free when the copy is removed. The node therefore
   needs spare disk for up to 7 days of released space; the runbook watches
   free space.
-- A copy is kept `RETAIN_DAYS = 7` days. Expired copies are removed when the
+- A copy is kept `RETAIN_DAYS = 7` days. When a compaction run finishes
+  successfully, every copy the account still has is kept until at least
+  7 days after that moment. A release that fails halfway and succeeds on a
+  retry a day later can have freed data in the first attempt that only the
+  first copy holds; this keeps that copy for the full 7 days after the
+  release really finished. Expired copies are removed when the
   agent starts and on every `GET /v1/accounts` (the Worker calls it hourly).
   Deleting an account removes its copies too. The account object gains
   `retained_until`: the latest expiry, or null.
@@ -860,8 +866,9 @@ day 7 would remove it. So nothing a compaction removes is gone at once.
   the existing install the customer does both steps Borg's documentation
   gives for a rolled-back repository: `borg delete --cache-only <repo>`, and
   removing the file `manifest-timestamp` in the repository's security
-  directory (`$BORG_CONFIG_DIR/security/<repository id>/`, by default under
-  `~/.config/borg/security/`). The recovery tool prints the repository id,
+  directory: `$BORG_SECURITY_DIR/<repository id>/` when that variable is set
+  on the client, otherwise `$BORG_CONFIG_DIR/security/<repository id>/`
+  (by default `~/.config/borg/security/<repository id>/`). The recovery tool prints the repository id,
   read from the repository's `config` file on the node, so the support reply
   can give the exact path. Removing the cache alone is not enough, because
   the timestamp lives in the security directory.
