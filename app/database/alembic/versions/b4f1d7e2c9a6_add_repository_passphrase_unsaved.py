@@ -24,15 +24,18 @@ def upgrade() -> None:
     }
     if "passphrase_unsaved" in existing:
         return
-    with op.batch_alter_table("repositories") as batch:
-        batch.add_column(
-            sa.Column(
-                "passphrase_unsaved",
-                sa.Boolean(),
-                nullable=False,
-                server_default=sa.false(),
-            )
-        )
+    # A plain ADD COLUMN, not batch mode: batch on SQLite rebuilds the table
+    # for an expression server default, and a rebuild of repositories with
+    # foreign keys on would cascade its DROP to the tables pointing at it.
+    op.add_column(
+        "repositories",
+        sa.Column(
+            "passphrase_unsaved",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
+    )
 
 
 def downgrade() -> None:
