@@ -831,8 +831,10 @@ day 7 would remove it. So nothing a compaction removes is gone at once.
 - Effect, verified on Borg 1.4.0 and XFS: after the compaction the account's
   usage drops at once (114 MiB to 57 MiB in the test), while the space on the
   disk is only really free when the copy is removed. The node therefore
-  needs spare disk for up to 7 days of released space; the runbook watches
-  free space.
+  needs spare disk for up to 7 days of released space, plus the held copies
+  of releases that failed and have not succeeded since (no expiry, see
+  below). Keep at least 20% of the volume free; the runbook watches free
+  space and lists held copies (section 16, item 8).
 - A copy from a successful compaction run is kept `RETAIN_DAYS = 7` days. A
   copy from a run that failed has no expiry at all: it stays until a later
   run for that account succeeds, and then, like every other copy the
