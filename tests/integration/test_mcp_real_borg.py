@@ -124,3 +124,43 @@ def test_operate_tools_on_a_real_repository(
     assert restored["data"]["job"]["status"] == "completed", restored["text"]
     # contents_only puts the folder's contents straight in, with their data
     assert (target / "hello.txt").read_text() == "hello"
+
+
+@pytest.mark.integration
+def test_generated_passphrase_works_with_real_borg(
+    test_client,
+    test_db,
+    tmp_path,
+    borg_binary,
+    admin_headers,
+    create_connection,  # noqa: F811  the shared MCP fixture, imported above
+):
+    """Phase 4: a repository created over MCP gets a passphrase nobody typed,
+    and Borg can back up with it."""
+    from app.database.models import Repository
+
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "hello.txt").write_text("hello")
+    _, token = create_connection(admin_headers, level="manage")
+    session = McpSession(test_client, token)
+
+    created = session.call(
+        "create_repository", name="Generated", path=str(tmp_path / "generated")
+    )
+    assert not created["is_error"], created["text"]
+    repo = test_db.query(Repository).filter(Repository.name == "Generated").one()
+    test_db.refresh(repo)
+    assert repo.passphrase_unsaved is True
+    assert repo.passphrase not in created["text"]
+
+    changed = session.call(
+        "update_repository", repository="Generated", source_directories=[str(source)]
+    )
+    assert not changed["is_error"], changed["text"]
+    started = session.call("start_backup", repository="Generated")
+    assert not started["is_error"], started["text"]
+    done = _until_done(session, "backup", started["data"]["job_id"])
+    assert done["data"]["job"]["status"] in ("completed", "completed_with_warnings"), (
+        done["text"]
+    )

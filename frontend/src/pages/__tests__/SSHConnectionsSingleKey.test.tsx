@@ -290,6 +290,18 @@ describe('SSHConnectionsSingleKey', () => {
     await waitFor(() => expect(sshKeysAPI.getSSHKeys).toHaveBeenCalledTimes(2))
   }, 30000)
 
+  it('opens the deploy dialog prefilled from an MCP hand-off link', async () => {
+    renderWithProviders(<SSHConnectionsSingleKey />, {
+      initialRoute: '/ssh-connections?deploy=1&host=backups.example.com&username=borg&port=23',
+    })
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    expect(within(dialog).getByLabelText(/^host$/i)).toHaveValue('backups.example.com')
+    expect(within(dialog).getByLabelText(/^username$/i)).toHaveValue('borg')
+    expect(within(dialog).getByLabelText(/^port$/i)).toHaveValue(23)
+    expect(within(dialog).getByLabelText(/^password$/i)).toHaveFocus()
+    await rtlWaitFor(() => expect(window.location.search).toBe(''))
+  }, 30000)
+
   it('deploys the system key with the expected connection payload', async () => {
     const { sshKeysAPI } = await import('../../services/api')
 

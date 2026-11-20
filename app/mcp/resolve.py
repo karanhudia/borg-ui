@@ -64,8 +64,9 @@ def pick(
     steps = (
         lambda name: name == text,
         lambda name: name.lower() == lowered,
+        # A unique prefix, never a substring: "photos" must not pick
+        # "Old Photos" for a tool that changes it (spec 5.4).
         lambda name: name.lower().startswith(lowered),
-        lambda name: lowered in name.lower(),
     )
     for matches in steps:
         hits = [item for item in items if lowered and matches(name_of(item))]

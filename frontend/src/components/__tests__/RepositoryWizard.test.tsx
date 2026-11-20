@@ -399,6 +399,17 @@ describe('RepositoryWizard', () => {
     })
   })
 
+  describe('prefilled import (MCP hand-off link)', () => {
+    it('opens with the initial values filled in', async () => {
+      renderWizard('import', undefined, vi.fn(), vi.fn(), {
+        initialValues: { name: 'Old photos', path: '/data/example/old' },
+      })
+      await waitForLocationStep()
+      expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Old photos')
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/data/example/old')
+    })
+  })
+
   describe('create mode', () => {
     it('renders the current storage-target step flow', async () => {
       renderWizard('create')

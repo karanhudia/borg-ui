@@ -77,6 +77,10 @@ class InternalClient:
         self._user_id = user_id
         self._connection_id = connection_id
 
+    @property
+    def app(self):
+        return self._app
+
     async def get(self, path: str, /, **params) -> Any:
         return await self.request("GET", path, params=params)
 
@@ -86,6 +90,12 @@ class InternalClient:
         return await self.request(
             "POST", path, params=params, json=json, timeout=timeout
         )
+
+    async def put(self, path: str, /, json: Any = None, **params) -> Any:
+        return await self.request("PUT", path, params=params, json=json)
+
+    async def patch(self, path: str, /, json: Any = None, **params) -> Any:
+        return await self.request("PATCH", path, params=params, json=json)
 
     async def request(
         self,

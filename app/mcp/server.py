@@ -28,6 +28,7 @@ from app.core.features import FEATURES, get_current_plan, has_feature
 from app.mcp import activity, auth
 from app.mcp.client import InternalClient
 from app.mcp.context import ConnectionContext, ToolContext
+from app.mcp import links
 from app.mcp.db import session_scope
 from app.mcp.registry import REGISTRY, ToolSpec, tools_for
 from app.mcp.render import ToolResult, finish
@@ -66,7 +67,14 @@ How to work
 - At operate access, restore_files only writes into an empty or new folder. If
   the user wants to restore over existing files, say that needs full access.
 - Never ask the user for a passphrase, password, private key or token. When one
-  is needed, Borg UI gives you a link to the page where the user enters it."""
+  is needed, Borg UI gives you a link to the page where the user enters it.
+  Links are for the user to open; pass them on as they are.
+- At manage access you can set things up. create_repository generates the
+  passphrase itself: tell the user to save it from the link in the answer.
+  create_backup_plan asks for what is missing instead of assuming; ask the user
+  those questions rather than inventing answers. trust_host_key lists the
+  fingerprint of every host key first: the user must compare each one before
+  you trust them."""
 
 
 def _icons() -> Optional[list[types.Icon]]:
@@ -197,6 +205,7 @@ async def on_call_tool(ctx, params) -> types.CallToolResult:
             ),
             # Progress skips finish(), so it redacts on its own (a file path
             # in the message can hold a secret).
+            base_url=links.base_url(ctx.request),
             progress=lambda percent, message=None: ctx.session.report_progress(
                 percent, 100, redact_secrets(message) if message else message
             ),

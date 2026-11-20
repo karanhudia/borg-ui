@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -1297,6 +1298,19 @@ export default function CloudStorage() {
     },
     enabled: canReadCloudStorage,
   })
+
+  // The MCP update_rclone_remote hand-off link: open that remote's edit
+  // dialog once the list is in, then drop the parameter.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const editParam = searchParams.get('edit')
+  useEffect(() => {
+    if (editParam === null || !remotesQuery.data) return
+    const remote = remotesQuery.data.find((item) => String(item.id) === editParam)
+    if (remote) setEditingRemote(remote)
+    const next = new URLSearchParams(searchParams)
+    next.delete('edit')
+    setSearchParams(next, { replace: true })
+  }, [editParam, remotesQuery.data, searchParams, setSearchParams])
 
   const providersQuery = useQuery({
     queryKey: ['rclone-providers'],

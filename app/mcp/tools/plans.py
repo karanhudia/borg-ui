@@ -359,6 +359,34 @@ class CronArgs(BaseModel):
     )
 
 
+class ScheduleInvalid(ValueError):
+    """A schedule the app would refuse, with the sentence to show."""
+
+    def __init__(self, text: str):
+        super().__init__(text)
+        self.text = text
+
+
+CRON_FIELDS = ("minute", "hour", "day_of_month", "month", "day_of_week")
+
+
+async def validate_schedule(ctx, expression: str, timezone: Optional[str]) -> dict:
+    """The app's own cron check, the one SchedulePicker uses. Returns the
+    route's answer (`cron_expression`, `timezone`, `next_runs`)."""
+    fields = expression.split()
+    if len(fields) != 5:
+        raise ScheduleInvalid(
+            "A cron expression has five fields: minute, hour, day of month, month, day of week. For example `0 2 * * *` is every day at 02:00."
+        )
+    result = await ctx.api.post(
+        "/api/schedule/validate-cron",
+        json={**dict(zip(CRON_FIELDS, fields)), "timezone": timezone},
+    )
+    if not result.get("success"):
+        raise ScheduleInvalid(f"`{expression}` does not work: {result.get('error')}")
+    return result
+
+
 @tool(
     name="check_cron",
     title="Check a schedule expression",
@@ -370,24 +398,10 @@ class CronArgs(BaseModel):
     routes=("POST /api/schedule/validate-cron",),
 )
 async def check_cron(ctx, args: CronArgs) -> ToolResult:
-    fields = args.expression.split()
-    if len(fields) != 5:
-        return ToolResult(
-            "A cron expression has five fields: minute, hour, day of month, month, day of week. For example `0 2 * * *` is every day at 02:00.",
-            is_error=True,
-        )
-    names = ("minute", "hour", "day_of_month", "month", "day_of_week")
-    result = await ctx.api.request(
-        "POST",
-        "/api/schedule/validate-cron",
-        json={**dict(zip(names, fields)), "timezone": args.timezone},
-    )
-    if not result.get("success"):
-        return ToolResult(
-            f"`{args.expression}` does not work: {result.get('error')}",
-            {"valid": False},
-            is_error=True,
-        )
+    try:
+        result = await validate_schedule(ctx, args.expression, args.timezone)
+    except ScheduleInvalid as invalid:
+        return ToolResult(invalid.text, {"valid": False}, is_error=True)
     runs = result.get("next_runs") or []
     lines = [
         f"✓ `{result['cron_expression']}` is valid ({result.get('timezone')}). Next runs:",

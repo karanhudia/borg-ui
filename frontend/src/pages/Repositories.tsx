@@ -12,6 +12,9 @@ import { translateBackendKey } from '../utils/translateBackendKey'
 import { resyncStoredArchives } from '../utils/archiveResync'
 import { statsUpdating } from '../utils/repositoryStats'
 import { useAuth } from '../hooks/useAuth'
+import PassphraseUnsavedSection from '../components/repositories/PassphraseUnsavedSection'
+import type { RepositoryWizardInitialValues } from '../components/RepositoryWizard'
+import { IMPORT_PREFILL_PARAMS, parseImportPrefill } from './repositories-page/importPrefill'
 import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { useOperationEvents } from '../hooks/useOperationEvents'
 import { usePlan } from '../hooks/usePlan'
@@ -163,6 +166,9 @@ export default function Repositories() {
   // Wizard state
   const [showWizard, setShowWizard] = useState(false)
   const [wizardMode, setWizardMode] = useState<'create' | 'edit' | 'import'>('create')
+  const [wizardInitialValues, setWizardInitialValues] = useState<
+    RepositoryWizardInitialValues | undefined
+  >(undefined)
   const [wizardRepository, setWizardRepository] = useState<Repository | null>(null)
 
   // Dialog states
@@ -956,7 +962,21 @@ export default function Repositories() {
   const closeWizard = () => {
     setShowWizard(false)
     setWizardRepository(null)
+    setWizardInitialValues(undefined)
   }
+
+  // The MCP import_repository hand-off link: open the import wizard prefilled,
+  // once, then drop the parameters so a reload does not reopen it.
+  const importPrefill = React.useMemo(() => parseImportPrefill(searchParams), [searchParams])
+  React.useEffect(() => {
+    if (!importPrefill) return
+    setWizardInitialValues(importPrefill)
+    openWizard('import')
+    const next = new URLSearchParams(searchParams)
+    IMPORT_PREFILL_PARAMS.forEach((key) => next.delete(key))
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importPrefill])
 
   const handleWizardSubmit = async (data: RepositoryData, keyfile?: File | null) => {
     try {
@@ -1104,6 +1124,8 @@ export default function Repositories() {
         canManageRepositoriesGlobally={canManageRepositoriesGlobally}
         onOpenWizard={openWizard}
       />
+
+      <PassphraseUnsavedSection repositories={repositories} />
 
       <RepositoriesToolbar
         isVisible={repositoriesLoading || repositories.length > 0}
@@ -1270,6 +1292,7 @@ export default function Repositories() {
         onClose={closeWizard}
         mode={wizardMode}
         repository={wizardRepository || undefined}
+        initialValues={wizardInitialValues}
         canUseRclone={canUseRclone}
         onSubmit={handleWizardSubmit}
       />

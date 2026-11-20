@@ -74,6 +74,36 @@ EXPECTED_TOOLS = {
     "discover_sources",
     "pause_background_work",
     "resume_background_work",
+    # Phase 4, Task 4
+    "create_repository",
+    "import_repository",
+    "update_repository",
+    "set_check_schedule",
+    "set_restore_check_schedule",
+    # Task 5
+    "generate_ssh_key",
+    "add_ssh_connection",
+    "update_ssh_connection",
+    "trust_host_key",
+    # Task 6
+    "create_backup_plan",
+    "update_backup_plan",
+    "set_backup_plan_enabled",
+    "create_schedule",
+    "update_schedule",
+    "set_schedule_enabled",
+    "duplicate_schedule",
+    # Task 7
+    "create_script",
+    "update_script",
+    "assign_script",
+    "update_notification_channel",
+    "update_rclone_remote",
+    "upgrade_agents",
+    # Task 8
+    "update_settings",
+    "update_user",
+    "create_user",
 }
 EM_DASH = "\u2014"
 READ_POST_ALLOWLIST = {"POST /api/schedule/validate-cron"}
@@ -92,6 +122,12 @@ FORBIDDEN_PREFIXES = (
     "/api/settings/mcp",
     "/api/system/licensing",
 )
+# Spec 5.9: secrets are a web UI action, never a tool's.
+FORBIDDEN_EXACT = {
+    "GET /api/repositories/{repo_id}/keyfile",
+    "POST /api/repositories/{repo_id}/passphrase/reveal",
+    "POST /api/repositories/{repo_id}/passphrase/acknowledge",
+}
 
 
 def _destructive(route: str) -> bool:
@@ -108,6 +144,8 @@ def _destructive(route: str) -> bool:
 
 def _forbidden(route: str) -> bool:
     path = route.split(" ", 1)[1]
+    if route in FORBIDDEN_EXACT:
+        return True
     return path.startswith(FORBIDDEN_PREFIXES) or "password" in path
 
 
@@ -123,6 +161,9 @@ def test_destructive_and_forbidden_checks_match():
     assert _forbidden("POST /api/settings/mcp/connections")
     assert _forbidden("POST /api/auth/change-password")
     assert not _forbidden("GET /api/settings/system")
+    assert _forbidden("GET /api/repositories/{repo_id}/keyfile")
+    assert _forbidden("POST /api/repositories/{repo_id}/passphrase/reveal")
+    assert _forbidden("POST /api/repositories/{repo_id}/passphrase/acknowledge")
 
 
 @pytest.mark.unit

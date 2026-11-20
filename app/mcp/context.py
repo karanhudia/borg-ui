@@ -30,3 +30,5 @@ class ToolContext:
     # Reports a percentage and a message on the call's own answer stream; a
     # no-op when the client sent no progressToken (spec 5.8).
     progress: Callable[[float, Optional[str]], Awaitable[None]] = _no_progress
+    # Where the user opens the web UI, for hand-off links (spec 5.9).
+    base_url: str = ""

@@ -231,6 +231,8 @@ ROUTE_ACCESS_REGISTRY: dict[tuple[str, str], AccessLevel] = {
     ("GET", "/api/repositories/{repo_id}/info"): "repository-scoped",
     ("GET", "/api/repositories/{repo_id}/keyfile"): "admin",
     ("POST", "/api/repositories/{repo_id}/keyfile"): "admin",
+    ("POST", "/api/repositories/{repo_id}/passphrase/acknowledge"): "admin",
+    ("POST", "/api/repositories/{repo_id}/passphrase/reveal"): "admin",
     ("POST", "/api/repositories/{repo_id}/permanent-delete"): "admin",
     ("POST", "/api/repositories/{repo_id}/prune"): "admin",
     ("GET", "/api/repositories/{repo_id}/prune-jobs"): "repository-scoped",

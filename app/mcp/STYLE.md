@@ -61,3 +61,20 @@ Ambiguous name
 Not allowed
   This connection has read access, and Back up now needs operate. You can
   change that under Settings > MCP.
+
+create_repository
+  ✓ Created *Photos* at /data/photos (repokey).
+
+  Borg UI generated its passphrase and stored it. It is not shown here,
+  so it never passes through the AI. Save it now: without it the backups
+  cannot be restored if Borg UI's database is lost.
+
+  Open https://borg.example/repositories?reveal=7 to reveal it once and
+  mark it saved.
+
+  Want me to set up a backup plan for it?
+
+Hand-off (a secret is needed)
+  To connect *Old photos*, open https://borg.example/repositories?import=1&...
+
+  Everything is filled in. Enter the passphrase there; it stays out of this chat.

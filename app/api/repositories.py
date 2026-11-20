@@ -1,5 +1,7 @@
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -61,7 +63,13 @@ from app.services.operations.repository_status import (
     storage_summaries,
 )
 from app.core.authorization import authorize_request
-from app.core.security import get_current_user, check_repo_access, require_any_role
+from app.core.security import (
+    check_repo_access,
+    get_current_user,
+    require_any_role,
+    require_browser_session,
+    verify_password,
+)
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import (
@@ -3660,6 +3668,7 @@ def get_repositories(
                 "schedule_timezone": schedule_summary["schedule_timezone"],
                 "next_run": schedule_summary["next_run"],
                 "has_keyfile": _offers_keyfile_download(db, repo, agents=page.agents),
+                "passphrase_unsaved": bool(repo.passphrase_unsaved),
                 "source_ssh_connection_id": repo.source_ssh_connection_id,
                 "borg_version": borg_major(repo),
             }
@@ -4863,6 +4872,7 @@ async def get_repository(
             "created_at": format_datetime(repository.created_at),
             "updated_at": format_datetime(repository.updated_at),
             "has_keyfile": _offers_keyfile_download(db, repository),
+            "passphrase_unsaved": bool(repository.passphrase_unsaved),
             "source_ssh_connection_id": repository.source_ssh_connection_id,
             "source_directories": _decode_json_list_field(
                 repository.source_directories
@@ -8052,3 +8062,96 @@ def get_restore_check_schedule(
             status_code=500,
             detail={"key": "backend.errors.repo.failedToGetRestoreCheckSchedule"},
         )
+
+
+class PassphraseRevealRequest(BaseModel):
+    # The current password for local accounts; the repository's exact name for
+    # accounts without one (OIDC, proxy auth).
+    password: Optional[str] = None
+    repository_name: Optional[str] = None
+
+
+def _flagged_repository(db: Session, repo_id: int) -> Repository:
+    repository = db.query(Repository).filter(Repository.id == repo_id).first()
+    if not repository:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"}
+        )
+    return repository
+
+
+def _reauthenticated(user: User, repository: Repository, body) -> bool:
+    # Proxy-auth and single sign-on users have no password to type; they type
+    # the repository's name, as the web UI asks them to.
+    if (
+        not settings.disable_authentication
+        and user.auth_source == "local"
+        and user.password_hash
+    ):
+        return bool(body.password) and verify_password(
+            body.password, user.password_hash
+        )
+    return body.repository_name is not None and secrets.compare_digest(
+        body.repository_name.encode(), (repository.name or "").encode()
+    )
+
+
+@router.post("/{repo_id}/passphrase/reveal")
+async def reveal_generated_passphrase(
+    repo_id: int,
+    body: PassphraseRevealRequest,
+    current_user: User = Depends(require_browser_session),
+    db: Session = Depends(get_db),
+):
+    """Show a passphrase Borg UI generated, until the user says it is saved.
+
+    Browser sessions only, after re-authentication (spec 2026-11-14-mcp-server,
+    5.9). Revealing does not clear the flag; acknowledging does.
+    """
+    repository = _flagged_repository(db, repo_id)
+    if not repository.passphrase_unsaved:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.repo.passphraseAlreadySaved"},
+        )
+    # bcrypt is slow on purpose; keep it off the event loop.
+    if not await run_in_threadpool(_reauthenticated, current_user, repository, body):
+        raise HTTPException(
+            status_code=403, detail={"key": "backend.errors.repo.reauthFailed"}
+        )
+    # An acknowledgement may have landed while bcrypt ran: end this
+    # transaction so the re-read sees it, and never show a saved passphrase.
+    db.rollback()
+    db.refresh(repository)
+    if not repository.passphrase_unsaved:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.repo.passphraseAlreadySaved"},
+        )
+    logger.warning(
+        "passphrase revealed", repository_id=repository.id, user_id=current_user.id
+    )
+    return {
+        "passphrase": repository.passphrase,
+        "encryption": repository.encryption,
+        "has_keyfile": bool(repository.has_keyfile),
+    }
+
+
+@router.post("/{repo_id}/passphrase/acknowledge", status_code=204)
+async def acknowledge_generated_passphrase(
+    repo_id: int,
+    current_user: User = Depends(require_browser_session),
+    db: Session = Depends(get_db),
+):
+    """The user saved the generated passphrase; never show it again."""
+    repository = _flagged_repository(db, repo_id)
+    if repository.passphrase_unsaved:
+        repository.passphrase_unsaved = False
+        db.commit()
+        logger.info(
+            "generated passphrase acknowledged",
+            repository_id=repository.id,
+            user_id=current_user.id,
+        )
+    return Response(status_code=204)

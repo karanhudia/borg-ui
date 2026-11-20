@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { Navigate } from 'react-router-dom'
+import {
+  DEPLOY_PREFILL_PARAMS,
+  parseDeployPrefill,
+} from './ssh-connections-single-key/deployPrefill'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '@mui/material'
@@ -69,6 +73,19 @@ export default function SSHConnectionsSingleKey() {
   const [redeployPassword, setRedeployPassword] = useState('')
   const [importForm, setImportForm] = useState(createImportForm)
   const [connectionForm, setConnectionForm] = useState(createConnectionForm)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // The MCP add_ssh_connection hand-off link: open the deploy dialog with the
+  // server filled in, once, then drop the parameters.
+  useEffect(() => {
+    const prefill = parseDeployPrefill(searchParams)
+    if (!prefill) return
+    setConnectionForm({ ...createConnectionForm(), ...prefill })
+    setDeployDialogOpen(true)
+    const next = new URLSearchParams(searchParams)
+    DEPLOY_PREFILL_PARAMS.forEach((key) => next.delete(key))
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
   const [testConnectionForm, setTestConnectionForm] = useState(createTestConnectionForm)
   const [editConnectionForm, setEditConnectionForm] = useState(createEditConnectionForm)
   const [connectionHostError, setConnectionHostError] = useState<string>()
