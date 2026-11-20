@@ -184,7 +184,7 @@ UI's own state with it. Every snapshot of that plan contains:
 | --- | --- |
 | `borg-ui-db.sqlite` | A consistent copy of the database, taken with SQLite's backup API. The live `borg.db`, `-wal` and `-shm` files are never backed up. |
 | `config.export` | A borgmatic-compatible export of repositories and schedules |
-| `.secret_key` | Needed to decrypt the SSH keys and script secrets stored in the database |
+| `secret-key` | The secret key in use when the snapshot was taken (`SECRET_KEY` if set, else the `.secret_key` file). It decrypts the SSH keys and script secrets in the database; a restore puts it back as `.secret_key`, or set it as `SECRET_KEY` |
 | `ssh_keys/` | The SSH keys Borg UI uses |
 | `borg_keys/` | Keyfiles of repositories that use keyfile encryption |
 | `manifest.json` | The Borg UI version and database revision that made the snapshot |

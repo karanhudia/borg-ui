@@ -337,6 +337,12 @@ Borg UI also prepares `/var/backups/borg-ui` on the host (through the `/`
 mount at `/local`) for the snapshots of this machine, outside its own data
 volume, so removing the volume does not take the snapshots with it.
 
+That needs the host's `/` mounted (the default `LOCAL_STORAGE_PATH`) and
+writable there. With a partial mount such as `LOCAL_STORAGE_PATH=/mnt/usb-drive`,
+or a read-only one, Borg UI keeps the snapshots in `/data/this-machine` inside
+its data volume instead, and removing the volume removes them too. Add a copy
+on another disk, a NAS or the cloud to cover that.
+
 ### Rootless Podman
 
 Rootless Podman maps container users differently from Docker. In a typical

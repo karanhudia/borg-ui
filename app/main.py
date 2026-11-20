@@ -354,9 +354,6 @@ mount_mcp(app)
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup"""
-    from app.services.self_backup import clear_staging_at_startup
-
-    clear_staging_at_startup()
     logger.info("Starting Borg UI")
     # Sync handlers run in anyio's threadpool (default 40 tokens). Cap it at the
     # DB pool size so a burst queues for a thread, not for a connection.
@@ -650,6 +647,12 @@ def _recover_interrupted_work() -> None:
     """Startup sweeps of rows a restart left behind that the runner's own
     recovery does not cover. Called by the runner once it holds its lease, so
     a process being replaced keeps its work."""
+    from app.services.self_backup import clear_staging_at_startup
+
+    # A This machine run a restart cut short leaves its database copy behind.
+    # Here, under the lease: a run's staging is written only once its backup
+    # holds a slot, so a process being replaced keeps its own.
+    clear_staging_at_startup()
     from app.database.database import SessionLocal
     from app.services.backup_plan_execution_service import (
         backup_plan_execution_service,

@@ -6459,7 +6459,8 @@
       },
       "thisMachine": {
         "confirmDelete": "Questo piano o repository protegge questa macchina e Borg UI stesso. Conferma per eliminarlo comunque.",
-        "adminRequired": "Solo un amministratore può cambiare ciò che il piano Questa macchina salva."
+        "adminRequired": "Solo un amministratore può cambiare ciò che il piano Questa macchina salva.",
+        "setupInProgress": "La protezione di questa macchina è già in configurazione. Aggiorna tra un momento."
       }
     },
     "success": {

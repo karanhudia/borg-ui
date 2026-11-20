@@ -6459,7 +6459,8 @@
       },
       "thisMachine": {
         "confirmDelete": "Dieser Plan oder dieses Repository schützt diesen Rechner und Borg UI selbst. Bestätige, um es trotzdem zu löschen.",
-        "adminRequired": "Nur ein Admin kann ändern, was der Plan „Dieser Rechner“ sichert."
+        "adminRequired": "Nur ein Admin kann ändern, was der Plan „Dieser Rechner“ sichert.",
+        "setupInProgress": "Der Schutz für diesen Rechner wird bereits eingerichtet. Lade die Seite gleich neu."
       }
     },
     "success": {

@@ -342,3 +342,162 @@ def test_a_collector_that_raises_anything_is_skipped(tmp_path):
 
     with patch.object(sb, "_REBUILD_COLLECTORS", (("broken", broken), ("fine", fine))):
         assert sb.collect_rebuild_inputs(tmp_path, tmp_path) == ["fine"]
+
+
+# --- PR #1587 review ---
+
+
+@pytest.mark.unit
+def test_root_only_source_roots_are_kept(tmp_path):
+    host = tmp_path / "local"
+    (host / "etc").mkdir(parents=True)
+    real_is_dir = Path.is_dir
+
+    def is_dir(self):
+        if self.name == "volumes":
+            raise PermissionError(13, "Permission denied", str(self))
+        return real_is_dir(self)
+
+    with patch.object(Path, "is_dir", is_dir):
+        sources = tm.source_directories(host)
+    assert str(host / "var/lib/docker/volumes") in sources
+
+
+@pytest.mark.unit
+def test_read_all_backups_skip_the_source_existence_preflight(tmp_path):
+    from app.services.backup_service import backup_service
+
+    missing = str(tmp_path / "behind-root-only/volumes")
+    backup_service._validate_local_source_paths_exist([missing], read_all=True)
+    with pytest.raises(Exception):
+        backup_service._validate_local_source_paths_exist([missing])
+
+
+@pytest.mark.unit
+def test_only_admins_update_a_system_repository(
+    test_client, operator_headers, test_db, operator_user
+):
+    operator_user.all_repositories_role = "operator"
+    repo = Repository(
+        name="This machine (local)",
+        path="/backups/tm",
+        encryption="none",
+        repository_type="local",
+        mode="full",
+        system_role=tm.THIS_MACHINE_ROLE,
+    )
+    test_db.add(repo)
+    test_db.commit()
+    response = test_client.put(
+        f"/api/repositories/{repo.id}",
+        json={"custom_flags": "--pattern R /local/root"},
+        headers=operator_headers,
+    )
+    # Already admin-only for every repository (ENDPOINT_POLICIES); keep it so.
+    assert response.status_code == 403
+    assert response.json()["detail"]["key"] == "backend.errors.repo.adminAccessRequired"
+
+
+def _host_root(tmp_path):
+    host = tmp_path / "local"
+    (host / "etc").mkdir(parents=True, exist_ok=True)
+    (host / "etc/os-release").write_text("ID=debian\n")
+    return host
+
+
+@pytest.mark.unit
+async def test_setup_adopts_an_unflagged_plan_left_by_a_crash(
+    test_db, admin_user, tmp_path
+):
+    from unittest.mock import AsyncMock
+
+    host = _host_root(tmp_path)
+    with (
+        patch(
+            "app.api.repositories.initialize_borg_repository",
+            new=AsyncMock(return_value={"success": True}),
+        ),
+        patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        patch.object(tm, "_host_root", return_value=host),
+    ):
+        first = await tm.setup_this_machine(test_db, admin_user)
+        plan = test_db.get(BackupPlan, first.plan_id)
+        plan.system_role = None  # the crash: role never committed
+        test_db.commit()
+        again = await tm.setup_this_machine(test_db, admin_user)
+    assert again.plan_id == first.plan_id
+    assert test_db.get(BackupPlan, first.plan_id).system_role == tm.THIS_MACHINE_ROLE
+
+
+@pytest.mark.unit
+async def test_setup_retries_a_missing_restore_check(test_db, admin_user, tmp_path):
+    from unittest.mock import AsyncMock
+
+    host = _host_root(tmp_path)
+    with (
+        patch(
+            "app.api.repositories.initialize_borg_repository",
+            new=AsyncMock(return_value={"success": True}),
+        ),
+        patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        patch.object(tm, "_host_root", return_value=host),
+    ):
+        first = await tm.setup_this_machine(test_db, admin_user)
+        repo = test_db.get(Repository, first.repository_id)
+        repo.restore_check_cron_expression = None
+        test_db.query(BackupPlan).delete()
+        test_db.commit()
+        await tm.setup_this_machine(test_db, admin_user)
+    test_db.expire_all()
+    assert test_db.get(Repository, first.repository_id).restore_check_cron_expression
+
+
+@pytest.mark.unit
+async def test_setup_reports_the_reused_repository_location(
+    test_db, admin_user, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(tm.settings, "data_dir", str(tmp_path / "data"))
+    test_db.add(
+        Repository(
+            name="This machine (local)",
+            path=str(tmp_path / "data" / "this-machine"),
+            encryption="none",
+            repository_type="local",
+            mode="full",
+            system_role=tm.THIS_MACHINE_ROLE,
+            restore_check_cron_expression="0 4 * * 0",
+        )
+    )
+    test_db.commit()
+    host = _host_root(tmp_path)
+    with patch.object(tm, "_host_root", return_value=host):
+        result = await tm.setup_this_machine(test_db, admin_user)
+    assert result.in_data_volume is True
+
+
+@pytest.mark.unit
+async def test_concurrent_setup_conflict_is_not_a_500(test_db, admin_user, tmp_path):
+    from sqlalchemy.exc import IntegrityError
+
+    host = _host_root(tmp_path)
+    with (
+        patch.object(tm, "_host_root", return_value=host),
+        patch.object(
+            tm, "_create_repository", side_effect=IntegrityError("x", {}, Exception())
+        ),
+    ):
+        with pytest.raises(tm.HTTPException) as exc:
+            await tm.setup_this_machine(test_db, admin_user)
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.unit
+def test_staging_is_cleared_in_lease_protected_recovery():
+    import inspect
+
+    from app import main
+
+    assert "clear_staging_at_startup" in inspect.getsource(
+        main._recover_interrupted_work
+    )
+    assert "clear_staging_at_startup" not in inspect.getsource(main.startup_event)

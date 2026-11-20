@@ -496,9 +496,17 @@ install_borg_binary() {
 # the forwarder uses it only for This machine backups. Kept only if the
 # service user can run it (a capability outside the bounding set makes exec
 # fail), and recorded in a marker the app reads.
+# Every read-all copy and the marker go first, whatever happens next: a
+# service-user change, a root service or a failed probe must not leave a copy
+# another group can run.
+revoke_read_all() {
+  rm -f "${PREFIX}/read-all"
+  rm -f "${PREFIX}"/borg/*/borg-read /usr/bin/borg-read
+}
+
 grant_read_all() {
   local binary="$1" copy="$1-read" marker="${PREFIX}/read-all"
-  rm -f "${marker}"
+  revoke_read_all
   [[ "${SERVICE_USER}" != "root" ]] || return 0
   command -v setcap >/dev/null 2>&1 || { warn "setcap missing; Borg reads as ${SERVICE_USER} only"; return 0; }
   # A copy, so every other Borg call keeps the service user's own access.
@@ -534,6 +542,8 @@ grant_read_all() {
 }
 
 install_borg1() {
+  # Before choosing a Borg: the package fallback below never grants read-all.
+  revoke_read_all
   if install_borg_binary 1; then
     # Borg UI resolves Borg 1 as plain "borg" on PATH.
     write_forwarder borg "${BORG_BINARY}"

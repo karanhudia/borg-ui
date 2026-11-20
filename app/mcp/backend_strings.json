@@ -550,7 +550,8 @@
     },
     "thisMachine": {
       "adminRequired": "Only an admin can change what the This machine plan backs up.",
-      "confirmDelete": "This is the plan or repository that protects this machine and Borg UI itself. Confirm to delete it anyway."
+      "confirmDelete": "This is the plan or repository that protects this machine and Borg UI itself. Confirm to delete it anyway.",
+      "setupInProgress": "Protection for this machine is already being set up. Refresh in a moment."
     }
   },
   "messages": {

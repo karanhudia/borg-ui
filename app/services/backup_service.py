@@ -1125,8 +1125,16 @@ class BackupService:
                 cleanup_temp_key_file(key_file)
 
     def _validate_local_source_paths_exist(
-        self, source_paths: list[str], skip_paths: set[str] | None = None
+        self,
+        source_paths: list[str],
+        skip_paths: set[str] | None = None,
+        read_all: bool = False,
     ) -> None:
+        if read_all:
+            # This machine backups: the app user cannot see under root-only
+            # folders (Docker keeps /var/lib/docker at 0710), but Borg with
+            # read-all can, and reports anything truly missing as a warning.
+            return
         skip_paths = skip_paths or set()
         missing_paths = [
             source_path
@@ -2297,7 +2305,9 @@ class BackupService:
                         )
 
             self._validate_local_source_paths_exist(
-                source_paths_for_existence_check, skip_paths=snapshot_source_paths
+                source_paths_for_existence_check,
+                skip_paths=snapshot_source_paths,
+                read_all=read_all,
             )
 
             if repo_record and repo_record.id:

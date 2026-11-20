@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -132,9 +133,18 @@ def _writable(path: Path) -> bool:
     return False
 
 
+def _maybe_dir(path: Path) -> bool:
+    """A root-only parent (Docker keeps /var/lib/docker at 0710) hides the
+    folder from the app user, while Borg with read-all can still reach it."""
+    try:
+        return path.is_dir()
+    except PermissionError:
+        return True
+
+
 def source_directories(host_root: Path) -> list[str]:
     return [
-        str(host_root / root) for root in SOURCE_ROOTS if (host_root / root).is_dir()
+        str(host_root / root) for root in SOURCE_ROOTS if _maybe_dir(host_root / root)
     ]
 
 
@@ -236,11 +246,7 @@ def plan_sources() -> tuple[list[str], list[str], Path, bool]:
 
 
 async def _create_repository(db: Session, user: User, path: Path) -> Repository:
-    from app.api.repositories import (
-        RepositoryCreate,
-        create_repository,
-        update_restore_check_schedule,
-    )
+    from app.api.repositories import RepositoryCreate, create_repository
 
     response = await create_repository(
         RepositoryCreate(
@@ -257,13 +263,6 @@ async def _create_repository(db: Session, user: User, path: Path) -> Repository:
     repository = db.get(Repository, response["repository"]["id"])
     repository.system_role = THIS_MACHINE_ROLE
     db.commit()
-    await update_restore_check_schedule(
-        repository.id,
-        {"cron_expression": RESTORE_CHECK_CRON, "timezone": "UTC"},
-        user,
-        db,
-    )
-    db.refresh(repository)
     return repository
 
 
@@ -325,32 +324,98 @@ def _linked_repository(db: Session, plan: BackupPlan) -> Optional[Repository]:
     return db.get(Repository, link.repository_id) if link else None
 
 
+def _adopt_repository(db: Session, repo_path: Path) -> Optional[Repository]:
+    """A repository an earlier setup created but did not get to flag: same
+    name and the same path setup would use, nothing else."""
+    repository = (
+        db.query(Repository)
+        .filter(
+            Repository.system_role.is_(None),
+            Repository.name == REPOSITORY_NAME,
+            Repository.path == str(repo_path),
+        )
+        .first()
+    )
+    if repository is not None:
+        repository.system_role = THIS_MACHINE_ROLE
+        db.commit()
+    return repository
+
+
+def _adopt_plan(db: Session, repository: Repository) -> Optional[BackupPlan]:
+    """A plan an earlier setup created but did not get to flag: same name and
+    linked to the system repository, nothing else."""
+    plan = (
+        db.query(BackupPlan)
+        .join(
+            BackupPlanRepository, BackupPlanRepository.backup_plan_id == BackupPlan.id
+        )
+        .filter(
+            BackupPlan.system_role.is_(None),
+            BackupPlan.name == PLAN_NAME,
+            BackupPlanRepository.repository_id == repository.id,
+        )
+        .first()
+    )
+    if plan is not None:
+        plan.system_role = THIS_MACHINE_ROLE
+        db.commit()
+    return plan
+
+
+async def _ensure_restore_check(
+    db: Session, user: User, repository: Repository
+) -> None:
+    if repository.restore_check_cron_expression:
+        return
+    from app.api.repositories import update_restore_check_schedule
+
+    await update_restore_check_schedule(
+        repository.id,
+        {"cron_expression": RESTORE_CHECK_CRON, "timezone": "UTC"},
+        user,
+        db,
+    )
+    db.refresh(repository)
+
+
 async def setup_this_machine(db: Session, user: User) -> SetupResult:
     """Create the "This machine" plan and repository. Safe to call again: an
-    existing setup is returned as it is, and a repository left by a setup that
-    failed half way is reused."""
-    sources, excludes, repo_path, in_data_volume = plan_sources()
+    existing setup is returned as it is, and whatever a setup that stopped
+    half way left behind is picked up and finished."""
+    sources, excludes, repo_path, _ = plan_sources()
     host_root = _host_root()
     skipped = (
-        [root for root in SOURCE_ROOTS if not (host_root / root).is_dir()]
+        [root for root in SOURCE_ROOTS if not _maybe_dir(host_root / root)]
         if host_root is not None
         else list(SOURCE_ROOTS)
     )
-    plan = system_plan(db)
-    if plan is not None:
-        repository = _linked_repository(db, plan)
-        return SetupResult(
-            plan_id=plan.id,
-            repository_id=repository.id if repository else 0,
-            in_data_volume=in_data_volume,
-            skipped_roots=skipped,
+    try:
+        plan = system_plan(db)
+        repository = (
+            system_repository(db)
+            or (plan and _linked_repository(db, plan))
+            or _adopt_repository(db, repo_path)
+            or await _create_repository(db, user, repo_path)
         )
-    repository = system_repository(db) or await _create_repository(db, user, repo_path)
-    plan = await _create_plan(db, user, repository, sources, excludes)
+        await _ensure_restore_check(db, user, repository)
+        plan = (
+            plan
+            or _adopt_plan(db, repository)
+            or await _create_plan(db, user, repository, sources, excludes)
+        )
+    except IntegrityError:
+        # Another setup request won the race for the one system plan or
+        # repository.
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.thisMachine.setupInProgress"},
+        )
     return SetupResult(
         plan_id=plan.id,
         repository_id=repository.id,
-        in_data_volume=in_data_volume,
+        in_data_volume=repository_in_data_volume(repository),
         skipped_roots=skipped,
     )
 
