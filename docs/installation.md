@@ -313,6 +313,28 @@ LOCAL_STORAGE_PATH=/mnt/usb-drive
 TZ=America/Chicago
 ```
 
+### Reading every file on the host
+
+To protect the whole machine, Borg needs to read files only root can read,
+such as `/etc/shadow`, other users' home folders and many container volumes.
+Borg UI keeps running as `PUID`, and only Borg gets that one permission. The
+default compose file asks for it:
+
+```yaml
+cap_add:
+  - DAC_READ_SEARCH
+```
+
+`privileged: true` already includes it. Without either, Borg UI starts as
+before and backs up what `PUID` can read; the startup log says
+`Borg reads host files as the app user only`. With it, the log says
+`Borg can read every host file`. The permission lets Borg read any file. It
+does not let Borg UI write anywhere `PUID` cannot.
+
+Borg UI also prepares `/var/backups/borg-ui` on the host (through the `/`
+mount at `/local`) for the snapshots of this machine, outside its own data
+volume, so removing the volume does not take the snapshots with it.
+
 ### Rootless Podman
 
 Rootless Podman maps container users differently from Docker. In a typical
@@ -546,6 +568,11 @@ directories, so an unprivileged default would silently skip most of the host.
 Pass `--service-user borg` for a restricted install. Borg UI will then only be
 able to back up what that user can read, which is the right trade when the host
 only backs up one application's data.
+
+With `--service-user`, the installer gives the pinned Borg 1 binary permission
+to read every file (`CAP_DAC_READ_SEARCH`), and keeps it only if the service
+user can still run Borg afterwards. The service itself stays unprivileged.
+Borg 2 and the distribution's `borgbackup` package do not get it.
 
 ### Configuration
 
