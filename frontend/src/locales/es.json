@@ -6430,7 +6430,8 @@
         "betaDisabled": "MCP es una función experimental. Un administrador puede activarla en Configuración > Avanzado > Beta."
       },
       "thisMachine": {
-        "confirmDelete": "Este plan o repositorio protege este equipo y el propio Borg UI. Confirma para eliminarlo de todos modos."
+        "confirmDelete": "Este plan o repositorio protege este equipo y el propio Borg UI. Confirma para eliminarlo de todos modos.",
+        "adminRequired": "Solo un administrador puede configurar la protección de este equipo."
       }
     },
     "success": {

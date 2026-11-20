@@ -6430,7 +6430,8 @@
         "betaDisabled": "MCP ist eine experimentelle Funktion. Ein Administrator kann sie unter Einstellungen > Erweitert > Beta einschalten."
       },
       "thisMachine": {
-        "confirmDelete": "Dieser Plan oder dieses Repository schützt diesen Rechner und Borg UI selbst. Bestätige, um es trotzdem zu löschen."
+        "confirmDelete": "Dieser Plan oder dieses Repository schützt diesen Rechner und Borg UI selbst. Bestätige, um es trotzdem zu löschen.",
+        "adminRequired": "Nur ein Admin kann den Schutz für diesen Rechner einrichten."
       }
     },
     "success": {

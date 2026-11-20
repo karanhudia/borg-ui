@@ -3,11 +3,61 @@
 Spec: docs/engineering/specs/2026-11-20-this-machine.md
 """
 
+import fnmatch
+import os
+import secrets
+import time
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.database.models import BackupPlan, BackupPlanRepository, Repository, User
 
 THIS_MACHINE_ROLE = "this_machine"
+PLAN_NAME = "This machine"
+REPOSITORY_NAME = "This machine (local)"
+HOST_SNAPSHOT_DIR = "var/backups/borg-ui"
+DATA_VOLUME_SNAPSHOT_DIR = "this-machine"
+SCHEDULE_CRON = "0 * * * *"
+RESTORE_CHECK_CRON = "0 4 * * 0"
+SOURCE_ROOTS = (
+    "etc",
+    "home",
+    "root",
+    "opt",
+    "srv",
+    "var/lib/docker/volumes",
+    "usr/local/etc",
+)
+CACHE_EXCLUDES = (
+    "**/.cache",
+    "**/node_modules/.cache",
+    "**/Cache",
+    "**/.local/share/Trash",
+    "**/tmp",
+)
+LIVE_DATABASE_EXCLUDES = ("**/borg.db", "**/borg.db-wal", "**/borg.db-shm")
+HOST_EXCLUDES = ("var/lib/docker/overlay2", "var/lib/docker/image")
+COMPACT_INTERVAL = timedelta(hours=24)
+
+
+@dataclass(frozen=True)
+class SetupResult:
+    plan_id: int
+    repository_id: int
+    in_data_volume: bool
+    skipped_roots: list[str]
+
+
+@dataclass(frozen=True)
+class SizeEstimate:
+    bytes: int
+    complete: bool
 
 
 def require_system_delete_confirmed(
@@ -20,3 +70,259 @@ def require_system_delete_confirmed(
             status_code=409,
             detail={"key": "backend.errors.thisMachine.confirmDelete"},
         )
+
+
+def _same_inode(a: Path, b: Path) -> bool:
+    try:
+        sa, sb = a.stat(), b.stat()
+    except OSError:
+        return False
+    return (sa.st_dev, sa.st_ino) == (sb.st_dev, sb.st_ino)
+
+
+def find_host_root(
+    mount_points: list[str],
+    container_root: Path = Path("/"),
+    in_docker: Optional[bool] = None,
+) -> Optional[Path]:
+    """The folder where the host's own `/` is visible to Borg UI, if any.
+
+    Native installs run on the host, so it is `/`. In Docker it is the first
+    configured mount point that looks like a Linux root and is not the
+    container's own root (the default compose file mounts host `/` at
+    `/local`)."""
+    if in_docker is None:
+        in_docker = Path("/.dockerenv").exists()
+    if not in_docker:
+        return Path("/")
+    for mount in mount_points:
+        candidate = Path(mount)
+        if (candidate / "etc" / "os-release").is_file() and not _same_inode(
+            candidate, container_root
+        ):
+            return candidate
+    return None
+
+
+def _host_root() -> Optional[Path]:
+    return find_host_root(settings.get_local_mount_points())
+
+
+def snapshot_location(host_root: Optional[Path], data_dir: Path) -> tuple[Path, bool]:
+    """Where "This machine (local)" lives, and whether that is inside the Borg
+    UI data volume (so it would be lost with the volume)."""
+    if host_root is not None:
+        return host_root / HOST_SNAPSHOT_DIR, False
+    return data_dir / DATA_VOLUME_SNAPSHOT_DIR, True
+
+
+def source_directories(host_root: Path) -> list[str]:
+    return [
+        str(host_root / root) for root in SOURCE_ROOTS if (host_root / root).is_dir()
+    ]
+
+
+def exclude_patterns(host_root: Path, repo_path: Path, data_dir: Path) -> list[str]:
+    patterns = [*CACHE_EXCLUDES, *LIVE_DATABASE_EXCLUDES]
+    patterns += [str(host_root / path) for path in HOST_EXCLUDES]
+    patterns.append(str(repo_path))
+    # ponytail: a data volume under /var/lib/docker/volumes shows the fallback
+    # repository at a host path we cannot predict, so exclude it by name.
+    patterns.append(f"**/{DATA_VOLUME_SNAPSHOT_DIR}")
+    return patterns
+
+
+def compact_due(
+    system_role: Optional[str], last_compact: Optional[datetime], now: datetime
+) -> bool:
+    """User plans compact after every run, as before. The system plan runs
+    hourly, so it compacts at most once a day."""
+    if not system_role or last_compact is None:
+        return True
+    return now - last_compact >= COMPACT_INTERVAL
+
+
+def _excluded(path: str, patterns: list[str]) -> bool:
+    return any(path == p or fnmatch.fnmatch(path, p) for p in patterns)
+
+
+def estimate_size(
+    paths: list[str], excludes: list[str], time_cap_s: float = 5.0
+) -> SizeEstimate:
+    """A fast walk for the first-start screen. Stops at the time cap and says
+    the number is a lower bound."""
+    deadline = time.monotonic() + time_cap_s
+    total = 0
+    for root in paths:
+        for dirpath, dirnames, filenames in os.walk(root, onerror=lambda _e: None):
+            if time.monotonic() > deadline:
+                return SizeEstimate(bytes=total, complete=False)
+            dirnames[:] = [
+                d for d in dirnames if not _excluded(os.path.join(dirpath, d), excludes)
+            ]
+            for name in filenames:
+                full = os.path.join(dirpath, name)
+                if _excluded(full, excludes):
+                    continue
+                try:
+                    total += os.lstat(full).st_size
+                except OSError:
+                    continue
+    return SizeEstimate(bytes=total, complete=True)
+
+
+def system_plan(db: Session) -> Optional[BackupPlan]:
+    return (
+        db.query(BackupPlan).filter(BackupPlan.system_role == THIS_MACHINE_ROLE).first()
+    )
+
+
+def system_repository(db: Session) -> Optional[Repository]:
+    return (
+        db.query(Repository).filter(Repository.system_role == THIS_MACHINE_ROLE).first()
+    )
+
+
+def plan_sources() -> tuple[list[str], list[str], Path, bool]:
+    """Source folders, excludes, repository path and data-volume flag for the
+    current host."""
+    host_root = _host_root()
+    data_dir = Path(settings.data_dir)
+    repo_path, in_data_volume = snapshot_location(host_root, data_dir)
+    if host_root is None:
+        # Without the host mounted, Borg UI can only protect itself: the plan
+        # backs up the self-backup folder the pre-backup step fills.
+        self_backup = data_dir / "self-backup"
+        self_backup.mkdir(parents=True, exist_ok=True)
+        return (
+            [str(self_backup)],
+            [*LIVE_DATABASE_EXCLUDES, str(repo_path)],
+            repo_path,
+            True,
+        )
+    return (
+        source_directories(host_root),
+        exclude_patterns(host_root, repo_path, data_dir),
+        repo_path,
+        in_data_volume,
+    )
+
+
+async def _create_repository(db: Session, user: User, path: Path) -> Repository:
+    from app.api.repositories import (
+        RepositoryCreate,
+        create_repository,
+        update_restore_check_schedule,
+    )
+
+    response = await create_repository(
+        RepositoryCreate(
+            name=REPOSITORY_NAME,
+            path=str(path),
+            borg_version=1,
+            encryption="repokey-blake2",
+            compression="lz4",
+            passphrase=secrets.token_urlsafe(32),
+        ),
+        user,
+        db,
+    )
+    repository = db.get(Repository, response["repository"]["id"])
+    repository.system_role = THIS_MACHINE_ROLE
+    db.commit()
+    await update_restore_check_schedule(
+        repository.id,
+        {"cron_expression": RESTORE_CHECK_CRON, "timezone": "UTC"},
+        user,
+        db,
+    )
+    db.refresh(repository)
+    return repository
+
+
+async def _create_plan(
+    db: Session,
+    user: User,
+    repository: Repository,
+    sources: list[str],
+    excludes: list[str],
+) -> BackupPlan:
+    from app.api.backup_plans import (
+        BackupPlanPayload,
+        BackupPlanRepositoryPayload,
+        create_backup_plan,
+    )
+
+    body = await create_backup_plan(
+        BackupPlanPayload(
+            name=PLAN_NAME,
+            description="Protects this machine and Borg UI itself.",
+            source_directories=sources,
+            exclude_patterns=excludes,
+            archive_name_template="this-machine-{now}",
+            schedule_enabled=True,
+            cron_expression=SCHEDULE_CRON,
+            timezone="UTC",
+            run_prune_after=True,
+            run_compact_after=True,
+            prune_keep_hourly=24,
+            prune_keep_daily=7,
+            prune_keep_weekly=4,
+            prune_keep_monthly=6,
+            prune_keep_yearly=0,
+            repositories=[
+                BackupPlanRepositoryPayload(
+                    repository_id=repository.id, execution_order=1
+                )
+            ],
+        ),
+        user,
+        db,
+    )
+    plan = db.get(BackupPlan, body["id"])
+    plan.system_role = THIS_MACHINE_ROLE
+    db.commit()
+    return plan
+
+
+def _linked_repository(db: Session, plan: BackupPlan) -> Optional[Repository]:
+    repository = system_repository(db)
+    if repository is not None:
+        return repository
+    link = (
+        db.query(BackupPlanRepository)
+        .filter(BackupPlanRepository.backup_plan_id == plan.id)
+        .order_by(BackupPlanRepository.execution_order)
+        .first()
+    )
+    return db.get(Repository, link.repository_id) if link else None
+
+
+async def setup_this_machine(db: Session, user: User) -> SetupResult:
+    """Create the "This machine" plan and repository. Safe to call again: an
+    existing setup is returned as it is, and a repository left by a setup that
+    failed half way is reused."""
+    sources, excludes, repo_path, in_data_volume = plan_sources()
+    host_root = _host_root()
+    skipped = (
+        [root for root in SOURCE_ROOTS if not (host_root / root).is_dir()]
+        if host_root is not None
+        else list(SOURCE_ROOTS)
+    )
+    plan = system_plan(db)
+    if plan is not None:
+        repository = _linked_repository(db, plan)
+        return SetupResult(
+            plan_id=plan.id,
+            repository_id=repository.id if repository else 0,
+            in_data_volume=in_data_volume,
+            skipped_roots=skipped,
+        )
+    repository = system_repository(db) or await _create_repository(db, user, repo_path)
+    plan = await _create_plan(db, user, repository, sources, excludes)
+    return SetupResult(
+        plan_id=plan.id,
+        repository_id=repository.id,
+        in_data_volume=in_data_volume,
+        skipped_roots=skipped,
+    )

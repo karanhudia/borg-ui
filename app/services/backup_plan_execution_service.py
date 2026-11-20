@@ -52,6 +52,7 @@ from app.services.operations.maintenance_start import (
     finish_inline_maintenance,
     start_inline_maintenance,
 )
+from app.services.this_machine import compact_due
 from app.services.backup_plan_policy import (
     BORG2_FEATURE,
     PLAN_REQUIRED_SKIP_REASON,
@@ -194,6 +195,7 @@ class PlanRunContext:
     date: str
     time_str: str
     unix_timestamp: str
+    system_role: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -2174,6 +2176,7 @@ class BackupPlanExecutionService:
             run_prune_after=bool(plan.run_prune_after),
             prune_scope_to_plan=bool(plan.prune_scope_to_plan),
             run_compact_after=bool(plan.run_compact_after),
+            system_role=plan.system_role,
             run_check_after=bool(plan.run_check_after),
             run_restore_check_after=bool(plan.run_restore_check_after),
             check_max_duration=plan.check_max_duration,
@@ -3327,7 +3330,9 @@ class BackupPlanExecutionService:
                 return "cancelled"
             record_step("prune", prune_job)
 
-        if context.run_compact_after:
+        if context.run_compact_after and compact_due(
+            context.system_role, repo.last_compact, datetime.utcnow()
+        ):
             if self._is_run_cancelled(run_id):
                 return "cancelled"
             compact_job = start_inline_maintenance(

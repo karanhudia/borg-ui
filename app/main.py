@@ -45,6 +45,7 @@ from app.api import (
     managed_machines,
     agents,
     source_discovery,
+    this_machine,
 )
 from app.api.v2 import router as v2_router
 from app.routers import config
@@ -327,6 +328,7 @@ app.include_router(config.router, prefix="/api")
 app.include_router(mounts.router)  # Mount management API
 
 app.include_router(tokens.router, prefix="/api")
+app.include_router(this_machine.router, prefix="/api")
 app.include_router(mcp_connections.router, prefix="/api")
 app.include_router(permissions.router, prefix="/api")
 app.include_router(
