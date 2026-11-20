@@ -133,6 +133,7 @@ export interface RepositoryStorage {
 }
 
 export interface Repository {
+  passphrase_unsaved?: boolean
   id: number
   name: string
   path: string

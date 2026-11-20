@@ -26,7 +26,9 @@ class StubApi:
         self.routes = routes
         self.calls = []
         self.posts = []
+        self.puts = []
         self.timeouts = {}
+        self.app = None
 
     async def get(self, path, /, **params):
         self.calls.append((path, params))
@@ -45,13 +47,28 @@ class StubApi:
             raise answer
         return answer(json) if callable(answer) else answer
 
+    async def put(self, path, /, json=None, **params):
+        """Answers from `routes["PUT " + path]`; every body is kept in `puts`."""
+        self.puts.append((path, json))
+        answer = self.routes[f"PUT {path}"]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer(json) if callable(answer) else answer
+
+    async def patch(self, path, /, json=None, **params):
+        self.puts.append((path, json))
+        answer = self.routes[f"PATCH {path}"]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer(json) if callable(answer) else answer
+
 
 class Turn:
     def __init__(self, value):
         self.value = value
 
 
-def run(name, routes, **args):
+def run(name, routes, /, **args):
     spec = REGISTRY[name]
     conn = ConnectionContext(1, "test", 1, "admin", Level.READ)
     ctx = ToolContext(conn=conn, api=StubApi(routes))

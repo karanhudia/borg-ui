@@ -230,6 +230,17 @@ def promote_repository_health(
     return health_status, health_color
 
 
+def _flag_unsaved_passphrase(
+    repo, health_status: str, health_color: str, warnings: list
+) -> tuple[str, str]:
+    """A generated passphrase nobody saved (spec 2026-11-14-mcp-server, 5.9),
+    in full and observe mode alike."""
+    if not getattr(repo, "passphrase_unsaved", False):
+        return health_status, health_color
+    warnings.append("Passphrase not saved yet")
+    return promote_repository_health(health_status, health_color, "warning")
+
+
 def classify_day_age(days: int, warning_days: int, critical_days: int) -> str:
     if days > critical_days:
         return "critical"
@@ -461,6 +472,10 @@ def build_full_repository_health(
     if restore_check_health["warning"]:
         warnings.append(restore_check_health["warning"])
 
+    health_status, health_color = _flag_unsaved_passphrase(
+        repo, health_status, health_color, warnings
+    )
+
     return {
         "health_status": health_status,
         "health_color": health_color,
@@ -544,6 +559,9 @@ def build_observe_repository_health(
         )
     if restore_check_health["warning"]:
         warnings.append(restore_check_health["warning"])
+    health_status, health_color = _flag_unsaved_passphrase(
+        repo, health_status, health_color, warnings
+    )
 
     return {
         "health_status": health_status,

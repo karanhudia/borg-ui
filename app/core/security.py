@@ -272,6 +272,21 @@ async def refuse_mcp_internal(
         )
 
 
+async def require_browser_session(
+    request: Request, user: User = Depends(get_current_user)
+) -> User:
+    """Refuse personal tokens and MCP calls: revealing a secret is something a
+    person does in the web UI (spec 2026-11-14-mcp-server, 5.9)."""
+    if getattr(request.state, "mcp_connection_id", None) is not None or getattr(
+        request.state, "api_token_auth", False
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"key": "backend.errors.auth.browserSessionRequired"},
+        )
+    return user
+
+
 async def _look_up_off_loop(load, request: Request, db: Session) -> User:
     """Run the user lookup in a worker thread.
 
@@ -323,6 +338,8 @@ def _authenticate_user(request: Request, db: Session) -> User:
         raise credentials_exception
 
     token = auth_header.split(" ")[1]
+    # Marks token callers so secret reveals can insist on a browser session.
+    request.state.api_token_auth = token.startswith(API_TOKEN_PREFIX)
     return _get_active_user_from_token(token, db, credentials_exception)
 
 

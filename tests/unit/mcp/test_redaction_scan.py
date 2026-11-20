@@ -48,6 +48,31 @@ ARGS = {
     "list_users": {},
     "cancel_job": {"job_type": "backup", "job_id": "{failed}"},
     "unmount_archive": {},
+    # Phase 4 (manage)
+    "import_repository": {"name": "Old", "path": "/data/example/old"},
+    "update_repository": {"repository": "Photos", "compression": "zstd"},
+    "set_check_schedule": {"repository": "Photos", "schedule": "0 3 * * 0"},
+    "set_restore_check_schedule": {"repository": "Photos", "schedule": "off"},
+    "update_ssh_connection": {"ssh_connection": "nobody@nowhere", "port": 2222},
+    "create_backup_plan": {},
+    "update_backup_plan": {"backup_plan": "Nightly photos", "compression": "zstd"},
+    "set_backup_plan_enabled": {"backup_plan": "Nightly photos", "enabled": True},
+    "create_schedule": {"name": "Scan"},
+    "update_schedule": {"schedule": "Nightly", "name": "Nightly two"},
+    "set_schedule_enabled": {"schedule": "Nightly", "enabled": True},
+    "duplicate_schedule": {"schedule": "Nightly"},
+    "create_script": {"name": "scan script", "content": "echo scan"},
+    "update_script": {"script": "notify", "description": "Ping after"},
+    "assign_script": {"repository": "Photos", "script": "notify", "hook": "pre-backup"},
+    "update_notification_channel": {
+        "channel": "Phone",
+        "notify_on_backup_success": True,
+    },
+    "update_rclone_remote": {"remote": "b2", "name": "b2-eu"},
+    "upgrade_agents": {"agents": ["outdated"]},
+    "update_settings": {"stats_refresh_interval_minutes": 30},
+    "update_user": {"user": "testuser", "full_name": "Test User"},
+    "create_user": {"username": "robin"},
 }
 # Tools that would launch real Borg or system work inside the test process.
 # Their answers leave through the same render.finish redaction as every
@@ -71,6 +96,10 @@ LAUNCHES_WORK = {
     "discover_sources",
     "pause_background_work",
     "resume_background_work",
+    "create_repository",
+    "generate_ssh_key",
+    "add_ssh_connection",
+    "trust_host_key",
 }
 
 
@@ -95,7 +124,7 @@ def test_no_secrets_and_no_crashes(
     headers = request.getfixturevalue(
         f"{role}_headers" if role != "viewer" else "auth_headers"
     )
-    _, token = create_connection(headers, name=f"{role} scan", level="operate")
+    _, token = create_connection(headers, name=f"{role} scan", level="manage")
     session = mcp(token)
     browse = [
         {

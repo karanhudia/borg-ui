@@ -5,6 +5,7 @@ import { Stack } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import { Search, Users } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { useSearchParams } from 'react-router-dom'
 import DataTable from './DataTable'
 import { settingsAPI, repositoriesAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -33,6 +34,9 @@ const emptyUserForm: UserFormState = {
   oidc_subject: '',
 }
 
+// Roles a hand-off link may preselect; anything else keeps the default.
+const LINK_ROLES = new Set(['viewer', 'operator', 'admin'])
+
 const UsersTab: React.FC = () => {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -55,6 +59,28 @@ const UsersTab: React.FC = () => {
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<number | null>(null)
 
   const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const canCreateUsers = can('multi_user')
+
+  // The MCP create_user hand-off link: open the add-user dialog with
+  // everything but the password filled in, once, then drop the parameters.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return
+    if (canCreateUsers) {
+      const role = searchParams.get('role')
+      setUserForm({
+        ...emptyUserForm,
+        username: searchParams.get('username') ?? '',
+        email: searchParams.get('email') ?? '',
+        full_name: searchParams.get('full_name') ?? '',
+        role: role && LINK_ROLES.has(role) ? role : emptyUserForm.role,
+      })
+      setShowCreateUser(true)
+    }
+    const next = new URLSearchParams(searchParams)
+    ;['new', 'username', 'email', 'full_name', 'role'].forEach((key) => next.delete(key))
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams, canCreateUsers])
   const [passwordForm, setPasswordForm] = useState<PasswordFormState>({ new_password: '' })
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')

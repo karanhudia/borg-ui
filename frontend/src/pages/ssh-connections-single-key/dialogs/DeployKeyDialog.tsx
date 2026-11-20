@@ -280,6 +280,9 @@ export function DeployKeyDialog({
             label={t('sshConnections.deployDialog.password')}
             type="password"
             fullWidth
+            // Opened from a hand-off link with the server filled in: the
+            // password is the one thing left to type.
+            autoFocus={Boolean(connectionForm.host && connectionForm.username)}
             value={connectionForm.password}
             onChange={(e) => setConnectionForm({ ...connectionForm, password: e.target.value })}
             placeholder={t('sshConnections.deployDialog.passwordPlaceholder')}
