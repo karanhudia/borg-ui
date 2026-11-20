@@ -326,3 +326,22 @@ async def setup_this_machine(db: Session, user: User) -> SetupResult:
         in_data_volume=in_data_volume,
         skipped_roots=skipped,
     )
+
+
+def read_all_marker() -> Path:
+    """Written at start-up (entrypoint, or the native installer) once Borg's
+    read-all interpreter has been proven to run in this container or host."""
+    return Path(os.environ.get("BORG_UI_READ_ALL_MARKER", "/run/borg-ui/read-all"))
+
+
+def has_read_all(
+    host_root: Optional[Path],
+    euid: Optional[int] = None,
+    marker: Optional[Path] = None,
+) -> bool:
+    """Whether Borg can read every file on the host, including root-only ones."""
+    if host_root is None:
+        return False
+    if (os.geteuid() if euid is None else euid) == 0:
+        return True
+    return (marker or read_all_marker()).exists()

@@ -31,6 +31,8 @@ WorkingDirectory=@PREFIX@/current
 # this one keeps serving from its own, and a rollback finds the previous
 # release complete.
 Environment=BORG_UI_VENV=@PREFIX@/current/venv
+# Present when the installer gave Borg CAP_DAC_READ_SEARCH ("This machine").
+Environment=BORG_UI_READ_ALL_MARKER=@PREFIX@/read-all
 ExecStart=@PREFIX@/current/packaging/native/start.sh
 Restart=on-failure
 RestartSec=5

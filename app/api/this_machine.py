@@ -28,6 +28,7 @@ class ThisMachineStatus(BaseModel):
     repository_id: Optional[int] = None
     in_data_volume: bool
     self_backup_supported: bool
+    read_all_access: bool
 
 
 def _self_backup_supported() -> bool:
@@ -48,6 +49,7 @@ def get_status(
         repository_id=repository.id if repository else None,
         in_data_volume=in_data_volume,
         self_backup_supported=_self_backup_supported(),
+        read_all_access=tm.has_read_all(tm._host_root()),
     )
 
 

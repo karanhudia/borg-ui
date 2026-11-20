@@ -26,6 +26,12 @@ services:
     # See: docs/installation.md for details
     privileged: true
 
+    # Lets Borg (and only Borg) read every file on the host, so "This machine"
+    # can back up files only root can read while Borg UI stays non-root.
+    # Needed only when privileged is off; privileged already allows it.
+    cap_add:
+      - DAC_READ_SEARCH
+
     ports:
       - "${PORT:-8081}:${PORT:-8081}"
 

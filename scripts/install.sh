@@ -139,6 +139,8 @@ APT_PACKAGES=(
   # archives needs. Mirrors the runtime base image's package list.
   libacl1 liblz4-1 libzstd1 libxxhash0 libfuse3-3 fuse3
   openssh-client sshfs sshpass rsync
+  # setcap, for Borg's read-all capability ("This machine").
+  libcap2-bin
 )
 
 install_packages() {
@@ -484,10 +486,30 @@ install_borg_binary() {
   BORG_BINARY="${dest}"
 }
 
+# "This machine" backs up files only root can read while the service stays
+# non-root: the pinned Borg 1 binary gets CAP_DAC_READ_SEARCH. Kept only if
+# the service user can still run it afterwards (a capability outside the
+# bounding set makes exec fail), and recorded in a marker the app reads.
+grant_read_all() {
+  local binary="$1" marker="${PREFIX}/read-all"
+  rm -f "${marker}"
+  [[ "${SERVICE_USER}" != "root" ]] || return 0
+  command -v setcap >/dev/null 2>&1 || { warn "setcap missing; Borg reads as ${SERVICE_USER} only"; return 0; }
+  if setcap cap_dac_read_search+ep "${binary}" 2>/dev/null &&
+    runuser -u "${SERVICE_USER}" -- "${binary}" --version >/dev/null 2>&1; then
+    touch "${marker}"
+    log "Borg can read every file on this machine"
+  else
+    setcap -r "${binary}" 2>/dev/null || true
+    warn "Borg reads files as ${SERVICE_USER} only; root-only files are skipped"
+  fi
+}
+
 install_borg1() {
   if install_borg_binary 1; then
     # Borg UI resolves Borg 1 as plain "borg" on PATH.
     write_forwarder borg "${BORG_BINARY}"
+    grant_read_all "${BORG_BINARY}"
     return
   fi
 

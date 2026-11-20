@@ -191,6 +191,42 @@ else
     echo "[$(date)] Docker socket not mounted, skipping docker group setup"
 fi
 
+# "This machine": let Borg read every file on the host when the container may
+# grant it (compose `cap_add: DAC_READ_SEARCH`). Proven by running the read-all
+# interpreter as the app user; a stale marker from an earlier start is dropped
+# first, because the bounding set can change between starts and the borg
+# wrapper must never pick an interpreter that cannot run.
+mkdir -p /run/borg-ui
+rm -f /run/borg-ui/read-all
+if [ -x /opt/borg1-read/bin/python3 ]; then
+    if [ "$PUID" = "0" ]; then
+        READ_PROBE="/opt/borg1-read/bin/python3 -I -c pass"
+    else
+        READ_PROBE="gosu borg /opt/borg1-read/bin/python3 -I -c pass"
+    fi
+    if $READ_PROBE 2>/dev/null; then
+        touch /run/borg-ui/read-all
+        echo "[$(date)] Borg can read every host file (DAC_READ_SEARCH)"
+    else
+        echo "[$(date)] Borg reads host files as the app user only. Add cap_add: [DAC_READ_SEARCH] to protect the whole machine."
+    fi
+fi
+
+# The host folder "This machine" keeps its snapshots in, outside the Borg UI
+# data volume so removing the volume does not take the snapshots with it.
+for mount in $(echo "${LOCAL_MOUNT_POINTS:-/local}" | tr ',' ' '); do
+    if [ -f "$mount/etc/os-release" ] && [ "$mount" != "/" ]; then
+        if mkdir -p "$mount/var/backups/borg-ui" 2>/dev/null \
+            && chown "$PUID:$PGID" "$mount/var/backups/borg-ui" 2>/dev/null \
+            && chmod 700 "$mount/var/backups/borg-ui" 2>/dev/null; then
+            echo "[$(date)] Snapshot folder ready at $mount/var/backups/borg-ui"
+        else
+            echo "[$(date)] WARNING: could not prepare $mount/var/backups/borg-ui"
+        fi
+        break
+    fi
+done
+
 # Bring the database up to date BEFORE anything reads it -- deploy_ssh_key below
 # reads the SSH keys from it. On a first migration into an empty Postgres the
 # tables do not exist until this runs, so reading keys first fails with
