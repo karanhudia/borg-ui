@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-11-20T17:25:36.926Z",
+  "generatedAt": "2026-11-20T17:38:49.738Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1587 visual report",
     "commitSha": "874d40aac0aa",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44782978838"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44785116840"
   },
   "totals": {
     "baseline": 1378,
     "actual": 1378,
     "compared": 1378,
-    "changed": 2,
+    "changed": 1,
     "added": 0,
     "removed": 0,
-    "unchanged": 1376
+    "unchanged": 1377
   },
   "changed": [
     {
-      "fileName": "components-announcementmodal--black-friday-sale--mobile.png",
-      "baselinePath": "images/baseline/components-announcementmodal--black-friday-sale--mobile.png",
-      "actualPath": "images/actual/components-announcementmodal--black-friday-sale--mobile.png",
-      "diffPath": "images/diff/components-announcementmodal--black-friday-sale--mobile.png",
-      "diffPixels": 9562,
+      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
+      "diffPixels": 386,
       "totalPixels": 329160,
-      "diffRatio": 0.029049702272451086,
+      "diffRatio": 0.0011726819783691822,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -32,24 +32,6 @@
       "actual": {
         "width": 390,
         "height": 844
-      }
-    },
-    {
-      "fileName": "components-announcementmodal--black-friday-sale.png",
-      "baselinePath": "images/baseline/components-announcementmodal--black-friday-sale.png",
-      "actualPath": "images/actual/components-announcementmodal--black-friday-sale.png",
-      "diffPath": "images/diff/components-announcementmodal--black-friday-sale.png",
-      "diffPixels": 9843,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0096123046875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
       }
     }
   ],
@@ -841,6 +823,12 @@
     },
     {
       "fileName": "components-analyticsconsentbanner--default.png"
+    },
+    {
+      "fileName": "components-announcementmodal--black-friday-sale--mobile.png"
+    },
+    {
+      "fileName": "components-announcementmodal--black-friday-sale.png"
     },
     {
       "fileName": "components-announcementmodal--maintenance-notice--mobile.png"
@@ -3637,9 +3625,6 @@
     },
     {
       "fileName": "pages-repositories-groups--empty-without-quick-start.png"
-    },
-    {
-      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png"
     },
     {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api.png"
