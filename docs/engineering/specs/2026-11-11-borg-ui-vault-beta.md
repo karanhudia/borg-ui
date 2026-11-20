@@ -804,9 +804,12 @@ day 7 would remove it. So nothing a compaction removes is gone at once.
   for the line `locked`, copies, then closes the command's input). If the
   lock cannot be taken, that repository is not copied and not compacted, and
   the compaction counts as failed, as before. Once a copy has been taken it is
-  kept for 7 days whatever the compaction does: Borg 1.4 commits and frees
-  segments while it compacts, so a compaction that fails halfway may already
-  have removed pruned data.
+  only ever removed by the expiry rules below, whatever the compaction does:
+  Borg 1.4 commits and frees segments while it compacts, so a compaction that
+  fails or stops halfway may already have removed pruned data. The node
+  records each copy, without an expiry, the moment it has been taken, before
+  the compaction of that repository starts; a container that dies mid-run
+  therefore leaves a recorded copy, and the restart marks the run as failed.
 - Nothing may be written between the copy and the compaction, or the
   compaction could remove something the copy does not hold. Borg cannot keep
   one lock across both, so the node closes the door first: for the whole
@@ -837,8 +840,15 @@ day 7 would remove it. So nothing a compaction removes is gone at once.
   that fails halfway may have freed data that only that copy holds, and the
   retry can come much later (the Worker gives up after 24 hourly attempts
   and the admin may only run it again days after), so no fixed expiry is
-  safe. Copies without an expiry show up in the admin view and the runbook's
-  disk check. Expired copies are removed when the
+  safe. A run counts as successful only when it finished with state `done`;
+  a run that failed, or that a restart found still running, counts as
+  failed. Copies without an expiry ("held") show up in the admin view.
+  Who acts on them: a held copy means a release did not finish, and the
+  Worker already emails the admin when a release gives up (section 10). The
+  admin fixes the cause and runs the release again from the admin site;
+  its success starts the 7 days. An admin removes a held copy by hand only
+  when the customer agrees, because it may hold the only copy of what the
+  failed run freed. Expired copies are removed when the
   agent starts and on every `GET /v1/accounts` (the Worker calls it hourly).
   Deleting an account removes its copies too. The account object gains
   `retained_until`: the latest expiry, or null.
@@ -1062,6 +1072,9 @@ Plans 1 and 4 can run in parallel with plan 2. Plan 3 follows plan 2.
 7. Remove the sentence about planned prices from the Vault page once the first
    invite goes out, and drop the append-only claim if gate A fails.
 8. Size the node's disk with room for retained copies (section 10.1): up to
-   7 days of released space is still on disk.
+   7 days of released space is still on disk, plus whatever held copies of
+   failed releases have not been resolved yet. Keep at least 20% of the
+   volume free; the runbook's weekly check alerts above 80% and lists held
+   copies, and every held copy is followed up within a week.
 9. In gate B, also let a sandbox subscription run into cancellation and buy
    the renewal link from the read-only email (8.6).
