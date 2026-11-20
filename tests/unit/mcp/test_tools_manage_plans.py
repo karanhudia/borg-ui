@@ -815,3 +815,21 @@ def test_update_schedule_refuses_an_empty_policy():
     )
     assert result.is_error
     assert api.puts == []
+
+
+@pytest.mark.unit
+def test_duplicate_rename_failure_still_warns_about_script_parameters():
+    from app.mcp.client import ApiError
+
+    routes = {
+        "/api/schedule/": {
+            "jobs": [
+                {**SCHEDULES["/api/schedule/"]["jobs"][0], "post_backup_script_id": 4}
+            ]
+        },
+        "POST /api/schedule/5/duplicate": {"job": {"id": 7, "name": "Nightly (copy)"}},
+        "PUT /api/schedule/7": ApiError(409, "backend.errors.schedule.nameExists"),
+    }
+    result, _ = run("duplicate_schedule", routes, schedule="Nightly", new_name="Weekly")
+    assert result.is_error
+    assert "script parameters" in result.text

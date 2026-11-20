@@ -740,6 +740,13 @@ async def duplicate_schedule(ctx, args: DuplicateScheduleArgs) -> ToolResult:
     copy = answer.get("job") or {}
     name = copy.get("name")
     data = {"schedule_id": copy.get("id"), "name": name}
+    # Said on every path, the failed rename too: the copy exists either way.
+    scripts_note = (
+        "Its scripts are attached, but their script parameters are not "
+        "copied: set them in the web UI before turning it on."
+        if job.get("pre_backup_script_id") or job.get("post_backup_script_id")
+        else None
+    )
     if args.new_name and copy.get("id"):
         try:
             await ctx.api.put(
@@ -747,21 +754,19 @@ async def duplicate_schedule(ctx, args: DuplicateScheduleArgs) -> ToolResult:
             )
         except ApiError:
             # The copy is committed; name it so a retry does not make another.
-            return ToolResult(
+            lines = [
                 f"Copied *{job['name']}* to *{name}*, but could not rename it to "
                 f"*{args.new_name}* (that name may be taken). Rename *{name}* "
-                "instead of copying again.",
-                data,
-                is_error=True,
-            )
+                "instead of copying again."
+            ]
+            if scripts_note:
+                lines.append(scripts_note)
+            return ToolResult(" ".join(lines), data, is_error=True)
         name = args.new_name
         data["name"] = name
     lines = [f"✓ Copied *{job['name']}* to *{name}*."]
     if copy.get("enabled") is False:
         lines.append("It is off; turn it on when ready.")
-    if job.get("pre_backup_script_id") or job.get("post_backup_script_id"):
-        lines.append(
-            "Its scripts are attached, but their script parameters are not "
-            "copied: set them in the web UI before turning it on."
-        )
+    if scripts_note:
+        lines.append(scripts_note)
     return ToolResult(" ".join(lines), data)
