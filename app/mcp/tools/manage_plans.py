@@ -48,14 +48,18 @@ class Source(BaseModel):
 
 
 class Retention(BaseModel):
+    # Counts are at least 0: prune emits a rule only when it is above 0, so a
+    # negative one would vanish without a word.
     model_config = ConfigDict(extra="forbid")
 
-    hourly: Optional[int] = Field(None, description="Hourly archives to keep.")
-    daily: Optional[int] = Field(None, description="Daily archives to keep.")
-    weekly: Optional[int] = Field(None, description="Weekly archives to keep.")
-    monthly: Optional[int] = Field(None, description="Monthly archives to keep.")
-    quarterly: Optional[int] = Field(None, description="Quarterly archives to keep.")
-    yearly: Optional[int] = Field(None, description="Yearly archives to keep.")
+    hourly: Optional[int] = Field(None, ge=0, description="Hourly archives to keep.")
+    daily: Optional[int] = Field(None, ge=0, description="Daily archives to keep.")
+    weekly: Optional[int] = Field(None, ge=0, description="Weekly archives to keep.")
+    monthly: Optional[int] = Field(None, ge=0, description="Monthly archives to keep.")
+    quarterly: Optional[int] = Field(
+        None, ge=0, description="Quarterly archives to keep."
+    )
+    yearly: Optional[int] = Field(None, ge=0, description="Yearly archives to keep.")
     within: Optional[str] = Field(
         None, description="Keep everything within this span, e.g. 2d."
     )
@@ -84,10 +88,17 @@ def _retention_fields(
 
 
 def _keeps_something(fields: dict) -> bool:
-    """Borg refuses a prune with no keep rule; an all-zero policy has none."""
+    """Borg refuses a prune with no keep rule; an all-zero policy has none.
+    A blank `within` is no rule either: the route stores it as empty."""
     return any(fields.get(f"prune_keep_{unit}") for unit in RETENTION_UNITS) or bool(
-        fields.get("prune_keep_within")
+        (fields.get("prune_keep_within") or "").strip()
     )
+
+
+def _policy_after(stored: dict, changes: dict) -> dict:
+    """The retention that will be saved: the stored units with the changes."""
+    keys = [f"prune_keep_{u}" for u in RETENTION_UNITS] + ["prune_keep_within"]
+    return {k: changes.get(k, stored.get(k)) for k in keys}
 
 
 EMPTY_POLICY = (
@@ -435,6 +446,9 @@ async def update_backup_plan(ctx, args: UpdatePlanArgs) -> ToolResult:
             f"Nothing changed: *{found['name']}* already has those settings.",
             {"plan_id": found["id"], "changed": []},
         )
+    pruning = changes.get("run_prune_after", detail.get("run_prune_after"))
+    if pruning and not _keeps_something(_policy_after(detail, changes)):
+        return ToolResult(EMPTY_POLICY, is_error=True)
     await ctx.api.put(f"/api/backup-plans/{found['id']}", json={**body, **changes})
     lines = [f"✓ Updated the backup plan *{changes.get('name', found['name'])}*.", ""]
     for key, value in changes.items():
@@ -656,6 +670,8 @@ async def update_schedule(ctx, args: UpdateScheduleArgs) -> ToolResult:
     if retention:
         changes.update(retention)
         changes["run_prune_after"] = True
+        if not _keeps_something(_policy_after(job, changes)):
+            return ToolResult(EMPTY_POLICY, is_error=True)
     await ctx.api.put(f"/api/schedule/{job['id']}", json=changes)
     lines = [f"✓ Updated the schedule *{changes.get('name', job['name'])}*.", ""]
     for key, value in changes.items():

@@ -272,3 +272,26 @@ def test_reauthentication_runs_off_the_event_loop(
     response = _reveal(test_client, flagged, admin_headers, password="admin123")
     assert response.status_code == 200
     assert "_reauthenticated" in ran
+
+
+@pytest.mark.unit
+def test_reveal_rechecks_the_flag_after_reauthentication(
+    test_client, admin_headers, flagged, test_db, monkeypatch
+):
+    """PR #1585 review: an acknowledgement that lands while bcrypt runs wins."""
+    import app.api.repositories as routes
+
+    real = routes._reauthenticated
+
+    def acknowledge_meanwhile(user, repository, body):
+        ok = real(user, repository, body)
+        test_client.post(
+            f"/api/repositories/{flagged.id}/passphrase/acknowledge",
+            headers=admin_headers,
+        )
+        return ok
+
+    monkeypatch.setattr(routes, "_reauthenticated", acknowledge_meanwhile)
+    response = _reveal(test_client, flagged, admin_headers, password="admin123")
+    assert response.status_code == 409
+    assert PASSPHRASE not in response.text

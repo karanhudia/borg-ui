@@ -8111,6 +8111,15 @@ async def reveal_generated_passphrase(
         raise HTTPException(
             status_code=403, detail={"key": "backend.errors.repo.reauthFailed"}
         )
+    # An acknowledgement may have landed while bcrypt ran: end this
+    # transaction so the re-read sees it, and never show a saved passphrase.
+    db.rollback()
+    db.refresh(repository)
+    if not repository.passphrase_unsaved:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.repo.passphraseAlreadySaved"},
+        )
     logger.warning(
         "passphrase revealed", repository_id=repository.id, user_id=current_user.id
     )

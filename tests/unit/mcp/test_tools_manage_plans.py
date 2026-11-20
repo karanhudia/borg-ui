@@ -742,3 +742,76 @@ def test_update_schedule_name_only_validates_nothing():
     _, api = run("update_schedule", routes, schedule="Nightly", name="Nightly two")
     assert api.posts == []  # no cron validation
     assert api.puts == [("/api/schedule/5", {"name": "Nightly two"})]
+
+
+# PR #1585 review, round 3
+
+
+@pytest.mark.unit
+def test_retention_refuses_negative_counts():
+    from pydantic import ValidationError
+
+    from app.mcp.registry import REGISTRY
+
+    with pytest.raises(ValidationError):
+        REGISTRY["create_backup_plan"].input_model(
+            **FULL, retention={"daily": 7, "yearly": -1}
+        )
+
+
+@pytest.mark.unit
+def test_whitespace_within_is_not_a_keep_rule():
+    result, api = run(
+        "create_backup_plan",
+        _routes(),
+        **FULL,
+        retention={"daily": 0, "within": "  "},
+        after=["prune"],
+    )
+    assert result.is_error
+    assert [p for p, _ in api.posts if p == "/api/backup-plans/"] == []
+
+
+@pytest.mark.unit
+def test_update_plan_refuses_an_empty_policy_while_pruning():
+    detail = {
+        **DETAIL,
+        "run_prune_after": True,
+        "prune_keep_hourly": 0,
+        "prune_keep_daily": 7,
+        "prune_keep_weekly": 0,
+        "prune_keep_monthly": 0,
+        "prune_keep_quarterly": 0,
+        "prune_keep_yearly": 0,
+    }
+    routes = {
+        "/api/backup-plans/": {"backup_plans": [detail]},
+        "/api/backup-plans/12": detail,
+        "PUT /api/backup-plans/12": detail,
+    }
+    result, api = run(
+        "update_backup_plan", routes, backup_plan="Nightly", retention={"daily": 0}
+    )
+    assert result.is_error
+    assert api.puts == []
+
+
+@pytest.mark.unit
+def test_update_schedule_refuses_an_empty_policy():
+    job = {
+        **SCHEDULES["/api/schedule/"]["jobs"][0],
+        "run_prune_after": True,
+        "prune_keep_daily": 7,
+        "prune_keep_weekly": 0,
+        "prune_keep_monthly": 0,
+        "prune_keep_yearly": 0,
+    }
+    routes = {
+        "/api/schedule/": {"jobs": [job]},
+        "PUT /api/schedule/5": {"success": True},
+    }
+    result, api = run(
+        "update_schedule", routes, schedule="Nightly", retention={"daily": 0}
+    )
+    assert result.is_error
+    assert api.puts == []
