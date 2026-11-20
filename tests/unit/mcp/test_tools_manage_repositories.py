@@ -263,3 +263,22 @@ def test_create_repository_end_to_end_flags_and_hides(
     assert secret not in repr(
         {c.name: getattr(row, c.name) for c in McpActivity.__table__.columns}
     )
+
+
+@pytest.mark.unit
+def test_create_repository_on_an_existing_repository_does_not_flag(no_flag):
+    """Review finding: the route registers an existing repository with the
+    generated passphrase without checking it; that passphrase opens nothing."""
+    routes = {
+        "POST /api/repositories/": {
+            "success": True,
+            "already_existed": True,
+            "repository": {"id": 9, "name": "Docs"},
+        }
+    }
+    result, _ = run("create_repository", routes, name="Docs", path="/data/example/docs")
+    assert no_flag == []
+    assert result.is_error
+    assert "already" in result.text
+    assert "/repositories?q=Docs" in result.text
+    assert "reveal" not in result.text

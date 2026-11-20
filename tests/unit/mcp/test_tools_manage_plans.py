@@ -359,3 +359,130 @@ def test_create_plan_against_the_app(
     assert plan.timezone == "Europe/Berlin"
     assert plan.schedule_enabled
     assert [link.repository_id for link in plan.repositories] == [seeded["photos"].id]
+
+
+@pytest.mark.unit
+def test_update_plan_keeps_hook_passwords(
+    mcp, create_connection, admin_headers, seeded, test_db, tmp_path
+):
+    """Review finding: the masked `***` must never be written back."""
+    import json
+
+    from app.core.security import decrypt_secret, encrypt_secret
+    from app.database.models import (
+        BackupPlan,
+        BackupPlanRepository,
+        BackupPlanScript,
+        Script,
+    )
+
+    body = tmp_path / "dump.sh"
+    body.write_text("echo dump\n")
+    script = Script(
+        name="db dump",
+        file_path=str(body),
+        parameters=json.dumps([{"name": "DB_PASSWORD", "type": "password"}]),
+    )
+    plan = BackupPlan(
+        name="Hooked plan",
+        source_directories=json.dumps([str(tmp_path)]),
+        source_type="local",
+        cron_expression="0 2 * * *",
+        timezone="UTC",
+    )
+    test_db.add_all([script, plan])
+    test_db.commit()
+    test_db.add_all(
+        [
+            BackupPlanScript(
+                backup_plan_id=plan.id,
+                script_id=script.id,
+                hook_type="pre-backup",
+                parameter_values=json.dumps(
+                    {"DB_PASSWORD": encrypt_secret("example-db-pw")}
+                ),
+            ),
+            BackupPlanRepository(
+                backup_plan_id=plan.id,
+                repository_id=seeded["photos"].id,
+                execution_order=1,
+            ),
+        ]
+    )
+    test_db.commit()
+    _, token = create_connection(admin_headers, name="m", level="manage")
+    result = mcp(token).call(
+        "update_backup_plan", backup_plan="Hooked plan", compression="zstd"
+    )
+    assert not result["is_error"], result["text"]
+    test_db.expire_all()
+    hook = test_db.query(BackupPlanScript).filter_by(backup_plan_id=plan.id).one()
+    stored = json.loads(hook.parameter_values)["DB_PASSWORD"]
+    assert decrypt_secret(stored) == "example-db-pw"
+
+
+@pytest.mark.unit
+def test_create_plan_partial_retention_zeroes_the_rest():
+    result, api = run("create_backup_plan", _routes(), **FULL, retention={"daily": 14})
+    body = api.posts[-1][1]
+    assert body["prune_keep_daily"] == 14
+    for unit in ("hourly", "weekly", "monthly", "quarterly", "yearly"):
+        assert body[f"prune_keep_{unit}"] == 0, unit
+    assert "Keeps: 14 daily" in result.text
+
+
+@pytest.mark.unit
+def test_create_schedule_partial_retention_zeroes_the_rest():
+    routes = _routes(**{"POST /api/schedule/": {"job": {"id": 6, "name": "Hourly"}}})
+    _, api = run(
+        "create_schedule",
+        routes,
+        name="Hourly",
+        repositories=["Photos"],
+        schedule="0 2 * * *",
+        retention={"daily": 14},
+    )
+    body = api.posts[-1][1]
+    assert body["prune_keep_daily"] == 14
+    assert body["prune_keep_weekly"] == 0 and body["prune_keep_yearly"] == 0
+
+
+@pytest.mark.unit
+def test_update_plan_timezone_only_revalidates_the_stored_cron():
+    seen = []
+
+    def validate(body):
+        seen.append(body)
+        return {
+            "success": True,
+            "cron_expression": "0 2 * * *",
+            "timezone": "Europe/Berlin",
+            "next_runs": [],
+        }
+
+    routes = {
+        **PLANS,
+        "/api/backup-plans/12": DETAIL,
+        "POST /api/schedule/validate-cron": validate,
+        "PUT /api/backup-plans/12": DETAIL,
+    }
+    result, api = run(
+        "update_backup_plan", routes, backup_plan="Nightly", timezone="Europe/Berlin"
+    )
+    assert seen and seen[0]["hour"] == "2" and seen[0]["timezone"] == "Europe/Berlin"
+    body = api.puts[0][1]
+    assert body["timezone"] == "Europe/Berlin"
+    assert body["cron_expression"] == "0 2 * * *"
+    assert body["schedule_enabled"] is True
+    assert "UTC → Europe/Berlin" in result.text
+
+
+@pytest.mark.unit
+def test_update_plan_sends_no_script_hooks():
+    routes = {
+        **PLANS,
+        "/api/backup-plans/12": DETAIL,
+        "PUT /api/backup-plans/12": DETAIL,
+    }
+    _, api = run("update_backup_plan", routes, backup_plan="Nightly", name="Renamed")
+    assert "script_hooks" not in api.puts[0][1]

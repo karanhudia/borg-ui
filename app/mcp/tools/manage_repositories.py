@@ -82,6 +82,26 @@ async def create_repository(ctx, args: CreateRepositoryArgs) -> ToolResult:
     repo_id = repo["id"]
     ctx.target = f"repository {args.name}"[:200]
     data = {"repository_id": repo_id, "name": args.name, "encryption": encryption}
+    if answer.get("already_existed"):
+        # The route adds an existing repository with whatever passphrase it was
+        # sent and does not check it, so the generated one opens nothing: do not
+        # ask the user to save it.
+        link = links.web(ctx, "repositories", q=args.name)
+        lines = [
+            f"⚠ A Borg repository already exists at {args.path}, so Borg UI added it "
+            f"as *{args.name}* instead of creating a new one.",
+        ]
+        if encrypted:
+            lines += [
+                "",
+                "It was added with a passphrase Borg UI generated, which cannot "
+                "open it. Open the repository at "
+                f"{link} and enter its real passphrase in its settings before "
+                "backing up to it.",
+            ]
+        return ToolResult(
+            "\n".join(lines), {**data, "already_existed": True}, is_error=encrypted
+        )
     if not encrypted:
         return ToolResult(
             f"✓ Created *{args.name}* at {args.path}, unencrypted.\n\nWant me to set up a backup plan for it?",

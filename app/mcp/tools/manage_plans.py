@@ -7,11 +7,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.backup_plans import (
-    BackupPlanPayload,
-    BackupPlanRepositoryPayload,
-    BackupPlanScriptPayload,
-)
+from app.api.backup_plans import BackupPlanPayload, BackupPlanRepositoryPayload
 from app.mcp import resolve
 from app.mcp.levels import Level
 from app.mcp.registry import tool
@@ -63,14 +59,26 @@ class Retention(BaseModel):
     )
 
 
-def _retention_fields(retention: Optional[Retention]) -> dict:
+RETENTION_UNITS = ("hourly", "daily", "weekly", "monthly", "quarterly", "yearly")
+
+
+def _retention_fields(
+    retention: Optional[Retention], *, complete: bool = False
+) -> dict:
+    """The route's prune_keep_* fields for the units given. With complete=True
+    (creating), units not given are 0, so "keep 14 daily" keeps only that
+    instead of silently taking the route's weekly, monthly and yearly defaults."""
     if retention is None:
         return {}
-    return {
+    fields = {
         ("prune_keep_within" if k == "within" else f"prune_keep_{k}"): v
         for k, v in retention.model_dump().items()
         if v is not None
     }
+    if complete:
+        for unit in RETENTION_UNITS:
+            fields.setdefault(f"prune_keep_{unit}", 0)
+    return fields
 
 
 def _retention_text(fields: dict) -> str:
@@ -200,7 +208,7 @@ async def create_backup_plan(ctx, args: CreatePlanArgs) -> ToolResult:
         return ToolResult(invalid.text, is_error=True)
     repos = [await resolve.repository(ctx, ref) for ref in args.repositories]
     defaults = []
-    retention = _retention_fields(args.retention)
+    retention = _retention_fields(args.retention, complete=True)
     if not retention:
         retention = {f"prune_keep_{k}": v for k, v in DEFAULT_RETENTION.items()}
         defaults.append(f"keep {_retention_text(retention)}")
@@ -266,15 +274,18 @@ async def create_backup_plan(ctx, args: CreatePlanArgs) -> ToolResult:
 def _payload_from(detail: dict) -> dict:
     """The PUT body the web UI would send: the plan as stored, in the route's
     own payload shape."""
-    body = {k: detail[k] for k in BackupPlanPayload.model_fields if k in detail}
+    body = {
+        k: detail[k]
+        for k in BackupPlanPayload.model_fields
+        if k in detail and k != "script_hooks"
+    }
     body["repositories"] = [
         {k: link[k] for k in BackupPlanRepositoryPayload.model_fields if k in link}
         for link in detail.get("repositories") or []
     ]
-    body["script_hooks"] = [
-        {k: hook[k] for k in BackupPlanScriptPayload.model_fields if k in hook}
-        for hook in detail.get("script_hooks") or []
-    ] or None
+    # No script_hooks: the route then keeps the stored hooks as they are. The
+    # GET masks password parameters as "***", and sending that back would
+    # store "***" as the password.
     return {k: v for k, v in body.items() if v is not None}
 
 
@@ -356,6 +367,16 @@ async def update_backup_plan(ctx, args: UpdatePlanArgs) -> ToolResult:
                 changes["cron_expression"] = checked["cron_expression"]
                 changes["timezone"] = checked.get("timezone") or detail.get("timezone")
                 changes["schedule_enabled"] = True
+        elif args.timezone:
+            # A new timezone alone: the stored cron, checked in that zone; the
+            # plan stays on or off as it was.
+            if detail.get("cron_expression"):
+                checked = await validate_schedule(
+                    ctx, detail["cron_expression"], args.timezone
+                )
+                changes["timezone"] = checked.get("timezone") or args.timezone
+            else:
+                changes["timezone"] = args.timezone
     except ScheduleInvalid as invalid:
         return ToolResult(invalid.text, is_error=True)
     if args.repositories:
@@ -371,6 +392,11 @@ async def update_backup_plan(ctx, args: UpdatePlanArgs) -> ToolResult:
     if args.after is not None:
         changes.update(
             {field: step in args.after for step, field in AFTER_STEPS.items()}
+        )
+    if not changes:
+        return ToolResult(
+            f"Nothing changed: *{found['name']}* already has those settings.",
+            {"plan_id": found["id"], "changed": []},
         )
     await ctx.api.put(f"/api/backup-plans/{found['id']}", json={**body, **changes})
     lines = [f"✓ Updated the backup plan *{changes.get('name', found['name'])}*.", ""]
@@ -478,7 +504,7 @@ async def create_schedule(ctx, args: CreateScheduleArgs) -> ToolResult:
     except ScheduleInvalid as invalid:
         return ToolResult(invalid.text, is_error=True)
     repos = [await resolve.repository(ctx, ref) for ref in args.repositories]
-    retention = _retention_fields(args.retention)
+    retention = _retention_fields(args.retention, complete=True)
     body = {
         "name": args.name,
         "repository_ids": [r["id"] for r in repos],
