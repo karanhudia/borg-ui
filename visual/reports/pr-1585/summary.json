@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-11-20T12:22:22.684Z",
+  "generatedAt": "2026-11-20T13:24:26.983Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1585 visual report",
     "commitSha": "91d2474f2c34",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44735106032"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44743835784"
   },
   "totals": {
     "baseline": 1358,
     "actual": 1378,
     "compared": 1358,
-    "changed": 4,
+    "changed": 5,
     "added": 20,
     "removed": 0,
-    "unchanged": 1354
+    "unchanged": 1353
   },
   "changed": [
     {
@@ -35,13 +35,31 @@
       }
     },
     {
+      "fileName": "pages-cloudstorage--editing-remote.png",
+      "baselinePath": "images/baseline/pages-cloudstorage--editing-remote.png",
+      "actualPath": "images/actual/pages-cloudstorage--editing-remote.png",
+      "diffPath": "images/diff/pages-cloudstorage--editing-remote.png",
+      "diffPixels": 256,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00025,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
       "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 388,
+      "diffPixels": 492,
       "totalPixels": 329160,
-      "diffRatio": 0.0011787580507959655,
+      "diffRatio": 0.0014947138169886984,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -3484,9 +3502,6 @@
     },
     {
       "fileName": "pages-cloudstorage--editing-remote--mobile.png"
-    },
-    {
-      "fileName": "pages-cloudstorage--editing-remote.png"
     },
     {
       "fileName": "pages-cloudstorage--empty--mobile.png"
