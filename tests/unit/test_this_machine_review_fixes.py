@@ -281,3 +281,51 @@ def test_status_reports_the_saved_repository_location(
     with patch.object(tm, "_host_root", return_value=host):
         body = test_client.get("/api/this-machine", headers=admin_headers).json()
     assert body["in_data_volume"] is True
+
+
+# --- CodeRabbit round 2 ---
+
+
+def _sqlite(path):
+    import sqlite3
+
+    with sqlite3.connect(path) as conn:
+        conn.execute("create table if not exists t (x)")
+
+
+@pytest.mark.unit
+def test_staging_uses_the_active_secret_key(test_db, tmp_path, monkeypatch):
+    _sqlite(tmp_path / "borg.db")
+    (tmp_path / ".secret_key").write_text("file-key")
+    monkeypatch.setattr(sb.settings, "secret_key", "env-key")
+    monkeypatch.setattr(
+        sb.settings, "database_url", f"sqlite:///{tmp_path / 'borg.db'}"
+    )
+    monkeypatch.setattr(sb.settings, "ssh_keys_dir", str(tmp_path / "ssh_keys"))
+    paths = sb.write_staging(
+        test_db, tmp_path, app_version="v", alembic_revision="r", hostname="h"
+    )
+    staged = sb.staging_dir(tmp_path) / sb.SECRET_KEY_NAME
+    assert staged.read_text() == "env-key"
+    assert str(tmp_path / ".secret_key") not in paths
+
+
+@pytest.mark.unit
+def test_sqlite_url_options_are_not_part_of_the_filename(
+    test_db, tmp_path, monkeypatch
+):
+    _sqlite(tmp_path / "borg.db")
+    monkeypatch.setattr(
+        sb.settings,
+        "database_url",
+        f"sqlite:///{tmp_path / 'borg.db'}?check_same_thread=false",
+    )
+    monkeypatch.setattr(sb.settings, "ssh_keys_dir", str(tmp_path / "ssh_keys"))
+    sb.write_staging(
+        test_db, tmp_path, app_version="v", alembic_revision="r", hostname="h"
+    )
+    import sqlite3
+
+    with sqlite3.connect(sb.staging_dir(tmp_path) / sb.SNAPSHOT_NAME) as conn:
+        tables = {r[0] for r in conn.execute("select name from sqlite_master")}
+    assert "t" in tables

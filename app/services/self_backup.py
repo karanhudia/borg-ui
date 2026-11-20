@@ -16,15 +16,18 @@ from typing import Any, Optional
 
 import structlog
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from app.config import get_runtime_app_version, resolve_secret_key_file, settings
+from app.config import get_runtime_app_version, settings
 
 logger = structlog.get_logger()
 
 MANIFEST_FORMAT = 1
 # Not "borg.db": the plan excludes every live borg.db by name.
 SNAPSHOT_NAME = "borg-ui-db.sqlite"
+# The key in use (SECRET_KEY wins over the .secret_key file), not the file.
+SECRET_KEY_NAME = "secret-key"
 WARNING_PREFIX = "Borg UI settings were not included in this snapshot"
 
 
@@ -48,7 +51,6 @@ def self_backup_paths(data_dir: Path) -> list[str]:
     listed even before it exists; it is written before Borg starts."""
     paths = [str(staging_dir(data_dir))]
     for extra in (
-        resolve_secret_key_file(str(data_dir)),
         Path(settings.ssh_keys_dir),
         # Keyfile-mode repositories cannot be opened without these.
         Path(data_dir) / "borg_keys",
@@ -222,13 +224,17 @@ def write_staging(
     """Fill the staging folder from scratch. Returns the paths Borg backs up."""
     from app.database.db_upgrade import _snapshot_sqlite
 
-    if not settings.database_url.startswith("sqlite"):
+    url = make_url(settings.database_url)
+    if url.get_backend_name() != "sqlite" or not url.database:
         raise SelfBackupUnsupported("self-backup supports SQLite databases only")
-    database = Path(settings.database_url.replace("sqlite:///", "", 1))
+    database = Path(url.database)
     staging = staging_dir(data_dir)
     clear_staging(data_dir)
     _make_staging(staging)
     _snapshot_sqlite(database, staging / SNAPSHOT_NAME)
+    key_file = staging / SECRET_KEY_NAME
+    key_file.write_text(settings.secret_key)
+    key_file.chmod(0o600)
     export = _config_export(db)
     if export is not None:
         (staging / "config.export").write_bytes(export)

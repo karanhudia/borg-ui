@@ -95,11 +95,8 @@ def test_rebuild_inputs_without_host_root(tmp_path):
 @pytest.mark.unit
 def test_self_backup_paths_only_existing(data_dir):
     paths = sb.self_backup_paths(data_dir)
-    assert paths == [
-        str(sb.staging_dir(data_dir)),
-        str(data_dir / ".secret_key"),
-        str(data_dir / "ssh_keys"),
-    ]
+    # The key travels inside staging (the one in use), not as the file.
+    assert paths == [str(sb.staging_dir(data_dir)), str(data_dir / "ssh_keys")]
 
 
 @pytest.mark.unit

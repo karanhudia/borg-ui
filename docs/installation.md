@@ -329,8 +329,8 @@ cap_add:
 
 `privileged: true` already includes it. Without either, Borg UI starts as
 before and backs up what `PUID` can read; the startup log says
-`Borg reads host files as the app user only`. With it, the log says
-`Borg can read every host file`. The permission lets those backups read any
+`This machine backups read host files as the app user only`. With it, the log says
+`This machine backups can read every host file`. The permission lets those backups read any
 file. It does not let Borg UI write anywhere `PUID` cannot.
 
 Borg UI also prepares `/var/backups/borg-ui` on the host (through the `/`

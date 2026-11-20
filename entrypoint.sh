@@ -191,48 +191,57 @@ else
     echo "[$(date)] Docker socket not mounted, skipping docker group setup"
 fi
 
-# "This machine": let Borg read every file on the host when the container may
-# grant it (compose `cap_add: DAC_READ_SEARCH`). Proven by running the read-all
-# interpreter as the app user; a stale marker from an earlier start is dropped
-# first, because the bounding set can change between starts and the borg
-# wrapper must never pick an interpreter that cannot run.
+# "This machine": the host folder its snapshots go to, outside the Borg UI data
+# volume so removing the volume does not take the snapshots with it. The host
+# root is the first LOCAL_MOUNT_POINTS entry that looks like a Linux root (the
+# same rule the app uses); entries are comma-separated and may contain spaces.
+HOST_ROOT=""
+OLD_IFS="$IFS"
+IFS=','
+for mount in ${LOCAL_MOUNT_POINTS:-/local}; do
+    mount="$(echo "$mount" | sed 's/^ *//; s/ *$//')"
+    if [ -n "$mount" ] && [ "$mount" != "/" ] && [ -f "$mount/etc/os-release" ]; then
+        HOST_ROOT="$mount"
+        break
+    fi
+done
+IFS="$OLD_IFS"
+if [ -n "$HOST_ROOT" ]; then
+    if mkdir -p "$HOST_ROOT/var/backups/borg-ui" 2>/dev/null \
+        && chown "$PUID:$PGID" "$HOST_ROOT/var/backups/borg-ui" 2>/dev/null \
+        && chmod 700 "$HOST_ROOT/var/backups/borg-ui" 2>/dev/null; then
+        echo "[$(date)] Snapshot folder ready at $HOST_ROOT/var/backups/borg-ui"
+    else
+        echo "[$(date)] WARNING: could not prepare $HOST_ROOT/var/backups/borg-ui"
+    fi
+fi
+
+# Let This machine backups read every host file when the container may grant
+# it (compose `cap_add: DAC_READ_SEARCH`). Proven by reading, as the app user
+# through the read-all interpreter, a root-only file on the host itself
+# (/etc/shadow): a capability that only works inside the container, under a
+# remapped user namespace or a nosuid mount, does not count. A stale marker
+# from an earlier start is dropped first, because the bounding set can change
+# between starts and the borg wrapper must never pick an interpreter that
+# cannot run.
 mkdir -p /run/borg-ui
 rm -f /run/borg-ui/read-all
-if [ -x /opt/borg1-read/bin/python3 ]; then
-    # A root-only file the app user must read through the copy: proves the
-    # capability is effective, not just that the copy can exec (a nosuid
-    # mount or user namespace can drop it silently).
-    PROBE_FILE=/run/borg-ui/read-probe
-    : > "$PROBE_FILE" && chown root:root "$PROBE_FILE" && chmod 600 "$PROBE_FILE"
+if [ -x /opt/borg1-read/bin/python3 ] && [ -n "$HOST_ROOT" ] && [ -f "$HOST_ROOT/etc/shadow" ]; then
+    PROBE_FILE="$HOST_ROOT/etc/shadow"
     read_probe() {
         if [ "$PUID" = "0" ]; then
-            /opt/borg1-read/bin/python3 -I -c "open('$PROBE_FILE','rb').close()"
+            /opt/borg1-read/bin/python3 -I -c "open('$PROBE_FILE','rb').read(1)"
         else
-            gosu borg /opt/borg1-read/bin/python3 -I -c "open('$PROBE_FILE','rb').close()"
+            gosu borg /opt/borg1-read/bin/python3 -I -c "open('$PROBE_FILE','rb').read(1)"
         fi
     }
     if read_probe 2>/dev/null; then
         touch /run/borg-ui/read-all
-        echo "[$(date)] Borg can read every host file (DAC_READ_SEARCH)"
+        echo "[$(date)] This machine backups can read every host file (DAC_READ_SEARCH)"
     else
-        echo "[$(date)] Borg reads host files as the app user only. Add cap_add: [DAC_READ_SEARCH] to protect the whole machine."
+        echo "[$(date)] This machine backups read host files as the app user only. Add cap_add: [DAC_READ_SEARCH] to protect the whole machine."
     fi
 fi
-
-# The host folder "This machine" keeps its snapshots in, outside the Borg UI
-# data volume so removing the volume does not take the snapshots with it.
-for mount in $(echo "${LOCAL_MOUNT_POINTS:-/local}" | tr ',' ' '); do
-    if [ -f "$mount/etc/os-release" ] && [ "$mount" != "/" ]; then
-        if mkdir -p "$mount/var/backups/borg-ui" 2>/dev/null \
-            && chown "$PUID:$PGID" "$mount/var/backups/borg-ui" 2>/dev/null \
-            && chmod 700 "$mount/var/backups/borg-ui" 2>/dev/null; then
-            echo "[$(date)] Snapshot folder ready at $mount/var/backups/borg-ui"
-        else
-            echo "[$(date)] WARNING: could not prepare $mount/var/backups/borg-ui"
-        fi
-        break
-    fi
-done
 
 # Bring the database up to date BEFORE anything reads it -- deploy_ssh_key below
 # reads the SSH keys from it. On a first migration into an empty Postgres the
