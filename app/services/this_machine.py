@@ -138,13 +138,17 @@ def source_directories(host_root: Path) -> list[str]:
     ]
 
 
-def exclude_patterns(host_root: Path, repo_path: Path, data_dir: Path) -> list[str]:
+def exclude_patterns(
+    host_root: Path, repo_path: Path, data_dir: Path, in_data_volume: bool = False
+) -> list[str]:
     patterns = [*CACHE_EXCLUDES, *LIVE_DATABASE_EXCLUDES]
     patterns += [str(host_root / path) for path in HOST_EXCLUDES]
     patterns.append(str(repo_path))
-    # ponytail: a data volume under /var/lib/docker/volumes shows the fallback
-    # repository at a host path we cannot predict, so exclude it by name.
-    patterns.append(f"**/{DATA_VOLUME_SNAPSHOT_DIR}")
+    if in_data_volume:
+        # ponytail: a data volume under /var/lib/docker/volumes shows the
+        # fallback repository at a host path we cannot predict, so exclude it
+        # by name. Only in fallback mode; a host repository has an exact path.
+        patterns.append(f"**/{DATA_VOLUME_SNAPSHOT_DIR}")
     return patterns
 
 
@@ -187,6 +191,13 @@ def estimate_size(
     return SizeEstimate(bytes=total, complete=True)
 
 
+def repository_in_data_volume(repository: Repository) -> bool:
+    """Where an existing This machine repository actually lives."""
+    data_dir = Path(settings.data_dir).resolve()
+    path = Path(repository.path).resolve()
+    return path == data_dir or data_dir in path.parents
+
+
 def system_plan(db: Session) -> Optional[BackupPlan]:
     return (
         db.query(BackupPlan).filter(BackupPlan.system_role == THIS_MACHINE_ROLE).first()
@@ -218,7 +229,7 @@ def plan_sources() -> tuple[list[str], list[str], Path, bool]:
         )
     return (
         source_directories(host_root),
-        exclude_patterns(host_root, repo_path, data_dir),
+        exclude_patterns(host_root, repo_path, data_dir, in_data_volume),
         repo_path,
         in_data_volume,
     )

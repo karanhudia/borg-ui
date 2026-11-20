@@ -700,6 +700,14 @@ async def _send_plan_required_notice(
         db.close()
 
 
+def _self_backup_in_thread() -> Optional[str]:
+    db = SessionLocal()
+    try:
+        return run_self_backup_step(db)
+    finally:
+        db.close()
+
+
 @dataclass
 class PreHookVerdict:
     """What a plan run's pre-backup scripts decided for its backups: go
@@ -1745,11 +1753,9 @@ class BackupPlanExecutionService:
             )
         warnings = [pre_script_error] if pre_script_error else []
         if context.system_role == THIS_MACHINE_ROLE:
-            db = SessionLocal()
-            try:
-                self_backup_warning = run_self_backup_step(db)
-            finally:
-                db.close()
+            # Copies the database and walks host files: off the event loop,
+            # with a session owned by that thread.
+            self_backup_warning = await asyncio.to_thread(_self_backup_in_thread)
             if self_backup_warning:
                 warnings.append(self_backup_warning)
         return PreHookVerdict(warning="; ".join(warnings) if warnings else None)

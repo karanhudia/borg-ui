@@ -47,7 +47,12 @@ def self_backup_paths(data_dir: Path) -> list[str]:
     """What the system plan backs up for Borg UI itself. The staging folder is
     listed even before it exists; it is written before Borg starts."""
     paths = [str(staging_dir(data_dir))]
-    for extra in (resolve_secret_key_file(str(data_dir)), Path(settings.ssh_keys_dir)):
+    for extra in (
+        resolve_secret_key_file(str(data_dir)),
+        Path(settings.ssh_keys_dir),
+        # Keyfile-mode repositories cannot be opened without these.
+        Path(data_dir) / "borg_keys",
+    ):
         if extra.exists():
             paths.append(str(extra))
     return paths
@@ -70,6 +75,12 @@ def with_self_backup_paths(
         paths = list(local.get("paths") or [])
         local["paths"] = [*paths, *[p for p in extra if p not in paths]]
     return directories, locations
+
+
+def _make_staging(staging: Path) -> None:
+    """Owner-only: it holds a database copy and a config export."""
+    staging.mkdir(parents=True, mode=0o700, exist_ok=True)
+    staging.chmod(0o700)
 
 
 def clear_staging(data_dir: Path) -> None:
@@ -216,7 +227,7 @@ def write_staging(
     database = Path(settings.database_url.replace("sqlite:///", "", 1))
     staging = staging_dir(data_dir)
     clear_staging(data_dir)
-    staging.mkdir(parents=True)
+    _make_staging(staging)
     _snapshot_sqlite(database, staging / SNAPSHOT_NAME)
     export = _config_export(db)
     if export is not None:
@@ -267,5 +278,11 @@ def run_self_backup_step(db: Session) -> Optional[str]:
     except Exception as exc:
         logger.warning("Self-backup staging failed", error=str(exc))
         clear_staging(data_dir)
+        # The backup was queued with this folder as a source and refuses a
+        # missing one; an empty folder lets the machine's files still go in.
+        try:
+            _make_staging(staging_dir(data_dir))
+        except OSError:
+            pass
         return f"{WARNING_PREFIX}: {exc}"
     return None

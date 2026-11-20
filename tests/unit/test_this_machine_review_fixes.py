@@ -203,3 +203,81 @@ def test_only_admins_edit_the_system_plan(
     assert (
         response.json()["detail"]["key"] == "backend.errors.thisMachine.adminRequired"
     )
+
+
+# --- CodeRabbit round 1 ---
+
+
+@pytest.mark.unit
+def test_failed_staging_leaves_an_empty_folder_borg_can_open(
+    test_db, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(sb.settings, "data_dir", str(tmp_path))
+    with patch.object(sb, "write_staging", side_effect=OSError("boom")):
+        assert sb.run_self_backup_step(test_db).startswith(sb.WARNING_PREFIX)
+    staging = sb.staging_dir(tmp_path)
+    assert staging.is_dir() and not any(staging.iterdir())
+
+
+@pytest.mark.unit
+def test_staging_is_owner_only(test_db, tmp_path, monkeypatch):
+    import sqlite3
+    import stat
+
+    with sqlite3.connect(tmp_path / "borg.db") as conn:
+        conn.execute("create table t (x)")
+    monkeypatch.setattr(
+        sb.settings, "database_url", f"sqlite:///{tmp_path / 'borg.db'}"
+    )
+    monkeypatch.setattr(sb.settings, "ssh_keys_dir", str(tmp_path / "ssh_keys"))
+    sb.write_staging(
+        test_db, tmp_path, app_version="v", alembic_revision="r", hostname="h"
+    )
+    mode = stat.S_IMODE(sb.staging_dir(tmp_path).stat().st_mode)
+    assert mode == 0o700
+
+
+@pytest.mark.unit
+def test_self_backup_includes_borg_keyfiles(tmp_path, monkeypatch):
+    (tmp_path / "borg_keys").mkdir()
+    monkeypatch.setattr(sb.settings, "ssh_keys_dir", str(tmp_path / "ssh_keys"))
+    assert str(tmp_path / "borg_keys") in sb.self_backup_paths(tmp_path)
+
+
+@pytest.mark.unit
+def test_same_name_folders_are_not_excluded_on_the_host(tmp_path):
+    host = tmp_path / "local"
+    (host / "etc").mkdir(parents=True)
+    excludes = tm.exclude_patterns(
+        host, host / "var/backups/borg-ui", tmp_path / "data", in_data_volume=False
+    )
+    assert not _borg_fm_excluded(str(host / "home/me/this-machine/notes"), excludes)
+    fallback = tm.exclude_patterns(
+        host, tmp_path / "data/this-machine", tmp_path / "data", in_data_volume=True
+    )
+    assert _borg_fm_excluded(
+        str(host / "var/lib/docker/volumes/v/_data/this-machine/data"), fallback
+    )
+
+
+@pytest.mark.unit
+def test_status_reports_the_saved_repository_location(
+    test_client, admin_headers, test_db, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(tm.settings, "data_dir", str(tmp_path / "data"))
+    test_db.add(
+        Repository(
+            name="This machine (local)",
+            path=str(tmp_path / "data" / "this-machine"),
+            encryption="none",
+            repository_type="local",
+            mode="full",
+            system_role=tm.THIS_MACHINE_ROLE,
+        )
+    )
+    test_db.commit()
+    host = tmp_path / "local"
+    (host / "etc").mkdir(parents=True)
+    with patch.object(tm, "_host_root", return_value=host):
+        body = test_client.get("/api/this-machine", headers=admin_headers).json()
+    assert body["in_data_volume"] is True

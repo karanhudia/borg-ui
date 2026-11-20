@@ -182,10 +182,11 @@ UI's own state with it. Every snapshot of that plan contains:
 
 | Item | What it is |
 | --- | --- |
-| `borg.db` | A consistent copy of the database, taken with SQLite's backup API. The live `borg.db`, `-wal` and `-shm` files are never backed up. |
+| `borg-ui-db.sqlite` | A consistent copy of the database, taken with SQLite's backup API. The live `borg.db`, `-wal` and `-shm` files are never backed up. |
 | `config.export` | A borgmatic-compatible export of repositories and schedules |
 | `.secret_key` | Needed to decrypt the SSH keys and script secrets stored in the database |
 | `ssh_keys/` | The SSH keys Borg UI uses |
+| `borg_keys/` | Keyfiles of repositories that use keyfile encryption |
 | `manifest.json` | The Borg UI version and database revision that made the snapshot |
 | `rebuild/` | Package lists, cron tables, enabled services and container definitions of the host, for rebuilding it later |
 

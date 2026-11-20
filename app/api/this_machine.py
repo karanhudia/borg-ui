@@ -44,7 +44,10 @@ def get_status(
 ) -> ThisMachineStatus:
     plan = tm.system_plan(db)
     repository = tm.system_repository(db)
-    _, _, _, in_data_volume = tm.plan_sources()
+    if repository is not None:
+        in_data_volume = tm.repository_in_data_volume(repository)
+    else:
+        _, _, _, in_data_volume = tm.plan_sources()
     return ThisMachineStatus(
         configured=plan is not None,
         plan_id=plan.id if plan else None,

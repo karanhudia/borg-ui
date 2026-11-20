@@ -4201,7 +4201,10 @@ class TestBackupPlanRoutes:
             assert repository == repo.path
             assert kwargs["source_directories"] == ["/home/tester/project"]
             assert kwargs["source_ssh_connection_id"] == source_connection.id
-            assert kwargs["exclude_patterns_override"] == ["node_modules", STAGING_EXCLUDE]
+            assert kwargs["exclude_patterns_override"] == [
+                "node_modules",
+                STAGING_EXCLUDE,
+            ]
             job = resolve_backup_job(db, job_id)
             assert job.source_ssh_connection_id == source_connection.id
             assert job.backup_plan_id is not None

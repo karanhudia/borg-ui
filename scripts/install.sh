@@ -502,15 +502,35 @@ grant_read_all() {
   [[ "${SERVICE_USER}" != "root" ]] || return 0
   command -v setcap >/dev/null 2>&1 || { warn "setcap missing; Borg reads as ${SERVICE_USER} only"; return 0; }
   # A copy, so every other Borg call keeps the service user's own access.
-  install -m 0755 "${binary}" "${copy}"
+  # Root-owned and runnable by the service group only: it can read any file.
+  local group
+  group="$(id -gn "${SERVICE_USER}")"
+  install -o root -g "${group}" -m 0750 "${binary}" "${copy}"
+  # Proof it reads a root-only file, not just that it runs: back the file up
+  # into a throwaway repository (Borg exits 1 on a file it cannot read).
+  local work probe
+  work="$(mktemp -d)"
+  chmod 0711 "${work}"
+  probe="${work}/root-only"
+  echo probe >"${probe}"
+  chmod 600 "${probe}"
+  install -d -o "${SERVICE_USER}" -g "${group}" -m 0700 "${work}/repo-parent"
   if setcap cap_dac_read_search+ep "${copy}" 2>/dev/null &&
-    runuser -u "${SERVICE_USER}" -- "${copy}" --version >/dev/null 2>&1; then
+    runuser -u "${SERVICE_USER}" -- env OPENSSL_armcap=0 \
+      BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+      BORG_BASE_DIR="${work}/repo-parent" \
+      "${copy}" init -e none "${work}/repo-parent/repo" >/dev/null 2>&1 &&
+    runuser -u "${SERVICE_USER}" -- env OPENSSL_armcap=0 \
+      BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+      BORG_BASE_DIR="${work}/repo-parent" \
+      "${copy}" create "${work}/repo-parent/repo::probe" "${probe}" >/dev/null 2>&1; then
     touch "${marker}"
     log "This machine backups can read every file"
   else
     rm -f "${copy}"
     warn "This machine backups read files as ${SERVICE_USER} only; root-only files are skipped"
   fi
+  rm -rf "${work}"
 }
 
 install_borg1() {

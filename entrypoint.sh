@@ -199,12 +199,19 @@ fi
 mkdir -p /run/borg-ui
 rm -f /run/borg-ui/read-all
 if [ -x /opt/borg1-read/bin/python3 ]; then
-    if [ "$PUID" = "0" ]; then
-        READ_PROBE="/opt/borg1-read/bin/python3 -I -c pass"
-    else
-        READ_PROBE="gosu borg /opt/borg1-read/bin/python3 -I -c pass"
-    fi
-    if $READ_PROBE 2>/dev/null; then
+    # A root-only file the app user must read through the copy: proves the
+    # capability is effective, not just that the copy can exec (a nosuid
+    # mount or user namespace can drop it silently).
+    PROBE_FILE=/run/borg-ui/read-probe
+    : > "$PROBE_FILE" && chown root:root "$PROBE_FILE" && chmod 600 "$PROBE_FILE"
+    read_probe() {
+        if [ "$PUID" = "0" ]; then
+            /opt/borg1-read/bin/python3 -I -c "open('$PROBE_FILE','rb').close()"
+        else
+            gosu borg /opt/borg1-read/bin/python3 -I -c "open('$PROBE_FILE','rb').close()"
+        fi
+    }
+    if read_probe 2>/dev/null; then
         touch /run/borg-ui/read-all
         echo "[$(date)] Borg can read every host file (DAC_READ_SEARCH)"
     else
