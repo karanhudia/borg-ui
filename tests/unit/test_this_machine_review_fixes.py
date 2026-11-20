@@ -166,3 +166,40 @@ def test_startup_clears_leftover_staging(tmp_path, monkeypatch):
 @pytest.mark.unit
 def test_snapshot_name_is_not_borg_db():
     assert Path(sb.SNAPSHOT_NAME).name != "borg.db"
+
+
+@pytest.mark.unit
+def test_read_all_is_a_backup_service_param():
+    from app.services.operations.backup_facade import SERVICE_PARAMS
+
+    assert "read_all" in SERVICE_PARAMS
+
+
+@pytest.mark.unit
+def test_read_all_env_only_when_asked():
+    assert sb.read_all_env(True) == {"BORG_UI_READ_ALL": "1"}
+    assert sb.read_all_env(False) == {}
+
+
+@pytest.mark.unit
+def test_only_admins_edit_the_system_plan(
+    test_client, operator_headers, test_db, operator_user
+):
+    operator_user.all_repositories_role = "operator"
+    plan = BackupPlan(
+        name="This machine",
+        source_directories='["/local/etc"]',
+        system_role=tm.THIS_MACHINE_ROLE,
+        created_at=datetime.utcnow(),
+    )
+    test_db.add(plan)
+    test_db.commit()
+    response = test_client.put(
+        f"/api/backup-plans/{plan.id}",
+        json={"name": "x", "source_directories": ["/local/root"], "repositories": []},
+        headers=operator_headers,
+    )
+    assert response.status_code == 403
+    assert (
+        response.json()["detail"]["key"] == "backend.errors.thisMachine.adminRequired"
+    )

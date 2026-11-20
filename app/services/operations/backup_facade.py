@@ -83,6 +83,7 @@ SERVICE_PARAMS = (
     "compression_override",
     "custom_flags_override",
     "upload_ratelimit_kib",
+    "read_all",
 )
 # `params` keys handed to `queue_agent_backup_job`, mapped to its names.
 AGENT_PARAMS = {

@@ -33,6 +33,12 @@ class SelfBackupUnsupported(RuntimeError):
     with Postgres tools."""
 
 
+def read_all_env(read_all: bool) -> dict[str, str]:
+    """The flag the image's `borg` wrapper needs, besides the start-up marker,
+    to run Borg with read-all access. Only the This machine plan sets it."""
+    return {"BORG_UI_READ_ALL": "1"} if read_all else {}
+
+
 def staging_dir(data_dir: Path) -> Path:
     return Path(data_dir) / "self-backup" / "staging"
 

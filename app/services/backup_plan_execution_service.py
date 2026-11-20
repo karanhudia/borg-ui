@@ -3081,6 +3081,7 @@ class BackupPlanExecutionService:
                     "compression_override": repository_context.compression,
                     "custom_flags_override": repository_context.custom_flags,
                     "upload_ratelimit_kib": repository_context.upload_ratelimit_kib,
+                    "read_all": context.system_role == THIS_MACHINE_ROLE,
                 },
                 commit=False,
             )

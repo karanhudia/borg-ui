@@ -432,6 +432,11 @@ write_forwarder() {
 # service already sets this through its unit, but a hook, a cron entry or an
 # operator at a shell does not, and Borg has to work in all of those.
 export OPENSSL_armcap=0
+# This machine backups only: a copy of Borg that may read every file, used
+# when Borg UI asks for it and the installer proved the service can run it.
+if [[ "\${BORG_UI_READ_ALL:-}" == 1 && -e "${PREFIX}/read-all" && -x "${target}-read" ]]; then
+  exec "${target}-read" "\$@"
+fi
 exec ${target} "\$@"
 FORWARDER
   chmod 0755 "${PREFIX}/bin/${name}"
@@ -487,21 +492,24 @@ install_borg_binary() {
 }
 
 # "This machine" backs up files only root can read while the service stays
-# non-root: the pinned Borg 1 binary gets CAP_DAC_READ_SEARCH. Kept only if
-# the service user can still run it afterwards (a capability outside the
-# bounding set makes exec fail), and recorded in a marker the app reads.
+# non-root: a copy of the pinned Borg 1 binary gets CAP_DAC_READ_SEARCH, and
+# the forwarder uses it only for This machine backups. Kept only if the
+# service user can run it (a capability outside the bounding set makes exec
+# fail), and recorded in a marker the app reads.
 grant_read_all() {
-  local binary="$1" marker="${PREFIX}/read-all"
+  local binary="$1" copy="$1-read" marker="${PREFIX}/read-all"
   rm -f "${marker}"
   [[ "${SERVICE_USER}" != "root" ]] || return 0
   command -v setcap >/dev/null 2>&1 || { warn "setcap missing; Borg reads as ${SERVICE_USER} only"; return 0; }
-  if setcap cap_dac_read_search+ep "${binary}" 2>/dev/null &&
-    runuser -u "${SERVICE_USER}" -- "${binary}" --version >/dev/null 2>&1; then
+  # A copy, so every other Borg call keeps the service user's own access.
+  install -m 0755 "${binary}" "${copy}"
+  if setcap cap_dac_read_search+ep "${copy}" 2>/dev/null &&
+    runuser -u "${SERVICE_USER}" -- "${copy}" --version >/dev/null 2>&1; then
     touch "${marker}"
-    log "Borg can read every file on this machine"
+    log "This machine backups can read every file"
   else
-    setcap -r "${binary}" 2>/dev/null || true
-    warn "Borg reads files as ${SERVICE_USER} only; root-only files are skipped"
+    rm -f "${copy}"
+    warn "This machine backups read files as ${SERVICE_USER} only; root-only files are skipped"
   fi
 }
 

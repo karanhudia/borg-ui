@@ -546,6 +546,7 @@
       "io": "Storage reported an input/output error. Check the affected disk, filesystem and mounts before retrying. Verify the operation state before submitting it again."
     },
     "thisMachine": {
+      "adminRequired": "Only an admin can change what the This machine plan backs up.",
       "confirmDelete": "This is the plan or repository that protects this machine and Borg UI itself. Confirm to delete it anyway."
     }
   },

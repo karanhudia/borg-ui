@@ -2268,6 +2268,11 @@ def update_backup_plan(
 ):
     plan = _load_plan_or_404(db, plan_id)
     _require_plan_operator_access(db, current_user, plan)
+    # Its backups read every host file, so only admins choose what it covers.
+    if plan.system_role:
+        require_any_role(
+            current_user, "admin", detail_key="backend.errors.thisMachine.adminRequired"
+        )
     try:
         repositories = _validate_payload(
             db,
