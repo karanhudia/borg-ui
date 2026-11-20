@@ -126,7 +126,7 @@ def collect_rebuild_inputs(host_root: Optional[Path], staging: Path) -> list[str
         try:
             if collect(host_root, out):
                 written.append(name)
-        except OSError as exc:  # shutil.Error is an OSError
+        except Exception as exc:  # optional; never costs the snapshot
             logger.info("Skipped rebuild input", input=name, error=str(exc))
     return written
 

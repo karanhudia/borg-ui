@@ -329,3 +329,16 @@ def test_sqlite_url_options_are_not_part_of_the_filename(
     with sqlite3.connect(sb.staging_dir(tmp_path) / sb.SNAPSHOT_NAME) as conn:
         tables = {r[0] for r in conn.execute("select name from sqlite_master")}
     assert "t" in tables
+
+
+@pytest.mark.unit
+def test_a_collector_that_raises_anything_is_skipped(tmp_path):
+    def broken(_root, _out):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad")
+
+    def fine(_root, out):
+        (out / "ok").write_text("x")
+        return True
+
+    with patch.object(sb, "_REBUILD_COLLECTORS", (("broken", broken), ("fine", fine))):
+        assert sb.collect_rebuild_inputs(tmp_path, tmp_path) == ["fine"]

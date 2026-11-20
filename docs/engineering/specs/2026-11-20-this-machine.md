@@ -1,7 +1,7 @@
 # This machine: protect by default, restore like WhatsApp
 
 **Date:** 2026-11-20
-**Status:** Design agreed with Karan 2026-11-20. Not started.
+**Status:** Design agreed with Karan 2026-11-20. Phase 1 implemented (PR 1); phases 2 to 4 not started.
 **Plan:** to be written under `docs/engineering/plans/2026-11-20-this-machine.md`
 
 ## Why
@@ -132,11 +132,16 @@ and database discovery.
 - Runs inside the "This machine" plan before `borg create`, as a built-in step
   in plan execution, not a script.
 - Writes `/data/self-backup/staging/` (data dir path, not literal `/data` on
-  native): `borg.db` copied with `_snapshot_sqlite`
-  (`app/database/db_upgrade.py`), `config.export` from `export_config`, and a
-  `manifest.json` (Borg UI version, alembic revision, created at, hostname).
-- The archive includes the staging folder, `.secret_key` and `ssh_keys/`.
-  The staging folder is deleted after the run, success or failure.
+  native; owner-only): `borg-ui-db.sqlite` copied with `_snapshot_sqlite`
+  (`app/database/db_upgrade.py`; not named `borg.db`, which the plan excludes
+  everywhere), `secret-key` holding the key in use (`SECRET_KEY` wins over
+  the `.secret_key` file), `config.export` from the borgmatic export
+  (`build_borgmatic_export_artifact`), a `manifest.json` (Borg UI version,
+  alembic revision, created at, hostname), and `rebuild/` inputs last.
+- The archive includes the staging folder, `ssh_keys/` and `borg_keys/`.
+  The staging folder is deleted after the run, success or failure, and at
+  start-up; a failed write leaves it empty so the backup still runs. Other
+  plans exclude `**/self-backup/staging`.
 - Archives are tagged or named so the restore engine can tell self-backup
   content exists (builder's call: an archive comment with the manifest, or a
   fixed path inside the archive).
@@ -179,7 +184,8 @@ One backend, two entry points (first-start screen, dashboard card).
    first, with the Borg UI version from the manifest.
 3. Refuse archives whose alembic revision is newer than this app's head, with
    a message naming the version needed. Older revisions are fine.
-4. Extract `borg.db`, `.secret_key` and `ssh_keys/` into
+4. Extract `borg-ui-db.sqlite` (as `borg.db`), `secret-key` (as
+   `.secret_key`), `ssh_keys/` and `borg_keys/` into
    `$DATA_DIR/restore-pending/` and write a marker.
 5. Exit the process with a non-zero code. Docker (`restart: unless-stopped`)
    and the native unit (`Restart=on-failure`) restart it.
