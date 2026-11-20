@@ -87,6 +87,7 @@ from app.core.features import (
     require_feature_access,
 )
 from app.config import settings
+from app.services.this_machine import require_system_delete_confirmed
 from app.services.mqtt_service import mqtt_service
 from app.services.process_cancel import communicate_or_kill
 from app.services.operations.wipe_facade import (
@@ -3588,6 +3589,7 @@ def get_repositories(
             repo_payload = {
                 "id": repo.id,
                 "name": repo.name,
+                "system_role": repo.system_role,
                 "path": repo.path,
                 "encryption": repo.encryption,
                 "compression": repo.compression,
@@ -4844,6 +4846,7 @@ async def get_repository(
         repository_payload = {
             "id": repository.id,
             "name": repository.name,
+            "system_role": repository.system_role,
             "path": repository.path,
             "encryption": repository.encryption,
             "compression": repository.compression,
@@ -6092,6 +6095,7 @@ async def delete_repository(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    confirm_system: bool = False,
 ):
     """Delete repository (admin only)"""
     require_any_role(
@@ -6105,6 +6109,7 @@ async def delete_repository(
                 detail={"key": "backend.errors.repo.repositoryNotFound"},
             )
         _require_repository_access(db, current_user, repository, "operator")
+        require_system_delete_confirmed(repository.system_role, confirm_system)
 
         # CRITICAL: Clean up all foreign key references before deleting repository
         # Some tables don't have CASCADE delete, so we must manually handle them
@@ -6204,6 +6209,7 @@ async def permanently_delete_repository(
     request: RepositoryPermanentDeleteRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    confirm_system: bool = False,
 ):
     """Delete a local repository directory, then remove the Borg UI record."""
     require_any_role(
@@ -6217,6 +6223,7 @@ async def permanently_delete_repository(
                 detail={"key": "backend.errors.repo.repositoryNotFound"},
             )
         _require_repository_access(db, current_user, repository, "operator")
+        require_system_delete_confirmed(repository.system_role, confirm_system)
 
         if not request.understood or request.confirmation_phrase != repository.name:
             raise HTTPException(

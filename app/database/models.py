@@ -290,11 +290,16 @@ DEFAULT_HISTORY_INDEX_EXCLUDES: tuple[str, ...] = (
 
 class Repository(Base):
     __tablename__ = "repositories"
-    __table_args__ = (Index("idx_repositories_source_ssh", "source_ssh_connection_id"),)
+    __table_args__ = (
+        Index("idx_repositories_source_ssh", "source_ssh_connection_id"),
+        Index("uq_repositories_system_role", "system_role", unique=True),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
     path = Column(String, unique=True, index=True)
+    # "this_machine" for the repository Borg UI creates to protect its host.
+    system_role = Column(String, nullable=True)
     encryption = Column(String, default="repokey")
     compression = Column(String, default="lz4")
     passphrase = Column(
@@ -890,9 +895,12 @@ class ScheduledJobRepository(Base):
 
 class BackupPlan(Base):
     __tablename__ = "backup_plans"
+    __table_args__ = (Index("uq_backup_plans_system_role", "system_role", unique=True),)
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
+    # "this_machine" for the plan Borg UI creates to protect its host.
+    system_role = Column(String, nullable=True)
     description = Column(Text, nullable=True)
     enabled = Column(Boolean, default=True, nullable=False)
 
