@@ -31,3 +31,15 @@ export function api(request: APIRequestContext, token: string) {
 export async function blockAnalytics(page: Page) {
   await page.route('https://t.borgui.com/**', (route) => route.abort())
 }
+
+// Announcements (bundled or from updates.borgui.com) open a modal over
+// whatever page a test is on; every one reads as already acknowledged here.
+export async function muteAnnouncements(page: Page) {
+  await page.addInitScript(() => {
+    const getItem = Storage.prototype.getItem
+    Storage.prototype.getItem = function (key: string) {
+      if (/^announcement:.+:ack$/.test(key)) return 'true'
+      return getItem.call(this, key)
+    }
+  })
+}
