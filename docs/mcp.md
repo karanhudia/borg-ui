@@ -173,8 +173,9 @@ Everything at Operate, plus setting things up and changing them:
   defaults it used. Plans can also be changed and turned on or off.
 - **Schedules**: create, change, copy, and turn schedules on or off.
 - **SSH**: create a key, add a connection, change one, and trust a server's
-  host key. Trusting takes two steps: the AI shows the fingerprint, you compare
-  it with the server's own, and only then is it trusted.
+  host key. Trusting takes two steps: the AI shows the fingerprint of every key
+  the server offers, you compare each with the server's own, and only then are
+  they trusted.
 - **Scripts, notifications, cloud remotes and agents** (admins): add and change
   scripts and attach them to repositories, choose which events a notification
   channel sends, change a cloud remote's non-secret settings, and upgrade agent

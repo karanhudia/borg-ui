@@ -72,8 +72,9 @@ How to work
 - At manage access you can set things up. create_repository generates the
   passphrase itself: tell the user to save it from the link in the answer.
   create_backup_plan asks for what is missing instead of assuming; ask the user
-  those questions rather than inventing answers. trust_host_key shows a
-  fingerprint first: the user must compare it before you trust it."""
+  those questions rather than inventing answers. trust_host_key lists the
+  fingerprint of every host key first: the user must compare each one before
+  you trust them."""
 
 
 def _icons() -> Optional[list[types.Icon]]:

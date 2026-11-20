@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
 
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.mcp import links, resolve
+from app.utils.ssh_host_keys import key_fingerprint, sort_host_key_lines
 from app.mcp.levels import Level
 from app.mcp.registry import tool
 from app.mcp.render import ToolResult
@@ -225,33 +225,33 @@ class TrustHostKeyArgs(BaseModel):
         description="Connection as user@host or its id.",
         examples=["borg@backups.example.com"],
     )
-    fingerprint: Optional[str] = Field(
+    fingerprints: Optional[list[str]] = Field(
         None,
-        description="The fingerprint the user confirmed. Leave out on the first call to see it.",
-        examples=["SHA256:..."],
-    )
-    scan_code: Optional[str] = Field(
-        None,
-        description="The scan code the first call gave, so the key set the user saw is the one trusted.",
+        description="Every fingerprint the user confirmed against the server. Leave out on the first call to see them.",
+        examples=[["SHA256:..."]],
     )
 
 
-def _scan_code(observed: str) -> str:
-    """Names the whole key set: a server offers several host keys and the
-    fingerprint shown identifies only one, so the second call must see the
-    same set, not only the same main key."""
-    lines = sorted(line.strip() for line in observed.splitlines() if line.strip())
-    return hashlib.sha256("\n".join(lines).encode()).hexdigest()[:12]
+def _key_fingerprints(observed: str) -> list[tuple[str, Optional[str]]]:
+    """(key type, fingerprint) for every key the server offers. The route pins
+    all of them, so the user confirms all of them, not only the strongest."""
+    keys = []
+    for line in sort_host_key_lines(observed.splitlines()):
+        fields = line.split()
+        kind = fields[1] if len(fields) > 1 else "unknown"
+        keys.append((kind, key_fingerprint(line)))
+    return keys
 
 
 @tool(
     name="trust_host_key",
     title="Trust a server's host key",
     description=(
-        "Pins an SSH server's host key in two calls. The first shows the "
-        "fingerprint and trusts nothing; ask the user to compare it with the "
-        "server's own. The second, with that fingerprint, trusts the key only "
-        "if the server still shows the same one."
+        "Pins an SSH server's host keys in two calls. The first lists the "
+        "fingerprint of every key the server offers and trusts nothing; ask "
+        "the user to compare each one with the server's own. The second, with "
+        "all of those fingerprints, trusts the keys only if the server still "
+        "offers exactly that set."
     ),
     level=Level.MANAGE,
     routes=(
@@ -266,42 +266,55 @@ async def trust_host_key(ctx, args: TrustHostKeyArgs) -> ToolResult:
     label = resolve.ssh_label(connection)
     base = f"/api/ssh-keys/connections/{connection['id']}/host-key"
     scan = await ctx.api.get(base)
-    observed, seen = scan.get("observed_key"), scan.get("observed_fingerprint")
-    if not observed or not seen:
+    observed = scan.get("observed_key")
+    keys = _key_fingerprints(observed) if observed else []
+    if not keys:
         return ToolResult(
             f"✗ *{label}* did not answer with a host key. Check the server is up and the port is right.",
             is_error=True,
         )
-    code = _scan_code(observed)
-    if not args.fingerprint:
-        trusted = scan.get("trusted_fingerprint")
-        lines = [f"*{label}* shows this host key: `{seen}`", ""]
-        if trusted and trusted != seen:
-            lines += [f"⚠ Borg UI trusted a different key before: `{trusted}`.", ""]
-        lines.append(
-            "Nothing is trusted yet. Ask the user to compare it with the server's own "
-            "fingerprint (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the "
-            f"server), then call me again with it and the scan code `{code}`."
-        )
+    if any(fingerprint is None for _, fingerprint in keys):
         return ToolResult(
-            "\n".join(lines),
-            {"observed_fingerprint": seen, "scan_code": code, "trusted": False},
-        )
-    if not args.scan_code:
-        return ToolResult(
-            "Call me first without a fingerprint to scan the server, then again "
-            "with the fingerprint and the scan code that call gives.",
+            f"✗ *{label}* offered a host key Borg UI cannot read, so nothing is "
+            "trusted. Trust it from the web UI instead.",
             is_error=True,
         )
-    if args.fingerprint.strip() != seen or args.scan_code.strip() != code:
+    offered = sorted(fingerprint for _, fingerprint in keys)
+    listing = [f"- {kind}: `{fingerprint}`" for kind, fingerprint in keys]
+    if not args.fingerprints:
+        trusted = scan.get("trusted_fingerprint")
+        lines = [f"*{label}* offers these host keys:", "", *listing, ""]
+        if trusted and trusted not in offered:
+            lines += [f"⚠ Borg UI trusted a different key before: `{trusted}`.", ""]
+        lines.append(
+            "Nothing is trusted yet. Ask the user to compare every one with the "
+            "server's own (`ssh-keygen -lf` on each file in /etc/ssh/*.pub on the "
+            "server), then call me again with all of them."
+        )
+        return ToolResult("\n".join(lines), {"fingerprints": offered, "trusted": False})
+    confirmed = sorted({f.strip() for f in args.fingerprints})
+    if confirmed != offered:
+        unconfirmed = [f for f in offered if f not in confirmed]
+        lines = [f"✗ Not trusted. *{label}* now offers:", "", *listing, ""]
+        if unconfirmed and not set(confirmed) - set(offered):
+            lines.append(
+                "These were not confirmed: "
+                + ", ".join(f"`{f}`" for f in unconfirmed)
+                + ". Every key is pinned, so every key needs the user's check."
+            )
+        else:
+            lines.append(
+                "That is not the set the user confirmed. Check with the server's "
+                "admin before trusting anything."
+            )
         return ToolResult(
-            f"✗ Not trusted. *{label}* now shows a different key (`{seen}`) from the one "
-            "confirmed. Check with the server's admin before trusting anything.",
-            {"observed_fingerprint": seen, "trusted": False},
+            "\n".join(lines),
+            {"fingerprints": offered, "trusted": False},
             is_error=True,
         )
     await ctx.api.post(f"{base}/trust", json={"key": observed})
     return ToolResult(
-        f"✓ Borg UI now trusts *{label}*'s host key `{seen}`.",
-        {"observed_fingerprint": seen, "trusted": True},
+        f"✓ Borg UI now trusts *{label}*'s {len(keys)} host "
+        f"{'key' if len(keys) == 1 else 'keys'}.",
+        {"fingerprints": offered, "trusted": True},
     )

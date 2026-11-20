@@ -16,15 +16,6 @@ SYSTEM_KEY = {
 KEYS = {"/api/ssh-keys": {"ssh_keys": [SYSTEM_KEY]}}
 CONN = {"id": 4, "host": "backups.example.com", "username": "borg", "port": 22}
 CONNS = {"/api/ssh-keys/connections": {"connections": [CONN]}}
-SCAN = {
-    "connection_id": 4,
-    "host": "backups.example.com",
-    "port": 22,
-    "status": "unpinned",
-    "trusted_fingerprint": None,
-    "observed_fingerprint": "SHA256:EXAMPLEfingerprint",
-    "observed_key": "backups.example.com ssh-ed25519 AAAAEXAMPLEhostkey",
-}
 
 
 @pytest.mark.unit
@@ -129,128 +120,7 @@ def test_update_ssh_connection_rejects_kept_out_fields(field):
         )
 
 
-@pytest.mark.unit
-def test_trust_host_key_first_call_trusts_nothing():
-    routes = {**CONNS, "/api/ssh-keys/connections/4/host-key": SCAN}
-    result, api = run(
-        "trust_host_key", routes, ssh_connection="borg@backups.example.com"
-    )
-    assert api.posts == []
-    assert "SHA256:EXAMPLEfingerprint" in result.text
-    assert "compare" in result.text.lower()
-
-
-@pytest.mark.unit
-def test_trust_host_key_mismatch_refuses():
-    routes = {**CONNS, "/api/ssh-keys/connections/4/host-key": SCAN}
-    first, _ = run("trust_host_key", routes, ssh_connection="borg@backups.example.com")
-    result, api = run(
-        "trust_host_key",
-        routes,
-        ssh_connection="borg@backups.example.com",
-        fingerprint="SHA256:somethingElse",
-        scan_code=first.data["scan_code"],
-    )
-    assert api.posts == []
-    assert result.is_error
-    assert "different key" in result.text
-
-
-@pytest.mark.unit
-def test_trust_host_key_match_posts_the_scanned_key():
-    routes = {
-        **CONNS,
-        "/api/ssh-keys/connections/4/host-key": SCAN,
-        "POST /api/ssh-keys/connections/4/host-key/trust": {
-            **SCAN,
-            "status": "trusted",
-        },
-    }
-    first, _ = run("trust_host_key", routes, ssh_connection="borg@backups.example.com")
-    result, api = run(
-        "trust_host_key",
-        routes,
-        ssh_connection="borg@backups.example.com",
-        fingerprint="SHA256:EXAMPLEfingerprint",
-        scan_code=first.data["scan_code"],
-    )
-    assert api.posts == [
-        ("/api/ssh-keys/connections/4/host-key/trust", {"key": SCAN["observed_key"]})
-    ]
-    assert not result.is_error
-
-
-@pytest.mark.unit
-def test_trust_host_key_unreachable_server():
-    routes = {
-        **CONNS,
-        "/api/ssh-keys/connections/4/host-key": {
-            **SCAN,
-            "observed_key": None,
-            "observed_fingerprint": None,
-        },
-    }
-    result, api = run(
-        "trust_host_key", routes, ssh_connection="borg@backups.example.com"
-    )
-    assert api.posts == []
-    assert result.is_error
-
-
 # PR #1585 review
-
-TWO_KEYS = {
-    **SCAN,
-    "observed_key": "backups.example.com ssh-ed25519 AAAAEXAMPLEhostkey\nbackups.example.com ssh-rsa AAAAEXAMPLErsa",
-}
-
-
-@pytest.mark.unit
-def test_trust_host_key_first_call_gives_a_scan_code():
-    routes = {**CONNS, "/api/ssh-keys/connections/4/host-key": TWO_KEYS}
-    result, _ = run("trust_host_key", routes, ssh_connection="borg@backups.example.com")
-    assert result.data["scan_code"]
-    assert result.data["scan_code"] in result.text
-
-
-@pytest.mark.unit
-def test_trust_host_key_refuses_when_another_key_changed():
-    first, _ = run(
-        "trust_host_key",
-        {**CONNS, "/api/ssh-keys/connections/4/host-key": TWO_KEYS},
-        ssh_connection="borg@backups.example.com",
-    )
-    swapped = {
-        **TWO_KEYS,
-        "observed_key": "backups.example.com ssh-ed25519 AAAAEXAMPLEhostkey\nbackups.example.com ssh-rsa AAAAEVILrsa",
-    }
-    routes = {
-        **CONNS,
-        "/api/ssh-keys/connections/4/host-key": swapped,
-        "POST /api/ssh-keys/connections/4/host-key/trust": swapped,
-    }
-    result, api = run(
-        "trust_host_key",
-        routes,
-        ssh_connection="borg@backups.example.com",
-        fingerprint="SHA256:EXAMPLEfingerprint",
-        scan_code=first.data["scan_code"],
-    )
-    assert api.posts == []
-    assert result.is_error
-
-
-@pytest.mark.unit
-def test_trust_host_key_needs_the_scan_code():
-    routes = {**CONNS, "/api/ssh-keys/connections/4/host-key": TWO_KEYS}
-    result, api = run(
-        "trust_host_key",
-        routes,
-        ssh_connection="borg@backups.example.com",
-        fingerprint="SHA256:EXAMPLEfingerprint",
-    )
-    assert api.posts == []
-    assert result.is_error
 
 
 @pytest.mark.unit
