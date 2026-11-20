@@ -830,12 +830,15 @@ day 7 would remove it. So nothing a compaction removes is gone at once.
   disk is only really free when the copy is removed. The node therefore
   needs spare disk for up to 7 days of released space; the runbook watches
   free space.
-- A copy is kept `RETAIN_DAYS = 7` days. When a compaction run finishes
-  successfully, every copy the account still has is kept until at least
-  7 days after that moment. A release that fails halfway and succeeds on a
-  retry a day later can have freed data in the first attempt that only the
-  first copy holds; this keeps that copy for the full 7 days after the
-  release really finished. Expired copies are removed when the
+- A copy from a successful compaction run is kept `RETAIN_DAYS = 7` days. A
+  copy from a run that failed has no expiry at all: it stays until a later
+  run for that account succeeds, and then, like every other copy the
+  account still has, it is kept until 7 days after that success. A release
+  that fails halfway may have freed data that only that copy holds, and the
+  retry can come much later (the Worker gives up after 24 hourly attempts
+  and the admin may only run it again days after), so no fixed expiry is
+  safe. Copies without an expiry show up in the admin view and the runbook's
+  disk check. Expired copies are removed when the
   agent starts and on every `GET /v1/accounts` (the Worker calls it hourly).
   Deleting an account removes its copies too. The account object gains
   `retained_until`: the latest expiry, or null.
