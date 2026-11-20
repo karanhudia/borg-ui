@@ -8,6 +8,7 @@
   "tests/migrations/test_repository_agent_script_after_upgrade.py": 107,
   "tests/migrations/test_revisions_have_tests.py": 1,
   "tests/migrations/test_schedule_repository_scripts_after_upgrade.py": 125,
+  "tests/migrations/test_system_role_upgrade.py": 51,
   "tests/migrations/test_upgrade_paths.py": 195,
   "tests/migrations/test_upgrade_paths_catch_failures.py": 90
 }

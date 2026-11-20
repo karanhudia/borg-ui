@@ -8,7 +8,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.core.security import get_current_user, refuse_mcp_internal, require_any_role
+from app.core.security import (
+    get_current_admin_user,
+    get_current_user,
+    refuse_mcp_internal,
+)
 from app.database.database import get_db
 from app.database.models import User
 from app.services import this_machine as tm
@@ -18,8 +22,6 @@ router = APIRouter(
     tags=["This machine"],
     dependencies=[Depends(refuse_mcp_internal)],
 )
-
-ADMIN_KEY = "backend.errors.thisMachine.adminRequired"
 
 
 class ThisMachineStatus(BaseModel):
@@ -54,8 +56,7 @@ def get_status(
 
 
 @router.get("/estimate")
-def get_estimate(current_user: User = Depends(get_current_user)) -> dict:
-    require_any_role(current_user, "admin", detail_key=ADMIN_KEY)
+def get_estimate(current_user: User = Depends(get_current_admin_user)) -> dict:
     sources, excludes, _, in_data_volume = tm.plan_sources()
     estimate = tm.estimate_size(sources, excludes)
     return {
@@ -67,8 +68,7 @@ def get_estimate(current_user: User = Depends(get_current_user)) -> dict:
 
 @router.post("/setup", status_code=201)
 async def setup(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    require_any_role(current_user, "admin", detail_key=ADMIN_KEY)
     return asdict(await tm.setup_this_machine(db, current_user))
