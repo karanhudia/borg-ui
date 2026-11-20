@@ -8,7 +8,7 @@ import time
 from types import SimpleNamespace
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -52,7 +52,13 @@ from app.services.operations.maintenance_start import (
     finish_inline_maintenance,
     start_inline_maintenance,
 )
-from app.services.this_machine import compact_due
+from app.services.self_backup import (
+    clear_staging,
+    run_self_backup_step,
+    self_backup_paths,
+    with_self_backup_paths,
+)
+from app.services.this_machine import THIS_MACHINE_ROLE, compact_due
 from app.services.backup_plan_policy import (
     BORG2_FEATURE,
     PLAN_REQUIRED_SKIP_REASON,
@@ -1661,6 +1667,9 @@ class BackupPlanExecutionService:
                     error=str(hook_exc),
                 )
             self._mark_run_failed(run_id, "; ".join(messages))
+        finally:
+            if context is not None and context.system_role == THIS_MACHINE_ROLE:
+                clear_staging(Path(settings.data_dir))
 
     async def enter_backup_slot(self, run_id: int) -> PreHookVerdict:
         """Called by the backup executor once the runner gave a backup of
@@ -1730,7 +1739,16 @@ class BackupPlanExecutionService:
                 status="failed",
                 message=source_pre_error or "Database source pre-backup script failed",
             )
-        return PreHookVerdict(warning=pre_script_error)
+        warnings = [pre_script_error] if pre_script_error else []
+        if context.system_role == THIS_MACHINE_ROLE:
+            db = SessionLocal()
+            try:
+                self_backup_warning = run_self_backup_step(db)
+            finally:
+                db.close()
+            if self_backup_warning:
+                warnings.append(self_backup_warning)
+        return PreHookVerdict(warning="; ".join(warnings) if warnings else None)
 
     async def _run_post_backup_scripts(
         self,
@@ -2194,6 +2212,15 @@ class BackupPlanExecutionService:
             time_str=now.strftime("%H:%M:%S"),
             unix_timestamp=str(int(now.timestamp() * 1000)),
         )
+        if plan.system_role == THIS_MACHINE_ROLE:
+            directories, locations = with_self_backup_paths(
+                context.source_directories,
+                context.source_locations,
+                self_backup_paths(Path(settings.data_dir)),
+            )
+            context = replace(
+                context, source_directories=directories, source_locations=locations
+            )
         repositories = []
         for link in enabled_links:
             base_upload_ratelimit_kib = (
