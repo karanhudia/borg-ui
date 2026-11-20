@@ -539,17 +539,24 @@ The cron deletes a Vault only when all of these hold:
 Because of rule 2, a missed cron run or an email outage delays deletion
 instead of skipping the warning.
 
-Deletion starts with a claim, one conditional update that sets `deleted_at`
-and `status = 'deleted'` only where the row is still not deleted, still has
-the `sub_status` the rules were evaluated with, and has no hold in the
-future. A renewal that attached in the meantime (8.6) or a renewal order
-that just placed a hold makes the claim fail, and nothing is deleted. Once
-the claim has succeeded no renewal can attach any more, because attaching
-requires `deleted_at IS NULL`. Only then does the Worker call the node
-`DELETE`, cancel the Paddle subscription if it is not already canceled, and
-send the `deleted` email. If the node call fails, the account keeps
-`node_error` and the cron repeats the node call on every run until it has
-worked; the email goes out after that.
+Deletion starts with a claim, one conditional update that sets `deleted_at`,
+`status = 'deleted'` and `delete_steps = '{}'` only where the row is still
+exactly the row the rules were evaluated on: same `updated_at` (every write
+to an account sets it, so it works as a row version), still not deleted, and
+no hold in the future. Any change since the evaluation, such as a webhook
+that cleared `cancel_at`, a renewal that attached (8.6) or a renewal order
+that placed a hold, makes the claim fail; nothing is deleted and the next
+run evaluates again. Once the claim has succeeded no renewal can attach any
+more, because attaching requires `deleted_at IS NULL`.
+
+After the claim three steps remain, and each is recorded in `delete_steps`
+(a JSON object) when it has worked: `node` (the node `DELETE`), `paddle`
+(the subscription cancelled, or already cancelled, or there is none) and
+`email` (the `deleted` email sent, which waits for the other two). The hourly
+cron finishes every deleted account whose `delete_steps` lacks one of them,
+repeating each missing step until it works. A Worker that stops right after
+the claim therefore leaves nothing behind: the next run picks it up, and the
+subscription is not left billing.
 
 ### 8.5 Reconcile (hourly cron and after every subscription event)
 
@@ -795,8 +802,10 @@ day 7 would remove it. So nothing a compaction removes is gone at once.
   `borg with-lock <repo> sh -c 'echo locked; read _'` as the account, waits
   for the line `locked`, copies, then closes the command's input). If the
   lock cannot be taken, that repository is not copied and not compacted, and
-  the compaction counts as failed, as before. If the compaction itself fails
-  after the copy, the copy is removed.
+  the compaction counts as failed, as before. Once a copy has been taken it is
+  kept for 7 days whatever the compaction does: Borg 1.4 commits and frees
+  segments while it compacts, so a compaction that fails halfway may already
+  have removed pruned data.
 - Nothing may be written between the copy and the compaction, or the
   compaction could remove something the copy does not hold. Borg cannot keep
   one lock across both, so the node closes the door first: for the whole
@@ -847,10 +856,15 @@ day 7 would remove it. So nothing a compaction removes is gone at once.
 - After a recovery the customer's Borg refuses the repository once with
   "Cache, or information obtained from the security directory is newer than
   repository", because the repository went back in time. That is Borg's
-  rollback protection working. A fresh client works at once (verified); on
-  the existing install the customer removes the repository's local cache and
-  security info (`borg delete --cache-only <repo>`, per Borg's documentation)
-  or removes the repository from Borg UI and adds it again.
+  rollback protection working. A fresh client works at once (verified). On
+  the existing install the customer does both steps Borg's documentation
+  gives for a rolled-back repository: `borg delete --cache-only <repo>`, and
+  removing the file `manifest-timestamp` in the repository's security
+  directory (`$BORG_CONFIG_DIR/security/<repository id>/`, by default under
+  `~/.config/borg/security/`). The recovery tool prints the repository id,
+  read from the repository's `config` file on the node, so the support reply
+  can give the exact path. Removing the cache alone is not enough, because
+  the timestamp lives in the security directory.
 - Limit that remains: recovery needs someone to notice within 7 days of the
   compaction, 14 days after the release was requested, and it needs the
   passphrase, which only the customer has.
