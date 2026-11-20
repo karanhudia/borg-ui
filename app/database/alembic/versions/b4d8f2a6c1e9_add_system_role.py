@@ -1,7 +1,7 @@
 """add system_role to backup_plans and repositories
 
 Revision ID: b4d8f2a6c1e9
-Revises: a9e3c7b1d5f2
+Revises: b4f1d7e2c9a6
 Create Date: 2026-11-20
 
 Marks the plan and repository Borg UI creates to protect its own host
@@ -12,7 +12,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "b4d8f2a6c1e9"
-down_revision = "a9e3c7b1d5f2"
+down_revision = "b4f1d7e2c9a6"
 branch_labels = None
 depends_on = None
 
