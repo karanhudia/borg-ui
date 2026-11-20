@@ -121,7 +121,7 @@ class McpSession:
         assert response.status_code == 200, response.text
         return self.result(response)["tools"]
 
-    def call(self, name, **arguments):
+    def call(self, name, /, **arguments):
         response = self.post("tools/call", {"name": name, "arguments": arguments})
         assert response.status_code == 200, response.text
         result = self.result(response)

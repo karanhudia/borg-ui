@@ -1131,6 +1131,12 @@ export const repositoriesAPI = {
   createRepository: (data: RepositoryData) => api.post('/repositories/', data),
   importRepository: (data: RepositoryData) => api.post('/repositories/import', data),
   downloadKeyfile: (id: number) => api.get(`/repositories/${id}/keyfile`, { responseType: 'blob' }),
+  revealPassphrase: (id: number, body: { password?: string; repository_name?: string }) =>
+    api.post<{ passphrase: string; encryption: string; has_keyfile: boolean }>(
+      `/repositories/${id}/passphrase/reveal`,
+      body
+    ),
+  acknowledgePassphrase: (id: number) => api.post(`/repositories/${id}/passphrase/acknowledge`),
   // The stored size figures and pending index kinds alone (#981, #1063):
   // no live Borg call, unlike the detail.
   getStorage: (id: number) => api.get<RepositoryStorageResponse>(`/repositories/${id}/storage`),

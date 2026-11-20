@@ -2176,6 +2176,31 @@
       "rcloneHydrateCompleted": "rclone hydrate completed",
       "rcloneHydrateFailed": "Failed to hydrate rclone cache",
       "wizardFailed": "Failed to {{mode}} repository"
+    },
+    "passphraseUnsaved": {
+      "title_one": "Save the passphrase of this repository",
+      "title_other": "Save the passphrases of these repositories",
+      "why": "Borg UI generated these passphrases and nobody has saved them yet. Without a passphrase the backups cannot be restored if Borg UI's database is lost.",
+      "reveal": "Reveal",
+      "revealFor": "Reveal passphrase of {{name}}"
+    },
+    "revealPassphrase": {
+      "title": "Passphrase of {{name}}",
+      "passwordIntro": "Confirm it is you to see the passphrase.",
+      "nameIntro": "Type the repository name, {{name}}, to see the passphrase.",
+      "passwordLabel": "Your password",
+      "nameLabel": "Repository name",
+      "show": "Show passphrase",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "keepItSafe": "Store it in a password manager or somewhere safe outside Borg UI. Once you confirm it is saved, Borg UI will not show it again.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "keyfileHint": "This repository also uses a keyfile. Keep a copy of it with the passphrase.",
+      "downloadKeyfile": "Download keyfile",
+      "saved": "I've saved it",
+      "close": "Close",
+      "failed": "That did not work. Try again."
     }
   },
   "activity": {
@@ -5931,7 +5956,8 @@
         "oidcPendingApproval": "Your single sign-on account is waiting for administrator approval",
         "oidcTemplateUserNotFound": "The configured single sign-on template user was not found",
         "mcpTokenNotForApi": "This token is for MCP clients and cannot be used with the API.",
-        "notAvailableOverMcp": "This action is not available to MCP connections."
+        "notAvailableOverMcp": "This action is not available to MCP connections.",
+        "browserSessionRequired": "Open Borg UI in your browser to do this. Tokens and AI connections cannot."
       },
       "plan": {
         "featureNotAvailable": "This feature is not available on your current plan."
@@ -6067,7 +6093,9 @@
         "failedExportKeyfile": "Failed to export keyfile",
         "borg2RepositoryNotReadable": "Borg 2 does not recognise this as a repository. If it was created before the upgrade to Borg 2.0.0b25, that is the cause: 2.0.0b25 changed the repository format and cannot read repositories written by earlier Borg 2 betas. The repository has to be created anew; the upgrade notes in the installation guide describe the steps. Otherwise, check the repository path.",
         "invalidEncryption": "Encryption mode '{{mode}}' is not available for Borg 2 repositories.",
-        "invalidEncryptionMode": "Encryption mode '{{mode}}' is not available for this repository."
+        "invalidEncryptionMode": "Encryption mode '{{mode}}' is not available for this repository.",
+        "reauthFailed": "That did not match. Check it and try again.",
+        "passphraseAlreadySaved": "This passphrase was already saved, so Borg UI no longer shows it."
       },
       "rclone": {
         "invalidRemoteName": "Remote name can only use letters, numbers, dots, dashes, and underscores",

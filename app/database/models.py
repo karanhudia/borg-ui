@@ -303,6 +303,11 @@ class Repository(Base):
     has_keyfile = Column(
         Boolean, default=False
     )  # Whether repository has a keyfile (keyfile/keyfile-blake2 encryption)
+    # Set when Borg UI generated the passphrase (MCP create_repository) and the
+    # user has not confirmed saving it yet (spec 2026-11-14-mcp-server, 5.9).
+    # server_default only, like index_mode: a Python default would put the
+    # column into every INSERT, including ones against older schemas.
+    passphrase_unsaved = Column(Boolean, server_default=sa_false(), nullable=False)
     source_directories = Column(
         Text, nullable=True
     )  # JSON array of directories to backup

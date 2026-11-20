@@ -25,8 +25,8 @@ everything the levels above it can.
 | Manage | Also create and edit configuration: repositories, plans, schedules, scripts and connections. |
 | Full | Also destructive actions, always through a preview you confirm first. |
 
-This version has tools for **Read** and **Operate**. Manage and Full arrive in
-later updates, and you cannot create a connection at a level that has no tools yet.
+This version has tools for **Read**, **Operate** and **Manage**. Full arrives
+in a later update, and you cannot create a connection at a level that has no tools yet.
 That way, a connection never gains new powers just because Borg UI was
 upgraded.
 
@@ -160,6 +160,53 @@ Starting something answers at once with the job, and usually an estimate from
 earlier runs. Ask the AI to wait for it: clients that show progress get live
 updates while it runs.
 
+## What the AI can do at Manage
+
+Everything at Operate, plus setting things up and changing them:
+
+- **Repositories**: create a repository on the server or over SSH, connect an
+  existing one, change its name, compression, folders, exclusions and limits,
+  and schedule checks and restore checks.
+- **Backup plans**: create a plan from what to back up (server, SSH or agent
+  paths), which repositories, when and how long to keep archives. When
+  something is missing the AI asks instead of guessing, and it tells you which
+  defaults it used. Plans can also be changed and turned on or off.
+- **Schedules**: create, change, copy, and turn schedules on or off.
+- **SSH**: create a key, add a connection, change one, and trust a server's
+  host key. Trusting takes two steps: the AI shows the fingerprint, you compare
+  it with the server's own, and only then is it trusted.
+- **Scripts, notifications, cloud remotes and agents** (admins): add and change
+  scripts and attach them to repositories, choose which events a notification
+  channel sends, change a cloud remote's non-secret settings, and upgrade agent
+  machines.
+- **Settings and users** (admins): change system settings such as timeouts,
+  log retention, dashboard thresholds and backup reports, and change other
+  users' roles. Integrations, metrics, MQTT and the lock-breaking switch stay
+  in the web UI, and so does your own account.
+
+When a step needs a secret, such as the server's password to deploy a key,
+the passphrase of an encrypted repository you are connecting, a cloud key or
+a new user's password, the AI prepares everything else and gives you a link
+to the right dialog in Borg UI. You type the secret there, so it never reaches
+the AI.
+
+## Saving a generated passphrase
+
+When the AI creates an encrypted repository, Borg UI generates a strong
+passphrase and stores it. The AI never sees it. Until you save it:
+
+- The **Repositories** page shows a **Save the passphrase** notice for that
+  repository, and the dashboard lists the repository as needing attention.
+- Select **Reveal** and confirm it is you: type your password, or, if you sign
+  in through single sign-on or a proxy, the repository's name.
+- Copy the passphrase into a password manager or somewhere safe outside Borg
+  UI. For keyfile repositories, also download the keyfile.
+- Select **I've saved it**. Borg UI then never shows the passphrase again.
+
+Without the passphrase the backups cannot be restored if Borg UI's database is
+lost, so do not skip this. Revealing works only in the browser: personal API
+tokens and AI connections cannot reveal a passphrase.
+
 ## Activity
 
 Each connection's row has an **Activity** button. It lists each tool call that
@@ -197,7 +244,8 @@ revoke every user's connections.
   capped by the connection's level and the admin's cap.
 - Secrets never pass through the AI. No tool returns a passphrase, private key,
   password or notification URL token, and no tool can manage tokens, MCP
-  settings, licensing or passwords.
+  settings, licensing or passwords. Where a secret is needed, the AI hands you
+  a link to the Borg UI dialog where you enter it.
 - Calls are rate limited per connection.
 - To cut a client off, revoke its connection. It stops working on its next
   call.

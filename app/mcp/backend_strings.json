@@ -57,6 +57,7 @@
     },
     "auth": {
       "authTokenRequired": "Authentication token required",
+      "browserSessionRequired": "Open Borg UI in your browser to do this. Tokens and AI connections cannot.",
       "cannotDeleteSelf": "Cannot delete yourself",
       "currentPasswordIncorrect": "Current password is incorrect",
       "emailAlreadyRegistered": "Email already registered",
@@ -326,6 +327,7 @@
       "notValidBorgRepository": "Not a valid Borg repository: {{path}}",
       "operationAlreadyRunning": "Another repository operation is already running",
       "parentDirectoryNotWritable": "Parent directory is not writable: {{path}}. Please ensure the directory exists with correct permissions.",
+      "passphraseAlreadySaved": "This passphrase was already saved, so Borg UI no longer shows it.",
       "pathExists": "Repository path already exists",
       "permanentDeleteConfirmationMismatch": "The confirmation phrase must match the repository name exactly",
       "permanentDeleteLocalOnly": "Permanent deletion is only available for local repositories stored on this server",
@@ -335,6 +337,7 @@
       "permissionDeniedCreateDirectory": "Permission denied: cannot create directory at '{{path}}'. To store repositories on your host machine, use paths starting with '/local/'.",
       "permissionDeniedCreateParentDirectory": "Permission denied: cannot create parent directory '{{path}}'. Please ensure the directory exists on your host machine with proper permissions.",
       "pruneAlreadyRunning": "A prune operation is already running for this repository",
+      "reauthFailed": "That did not match. Check it and try again.",
       "remoteBorg2Incompatible": "The remote server is not running a compatible Borg 2 server. Install Borg 2 on the remote host and set the remote Borg path to its borg2 binary, or use Borg 1 for this repository.",
       "repoHasNoKeyfile": "This repository has no keyfile",
       "repositoryDirNotExist": "Repository directory does not exist: {{path}}",

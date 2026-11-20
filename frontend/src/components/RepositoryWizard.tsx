@@ -70,6 +70,8 @@ interface RepositoryWizardProps {
   repository?: Repository
   onSubmit: (data: RepositoryData, keyfile?: File | null) => void | Promise<void>
   canUseRclone?: boolean
+  /** Create or import opens with these filled in (the MCP hand-off link). */
+  initialValues?: RepositoryWizardInitialValues
 }
 
 interface SSHConnection {
@@ -127,7 +129,19 @@ interface WizardState {
   historyIndexExcludes: string[]
 }
 
-const createInitialState = (): WizardState => ({
+export type RepositoryWizardInitialValues = Partial<
+  Pick<WizardState, 'name' | 'path' | 'borgVersion' | 'repositoryLocation' | 'repoSshConnectionId'>
+>
+
+const createInitialState = (values?: RepositoryWizardInitialValues): WizardState => ({
+  ...blankState(),
+  ...values,
+  ...(values?.borgVersion
+    ? { encryption: getDefaultRepositoryEncryption(values.borgVersion) }
+    : {}),
+})
+
+const blankState = (): WizardState => ({
   name: '',
   borgVersion: 1,
   repositoryMode: 'full',
@@ -264,6 +278,7 @@ const RepositoryWizard = ({
   repository,
   onSubmit,
   canUseRclone = true,
+  initialValues,
 }: RepositoryWizardProps) => {
   const { trackRepository, EventAction, EventCategory } = useAnalytics()
   const { trackFeatureUsed, trackFeatureBlocked } = useFeatureAnalytics()
@@ -552,11 +567,6 @@ const RepositoryWizard = ({
   }, [repository])
 
   // Reset form
-  const resetForm = () => {
-    setActiveStep(0)
-    setWizardState(createInitialState())
-  }
-
   // Handle state changes
   const handleStateChange = (updates: Partial<WizardState>) => {
     setWizardState((prev) => {
@@ -785,10 +795,11 @@ const RepositoryWizard = ({
       if (mode === 'edit' && repository) {
         populateEditData()
       } else {
-        resetForm()
+        setActiveStep(0)
+        setWizardState(createInitialState(initialValues))
       }
     }
-  }, [open, mode, repository, populateEditData, loadWizardData])
+  }, [open, mode, repository, populateEditData, loadWizardData, initialValues])
 
   // Reflect the selected agent's own $BORG_REPO: advertise it (drives the "agent
   // has no repo" warning) and auto-fill the path. Runs in edit too so agent repos

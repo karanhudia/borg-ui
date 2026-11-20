@@ -69,6 +69,19 @@ function DeployKeyDialogStory({
   )
 }
 
+/** Opened from an MCP hand-off link: the server is filled in and the
+ *  password field has the focus, since it is the one thing left to type. */
+export const PrefilledFromLink: Story = {
+  args: {
+    initialForm: {
+      ...createConnectionForm(),
+      host: 'backups.example.com',
+      username: 'borg',
+      port: 23,
+    },
+  },
+}
+
 export const CustomDefaults: Story = {
   args: {
     initialForm: createConnectionForm(),

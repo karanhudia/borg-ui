@@ -90,3 +90,20 @@ def mount_body(repo: dict, archive: dict | None) -> dict:
         if repo.get("borg_version") == 2:
             body["archive_id"] = _borg_id(archive)
     return body
+
+
+def _create_base(payload: dict) -> str:
+    # client.ts: agent and rclone repositories go through the v1 dispatcher.
+    agent = payload.get("execution_target") == "agent"
+    rclone = payload.get("storage_backend") == "rclone"
+    if payload.get("borg_version") == 2 and not (agent or rclone):
+        return "/api/v2/repositories/"
+    return "/api/repositories/"
+
+
+def repository_create(payload: dict) -> str:
+    return _create_base(payload)
+
+
+def repository_import(payload: dict) -> str:
+    return f"{_create_base(payload)}import"

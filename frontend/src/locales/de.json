@@ -2176,6 +2176,31 @@
       "rcloneHydrateCompleted": "rclone-Hydratisierung abgeschlossen",
       "rcloneHydrateFailed": "rclone-Cache konnte nicht hydratisiert werden",
       "wizardFailed": "Repository konnte nicht {{mode}} werden"
+    },
+    "passphraseUnsaved": {
+      "title_one": "Passphrase dieses Repositorys sichern",
+      "title_other": "Passphrasen dieser Repositorys sichern",
+      "why": "Borg UI hat diese Passphrasen erzeugt, und noch niemand hat sie gesichert. Ohne Passphrase lassen sich die Backups nicht wiederherstellen, wenn die Datenbank von Borg UI verloren geht.",
+      "reveal": "Anzeigen",
+      "revealFor": "Passphrase von {{name}} anzeigen"
+    },
+    "revealPassphrase": {
+      "title": "Passphrase von {{name}}",
+      "passwordIntro": "Bestätige, dass du es bist, um die Passphrase zu sehen.",
+      "nameIntro": "Gib den Repository-Namen {{name}} ein, um die Passphrase zu sehen.",
+      "passwordLabel": "Dein Passwort",
+      "nameLabel": "Repository-Name",
+      "show": "Passphrase anzeigen",
+      "showPassword": "Passwort anzeigen",
+      "hidePassword": "Passwort verbergen",
+      "keepItSafe": "Bewahre sie in einem Passwort-Manager oder an einem sicheren Ort außerhalb von Borg UI auf. Sobald du bestätigst, dass sie gesichert ist, zeigt Borg UI sie nicht mehr an.",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "keyfileHint": "Dieses Repository nutzt auch eine Schlüsseldatei. Bewahre eine Kopie davon bei der Passphrase auf.",
+      "downloadKeyfile": "Schlüsseldatei herunterladen",
+      "saved": "Ich habe sie gesichert",
+      "close": "Schließen",
+      "failed": "Das hat nicht geklappt. Versuche es erneut."
     }
   },
   "activity": {
@@ -5931,7 +5956,8 @@
         "oidcPendingApproval": "Dein Single-Sign-on-Konto wartet auf die Freigabe durch einen Administrator",
         "oidcTemplateUserNotFound": "Der konfigurierte Single-Sign-on-Vorlagenbenutzer wurde nicht gefunden",
         "mcpTokenNotForApi": "Dieses Token ist für MCP-Clients und kann nicht mit der API verwendet werden.",
-        "notAvailableOverMcp": "Diese Aktion ist für MCP-Verbindungen nicht verfügbar."
+        "notAvailableOverMcp": "Diese Aktion ist für MCP-Verbindungen nicht verfügbar.",
+        "browserSessionRequired": "Öffne Borg UI im Browser, um das zu tun. Tokens und KI-Verbindungen können das nicht."
       },
       "plan": {
         "featureNotAvailable": "Diese Funktion ist in deinem aktuellen Plan nicht verfügbar."
@@ -6067,7 +6093,9 @@
         "failedExportKeyfile": "Fehler beim Exportieren der Schlüsseldatei",
         "borg2RepositoryNotReadable": "Borg 2 erkennt dies nicht als Repository. Wurde es vor dem Upgrade auf Borg 2.0.0b25 angelegt, ist das die Ursache: 2.0.0b25 hat das Repository-Format geändert und kann Repositories früherer Borg-2-Betas nicht lesen. Das Repository muss neu angelegt werden; die Upgrade-Hinweise in der Installationsanleitung beschreiben die Schritte. Andernfalls den Repository-Pfad prüfen.",
         "invalidEncryption": "Der Verschlüsselungsmodus '{{mode}}' ist für Borg-2-Repositories nicht verfügbar.",
-        "invalidEncryptionMode": "Der Verschlüsselungsmodus '{{mode}}' ist für dieses Repository nicht verfügbar."
+        "invalidEncryptionMode": "Der Verschlüsselungsmodus '{{mode}}' ist für dieses Repository nicht verfügbar.",
+        "reauthFailed": "Das hat nicht gepasst. Prüfe die Eingabe und versuche es erneut.",
+        "passphraseAlreadySaved": "Diese Passphrase wurde bereits gespeichert, daher zeigt Borg UI sie nicht mehr an."
       },
       "rclone": {
         "invalidRemoteName": "Remote-Name darf nur Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche enthalten",

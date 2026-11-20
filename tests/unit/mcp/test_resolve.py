@@ -12,7 +12,7 @@ ITEMS = [
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("ref", ["Documents", "documents", "doc", "cume", 3, "3"])
+@pytest.mark.parametrize("ref", ["Documents", "documents", "doc", 3, "3"])
 def test_resolves_unique_matches(ref):
     assert pick("repository", ref, ITEMS)["id"] == 3
 
@@ -21,6 +21,21 @@ def test_resolves_unique_matches(ref):
 def test_exact_name_wins_over_prefix():
     assert pick("repository", "Photos", ITEMS)["id"] == 1
     assert pick("repository", "photos", ITEMS)["id"] == 1
+
+
+@pytest.mark.unit
+def test_pick_prefers_prefix_over_substring():
+    items = [{"id": 1, "name": "Photos"}, {"id": 2, "name": "Old Photos"}]
+    assert pick("repository", "photos", items)["id"] == 1
+    assert pick("repository", "phot", items)["id"] == 1
+
+
+@pytest.mark.unit
+def test_pick_substring_only_is_not_found():
+    with pytest.raises(NotFound):
+        pick("repository", "hotos", ITEMS)
+    with pytest.raises(NotFound):
+        pick("repository", "cume", ITEMS)
 
 
 @pytest.mark.unit

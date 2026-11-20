@@ -35,7 +35,7 @@ def running_app(test_db):
     test_db.add(user)
     test_db.commit()
     tokens = {}
-    for level in ("read", "operate"):
+    for level in ("read", "operate", "manage"):
         token = "borgui_" + secrets.token_urlsafe(32)
         test_db.add(
             ApiToken(
@@ -107,3 +107,25 @@ def test_operate_connection_over_the_official_client(running_app):
     assert {"start_backup", "restore_files", "wait_for_job"} <= names
     assert unmount.is_error is False
     assert unmount.content[0].text == "Nothing is mounted."
+
+
+@pytest.mark.integration
+def test_manage_connection_over_the_official_client(running_app):
+    """Phase 4: a manage connection sees the manage tools and changes a setting."""
+    url, tokens = running_app
+    _, tools, cron, settings = asyncio.run(
+        _session(
+            url,
+            tokens["manage"],
+            calls=(
+                ("check_cron", {"expression": "0 2 * * *"}),
+                ("update_settings", {"stats_refresh_interval_minutes": 15}),
+            ),
+        )
+    )
+    names = {tool.name for tool in tools.tools}
+    assert len(names) == 81
+    assert {"create_repository", "create_backup_plan", "update_settings"} <= names
+    assert cron.is_error is False
+    assert settings.is_error is False, settings.content[0].text
+    assert "→ 15" in settings.content[0].text

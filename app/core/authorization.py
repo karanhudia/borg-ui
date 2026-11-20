@@ -135,6 +135,12 @@ ENDPOINT_POLICIES: Dict[Tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/repositories/{repo_id}/keyfile"): EndpointPolicy(
         ("admin",), "backend.errors.repo.adminAccessRequired"
     ),
+    ("POST", "/api/repositories/{repo_id}/passphrase/reveal"): EndpointPolicy(
+        ("admin",), "backend.errors.repo.adminAccessRequired"
+    ),
+    ("POST", "/api/repositories/{repo_id}/passphrase/acknowledge"): EndpointPolicy(
+        ("admin",), "backend.errors.repo.adminAccessRequired"
+    ),
     ("PUT", "/api/repositories/{repo_id}"): EndpointPolicy(
         ("admin",), "backend.errors.repo.adminAccessRequired"
     ),

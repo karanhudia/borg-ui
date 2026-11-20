@@ -1269,6 +1269,18 @@ describe('CloudStorage', () => {
     expect(screen.queryByText('archive.tar')).not.toBeInTheDocument()
   }, 60000)
 
+  it('opens the edit dialog from an MCP hand-off link', async () => {
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage?edit=10' })
+    expect(await screen.findByRole('dialog', { name: /Edit rclone remote/i })).toBeInTheDocument()
+    await waitFor(() => expect(window.location.search).toBe(''))
+  }, 30000)
+
+  it('ignores an edit link for a remote that does not exist', async () => {
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage?edit=999' })
+    await screen.findByTestId('cloud-storage-remote-prod-s3')
+    expect(screen.queryByRole('dialog', { name: /Edit rclone remote/i })).not.toBeInTheDocument()
+  }, 30000)
+
   it('edits a remote from the remote card', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })

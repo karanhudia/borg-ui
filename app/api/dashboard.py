@@ -461,6 +461,13 @@ def build_full_repository_health(
     if restore_check_health["warning"]:
         warnings.append(restore_check_health["warning"])
 
+    # A generated passphrase nobody saved (spec 2026-11-14-mcp-server, 5.9).
+    if getattr(repo, "passphrase_unsaved", False):
+        health_status, health_color = promote_repository_health(
+            health_status, health_color, "warning"
+        )
+        warnings.append("Passphrase not saved yet")
+
     return {
         "health_status": health_status,
         "health_color": health_color,
