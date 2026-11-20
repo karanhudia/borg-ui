@@ -56,7 +56,10 @@ def test_base_url_prefers_public_base_url(monkeypatch):
 
     from app.config import settings
 
-    monkeypatch.setattr(settings, "public_base_url", "https://borg.example.invalid/")
+    # PUBLIC_BASE_URL already includes BASE_PATH (docs/configuration.md)
+    monkeypatch.setattr(
+        settings, "public_base_url", "https://borg.example.invalid/borg/"
+    )
     request = Request(
         {
             "type": "http",
@@ -71,3 +74,26 @@ def test_base_url_prefers_public_base_url(monkeypatch):
         }
     )
     assert links.base_url(request) == "https://borg.example.invalid/borg"
+
+
+@pytest.mark.unit
+def test_base_url_without_public_url_adds_the_base_path(monkeypatch):
+    from starlette.requests import Request
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "public_base_url", None)
+    request = Request(
+        {
+            "type": "http",
+            "scheme": "http",
+            "headers": [(b"host", b"backups.example.com")],
+            "root_path": "/borg",
+            "path": "/borg/mcp",
+            "client": ("10.0.0.2", 1),
+            "server": ("backups.example.com", 80),
+            "query_string": b"",
+            "method": "POST",
+        }
+    )
+    assert links.base_url(request) == "http://backups.example.com/borg"

@@ -59,6 +59,9 @@ export default function PassphraseUnsavedSection({ repositories }: { repositorie
       <PassphraseUnsavedBanner repositories={repositories} onReveal={setOpenId} />
       {repo && (
         <RevealPassphraseDialog
+          // A new repository starts the dialog over, so one repository's
+          // revealed passphrase never shows under another's name.
+          key={repo.id}
           open
           repositoryName={repo.name}
           reauth={reauth}

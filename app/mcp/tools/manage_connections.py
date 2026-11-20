@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -121,7 +123,14 @@ async def add_ssh_connection(ctx, args: AddConnectionArgs) -> ToolResult:
             "Want me to create a repository there?",
             data,
         )
-    link = links.ssh_deploy(ctx, args.host, args.username, args.port)
+    link = links.ssh_deploy(
+        ctx,
+        args.host,
+        args.username,
+        args.port,
+        # The deploy dialog picks the system key unless told otherwise.
+        ssh_key_id=None if key.get("is_system_key") else key["id"],
+    )
     return ToolResult(
         "\n".join(
             [
@@ -221,6 +230,18 @@ class TrustHostKeyArgs(BaseModel):
         description="The fingerprint the user confirmed. Leave out on the first call to see it.",
         examples=["SHA256:..."],
     )
+    scan_code: Optional[str] = Field(
+        None,
+        description="The scan code the first call gave, so the key set the user saw is the one trusted.",
+    )
+
+
+def _scan_code(observed: str) -> str:
+    """Names the whole key set: a server offers several host keys and the
+    fingerprint shown identifies only one, so the second call must see the
+    same set, not only the same main key."""
+    lines = sorted(line.strip() for line in observed.splitlines() if line.strip())
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest()[:12]
 
 
 @tool(
@@ -251,6 +272,7 @@ async def trust_host_key(ctx, args: TrustHostKeyArgs) -> ToolResult:
             f"✗ *{label}* did not answer with a host key. Check the server is up and the port is right.",
             is_error=True,
         )
+    code = _scan_code(observed)
     if not args.fingerprint:
         trusted = scan.get("trusted_fingerprint")
         lines = [f"*{label}* shows this host key: `{seen}`", ""]
@@ -259,12 +281,19 @@ async def trust_host_key(ctx, args: TrustHostKeyArgs) -> ToolResult:
         lines.append(
             "Nothing is trusted yet. Ask the user to compare it with the server's own "
             "fingerprint (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the "
-            "server), then call me again with it."
+            f"server), then call me again with it and the scan code `{code}`."
         )
         return ToolResult(
-            "\n".join(lines), {"observed_fingerprint": seen, "trusted": False}
+            "\n".join(lines),
+            {"observed_fingerprint": seen, "scan_code": code, "trusted": False},
         )
-    if args.fingerprint.strip() != seen:
+    if not args.scan_code:
+        return ToolResult(
+            "Call me first without a fingerprint to scan the server, then again "
+            "with the fingerprint and the scan code that call gives.",
+            is_error=True,
+        )
+    if args.fingerprint.strip() != seen or args.scan_code.strip() != code:
         return ToolResult(
             f"✗ Not trusted. *{label}* now shows a different key (`{seen}`) from the one "
             "confirmed. Check with the server's admin before trusting anything.",

@@ -107,16 +107,24 @@ async def create_repository(ctx, args: CreateRepositoryArgs) -> ToolResult:
             f"✓ Created *{args.name}* at {args.path}, unencrypted.\n\nWant me to set up a backup plan for it?",
             data,
         )
-    try:
-        passphrase.mark_unsaved(ctx.api.app, repo_id)
-    except Exception:
-        return ToolResult(
-            f"⚠ Created *{args.name}*, but Borg UI could not remind you to save its "
-            "passphrase. Open the repository in the web UI and save the passphrase "
-            f"from its settings. {WHY_SAVE}",
-            data,
-            is_error=True,
-        )
+    # The flag is what lets the user reveal the passphrase; a transient
+    # database error gets one retry. No route shows a passphrase without it.
+    for attempt in range(2):
+        try:
+            passphrase.mark_unsaved(ctx.api.app, repo_id)
+            break
+        except Exception:
+            if attempt:
+                return ToolResult(
+                    f"⚠ Created *{args.name}*, but Borg UI could not record that its "
+                    "generated passphrase is unsaved, so the passphrase cannot be "
+                    "shown to you. Nothing is backed up to it yet: delete it in the "
+                    "web UI together with its data (removing only the Borg UI entry "
+                    "leaves the repository files at that path), or ask me to create "
+                    f"a new one at another path. {WHY_SAVE}",
+                    data,
+                    is_error=True,
+                )
     link = links.repository(ctx, repo_id)
     return ToolResult(
         "\n".join(
@@ -168,6 +176,14 @@ class ImportRepositoryArgs(BaseModel):
     idempotent=False,
 )
 async def import_repository(ctx, args: ImportRepositoryArgs) -> ToolResult:
+    if args.path.startswith("ssh://") and not args.ssh_connection:
+        # The import dialog binds an ssh:// path to a saved connection only
+        # when one is chosen; the link cannot pick it.
+        return ToolResult(
+            "That path is on another server. Tell me which SSH connection it uses "
+            "(ssh_connection, as user@host), or add one first with add_ssh_connection.",
+            is_error=True,
+        )
     connection_id = await _connection_id(ctx, args.ssh_connection)
     ctx.target = f"repository {args.name}"[:200]
     if args.encrypted:
@@ -311,9 +327,12 @@ async def _set_schedule(ctx, args, route: str, what: str, extra: dict) -> ToolRe
         checked = await validate_schedule(ctx, args.schedule, args.timezone)
     except ScheduleInvalid as invalid:
         return ToolResult(invalid.text, is_error=True)
-    body = {"cron_expression": checked["cron_expression"]}
-    if args.timezone:
-        body["timezone"] = checked.get("timezone") or args.timezone
+    # Always the zone it was checked in (UTC unless given), so the saved
+    # schedule runs when the answer says it does.
+    body = {
+        "cron_expression": checked["cron_expression"],
+        "timezone": checked.get("timezone") or args.timezone or "UTC",
+    }
     await ctx.api.put(path, json={**body, **extra})
     runs = checked.get("next_runs") or []
     lines = [
@@ -343,7 +362,11 @@ async def _set_schedule(ctx, args, route: str, what: str, extra: dict) -> ToolRe
     read_only=False,
 )
 async def set_check_schedule(ctx, args: RepositoryCheckScheduleArgs) -> ToolResult:
-    extra = {"max_duration": args.max_duration * 60} if args.max_duration else {}
+    extra = (
+        {"max_duration": args.max_duration * 60}
+        if args.max_duration is not None
+        else {}
+    )
     return await _set_schedule(
         ctx, args, "/api/repositories/{repo_id}/check-schedule", "Checking", extra
     )

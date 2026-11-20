@@ -282,3 +282,69 @@ def test_create_repository_on_an_existing_repository_does_not_flag(no_flag):
     assert "already" in result.text
     assert "/repositories?q=Docs" in result.text
     assert "reveal" not in result.text
+
+
+# PR #1585 review
+
+
+@pytest.mark.unit
+def test_create_repository_flag_retry_then_honest_failure(monkeypatch):
+    calls = []
+
+    def flaky(app, repo_id):
+        calls.append(repo_id)
+        if len(calls) == 1:
+            raise RuntimeError("database is locked")
+
+    monkeypatch.setattr("app.mcp.passphrase.mark_unsaved", flaky)
+    routes = {"POST /api/repositories/": CREATED_V1}
+    result, _ = run("create_repository", routes, name="Docs", path="/data/example/docs")
+    assert calls == [9, 9]
+    assert not result.is_error
+    assert "reveal=9" in result.text
+
+
+@pytest.mark.unit
+def test_create_repository_flag_failure_promises_no_recovery(monkeypatch):
+    def boom(app, repo_id):
+        raise RuntimeError("db gone")
+
+    monkeypatch.setattr("app.mcp.passphrase.mark_unsaved", boom)
+    routes = {"POST /api/repositories/": CREATED_V1}
+    result, _ = run("create_repository", routes, name="Docs", path="/data/example/docs")
+    assert result.is_error
+    assert "settings" not in result.text
+    assert "cannot be shown" in result.text
+
+
+@pytest.mark.unit
+def test_import_ssh_url_without_connection_asks_for_one():
+    result, api = run(
+        "import_repository", {}, name="Old", path="ssh://borg@nas.example.com/./old"
+    )
+    assert result.is_error
+    assert "ssh_connection" in result.text
+    assert api.posts == []
+
+
+@pytest.mark.unit
+def test_set_check_schedule_sends_zero_duration():
+    routes = {
+        **REPOS,
+        "POST /api/schedule/validate-cron": {
+            "success": True,
+            "cron_expression": "0 3 * * 0",
+            "timezone": "UTC",
+            "next_runs": [],
+        },
+        "PUT /api/repositories/1/check-schedule": {"success": True},
+    }
+    _, api = run(
+        "set_check_schedule",
+        routes,
+        repository="Photos",
+        schedule="0 3 * * 0",
+        max_duration=0,
+    )
+    assert api.puts[0][1]["max_duration"] == 0
+    assert api.puts[0][1]["timezone"] == "UTC"  # always the zone it was checked in

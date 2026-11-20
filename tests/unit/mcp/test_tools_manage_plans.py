@@ -269,6 +269,8 @@ SCHEDULES = {
                 "name": "Nightly",
                 "enabled": True,
                 "cron_expression": "0 3 * * *",
+                "schedule_mode": "cron",
+                "timezone": "Europe/Berlin",
             }
         ]
     }
@@ -302,12 +304,27 @@ def test_create_schedule_posts():
 
 @pytest.mark.unit
 def test_update_schedule_puts_changes_only():
-    routes = {**SCHEDULES, **CRON_OK, "PUT /api/schedule/5": {"success": True}}
+    seen = []
+
+    def validate(body):
+        seen.append(body)
+        return CRON_OK["POST /api/schedule/validate-cron"]
+
+    routes = {
+        **SCHEDULES,
+        "POST /api/schedule/validate-cron": validate,
+        "PUT /api/schedule/5": {"success": True},
+    }
     _, api = run("update_schedule", routes, schedule="Nightly", cron="0 2 * * *")
+    assert seen[0]["timezone"] == "Europe/Berlin"  # the stored zone, not UTC
     assert api.puts == [
         (
             "/api/schedule/5",
-            {"cron_expression": "0 2 * * *", "timezone": "Europe/Berlin"},
+            {
+                "cron_expression": "0 2 * * *",
+                "schedule_mode": "cron",
+                "timezone": "Europe/Berlin",
+            },
         )
     ]
 
@@ -486,3 +503,242 @@ def test_update_plan_sends_no_script_hooks():
     }
     _, api = run("update_backup_plan", routes, backup_plan="Nightly", name="Renamed")
     assert "script_hooks" not in api.puts[0][1]
+
+
+# PR #1585 review
+
+
+AVAILABILITY = {
+    "/api/schedule/": {
+        "jobs": [
+            {
+                "id": 5,
+                "name": "Nightly",
+                "enabled": True,
+                "cron_expression": None,
+                "schedule_mode": "availability",
+                "timezone": "UTC",
+            }
+        ]
+    }
+}
+
+
+@pytest.mark.unit
+def test_update_schedule_cron_switches_availability_to_cron_mode():
+    routes = {**AVAILABILITY, **CRON_OK, "PUT /api/schedule/5": {"success": True}}
+    _, api = run("update_schedule", routes, schedule="Nightly", cron="0 2 * * *")
+    assert api.puts[0][1]["schedule_mode"] == "cron"
+
+
+@pytest.mark.unit
+def test_update_schedule_timezone_only_on_availability_needs_no_cron():
+    routes = {**AVAILABILITY, "PUT /api/schedule/5": {"success": True}}
+    result, api = run(
+        "update_schedule", routes, schedule="Nightly", timezone="Europe/Berlin"
+    )
+    assert not result.is_error, result.text
+    assert api.puts == [("/api/schedule/5", {"timezone": "Europe/Berlin"})]
+
+
+@pytest.mark.unit
+def test_update_plan_cron_switches_availability_to_cron_mode():
+    detail = {**DETAIL, "schedule_mode": "availability", "cron_expression": None}
+    routes = {
+        "/api/backup-plans/": {"backup_plans": [detail]},
+        "/api/backup-plans/12": detail,
+        **CRON_OK,
+        "PUT /api/backup-plans/12": detail,
+    }
+    _, api = run(
+        "update_backup_plan", routes, backup_plan="Nightly", schedule="0 2 * * *"
+    )
+    assert api.puts[0][1]["schedule_mode"] == "cron"
+
+
+@pytest.mark.unit
+def test_update_plan_keeps_overrides_of_retained_repositories():
+    link = {
+        **DETAIL["repositories"][0],
+        "enabled": False,
+        "compression_source": "custom",
+        "compression_override": "zstd,9",
+        "upload_ratelimit_kib_override": 512,
+    }
+    detail = {**DETAIL, "repositories": [link]}
+    routes = {
+        "/api/backup-plans/": {"backup_plans": [detail]},
+        "/api/backup-plans/12": detail,
+        **REPOS,
+        "PUT /api/backup-plans/12": detail,
+    }
+    _, api = run(
+        "update_backup_plan",
+        routes,
+        backup_plan="Nightly",
+        repositories=["Offsite", "Photos"],
+    )
+    sent = {r["repository_id"]: r for r in api.puts[0][1]["repositories"]}
+    assert sent[2] == {"repository_id": 2, "execution_order": 1, "enabled": True}
+    assert sent[1]["execution_order"] == 2
+    assert sent[1]["enabled"] is False
+    assert sent[1]["compression_override"] == "zstd,9"
+    assert sent[1]["upload_ratelimit_kib_override"] == 512
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("field", ["sources", "repositories"])
+def test_update_plan_rejects_empty_replacement_lists(field):
+    routes = {
+        **PLANS,
+        "/api/backup-plans/12": DETAIL,
+        "PUT /api/backup-plans/12": DETAIL,
+    }
+    result, api = run(
+        "update_backup_plan",
+        routes,
+        backup_plan="Nightly",
+        name="Renamed",
+        **{field: []},
+    )
+    assert result.is_error
+    assert api.puts == []
+
+
+@pytest.mark.unit
+def test_update_schedule_rejects_empty_repositories():
+    routes = {**SCHEDULES, "PUT /api/schedule/5": {"success": True}}
+    result, api = run("update_schedule", routes, schedule="Nightly", repositories=[])
+    assert result.is_error
+    assert api.puts == []
+
+
+@pytest.mark.unit
+def test_update_plan_manual_with_timezone_sets_both():
+    routes = {
+        **PLANS,
+        "/api/backup-plans/12": DETAIL,
+        "PUT /api/backup-plans/12": DETAIL,
+    }
+    _, api = run(
+        "update_backup_plan",
+        routes,
+        backup_plan="Nightly",
+        schedule="manual",
+        timezone="Europe/Berlin",
+    )
+    body = api.puts[0][1]
+    assert body["schedule_enabled"] is False
+    assert body["timezone"] == "Europe/Berlin"
+
+
+@pytest.mark.unit
+def test_create_plan_reports_saved_next_run_and_template_default():
+    created = {**CREATED, "next_run": "2026-11-22T01:00:00"}
+    result, _ = run(
+        "create_backup_plan", _routes(**{"POST /api/backup-plans/": created}), **FULL
+    )
+    assert "archive names `{plan_name}-{now}`" in result.text
+    assert result.data["next_run"] == "2026-11-22T01:00:00"
+    assert "2026-11-22" in result.text
+
+
+@pytest.mark.unit
+def test_create_plan_says_when_pruning_is_off():
+    result, _ = run("create_backup_plan", _routes(), **FULL, retention={"daily": 14})
+    assert "pruning after backups is off" in result.text
+    result, _ = run(
+        "create_backup_plan",
+        _routes(),
+        **FULL,
+        retention={"daily": 14},
+        after=["prune"],
+    )
+    assert "pruning after backups is off" not in result.text
+
+
+@pytest.mark.unit
+def test_create_plan_refuses_prune_with_an_empty_policy():
+    result, api = run(
+        "create_backup_plan",
+        _routes(),
+        **FULL,
+        retention={"daily": 0},
+        after=["prune"],
+    )
+    assert result.is_error
+    assert [p for p, _ in api.posts if p == "/api/backup-plans/"] == []
+
+
+@pytest.mark.unit
+def test_create_schedule_refuses_an_empty_policy():
+    routes = _routes(**{"POST /api/schedule/": {"job": {"id": 6, "name": "Hourly"}}})
+    result, api = run(
+        "create_schedule",
+        routes,
+        name="Hourly",
+        repositories=["Photos"],
+        schedule="0 2 * * *",
+        retention={},
+    )
+    assert result.is_error
+    assert [p for p, _ in api.posts if p == "/api/schedule/"] == []
+
+
+@pytest.mark.unit
+def test_create_schedule_reports_saved_next_run():
+    routes = _routes(
+        **{
+            "POST /api/schedule/": {
+                "job": {"id": 6, "name": "Hourly", "next_run": "2026-11-22T01:00:00"}
+            }
+        }
+    )
+    result, _ = run(
+        "create_schedule",
+        routes,
+        name="Hourly",
+        repositories=["Photos"],
+        schedule="0 2 * * *",
+    )
+    assert result.data["next_run"] == "2026-11-22T01:00:00"
+    assert "2026-11-22" in result.text
+
+
+@pytest.mark.unit
+def test_duplicate_schedule_warns_about_script_parameters():
+    scheduled = {
+        "/api/schedule/": {
+            "jobs": [
+                {**SCHEDULES["/api/schedule/"]["jobs"][0], "pre_backup_script_id": 3}
+            ]
+        },
+        "POST /api/schedule/5/duplicate": {
+            "job": {"id": 7, "name": "Nightly (copy)", "enabled": False}
+        },
+    }
+    result, _ = run("duplicate_schedule", scheduled, schedule="Nightly")
+    assert "script parameters" in result.text
+
+
+@pytest.mark.unit
+def test_duplicate_schedule_rename_failure_names_the_copy():
+    from app.mcp.client import ApiError
+
+    routes = {
+        **SCHEDULES,
+        "POST /api/schedule/5/duplicate": {"job": {"id": 7, "name": "Nightly (copy)"}},
+        "PUT /api/schedule/7": ApiError(409, "backend.errors.schedule.nameExists"),
+    }
+    result, _ = run("duplicate_schedule", routes, schedule="Nightly", new_name="Weekly")
+    assert result.is_error
+    assert "*Nightly (copy)*" in result.text
+    assert result.data["schedule_id"] == 7
+
+
+@pytest.mark.unit
+def test_update_schedule_name_only_validates_nothing():
+    routes = {**SCHEDULES, "PUT /api/schedule/5": {"success": True}}
+    _, api = run("update_schedule", routes, schedule="Nightly", name="Nightly two")
+    assert api.posts == []  # no cron validation
+    assert api.puts == [("/api/schedule/5", {"name": "Nightly two"})]

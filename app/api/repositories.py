@@ -1,6 +1,7 @@
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -8105,7 +8106,8 @@ async def reveal_generated_passphrase(
             status_code=409,
             detail={"key": "backend.errors.repo.passphraseAlreadySaved"},
         )
-    if not _reauthenticated(current_user, repository, body):
+    # bcrypt is slow on purpose; keep it off the event loop.
+    if not await run_in_threadpool(_reauthenticated, current_user, repository, body):
         raise HTTPException(
             status_code=403, detail={"key": "backend.errors.repo.reauthFailed"}
         )

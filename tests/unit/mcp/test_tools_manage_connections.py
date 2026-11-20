@@ -143,11 +143,13 @@ def test_trust_host_key_first_call_trusts_nothing():
 @pytest.mark.unit
 def test_trust_host_key_mismatch_refuses():
     routes = {**CONNS, "/api/ssh-keys/connections/4/host-key": SCAN}
+    first, _ = run("trust_host_key", routes, ssh_connection="borg@backups.example.com")
     result, api = run(
         "trust_host_key",
         routes,
         ssh_connection="borg@backups.example.com",
         fingerprint="SHA256:somethingElse",
+        scan_code=first.data["scan_code"],
     )
     assert api.posts == []
     assert result.is_error
@@ -164,11 +166,13 @@ def test_trust_host_key_match_posts_the_scanned_key():
             "status": "trusted",
         },
     }
+    first, _ = run("trust_host_key", routes, ssh_connection="borg@backups.example.com")
     result, api = run(
         "trust_host_key",
         routes,
         ssh_connection="borg@backups.example.com",
         fingerprint="SHA256:EXAMPLEfingerprint",
+        scan_code=first.data["scan_code"],
     )
     assert api.posts == [
         ("/api/ssh-keys/connections/4/host-key/trust", {"key": SCAN["observed_key"]})
@@ -191,3 +195,79 @@ def test_trust_host_key_unreachable_server():
     )
     assert api.posts == []
     assert result.is_error
+
+
+# PR #1585 review
+
+TWO_KEYS = {
+    **SCAN,
+    "observed_key": "backups.example.com ssh-ed25519 AAAAEXAMPLEhostkey\nbackups.example.com ssh-rsa AAAAEXAMPLErsa",
+}
+
+
+@pytest.mark.unit
+def test_trust_host_key_first_call_gives_a_scan_code():
+    routes = {**CONNS, "/api/ssh-keys/connections/4/host-key": TWO_KEYS}
+    result, _ = run("trust_host_key", routes, ssh_connection="borg@backups.example.com")
+    assert result.data["scan_code"]
+    assert result.data["scan_code"] in result.text
+
+
+@pytest.mark.unit
+def test_trust_host_key_refuses_when_another_key_changed():
+    first, _ = run(
+        "trust_host_key",
+        {**CONNS, "/api/ssh-keys/connections/4/host-key": TWO_KEYS},
+        ssh_connection="borg@backups.example.com",
+    )
+    swapped = {
+        **TWO_KEYS,
+        "observed_key": "backups.example.com ssh-ed25519 AAAAEXAMPLEhostkey\nbackups.example.com ssh-rsa AAAAEVILrsa",
+    }
+    routes = {
+        **CONNS,
+        "/api/ssh-keys/connections/4/host-key": swapped,
+        "POST /api/ssh-keys/connections/4/host-key/trust": swapped,
+    }
+    result, api = run(
+        "trust_host_key",
+        routes,
+        ssh_connection="borg@backups.example.com",
+        fingerprint="SHA256:EXAMPLEfingerprint",
+        scan_code=first.data["scan_code"],
+    )
+    assert api.posts == []
+    assert result.is_error
+
+
+@pytest.mark.unit
+def test_trust_host_key_needs_the_scan_code():
+    routes = {**CONNS, "/api/ssh-keys/connections/4/host-key": TWO_KEYS}
+    result, api = run(
+        "trust_host_key",
+        routes,
+        ssh_connection="borg@backups.example.com",
+        fingerprint="SHA256:EXAMPLEfingerprint",
+    )
+    assert api.posts == []
+    assert result.is_error
+
+
+@pytest.mark.unit
+def test_add_ssh_connection_hand_off_carries_a_chosen_key():
+    extra = {"id": 5, "name": "Offsite", "is_system_key": False, "public_key": PUBLIC}
+    routes = {
+        "/api/ssh-keys": {"ssh_keys": [SYSTEM_KEY, extra]},
+        "POST /api/ssh-keys/5/test-connection": {
+            "success": False,
+            "connection": {**CONN},
+        },
+    }
+    result, _ = run(
+        "add_ssh_connection",
+        routes,
+        host="backups.example.com",
+        username="borg",
+        ssh_key="Offsite",
+    )
+    assert "ssh_key_id=5" in result.text

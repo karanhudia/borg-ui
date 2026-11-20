@@ -16,4 +16,11 @@ describe('parseDeployPrefill', () => {
     expect(parseDeployPrefill(new URLSearchParams('deploy=1&port=abc'))).toEqual({})
     expect(parseDeployPrefill(new URLSearchParams('deploy=1&port=70000'))).toEqual({})
   })
+
+  it('carries a chosen SSH key', () => {
+    expect(parseDeployPrefill(new URLSearchParams('deploy=1&ssh_key_id=5'))).toEqual({
+      ssh_key_id: 5,
+    })
+    expect(parseDeployPrefill(new URLSearchParams('deploy=1&ssh_key_id=x'))).toEqual({})
+  })
 })

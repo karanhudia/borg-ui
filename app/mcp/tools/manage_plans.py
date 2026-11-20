@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.backup_plans import BackupPlanPayload, BackupPlanRepositoryPayload
 from app.mcp import resolve
+from app.mcp.client import ApiError
 from app.mcp.levels import Level
 from app.mcp.registry import tool
 from app.mcp.render import ToolResult, when
@@ -17,6 +18,7 @@ from app.mcp.tools.plans import ScheduleInvalid, validate_schedule
 # BackupPlanPayload's own defaults, named back to the user when applied.
 DEFAULT_RETENTION = {"daily": 7, "weekly": 4, "monthly": 6, "yearly": 1}
 DEFAULT_COMPRESSION = "lz4"
+DEFAULT_ARCHIVE_TEMPLATE = "{plan_name}-{now}"
 MISSING_SENTENCES = {
     "name": "a name for the plan",
     "sources": "what to back up",
@@ -79,6 +81,19 @@ def _retention_fields(
         for unit in RETENTION_UNITS:
             fields.setdefault(f"prune_keep_{unit}", 0)
     return fields
+
+
+def _keeps_something(fields: dict) -> bool:
+    """Borg refuses a prune with no keep rule; an all-zero policy has none."""
+    return any(fields.get(f"prune_keep_{unit}") for unit in RETENTION_UNITS) or bool(
+        fields.get("prune_keep_within")
+    )
+
+
+EMPTY_POLICY = (
+    "That retention keeps nothing, and pruning with it would delete every "
+    "archive. Give at least one rule, for example 7 daily."
+)
 
 
 def _retention_text(fields: dict) -> str:
@@ -216,6 +231,10 @@ async def create_backup_plan(ctx, args: CreatePlanArgs) -> ToolResult:
         defaults.append(f"{DEFAULT_COMPRESSION} compression")
     if len(repos) > 1:
         defaults.append("repositories run one after another")
+    defaults.append(f"archive names `{DEFAULT_ARCHIVE_TEMPLATE}`")
+    prune_after = "prune" in (args.after or [])
+    if prune_after and not _keeps_something(retention):
+        return ToolResult(EMPTY_POLICY, is_error=True)
     body = {
         "name": args.name,
         "source_type": locations[0]["source_type"] if len(locations) == 1 else "mixed",
@@ -256,18 +275,20 @@ async def create_backup_plan(ctx, args: CreatePlanArgs) -> ToolResult:
             if manual
             else f"`{body['cron_expression']}` ({body['timezone']})"
         ),
-        f"- Keeps: {_retention_text(retention)}",
+        f"- Keeps: {_retention_text(retention)}"
+        + ("" if prune_after else " (saved; pruning after backups is off)"),
     ]
     if any(body[f] for f in AFTER_STEPS.values()):
         lines.append("- After each backup: " + ", ".join(args.after))
     if defaults:
         lines += ["", "Defaults I used: " + "; ".join(defaults) + "."]
-    runs = (checked or {}).get("next_runs") or []
-    if runs:
-        lines += ["", f"Next run: {when(runs[0])}."]
+    # The run the saved plan will make, not the earlier preview's first one.
+    next_run = plan.get("next_run")
+    if next_run:
+        lines += ["", f"Next run: {when(next_run)}."]
     lines += ["", "Want me to run it now?"]
     return ToolResult(
-        "\n".join(lines), {"plan_id": plan.get("id"), "next_runs": runs[:3]}
+        "\n".join(lines), {"plan_id": plan.get("id"), "next_run": next_run}
     )
 
 
@@ -343,6 +364,12 @@ async def update_backup_plan(ctx, args: UpdatePlanArgs) -> ToolResult:
             "Tell me what to change: name, sources, repositories, schedule, retention, compression, exclusions or follow-up maintenance.",
             is_error=True,
         )
+    for field in ("sources", "repositories"):
+        if getattr(args, field) == []:
+            return ToolResult(
+                f"A plan needs at least one of its {field}; leave {field} out to keep them.",
+                is_error=True,
+            )
     found = await resolve.backup_plan(ctx, args.backup_plan)
     detail = await ctx.api.get(f"/api/backup-plans/{found['id']}")
     body = _payload_from(detail)
@@ -360,6 +387,8 @@ async def update_backup_plan(ctx, args: UpdatePlanArgs) -> ToolResult:
         if args.schedule:
             if args.schedule.strip().lower() == "manual":
                 changes["schedule_enabled"] = False
+                if args.timezone:
+                    changes["timezone"] = args.timezone
             else:
                 checked = await validate_schedule(
                     ctx, args.schedule, args.timezone or detail.get("timezone")
@@ -367,6 +396,9 @@ async def update_backup_plan(ctx, args: UpdatePlanArgs) -> ToolResult:
                 changes["cron_expression"] = checked["cron_expression"]
                 changes["timezone"] = checked.get("timezone") or detail.get("timezone")
                 changes["schedule_enabled"] = True
+                # An availability plan ignores the cron; an explicit cron
+                # means the user wants it to run on that cron.
+                changes["schedule_mode"] = "cron"
         elif args.timezone:
             # A new timezone alone: the stored cron, checked in that zone; the
             # plan stays on or off as it was.
@@ -381,8 +413,13 @@ async def update_backup_plan(ctx, args: UpdatePlanArgs) -> ToolResult:
         return ToolResult(invalid.text, is_error=True)
     if args.repositories:
         repos = [await resolve.repository(ctx, ref) for ref in args.repositories]
+        # Links that stay keep their overrides and on/off state; only their
+        # order changes. New links take the defaults.
+        kept = {link["repository_id"]: link for link in body.get("repositories", [])}
         changes["repositories"] = [
-            {"repository_id": r["id"], "execution_order": i, "enabled": True}
+            {**kept[r["id"]], "execution_order": i}
+            if r["id"] in kept
+            else {"repository_id": r["id"], "execution_order": i, "enabled": True}
             for i, r in enumerate(repos, start=1)
         ]
     for field in ("name", "description", "compression", "exclude_patterns"):
@@ -505,6 +542,8 @@ async def create_schedule(ctx, args: CreateScheduleArgs) -> ToolResult:
         return ToolResult(invalid.text, is_error=True)
     repos = [await resolve.repository(ctx, ref) for ref in args.repositories]
     retention = _retention_fields(args.retention, complete=True)
+    if args.retention is not None and not _keeps_something(retention):
+        return ToolResult(EMPTY_POLICY, is_error=True)
     body = {
         "name": args.name,
         "repository_ids": [r["id"] for r in repos],
@@ -517,21 +556,23 @@ async def create_schedule(ctx, args: CreateScheduleArgs) -> ToolResult:
     answer = await ctx.api.post("/api/schedule/", json=body)
     job = answer.get("job") or {}
     ctx.target = f"schedule {args.name}"[:200]
-    runs = checked.get("next_runs") or []
+    next_run = job.get("next_run")
     lines = [
         f"✓ Created the schedule *{args.name}* for "
         + ", ".join(f"*{r['name']}*" for r in repos)
         + ".",
         f"Runs on `{body['cron_expression']}` ({body['timezone']}).",
     ]
-    if runs:
-        lines.append(f"Next run: {when(runs[0])}.")
+    if retention:
+        lines.append(f"Prunes after each run, keeping {_retention_text(retention)}.")
+    if next_run:
+        lines.append(f"Next run: {when(next_run)}.")
     lines += [
         "",
         "Tip: a backup plan keeps sources, retention and scripts together, if you want to move this later.",
     ]
     return ToolResult(
-        "\n".join(lines), {"schedule_id": job.get("id"), "next_runs": runs[:3]}
+        "\n".join(lines), {"schedule_id": job.get("id"), "next_run": next_run}
     )
 
 
@@ -572,20 +613,39 @@ async def update_schedule(ctx, args: UpdateScheduleArgs) -> ToolResult:
             "Tell me what to change: name, cron expression, timezone, repositories or retention.",
             is_error=True,
         )
+    if args.repositories == []:
+        return ToolResult(
+            "A schedule needs at least one repository; leave repositories out to keep them.",
+            is_error=True,
+        )
     job = await resolve.schedule(ctx, args.schedule)
     changes: dict = {}
-    if args.cron or args.timezone:
+    # Timing is checked only when the caller changes it; a rename or a
+    # repository change leaves the stored cron and zone alone.
+    cron = (args.cron or args.timezone) and (
+        args.cron
+        or (
+            job.get("cron_expression")
+            if job.get("schedule_mode") != "availability"
+            else None
+        )
+    )
+    if cron:
         try:
             checked = await validate_schedule(
-                ctx,
-                args.cron or job.get("cron_expression") or "",
-                args.timezone or job.get("timezone"),
+                ctx, cron, args.timezone or job.get("timezone")
             )
         except ScheduleInvalid as invalid:
             return ToolResult(invalid.text, is_error=True)
-        changes["cron_expression"] = checked["cron_expression"]
+        if args.cron:
+            changes["cron_expression"] = checked["cron_expression"]
+            # Availability schedules drop the cron; an explicit one means cron.
+            changes["schedule_mode"] = "cron"
         if checked.get("timezone"):
             changes["timezone"] = checked["timezone"]
+    elif args.timezone:
+        # No cron to check (availability mode): the route checks the zone.
+        changes["timezone"] = args.timezone
     if args.name:
         changes["name"] = args.name
     if args.repositories:
@@ -663,11 +723,29 @@ async def duplicate_schedule(ctx, args: DuplicateScheduleArgs) -> ToolResult:
     answer = await ctx.api.post(f"/api/schedule/{job['id']}/duplicate")
     copy = answer.get("job") or {}
     name = copy.get("name")
+    data = {"schedule_id": copy.get("id"), "name": name}
     if args.new_name and copy.get("id"):
-        await ctx.api.put(f"/api/schedule/{copy['id']}", json={"name": args.new_name})
+        try:
+            await ctx.api.put(
+                f"/api/schedule/{copy['id']}", json={"name": args.new_name}
+            )
+        except ApiError:
+            # The copy is committed; name it so a retry does not make another.
+            return ToolResult(
+                f"Copied *{job['name']}* to *{name}*, but could not rename it to "
+                f"*{args.new_name}* (that name may be taken). Rename *{name}* "
+                "instead of copying again.",
+                data,
+                is_error=True,
+            )
         name = args.new_name
-    state = " It is off; turn it on when ready." if copy.get("enabled") is False else ""
-    return ToolResult(
-        f"✓ Copied *{job['name']}* to *{name}*.{state}",
-        {"schedule_id": copy.get("id"), "name": name},
-    )
+        data["name"] = name
+    lines = [f"✓ Copied *{job['name']}* to *{name}*."]
+    if copy.get("enabled") is False:
+        lines.append("It is off; turn it on when ready.")
+    if job.get("pre_backup_script_id") or job.get("post_backup_script_id"):
+        lines.append(
+            "Its scripts are attached, but their script parameters are not "
+            "copied: set them in the web UI before turning it on."
+        )
+    return ToolResult(" ".join(lines), data)

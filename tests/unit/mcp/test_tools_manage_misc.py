@@ -230,3 +230,56 @@ def test_create_script_refused_for_non_admin():
     }
     with pytest.raises(ApiError):
         run("create_script", routes, name="x", content="echo")
+
+
+# PR #1585 review
+
+
+@pytest.mark.unit
+def test_rclone_rename_of_unmanaged_remote_hands_off():
+    unmanaged = {**REMOTE, "config_source": "external"}
+    routes = {"/api/rclone/remotes": {"remotes": [unmanaged]}}
+    result, api = run("update_rclone_remote", routes, remote="b2", name="b2-eu")
+    assert api.puts == []
+    assert result.is_error
+    assert "/cloud-storage?edit=8" in result.text
+
+
+@pytest.mark.unit
+def test_update_notification_empty_selection_clears_it():
+    routes = {"/api/notifications": [CHANNEL], "PUT /api/notifications/6": CHANNEL}
+    _, api = run(
+        "update_notification_channel", routes, channel="Phone", repositories=[]
+    )
+    assert api.puts == [
+        (
+            "/api/notifications/6",
+            {"repository_ids": [], "monitor_all_repositories": False},
+        )
+    ]
+
+
+@pytest.mark.unit
+def test_upgrade_skips_agents_that_cannot_upgrade_themselves():
+    agents = {
+        "/api/managed-machines/agents": [
+            {
+                "id": 1,
+                "name": "laptop",
+                "upgrade_status": "outdated",
+                "self_upgrade_supported": True,
+            },
+            {
+                "id": 3,
+                "name": "pi",
+                "upgrade_status": "outdated",
+                "self_upgrade_supported": False,
+            },
+        ]
+    }
+    routes = {**agents, "POST /api/managed-machines/agents/upgrade": {"success": True}}
+    result, api = run("upgrade_agents", routes, agents=["outdated"])
+    assert api.posts == [
+        ("/api/managed-machines/agents/upgrade", {"agent_machine_ids": [1]})
+    ]
+    assert "*pi*" in result.text

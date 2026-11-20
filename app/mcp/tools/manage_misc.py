@@ -217,7 +217,7 @@ NotificationArgs = create_model(
 )
 async def update_notification_channel(ctx, args: NotificationArgs) -> ToolResult:
     changes = args.model_dump(exclude={"channel", "repositories"}, exclude_none=True)
-    if args.repositories:
+    if args.repositories is not None:
         changes["repository_ids"] = [
             (await resolve.repository(ctx, ref))["id"] for ref in args.repositories
         ]
@@ -285,6 +285,16 @@ async def update_rclone_remote(ctx, args: RcloneArgs) -> ToolResult:
             f"so it stays out of this chat. Change it at {link}",
             {"edit_url": link},
         )
+    if args.name and remote.get("config_source") != "managed":
+        # The route renames only the database row of a remote whose config
+        # Borg UI does not manage; rclone would then not find it by name.
+        link = links.rclone_remote(ctx, remote["id"])
+        return ToolResult(
+            f"*{remote['name']}* uses an rclone config Borg UI does not manage, so "
+            f"renaming it here would break it. Rename it in that config, then at {link}",
+            {"edit_url": link},
+            is_error=True,
+        )
     body: dict = {}
     if args.name:
         body["name"] = args.name
@@ -332,13 +342,21 @@ class UpgradeArgs(BaseModel):
 )
 async def upgrade_agents(ctx, args: UpgradeArgs) -> ToolResult:
     agents = await ctx.api.get("/api/managed-machines/agents")
+
+    # The route refuses the whole batch when one agent cannot upgrade itself,
+    # so those are left out and named instead. None means not reported yet.
+    def upgradable(agent: dict) -> bool:
+        return (
+            agent.get("upgrade_status") == "outdated"
+            and agent.get("self_upgrade_supported") is not False
+        )
+
     if [a.strip().lower() for a in args.agents] == ["outdated"]:
-        wanted = [a for a in agents if a.get("upgrade_status") == "outdated"]
-        current = []
+        outdated = [a for a in agents if a.get("upgrade_status") == "outdated"]
     else:
-        picked = [resolve.pick("agent machine", ref, agents) for ref in args.agents]
-        wanted = [a for a in picked if a.get("upgrade_status") == "outdated"]
-        current = [a for a in picked if a.get("upgrade_status") != "outdated"]
+        outdated = [resolve.pick("agent machine", ref, agents) for ref in args.agents]
+    wanted = [a for a in outdated if upgradable(a)]
+    current = [a for a in outdated if not upgradable(a)]
     names = ", ".join(f"*{a['name']}*" for a in current)
     current_text = (
         f"{names} {'is' if len(current) == 1 else 'are'} already current or cannot be upgraded from here."

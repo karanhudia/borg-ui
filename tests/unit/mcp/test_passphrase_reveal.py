@@ -232,3 +232,43 @@ def test_proxy_auth_types_the_repository_name(test_db, flagged):
         assert _reauthenticated(
             user, flagged, PassphraseRevealRequest(repository_name="Photos")
         )
+
+
+@pytest.mark.unit
+def test_observe_mode_health_also_warns():
+    """PR #1585 review: a flagged repository switched to observe keeps the warning."""
+    from datetime import datetime, timedelta
+
+    from app.api.dashboard import build_observe_repository_health
+
+    now = datetime.utcnow()
+    repo = Repository(
+        name="Photos",
+        path="/data/example/photos",
+        mode="observe",
+        last_backup=now - timedelta(hours=1),
+        passphrase_unsaved=True,
+    )
+    health = build_observe_repository_health(repo, now)
+    assert "Passphrase not saved yet" in health["warnings"]
+    assert health["health_status"] in ("warning", "critical")
+
+
+@pytest.mark.unit
+def test_reauthentication_runs_off_the_event_loop(
+    test_client, admin_headers, flagged, monkeypatch
+):
+    """PR #1585 review: bcrypt must not block the worker's event loop."""
+    import app.api.repositories as routes
+
+    ran = []
+    real = routes.run_in_threadpool
+
+    async def recording(func, *args, **kwargs):
+        ran.append(func.__name__)
+        return await real(func, *args, **kwargs)
+
+    monkeypatch.setattr(routes, "run_in_threadpool", recording)
+    response = _reveal(test_client, flagged, admin_headers, password="admin123")
+    assert response.status_code == 200
+    assert "_reauthenticated" in ran

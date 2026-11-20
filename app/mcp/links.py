@@ -8,13 +8,17 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
+from app.config import settings
 from app.core.oidc import build_external_base_url
 
 SECRET_WORDS = ("passphrase", "password", "private_key", "secret", "token")
 
 
 def base_url(request) -> str:
-    """PUBLIC_BASE_URL when set, else the request's host, plus BASE_PATH."""
+    """PUBLIC_BASE_URL as set (it already includes BASE_PATH, as
+    docs/configuration.md says), else the request's host plus BASE_PATH."""
+    if settings.public_base_url:
+        return settings.public_base_url.strip().rstrip("/")
     root_path = (request.scope.get("root_path") or "").rstrip("/")
     return f"{build_external_base_url(request).rstrip('/')}{root_path}"
 
@@ -39,9 +43,17 @@ def import_repository(ctx, **fields) -> str:
     return web(ctx, "repositories", import_=1, **fields)
 
 
-def ssh_deploy(ctx, host: str, username: str, port: int = 22) -> str:
+def ssh_deploy(
+    ctx, host: str, username: str, port: int = 22, ssh_key_id: int | None = None
+) -> str:
     return web(
-        ctx, "ssh-connections", deploy=1, host=host, username=username, port=port
+        ctx,
+        "ssh-connections",
+        deploy=1,
+        host=host,
+        username=username,
+        port=port,
+        ssh_key_id=ssh_key_id,
     )
 
 
