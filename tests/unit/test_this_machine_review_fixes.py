@@ -251,7 +251,7 @@ def test_same_name_folders_are_not_excluded_on_the_host(tmp_path):
     excludes = tm.exclude_patterns(
         host, host / "var/backups/borg-ui", tmp_path / "data", in_data_volume=False
     )
-    assert not _borg_fm_excluded(str(host / "home/me/this-machine/notes"), excludes)
+    assert not _borg_fm_excluded(str(host / "home/alex/this-machine/notes"), excludes)
     fallback = tm.exclude_patterns(
         host, tmp_path / "data/this-machine", tmp_path / "data", in_data_volume=True
     )
