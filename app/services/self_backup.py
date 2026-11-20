@@ -23,6 +23,8 @@ from app.config import get_runtime_app_version, resolve_secret_key_file, setting
 logger = structlog.get_logger()
 
 MANIFEST_FORMAT = 1
+# Not "borg.db": the plan excludes every live borg.db by name.
+SNAPSHOT_NAME = "borg-ui-db.sqlite"
 WARNING_PREFIX = "Borg UI settings were not included in this snapshot"
 
 
@@ -68,6 +70,12 @@ def clear_staging(data_dir: Path) -> None:
     shutil.rmtree(staging_dir(data_dir), ignore_errors=True)
 
 
+def clear_staging_at_startup() -> None:
+    """A run cut short by a crash or restart leaves the database copy behind;
+    nothing should find it until the next system run writes a fresh one."""
+    clear_staging(Path(settings.data_dir))
+
+
 def _copy_if_exists(src: Path, dest: Path) -> bool:
     if src.is_dir():
         shutil.copytree(src, dest, symlinks=True)
@@ -95,38 +103,80 @@ def collect_rebuild_inputs(host_root: Optional[Path], staging: Path) -> list[str
     out = staging / "rebuild"
     out.mkdir(parents=True, exist_ok=True)
     written = []
-    if _copy_if_exists(host_root / "var/lib/dpkg/status", out / "dpkg-status"):
-        written.append("dpkg-status")
-    if _copy_if_exists(host_root / "var/lib/apk/db/installed", out / "apk-installed"):
-        written.append("apk-installed")
+    for name, collect in _REBUILD_COLLECTORS:
+        try:
+            if collect(host_root, out):
+                written.append(name)
+        except OSError as exc:  # shutil.Error is an OSError
+            logger.info("Skipped rebuild input", input=name, error=str(exc))
+    return written
+
+
+def _dpkg(host_root: Path, out: Path) -> bool:
+    return _copy_if_exists(host_root / "var/lib/dpkg/status", out / "dpkg-status")
+
+
+def _apk(host_root: Path, out: Path) -> bool:
+    return _copy_if_exists(
+        host_root / "var/lib/apk/db/installed", out / "apk-installed"
+    )
+
+
+def _pacman(host_root: Path, out: Path) -> bool:
     pacman = host_root / "var/lib/pacman/local"
-    if pacman.is_dir():
-        (out / "pacman.txt").write_text(
-            "\n".join(sorted(p.name for p in pacman.iterdir() if p.is_dir())) + "\n"
-        )
-        written.append("pacman.txt")
-    if shutil.which("rpm") and (host_root / "var/lib/rpm").is_dir():
-        listing = _run(["rpm", "-qa", "--root", str(host_root)])
-        if listing is not None:
-            (out / "rpm.txt").write_text(listing)
-            written.append("rpm.txt")
-    if _copy_if_exists(host_root / "var/spool/cron", out / "crontabs"):
-        written.append("crontabs")
+    if not pacman.is_dir():
+        return False
+    names = sorted(p.name for p in pacman.iterdir() if p.is_dir())
+    (out / "pacman.txt").write_text("\n".join(names) + "\n")
+    return True
+
+
+def _rpm(host_root: Path, out: Path) -> bool:
+    if not (shutil.which("rpm") and (host_root / "var/lib/rpm").is_dir()):
+        return False
+    listing = _run(["rpm", "-qa", "--root", str(host_root)])
+    if listing is None:
+        return False
+    (out / "rpm.txt").write_text(listing)
+    return True
+
+
+def _crontabs(host_root: Path, out: Path) -> bool:
+    return _copy_if_exists(host_root / "var/spool/cron", out / "crontabs")
+
+
+def _systemd(host_root: Path, out: Path) -> bool:
     wants = sorted(
         f"{d.name}/{u.name}"
         for d in (host_root / "etc/systemd/system").glob("*.wants")
         for u in d.iterdir()
     )
-    if wants:
-        (out / "systemd-enabled.txt").write_text("\n".join(wants) + "\n")
-        written.append("systemd-enabled.txt")
-    if shutil.which("docker"):
-        ids = (_run(["docker", "ps", "-aq"]) or "").split()
-        inspected = _run(["docker", "inspect", *ids]) if ids else None
-        if inspected is not None:
-            (out / "containers.json").write_text(inspected)
-            written.append("containers.json")
-    return written
+    if not wants:
+        return False
+    (out / "systemd-enabled.txt").write_text("\n".join(wants) + "\n")
+    return True
+
+
+def _containers(_host_root: Path, out: Path) -> bool:
+    if not shutil.which("docker"):
+        return False
+    ids = (_run(["docker", "ps", "-aq"]) or "").split()
+    inspected = _run(["docker", "inspect", *ids]) if ids else None
+    if inspected is None:
+        return False
+    (out / "containers.json").write_text(inspected)
+    return True
+
+
+_REBUILD_COLLECTORS = (
+    ("dpkg-status", _dpkg),
+    ("apk-installed", _apk),
+    ("pacman.txt", _pacman),
+    ("rpm.txt", _rpm),
+    ("crontabs", _crontabs),
+    ("systemd-enabled.txt", _systemd),
+    ("containers.json", _containers),
+)
 
 
 def _config_export(db: Session) -> Optional[bytes]:
@@ -161,11 +211,10 @@ def write_staging(
     staging = staging_dir(data_dir)
     clear_staging(data_dir)
     staging.mkdir(parents=True)
-    _snapshot_sqlite(database, staging / "borg.db")
+    _snapshot_sqlite(database, staging / SNAPSHOT_NAME)
     export = _config_export(db)
     if export is not None:
         (staging / "config.export").write_bytes(export)
-    collect_rebuild_inputs(host_root, staging)
     (staging / "manifest.json").write_text(
         json.dumps(
             {
@@ -178,6 +227,8 @@ def write_staging(
             indent=2,
         )
     )
+    # Last, so a host the app user cannot fully read never costs the database.
+    collect_rebuild_inputs(host_root, staging)
     return self_backup_paths(data_dir)
 
 

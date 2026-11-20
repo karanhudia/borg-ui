@@ -354,6 +354,9 @@ mount_mcp(app)
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup"""
+    from app.services.self_backup import clear_staging_at_startup
+
+    clear_staging_at_startup()
     logger.info("Starting Borg UI")
     # Sync handlers run in anyio's threadpool (default 40 tokens). Cap it at the
     # DB pool size so a burst queues for a thread, not for a connection.

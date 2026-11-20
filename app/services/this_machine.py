@@ -42,6 +42,9 @@ CACHE_EXCLUDES = (
     "**/tmp",
 )
 LIVE_DATABASE_EXCLUDES = ("**/borg.db", "**/borg.db-wal", "**/borg.db-shm")
+# User plans that reach the Borg UI data volume never take the self-backup
+# staging folder (a database copy and config export).
+STAGING_EXCLUDE = "**/self-backup/staging"
 HOST_EXCLUDES = ("var/lib/docker/overlay2", "var/lib/docker/image")
 COMPACT_INTERVAL = timedelta(hours=24)
 
@@ -111,9 +114,22 @@ def _host_root() -> Optional[Path]:
 def snapshot_location(host_root: Optional[Path], data_dir: Path) -> tuple[Path, bool]:
     """Where "This machine (local)" lives, and whether that is inside the Borg
     UI data volume (so it would be lost with the volume)."""
-    if host_root is not None:
+    if host_root is not None and _writable(host_root / HOST_SNAPSHOT_DIR):
         return host_root / HOST_SNAPSHOT_DIR, False
     return data_dir / DATA_VOLUME_SNAPSHOT_DIR, True
+
+
+def _writable(path: Path) -> bool:
+    """Whether Borg UI can create or write `path`: the path itself if it
+    exists, else its nearest existing parent (rootless Docker and read-only
+    mounts show the host but cannot hold the snapshots)."""
+    for candidate in (path, *path.parents):
+        try:
+            if candidate.exists():
+                return os.access(candidate, os.W_OK)
+        except OSError:
+            return False
+    return False
 
 
 def source_directories(host_root: Path) -> list[str]:

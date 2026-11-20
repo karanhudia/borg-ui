@@ -6275,7 +6275,8 @@ async def permanently_delete_repository(
                 },
             ) from exc
 
-        await delete_repository(repo_id, current_user, db)
+        # The outer route already required confirm_system for system repositories.
+        await delete_repository(repo_id, current_user, db, confirm_system=True)
         logger.info(
             "Repository permanently deleted",
             repo_id=repo_id,

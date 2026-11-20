@@ -42,7 +42,7 @@ def _write(db, data_dir, host_root=None):
 def test_write_staging_copies_db_and_manifest(test_db, data_dir):
     _write(test_db, data_dir)
     staging = sb.staging_dir(data_dir)
-    with sqlite3.connect(staging / "borg.db") as conn:
+    with sqlite3.connect(staging / sb.SNAPSHOT_NAME) as conn:
         assert conn.execute("select x from t").fetchone() == (1,)
     manifest = json.loads((staging / "manifest.json").read_text())
     assert manifest["alembic_revision"] == "abc123"

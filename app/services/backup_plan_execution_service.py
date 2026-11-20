@@ -58,7 +58,11 @@ from app.services.self_backup import (
     self_backup_paths,
     with_self_backup_paths,
 )
-from app.services.this_machine import THIS_MACHINE_ROLE, compact_due
+from app.services.this_machine import (
+    STAGING_EXCLUDE,
+    THIS_MACHINE_ROLE,
+    compact_due,
+)
 from app.services.backup_plan_policy import (
     BORG2_FEATURE,
     PLAN_REQUIRED_SKIP_REASON,
@@ -2220,6 +2224,10 @@ class BackupPlanExecutionService:
             )
             context = replace(
                 context, source_directories=directories, source_locations=locations
+            )
+        elif STAGING_EXCLUDE not in context.exclude_patterns:
+            context = replace(
+                context, exclude_patterns=[*context.exclude_patterns, STAGING_EXCLUDE]
             )
         repositories = []
         for link in enabled_links:
