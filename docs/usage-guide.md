@@ -421,7 +421,7 @@ archive name templates that differ in fixed text (for example `nas-{now}` and
 anything, so a template that differs from another only there is refused too.
 On Borg 1 the plan's own template needs some fixed text: `{now}` on its own
 would match every archive. On Borg 2 the plan's own template must not use a
-Borg placeholder. Literal braces (`{{` or `}}`) are not supported with this
+Borg placeholder. Literal braces (<code v-pre>{{</code> or <code v-pre>}}</code>) are not supported with this
 option. A managed agent needs a version that supports
 this option; an older agent fails the prune instead of pruning everything.
 
