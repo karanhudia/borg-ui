@@ -562,7 +562,10 @@ async def test_concurrent_setups_agree_on_one_repository_and_passphrase(
 
     host = _host_root(tmp_path)
 
-    async def slow_init(*_args, **_kwargs):
+    init_passphrases = []
+
+    async def slow_init(_path, _encryption, passphrase, *_args, **_kwargs):
+        init_passphrases.append(passphrase)
         await asyncio.sleep(0.05)
         return {"success": True}
 
@@ -586,6 +589,8 @@ async def test_concurrent_setups_agree_on_one_repository_and_passphrase(
     test_db.expire_all()
     assert test_db.query(Repository).count() == 1
     assert test_db.query(BackupPlan).count() == 1
+    assert len(init_passphrases) == 1
+    assert test_db.query(Repository).one().passphrase == init_passphrases[0]
 
 
 @pytest.mark.unit
