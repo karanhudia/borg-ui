@@ -182,8 +182,8 @@ def _alert_cooldown_elapsed(settings: SystemSettings, now: datetime) -> bool:
 # (`run_transaction_off_loop`), each step ending its transaction: the alert or
 # the report is sent in between, and no lock or connection is held while it
 # is. The monitoring's check is recorded before its alert is sent (the
-# alert's preparation committed it there before), the alert and the report
-# after they were sent.
+# alert's preparation committed it there before), and so is a due report's
+# window; the alert, and a report sent by hand, after they were sent.
 
 
 def _monitoring_check(
@@ -460,16 +460,64 @@ def build_backup_report(
     )
 
 
-def _report_to_send(db: Session, now: datetime, force: bool) -> Optional[BackupReport]:
+def _report_to_send(
+    db: Session, now: datetime, force: bool, claimed: list
+) -> Optional[BackupReport]:
+    """The report to send, or None when it is not due. A due report's window
+    is recorded here, under the settings row's lock and before the report is
+    sent: a second scheduler (a process being replaced runs one until it is
+    stopped) then finds it not due, and sends no second report. A report
+    sent by hand (`force`) is recorded after it was sent."""
     settings = _get_or_create_settings(db)
-    if not force and not is_report_due(settings, now):
+    if force:
+        return build_backup_report(db, settings, now)
+    if not is_report_due(settings, now):
+        return None  # without the lock: on SQLite it is the write lock
+    lock_settings_row(db, settings)
+    if not is_report_due(settings, now):
         return None
-    return build_backup_report(db, settings, now)
+    report = build_backup_report(db, settings, now)
+    sent_before = settings.backup_reports_last_sent_at
+    settings.backup_reports_last_sent_at = now
+    db.commit()
+    # handed out at once: a caller cancelled while this thread finishes
+    # still learns that the window was recorded
+    claimed.append(sent_before)
+    return report
+
+
+def _reopen_report_window(
+    db: Session, now: datetime, sent_before: Optional[datetime]
+) -> None:
+    """The report was not sent: its window counts as not sent, and the next
+    pass tries again. Unless a later report has been recorded meanwhile. The
+    failed send may have left its transaction aborted: rolled back first."""
+    db.rollback()
+    settings = db.query(SystemSettings).first()
+    if settings is None:
+        return
+    lock_settings_row(db, settings)
+    if settings.backup_reports_last_sent_at == now:
+        settings.backup_reports_last_sent_at = sent_before
+        db.commit()
 
 
 def _record_report_sent(db: Session, now: datetime) -> None:
+    """Record a report sent by hand, under the settings row's lock. A later
+    window a scheduler has claimed meanwhile is not moved back: it would be
+    found due again and sent a second time. The window counts as served by
+    this report instead, recorded just after the claim: should the
+    scheduler's send fail, its reopen no longer finds its own claim, and
+    leaves the window recorded."""
     settings = _get_or_create_settings(db)
-    settings.backup_reports_last_sent_at = now
+    lock_settings_row(db, settings)
+    last_sent = settings.backup_reports_last_sent_at
+    if last_sent is None or _to_utc_naive(last_sent) < now:
+        settings.backup_reports_last_sent_at = now
+    else:
+        settings.backup_reports_last_sent_at = _to_utc_naive(last_sent) + timedelta(
+            microseconds=1
+        )
     db.commit()
 
 
@@ -477,12 +525,34 @@ async def send_backup_report_now(
     db: Session, now: Optional[datetime] = None, *, force: bool = True
 ) -> dict:
     now_naive = _normalize_now(now)
-    report = await run_transaction_off_loop(db, _report_to_send, db, now_naive, force)
-    if report is None:
-        return {"sent": False, "reason": "not_due", "repository_count": 0}
+    claimed: list = []
+    sent = False
+    try:
+        report = await run_transaction_off_loop(
+            db, _report_to_send, db, now_naive, force, claimed
+        )
+        if report is None:
+            return {"sent": False, "reason": "not_due", "repository_count": 0}
 
-    await NotificationService.send_backup_report(db, report.title, report.body)
-    await run_transaction_off_loop(db, _record_report_sent, db, now_naive)
+        await NotificationService.send_backup_report(db, report.title, report.body)
+        sent = True
+        if not claimed:
+            await run_transaction_off_loop(db, _record_report_sent, db, now_naive)
+    except BaseException:
+        # The window is recorded and the report is not sent: its preparation
+        # failed, or the scheduler was stopped meanwhile. The next pass tries
+        # again.
+        if claimed and not sent:
+            try:
+                await run_transaction_off_loop(
+                    db, _reopen_report_window, db, now_naive, claimed[0]
+                )
+            except Exception as reopen_error:
+                logger.warning(
+                    "Failed to reopen the backup report window",
+                    error=str(reopen_error),
+                )
+        raise
     return {
         "sent": True,
         "repository_count": report.repository_count,

@@ -124,7 +124,10 @@ from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
 from app.utils.schedule_time import calculate_next_cron_run, to_utc_naive
 from app.utils.source_locations import decode_source_locations
-from app.services.schedule_availability import source_locations_available
+from app.services.schedule_availability import (
+    location_probe_targets,
+    source_locations_available,
+)
 
 logger = structlog.get_logger()
 
@@ -815,6 +818,7 @@ class BackupPlanExecutionService:
         )
         if step == "skip":
             return False
+        probed: Optional[tuple] = None
         if step == "probe":
             locations, source_type, ssh_connection_id = sources
             decision = await source_locations_available(
@@ -823,6 +827,7 @@ class BackupPlanExecutionService:
                 fallback_source_type=source_type,
                 fallback_ssh_connection_id=ssh_connection_id,
             )
+            probed = decision.targets
             if not decision.available:
                 await run_transaction_off_loop(
                     db,
@@ -844,7 +849,7 @@ class BackupPlanExecutionService:
         if not allowed:
             return False
         try:
-            return await self._start_scheduled_run(db, plan, now)
+            return await self._start_scheduled_run(db, plan, now, probed=probed)
         except ValueError as exc:
             logger.error(
                 "Failed to dispatch scheduled backup plan",
@@ -1043,11 +1048,18 @@ class BackupPlanExecutionService:
         return True
 
     async def _start_scheduled_run(
-        self, db: Session, plan: BackupPlan, now: datetime
+        self,
+        db: Session,
+        plan: BackupPlan,
+        now: datetime,
+        *,
+        probed: Optional[tuple] = None,
     ) -> bool:
         """Start the plan's due run unless one is active, and say whether it
         did. A start by hand decides in a worker thread, under the plan's
-        lock: so does this one, on what is committed by now.
+        lock: so does this one, on what is committed by now. An availability
+        plan whose sources were changed while they were probed (`probed`,
+        the targets of the probe) stays due, and the next pass probes them.
 
         The whole transaction runs in a thread, from the lock to the commit.
         On the loop, the wait for the lock would hold every request; and a
@@ -1070,6 +1082,7 @@ class BackupPlanExecutionService:
                 not still_due
                 or self.has_active_run(db, plan.id)
                 or self._minimum_interval_not_elapsed(db, plan, now)
+                or (probed is not None and probed != self._probe_targets(db, plan))
             ):
                 db.rollback()
                 return False
@@ -1082,6 +1095,16 @@ class BackupPlanExecutionService:
         # a pool of the tests keeps its connection in its thread
         return await self.launch_after(
             db, work, in_thread=checkout_can_wait(db.get_bind())
+        )
+
+    @staticmethod
+    def _probe_targets(db: Session, plan: BackupPlan) -> tuple:
+        """The sources an availability probe of the plan would probe now."""
+        return location_probe_targets(
+            db,
+            decode_source_locations(plan.source_locations),
+            fallback_source_type=plan.source_type,
+            fallback_ssh_connection_id=plan.source_ssh_connection_id,
         )
 
     @staticmethod
