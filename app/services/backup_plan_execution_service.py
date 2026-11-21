@@ -1073,6 +1073,13 @@ class BackupPlanExecutionService:
             ):
                 db.rollback()
                 return False
+            # The feature access as it is now: a license that lapsed since
+            # the check before the lock starts no run, and the plan stays due
+            # for the next pass, which records the refusal. Without a commit:
+            # it would end the plan's lock.
+            if not evaluate_backup_plan_access(db, plan, commit=False).allowed:
+                db.rollback()
+                return False
             created.append(self.create_run(db, plan, trigger="schedule"))
             plan.last_run = now
             plan.next_run = self._next_plan_run(plan, now)

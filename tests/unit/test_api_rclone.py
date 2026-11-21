@@ -2130,7 +2130,9 @@ def test_create_managed_rclone_remote_removes_config_file_on_commit_failure(
 ):
     config_root = tmp_path / "rclone"
     monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
-    monkeypatch.setattr("app.core.features.get_effective_plan_value", lambda _db: "pro")
+    monkeypatch.setattr(
+        "app.core.features.get_effective_plan_value", lambda _db, **_kwargs: "pro"
+    )
     original_commit = test_db.commit
     state = {"failed": False}
 

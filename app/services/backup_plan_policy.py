@@ -82,8 +82,9 @@ def evaluate_backup_plan_feature_access(
     enabled_repository_count: int,
     repository_run_mode: str,
     source_locations: Optional[list[dict[str, Any]]] = None,
+    commit: bool = True,
 ) -> BackupPlanFeatureDecision:
-    current_plan = get_current_plan(db)
+    current_plan = get_current_plan(db, commit=commit)
     feature = BACKUP_PLAN_ADVANCED_FEATURE
     reason: Optional[str] = None
     if enabled_repository_count > 1:
@@ -99,7 +100,7 @@ def evaluate_backup_plan_feature_access(
             reason = source_reason
 
     required = FEATURES[feature]
-    allowed = reason is None or has_feature(db, feature)
+    allowed = reason is None or has_feature(db, feature, commit=commit)
     return BackupPlanFeatureDecision(
         allowed=allowed,
         current=current_plan,
@@ -110,8 +111,11 @@ def evaluate_backup_plan_feature_access(
 
 
 def evaluate_backup_plan_access(
-    db: Session, plan: BackupPlan
+    db: Session, plan: BackupPlan, *, commit: bool = True
 ) -> BackupPlanFeatureDecision:
+    """Whether the plan's features are licensed. With `commit=False` the
+    licensing lookup leaves the caller's transaction open, with any lock it
+    holds: a start can decide under the plan's lock."""
     decision = evaluate_backup_plan_feature_access(
         db,
         enabled_repository_count=sum(1 for link in plan.repositories if link.enabled),
@@ -122,6 +126,7 @@ def evaluate_backup_plan_access(
             source_ssh_connection_id=plan.source_ssh_connection_id,
             source_directories=_decode_plan_source_directories(plan),
         ),
+        commit=commit,
     )
     # an existing refusal comes first; an allowed plan still needs Borg 2 for
     # its Borg 2 repositories, whatever else an override grants it
@@ -130,7 +135,7 @@ def evaluate_backup_plan_access(
         for link in plan.repositories
     ):
         return BackupPlanFeatureDecision(
-            allowed=has_feature(db, BORG2_FEATURE),
+            allowed=has_feature(db, BORG2_FEATURE, commit=commit),
             current=decision.current,
             required=FEATURES[BORG2_FEATURE],
             feature=BORG2_FEATURE,

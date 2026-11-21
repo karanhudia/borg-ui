@@ -11,6 +11,7 @@ import httpx
 import structlog
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -19,6 +20,9 @@ from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 PLAN_RANK = {"community": 0, "pro": 1, "enterprise": 2}
+# PostgreSQL advisory lock for the licensing row's creation; the job
+# admission locks use 276116 and 276117
+LICENSING_LOCK_ID = 276118
 
 
 def utc_now() -> datetime:
@@ -87,26 +91,61 @@ def _load_public_key(public_key_raw: bytes) -> Ed25519PublicKey:
         return public_key
 
 
-def get_or_create_licensing_state(db: Session) -> LicensingState:
-    state = db.query(LicensingState).first()
-    if state:
-        if not state.instance_id:
-            state.instance_id = str(uuid.uuid4())
-            db.commit()
-            db.refresh(state)
+def _lock_licensing_scope(db: Session) -> None:
+    """One caller at a time creates or completes the licensing row, from here
+    to the end of its transaction. Not held on the row: before the first
+    lookup there is none."""
+    dialect_name = db.get_bind().dialect.name
+    if dialect_name == "sqlite":
+        # The database's one write lock, whether or not a row matches.
+        db.execute(text("UPDATE licensing_state SET id = id"))
+    elif dialect_name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_id)"),
+            {"lock_id": LICENSING_LOCK_ID},
+        )
+
+
+def _licensing_row(db: Session) -> LicensingState | None:
+    return db.query(LicensingState).first()
+
+
+def get_or_create_licensing_state(
+    db: Session, *, commit: bool = True
+) -> LicensingState:
+    """The install's licensing row, created by the first lookup. With
+    `commit=False` a row created or completed here is only flushed, and the
+    caller's transaction, with any lock it holds, stays open."""
+    state = _licensing_row(db)
+    if state is not None and state.instance_id:
         return state
 
-    state = LicensingState(instance_id=str(uuid.uuid4()))
-    db.add(state)
+    # Two first lookups at once would each insert a row: the second one
+    # waits here, then finds the first one's.
+    _lock_licensing_scope(db)
+    state = _licensing_row(db)
+    if state is None:
+        state = LicensingState(instance_id=str(uuid.uuid4()))
+        db.add(state)
+    else:
+        db.refresh(state)
+        if not state.instance_id:
+            state.instance_id = str(uuid.uuid4())
+    # a lookup that found the row under the lock ends its transaction too:
+    # the lock is held until then
+    if not commit:
+        db.flush()
+        return state
     db.commit()
     db.refresh(state)
     return state
 
 
-def get_effective_plan_value(db: Session) -> str:
-    state = get_or_create_licensing_state(db)
+def get_effective_plan_value(db: Session, *, commit: bool = True) -> str:
+    state = get_or_create_licensing_state(db, commit=commit)
     refresh_status_if_expired(state)
-    db.commit()
+    if commit:
+        db.commit()
     return state.plan if state.status == "active" else "community"
 
 
@@ -187,10 +226,10 @@ def get_entitlement_summary(db: Session) -> dict[str, Any]:
     }
 
 
-def get_feature_access(db: Session) -> dict[str, bool]:
+def get_feature_access(db: Session, *, commit: bool = True) -> dict[str, bool]:
     from app.core.features import FEATURES
 
-    state = get_or_create_licensing_state(db)
+    state = get_or_create_licensing_state(db, commit=commit)
     refresh_status_if_expired(state)
     current_plan = state.plan if state.status == "active" else "community"
     effective = {
