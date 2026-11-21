@@ -538,6 +538,102 @@ def test_policy_keeps_the_operation_log_file_the_read_side_shows(db, tmp_path, k
 
 
 @pytest.mark.unit
+def test_policy_keeps_a_backup_log_file_its_agent_job_error_shows(db, tmp_path):
+    """A backup's log is also shown for a marker in its agent job's error
+    message. With no stored lines, the file is then the only transcript."""
+    from app.services.operations.backup_facade import (
+        BackupJobFacade,
+        backup_job_has_logs,
+    )
+
+    settings = _settings(db, log_save_policy=POLICY)
+    machine = _machine(db)
+
+    def _agent_backup(error_message):
+        op, log = _operation_with_log(db, tmp_path, "backup", "Archive name: a")
+        op.execution_mode = "agent"
+        job = _agent_job(db, machine, "completed", age_days=1)
+        job.operation_id = op.id
+        job.error_message = error_message
+        job.updated_at = job.created_at
+        db.commit()
+        return op, log
+
+    flagged, flagged_log = _agent_backup("Error: the result arrived twice")
+    clean, clean_log = _agent_backup(None)
+
+    def shown(op):
+        return backup_job_has_logs(db, BackupJobFacade(db, op), log_save_policy=POLICY)
+
+    assert shown(flagged) and not shown(clean)
+
+    results = run_retention(db, settings)
+    db.expire_all()
+
+    assert results["policy_operation_log_files_deleted"] == 1
+    assert flagged.log_file_path == str(flagged_log) and flagged_log.exists()
+    assert shown(flagged)
+    assert clean.log_file_path is None and not clean_log.exists()
+
+
+@pytest.mark.unit
+def test_policy_keeps_a_backup_log_file_its_agent_log_lines_show(db, tmp_path):
+    """A line that reached a backup's agent job after its file was written
+    shows the backup's log. The file is part of that log and stays."""
+    from app.services.operations.backup_facade import (
+        BackupJobFacade,
+        backup_job_has_logs,
+    )
+
+    settings = _settings(db, log_save_policy=POLICY)
+    op, log = _operation_with_log(db, tmp_path, "backup", "Archive name: a")
+    op.execution_mode = "agent"
+    job = _agent_job(db, _machine(db), "completed", age_days=1, log_lines=1)
+    job.operation_id = op.id
+    _agent_log_line(db, job, 1, "Warning: /data/a: file changed while we backed it up")
+    db.query(AgentJob).update({AgentJob.updated_at: job.created_at})
+    db.commit()
+
+    assert backup_job_has_logs(db, BackupJobFacade(db, op), log_save_policy=POLICY)
+
+    results = run_retention(db, settings)
+    db.expire_all()
+
+    assert results["policy_operation_log_files_deleted"] == 0
+    assert results["policy_log_rows_deleted"] == 0
+    assert op.log_file_path == str(log) and log.exists()
+
+
+@pytest.mark.unit
+def test_policy_leaves_a_log_file_whose_operation_failed_while_it_was_read(
+    db, tmp_path, monkeypatch
+):
+    from app.services import job_history_retention
+
+    settings = _settings(db, log_save_policy=POLICY)
+    op, log = _operation_with_log(db, tmp_path, "backup", "Archive name: a")
+    read_file = job_history_retention._marker_in_log_file
+
+    def read_then_the_operation_fails(path):
+        marker = read_file(path)
+        db.query(Operation).filter(Operation.id == op.id).update(
+            {Operation.status: "failed"}
+        )
+        db.commit()
+        return marker
+
+    monkeypatch.setattr(
+        job_history_retention, "_marker_in_log_file", read_then_the_operation_fails
+    )
+
+    results = run_retention(db, settings)
+    db.expire_all()
+
+    assert results["policy_operation_log_files_deleted"] == 0
+    assert op.log_file_path == str(log) and log.exists()
+
+
+@pytest.mark.unit
 def test_policy_failed_only_decides_without_the_output(db, tmp_path, monkeypatch):
     """Under failed_only the read side never looks at the text, so a marker
     keeps nothing and no log file is opened to look for one. An exit code

@@ -872,9 +872,13 @@ def purge_policy_agent_job_logs(db: Session, policy: str, discarded: tuple) -> i
                 continue
             dropped.append(job.id)
         if dropped:
-            # `settled` again: a line that arrived since the answer moved the
-            # job's updated_at, and the job then waits for the next pass.
-            total += purge_agent_job_logs(db, (AgentJob.id.in_(dropped), settled))
+            # The status and `settled` again: a job whose outcome changed is
+            # no candidate any more, and a line that arrived since the answer
+            # moved its updated_at, so it waits for the next pass.
+            total += purge_agent_job_logs(
+                db,
+                (AgentJob.id.in_(dropped), AgentJob.status.in_(discarded), settled),
+            )
     return total
 
 
@@ -939,6 +943,42 @@ def _operations_receiving_log_lines(db: Session, since) -> set:
     return ids
 
 
+def _backup_agent_output(db: Session, operation_ids: list) -> dict:
+    """What the agent job that carried each backup adds to the read side's
+    answer, by operation id: its error message and a marker from its log
+    lines (`backup_jobs_have_logs` passes both along with the operation's
+    own text), so they decide on the backup's log file too."""
+    from app.services.repository_executor import BACKUP_AGENT_JOB_TYPE
+
+    if not operation_ids:
+        return {}
+    # The newest job of a backup wins, as `get_agent_job_for_backup` picks it.
+    jobs = {
+        operation_id: (job_id, error_message)
+        for job_id, operation_id, error_message in (
+            db.query(AgentJob.id, AgentJob.operation_id, AgentJob.error_message)
+            .filter(
+                AgentJob.operation_id.in_(operation_ids),
+                AgentJob.job_type == BACKUP_AGENT_JOB_TYPE,
+            )
+            .order_by(AgentJob.id.asc())
+        )
+    }
+    markers = dict(
+        db.query(
+            AgentJobLog.agent_job_id,
+            func.min(_marker_in(db, AgentJobLog.message)),
+        )
+        .filter(AgentJobLog.agent_job_id.in_([job_id for job_id, _ in jobs.values()]))
+        .group_by(AgentJobLog.agent_job_id)
+        .all()
+    )
+    return {
+        operation_id: [error_message, markers.get(job_id)]
+        for operation_id, (job_id, error_message) in jobs.items()
+    }
+
+
 def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple) -> int:
     """Remove the log files of operations in a discarded status, except where
     the read side still shows them.
@@ -953,11 +993,24 @@ def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple)
         for status in discarded
     }
     candidates = db.query(
-        Operation.id, Operation.status, Operation.error_message, Operation.log_file_path
+        Operation.id,
+        Operation.status,
+        Operation.error_message,
+        Operation.log_file_path,
+        Operation.kind,
+        Operation.execution_mode,
     ).filter(Operation.status.in_(discarded), Operation.log_file_path.isnot(None))
     total = 0
     for operations in _id_batches(candidates, Operation.id):
         settled_at = utc_now() - LATE_LOG_SETTLE
+        agent_output = _backup_agent_output(
+            db,
+            [
+                operation.id
+                for operation in operations
+                if operation.kind == "backup" and operation.execution_mode == "agent"
+            ],
+        )
         # Reading the files can take a while on network storage; do not hold
         # the read transaction open meanwhile.
         db.commit()
@@ -969,9 +1022,12 @@ def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple)
                     marker = _marker_in_log_file(operation.log_file_path)
                 except OSError:
                     continue
-            if not _policy_shows(
-                policy, operation.status, [operation.error_message, marker]
-            ):
+            output = [
+                operation.error_message,
+                *agent_output.get(operation.id, ()),
+                marker,
+            ]
+            if not _policy_shows(policy, operation.status, output):
                 dropped.append(operation.id)
         if not dropped:
             continue
@@ -983,7 +1039,11 @@ def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple)
             operation_id for operation_id in dropped if operation_id not in receiving
         ]
         if dropped:
-            total += purge_operation_log_files(db, (Operation.id.in_(dropped),))
+            # The status again: an operation whose outcome changed while the
+            # batch was read is no candidate any more.
+            total += purge_operation_log_files(
+                db, (Operation.id.in_(dropped), Operation.status.in_(discarded))
+            )
     return total
 
 
