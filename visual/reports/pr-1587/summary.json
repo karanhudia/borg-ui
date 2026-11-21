@@ -1,40 +1,21 @@
 {
-  "generatedAt": "2026-11-20T17:58:48.934Z",
+  "generatedAt": "2026-11-21T03:37:11.544Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #1587 visual report",
     "commitSha": "874d40aac0aa",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44788148335"
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/44861969331"
   },
   "totals": {
     "baseline": 1378,
     "actual": 1378,
     "compared": 1378,
-    "changed": 1,
+    "changed": 0,
     "added": 0,
     "removed": 0,
-    "unchanged": 1377
+    "unchanged": 1378
   },
-  "changed": [
-    {
-      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "baselinePath": "images/baseline/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "actualPath": "images/actual/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPath": "images/diff/quick-start-agent-command-copying--without-clipboard-api--mobile.png",
-      "diffPixels": 502,
-      "totalPixels": 329160,
-      "diffRatio": 0.0015250941791226152,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    }
-  ],
+  "changed": [],
   "added": [],
   "removed": [],
   "unchanged": [
@@ -3625,6 +3606,9 @@
     },
     {
       "fileName": "pages-repositories-groups--empty-without-quick-start.png"
+    },
+    {
+      "fileName": "quick-start-agent-command-copying--without-clipboard-api--mobile.png"
     },
     {
       "fileName": "quick-start-agent-command-copying--without-clipboard-api.png"
