@@ -33,7 +33,7 @@ from app.database.models import (
 )
 from app.services.operations.job_facade import resolve_maintenance_job
 from tests.utils.agent_jobs import agent_maintenance_job
-from tests.utils.operations import seed_job_operation
+from tests.utils.operations import seed_job_operation, seed_operation
 from app.services.job_history_retention import (
     archive_names_from_prune_output,
     mark_jobs_of_pruned_archives,
@@ -329,6 +329,480 @@ def test_policy_failed_only_also_drops_warning_logs(db):
     remaining = {row.agent_job_id for row in db.query(AgentJobLog)}
     assert remaining == {failed.id}
     assert db.get(AgentJob, warned.id) is not None
+
+
+# --- the policy phase keeps what the read side shows (#1394) ------------------
+#
+# Each scenario asks the read side first, runs the pass, and asks again: a log
+# the save policy shows must still be there, and one it hides must be gone.
+
+POLICY = "failed_and_warnings"
+
+
+def _agent_log_lines(db, job):
+    return [
+        row.message
+        for row in db.query(AgentJobLog)
+        .filter(AgentJobLog.agent_job_id == job.id)
+        .order_by(AgentJobLog.sequence)
+    ]
+
+
+def _agent_log_line(db, job, sequence, message):
+    db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=sequence,
+            stream="stderr",
+            message=message,
+            created_at=job.created_at,
+        )
+    )
+    db.commit()
+
+
+def _agent_log_lines_scenario(db):
+    from app.services.log_policy import job_has_logs_by_policy
+
+    settings = _settings(db, log_save_policy=POLICY)
+    machine = _machine(db)
+    noisy = _agent_job(db, machine, "completed", age_days=1, log_lines=2)
+    _agent_log_line(
+        db,
+        noisy,
+        2,
+        '{"type": "log_message", "message": "a.txt: file changed while we '
+        'backed it up", "levelname": "WARNING"}',
+    )
+    clean = _agent_job(db, machine, "completed", age_days=1, log_lines=2)
+    # The marker is in the job's error message, not in a line.
+    flagged = _agent_job(db, machine, "completed", age_days=1, log_lines=2)
+    flagged.error_message = "Error: the result arrived twice"
+    flagged.updated_at = flagged.created_at  # settled, like the other two
+    db.commit()
+
+    def shown(job):
+        # What GET /agent-jobs/{id}/logs decides on.
+        return job_has_logs_by_policy(
+            job, POLICY, output_text=[*_agent_log_lines(db, job), job.error_message]
+        )
+
+    assert shown(noisy) and shown(flagged) and not shown(clean)
+
+    results = run_retention(db, settings)
+
+    assert results["policy_log_rows_deleted"] == 2
+    assert len(_agent_log_lines(db, noisy)) == 3
+    assert len(_agent_log_lines(db, flagged)) == 2
+    assert shown(noisy) and shown(flagged)
+    assert _agent_log_lines(db, clean) == []
+
+
+def _hook_execution(db, *, stdout="hook ran", stderr=None, exit_code=0):
+    when = utc_now() - timedelta(days=1)
+    execution = ScriptExecution(
+        hook_type="pre-backup",
+        status="completed",
+        exit_code=exit_code,
+        started_at=when,
+        completed_at=when,
+        stdout=stdout,
+        stderr=stderr,
+    )
+    db.add(execution)
+    db.commit()
+    return execution
+
+
+def _hook_output_scenario(db):
+    from app.api.activity import _activity_job_has_logs
+
+    settings = _settings(db, log_save_policy=POLICY)
+    noisy = _hook_execution(db, stdout="warning: snapshot is 3 days old")
+    noisy_stderr = _hook_execution(db, stderr="ERROR 1045: access denied, retrying")
+    clean = _hook_execution(db, stdout="snapshot taken")
+
+    def shown(execution):
+        return _activity_job_has_logs(
+            "script_execution", execution, log_save_policy=POLICY
+        )
+
+    assert shown(noisy) and shown(noisy_stderr) and not shown(clean)
+
+    results = run_retention(db, settings)
+    db.expire_all()
+
+    assert results["policy_inline_logs_cleared"] == 1
+    assert noisy.stdout == "warning: snapshot is 3 days old"
+    assert noisy_stderr.stderr == "ERROR 1045: access denied, retrying"
+    assert shown(noisy) and shown(noisy_stderr)
+    assert clean.stdout is None
+
+
+def _detail_output_scenario(db):
+    from app.api.activity import _activity_job_has_logs
+    from app.database.models import OperationWipeDetails
+    from app.services.operations.details import rclone_details, wipe_details
+    from app.services.operations.rclone_facade import RcloneSyncFacade
+
+    settings = _settings(db, log_save_policy=POLICY)
+    noisy = _phase6_operation(db, "rclone_sync", age_days=1)
+    rclone_details(db, noisy).log_text = "ERROR : a.txt: retrying"
+    clean = _phase6_operation(db, "rclone_sync", age_days=2)
+    rclone_details(db, clean).log_text = "copied 2 files"
+    # A wipe's dry-run output is its preview, which the policy never showed
+    # as a log: it goes with the status as before, whatever it says.
+    wipe = _phase6_operation(db, "wipe", age_days=1)
+    wipe_details(db, wipe).dry_run_output = "would delete error-reports-2026"
+    db.commit()
+
+    def shown(op):
+        return _activity_job_has_logs(
+            "rclone_sync", RcloneSyncFacade(db, op), log_save_policy=POLICY
+        )
+
+    assert shown(noisy) and not shown(clean)
+
+    results = run_retention(db, settings)
+    db.expire_all()
+
+    assert results["policy_operation_detail_logs_cleared"] == 2
+    assert shown(noisy)
+    assert RcloneSyncFacade(db, noisy).log_text == "ERROR : a.txt: retrying"
+    assert RcloneSyncFacade(db, clean).log_text is None
+    assert db.get(OperationWipeDetails, wipe.id).dry_run_output is None
+
+
+@pytest.mark.unit
+def test_policy_keeps_the_agent_log_lines_the_read_side_shows(db):
+    _agent_log_lines_scenario(db)
+
+
+@pytest.mark.unit
+def test_policy_keeps_the_hook_output_the_read_side_shows(db):
+    _hook_output_scenario(db)
+
+
+@pytest.mark.unit
+def test_policy_keeps_the_detail_output_the_read_side_shows(db):
+    _detail_output_scenario(db)
+
+
+def _operation_with_log(db, tmp_path, kind, text, *, status="completed"):
+    op = seed_operation(
+        db, kind, status=status, completed_at=utc_now() - timedelta(days=1)
+    )
+    path = tmp_path / f"operation_{op.id}.log"
+    path.write_text(text)
+    op.log_file_path = str(path)
+    db.commit()
+    return op, path
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("kind", ["backup", "check"])
+def test_policy_keeps_the_operation_log_file_the_read_side_shows(db, tmp_path, kind):
+    from app.api.maintenance_jobs import job_has_logs_for_policy
+    from app.services.operations.backup_facade import (
+        BackupJobFacade,
+        backup_job_has_logs,
+    )
+    from app.services.operations.job_facade import MaintenanceJobFacade
+
+    settings = _settings(db, log_save_policy=POLICY)
+    noisy, noisy_log = _operation_with_log(
+        db, tmp_path, kind, "/data/a: file changed while we backed it up\nWarning: 1"
+    )
+    clean, clean_log = _operation_with_log(
+        db, tmp_path, kind, "Archive name: a\nNumber of files: 3"
+    )
+
+    def shown(op):
+        if kind == "backup":
+            return backup_job_has_logs(
+                db, BackupJobFacade(db, op), log_save_policy=POLICY
+            )
+        return job_has_logs_for_policy(
+            MaintenanceJobFacade(db, op), log_save_policy=POLICY
+        )
+
+    assert shown(noisy) and not shown(clean)
+
+    results = run_retention(db, settings)
+    db.expire_all()
+
+    assert results["policy_operation_log_files_deleted"] == 1
+    assert noisy.log_file_path == str(noisy_log) and noisy_log.exists()
+    assert shown(noisy)
+    assert clean.log_file_path is None and not clean_log.exists()
+
+
+@pytest.mark.unit
+def test_policy_failed_only_decides_without_the_output(db, tmp_path, monkeypatch):
+    """Under failed_only the read side never looks at the text, so a marker
+    keeps nothing and no log file is opened to look for one. An exit code
+    still counts as a failure there, whatever the status says."""
+    from app.api.activity import _activity_job_has_logs
+    from app.services import job_history_retention
+
+    settings = _settings(db, log_save_policy="failed_only")
+    monkeypatch.setattr(
+        job_history_retention,
+        "_marker_in_log_file",
+        lambda path: pytest.fail(f"opened {path}"),
+    )
+    op, log = _operation_with_log(db, tmp_path, "check", "warning: 1 orphan")
+    noisy = _hook_execution(db, stdout="warning: snapshot is 3 days old")
+    nonzero = _hook_execution(db, stdout="partial", exit_code=3)
+
+    def shown(execution):
+        return _activity_job_has_logs(
+            "script_execution", execution, log_save_policy="failed_only"
+        )
+
+    assert shown(nonzero) and not shown(noisy)
+
+    run_retention(db, settings)
+    db.expire_all()
+
+    assert op.log_file_path is None and not log.exists()
+    assert noisy.stdout is None
+    assert nonzero.stdout == "partial"
+
+
+@pytest.mark.unit
+def test_policy_walks_past_the_logs_it_keeps(db, tmp_path, monkeypatch):
+    """A kept log still matches the candidate filter. The pass must move on
+    past a full batch of them and still reach what lies behind."""
+    from app.services import job_history_retention
+
+    monkeypatch.setattr(job_history_retention, "CHUNK_SIZE", 2)
+    settings = _settings(db, log_save_policy=POLICY)
+    machine = _machine(db)
+    kept_jobs = []
+    for _ in range(5):
+        job = _agent_job(db, machine, "completed", age_days=1, log_lines=3)
+        _agent_log_line(db, job, 3, "warning: slow link")
+        kept_jobs.append(job)
+    dropped_job = _agent_job(db, machine, "completed", age_days=1, log_lines=3)
+    kept_files = [
+        _operation_with_log(db, tmp_path, "check", "error: 1 orphan") for _ in range(5)
+    ]
+    dropped_op, dropped_log = _operation_with_log(db, tmp_path, "check", "all good")
+    kept_hooks = [_hook_execution(db, stdout="warning: old") for _ in range(5)]
+    dropped_hook = _hook_execution(db, stdout="fine")
+
+    results = run_retention(db, settings)
+    db.expire_all()
+
+    assert results["policy_log_rows_deleted"] == 3
+    assert results["policy_operation_log_files_deleted"] == 1
+    assert results["policy_inline_logs_cleared"] == 1
+    assert all(len(_agent_log_lines(db, job)) == 4 for job in kept_jobs)
+    assert _agent_log_lines(db, dropped_job) == []
+    assert all(log.exists() for _, log in kept_files)
+    assert dropped_op.log_file_path is None and not dropped_log.exists()
+    assert all(hook.stdout == "warning: old" for hook in kept_hooks)
+    assert dropped_hook.stdout is None
+
+    again = run_retention(db, settings)
+    assert not any(count for key, count in again.items() if key.startswith("policy_"))
+
+
+@pytest.mark.unit
+def test_marker_search_reads_a_log_file_in_blocks(tmp_path, monkeypatch):
+    from app.services import job_history_retention
+    from app.services.job_history_retention import _marker_in_log_file
+
+    monkeypatch.setattr(job_history_retention, "_LOG_FILE_BLOCK", 8)
+    log = tmp_path / "operation.log"
+    # Every offset, so the marker straddles each block boundary once.
+    for offset in range(20):
+        log.write_text("." * offset + "WaRnInG" + "." * 20)
+        assert _marker_in_log_file(str(log)) == "warning"
+    log.write_text("." * 5 + "ERROR")
+    assert _marker_in_log_file(str(log)) == "error"
+    log.write_text("warn" + "." * 8 + "ing, err" + "\n" + "or")
+    assert _marker_in_log_file(str(log)) is None
+    log.write_bytes(b"\xff\xfe not text \x00 Error")
+    assert _marker_in_log_file(str(log)) == "error"
+    assert _marker_in_log_file(str(tmp_path / "gone.log")) is None
+
+
+@pytest.mark.unit
+def test_policy_keeps_the_agent_log_lines_of_a_backup_that_failed(db):
+    """A backup's log is shown by the operation's status. Its agent job can
+    have completed all the same: Borg ran clean and a later step failed."""
+    from app.services.operations.backup_facade import (
+        BackupJobFacade,
+        backup_job_has_logs,
+    )
+
+    settings = _settings(db, log_save_policy=POLICY)
+    machine = _machine(db)
+
+    def _agent_backup(status):
+        op = seed_operation(
+            db,
+            "backup",
+            status=status,
+            execution_mode="agent",
+            completed_at=utc_now() - timedelta(days=1),
+        )
+        job = _agent_job(db, machine, "completed", age_days=1, log_lines=2)
+        job.operation_id = op.id
+        job.updated_at = job.created_at  # the link is not a late log line
+        db.commit()
+        return op, job
+
+    failed, failed_job = _agent_backup("failed")
+    clean, clean_job = _agent_backup("completed")
+
+    def shown(op):
+        return backup_job_has_logs(db, BackupJobFacade(db, op), log_save_policy=POLICY)
+
+    assert shown(failed) and not shown(clean)
+
+    run_retention(db, settings)
+
+    assert len(_agent_log_lines(db, failed_job)) == 2
+    assert _agent_log_lines(db, clean_job) == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("link", ["payload", "operation_id"])
+def test_policy_waits_for_the_late_lines_of_an_agent_job(db, tmp_path, link):
+    """An agent's log lines can land after its job finished, in the rows and
+    in the operation's log file. Judged on half a transcript, a job would
+    lose the lines before a warning still to come."""
+    settings = _settings(db, log_save_policy=POLICY)
+    machine = _machine(db)
+    kind = "check" if link == "payload" else "backup"
+    op, log = _operation_with_log(db, tmp_path, kind, "checking segments")
+    if link == "payload":
+        job = agent_maintenance_job(
+            db, machine, kind, op.id, status="completed", created_at=utc_now()
+        )
+    else:
+        job = _agent_job(db, machine, "completed", age_days=0)
+        job.operation_id = op.id
+        db.commit()
+    _agent_log_line(db, job, 0, "checking segments")
+
+    results = run_retention(db, settings)
+
+    assert results["policy_log_rows_deleted"] == 0
+    assert results["policy_operation_log_files_deleted"] == 0
+    assert len(_agent_log_lines(db, job)) == 1 and log.exists()
+
+    db.query(AgentJob).update({AgentJob.updated_at: utc_now() - timedelta(minutes=2)})
+    db.commit()
+
+    results = run_retention(db, settings)
+
+    assert results["policy_log_rows_deleted"] == 1
+    assert results["policy_operation_log_files_deleted"] == 1
+    assert not log.exists()
+
+
+@pytest.mark.unit
+def test_policy_leaves_a_log_file_a_line_reached_while_it_was_read(
+    db, tmp_path, monkeypatch
+):
+    from app.services import job_history_retention
+
+    settings = _settings(db, log_save_policy=POLICY)
+    op, log = _operation_with_log(db, tmp_path, "check", "checking segments")
+    job = agent_maintenance_job(
+        db,
+        _machine(db),
+        "check",
+        op.id,
+        status="completed",
+        created_at=utc_now() - timedelta(days=1),
+        updated_at=utc_now() - timedelta(days=1),
+    )
+    read_file = job_history_retention._marker_in_log_file
+
+    def read_then_a_line_arrives(path):
+        marker = read_file(path)
+        db.query(AgentJob).filter(AgentJob.id == job.id).update(
+            {AgentJob.updated_at: utc_now()}
+        )
+        db.commit()
+        return marker
+
+    monkeypatch.setattr(
+        job_history_retention, "_marker_in_log_file", read_then_a_line_arrives
+    )
+
+    results = run_retention(db, settings)
+
+    assert results["policy_operation_log_files_deleted"] == 0
+    assert log.exists()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("policy, age_days", [(POLICY, 1), ("all_jobs", 40)])
+def test_hook_output_on_stderr_alone_is_cleared_too(db, policy, age_days):
+    settings = _settings(db, log_save_policy=policy)
+    when = utc_now() - timedelta(days=age_days)
+    execution = _hook_execution(db, stdout=None, stderr="mounted /mnt/snap")
+    execution.started_at = execution.completed_at = when
+    db.commit()
+
+    run_retention(db, settings)
+    db.expire_all()
+
+    assert execution.stderr is None
+
+
+@pytest.mark.unit
+def test_policy_leaves_a_log_file_it_cannot_read(db, tmp_path):
+    """A failed read says nothing about what the log holds, so the file
+    waits for a later pass. A file that is gone has nothing left to keep."""
+    settings = _settings(db, log_save_policy=POLICY)
+    unreadable, unreadable_log = _operation_with_log(db, tmp_path, "check", "")
+    unreadable_log.unlink()
+    unreadable_log.mkdir()  # open() fails with an OSError that is not ENOENT
+    gone, gone_log = _operation_with_log(db, tmp_path, "check", "warning: 1")
+    gone_log.unlink()
+
+    results = run_retention(db, settings)
+    db.expire_all()
+
+    assert results["policy_operation_log_files_deleted"] == 1
+    assert unreadable.log_file_path == str(unreadable_log)
+    assert unreadable_log.is_dir()
+    assert gone.log_file_path is None
+
+
+@pytest.mark.unit
+def test_policy_sees_a_marker_behind_a_nul_byte(db):
+    """SQLite's LIKE stops at a NUL byte; the routes that serve one log read
+    past it. The pass must not drop what they still show."""
+    from app.api.activity import _activity_job_has_logs
+    from app.services.log_policy import job_has_logs_by_policy
+
+    settings = _settings(db, log_save_policy=POLICY)
+    hook = _hook_execution(db, stdout="ok\x00WARNING: snapshot incomplete")
+    job = _agent_job(db, _machine(db), "completed", age_days=1, log_lines=1)
+    _agent_log_line(db, job, 1, "progress\x00Error: chunk missing")
+
+    def shown():
+        return _activity_job_has_logs(
+            "script_execution", hook, log_save_policy=POLICY
+        ) and job_has_logs_by_policy(job, POLICY, output_text=_agent_log_lines(db, job))
+
+    assert shown()
+
+    results = run_retention(db, settings)
+    db.expire_all()
+
+    assert results["policy_inline_logs_cleared"] == 0
+    assert results["policy_log_rows_deleted"] == 0
+    assert hook.stdout == "ok\x00WARNING: snapshot incomplete"
+    assert shown()
 
 
 # --- pruned-archive cascade ---------------------------------------------------
@@ -1894,6 +2368,36 @@ class TestConsumedResultsOnPostgres:
         finally:
             db.close()
             engine.dispose()
+
+
+@requires_postgres
+class TestPolicyKeepsShownLogsOnPostgres:
+    """The policy phase lets the database search the output for a marker
+    (lower, LIKE, CASE, min over text). SQLite is covered above; this holds
+    the PostgreSQL side of the same scenarios."""
+
+    @pytest.fixture()
+    def pg(self):
+        engine = create_engine(POSTGRES_URL)
+        with engine.begin() as conn:
+            conn.execute(text("DROP SCHEMA public CASCADE"))
+            conn.execute(text("CREATE SCHEMA public"))
+        Base.metadata.create_all(engine)
+        db = Session(bind=engine)
+        try:
+            yield db
+        finally:
+            db.close()
+            engine.dispose()
+
+    def test_agent_log_lines(self, pg):
+        _agent_log_lines_scenario(pg)
+
+    def test_hook_output(self, pg):
+        _hook_output_scenario(pg)
+
+    def test_detail_output(self, pg):
+        _detail_output_scenario(pg)
 
 
 def _committed_state_at_unlink(tmp_path, purge):
