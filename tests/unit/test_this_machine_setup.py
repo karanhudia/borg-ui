@@ -182,3 +182,50 @@ def test_setup_route_requires_admin(test_client, operator_headers):
 def test_status_route_reports_not_configured(test_client, admin_headers):
     body = test_client.get("/api/this-machine", headers=admin_headers).json()
     assert body["configured"] is False and body["plan_id"] is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_setup_refuses_existing_repo_the_new_passphrase_cannot_open(
+    test_db, admin_user, tmp_path
+):
+    """A retry after a half-finished setup finds the repository already on
+    disk. The fresh passphrase cannot open it, so no row may store it."""
+    host = _host(tmp_path)
+    init = patch(
+        "app.api.repositories.initialize_borg_repository",
+        new=AsyncMock(return_value={"success": True, "already_existed": True}),
+    )
+    verify = patch(
+        "app.api.repositories.verify_existing_repository",
+        new=AsyncMock(
+            return_value={
+                "success": False,
+                "stderr": "passphrase supplied is incorrect",
+            }
+        ),
+    )
+    with init, verify, patch.object(tm, "_host_root", return_value=host):
+        with pytest.raises(Exception):
+            await tm.setup_this_machine(test_db, admin_user)
+    assert test_db.query(Repository).count() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_setup_keeps_existing_repo_the_passphrase_opens(
+    test_db, admin_user, tmp_path
+):
+    host = _host(tmp_path)
+    init = patch(
+        "app.api.repositories.initialize_borg_repository",
+        new=AsyncMock(return_value={"success": True, "already_existed": True}),
+    )
+    verify = patch(
+        "app.api.repositories.verify_existing_repository",
+        new=AsyncMock(return_value={"success": True, "info": {}}),
+    )
+    mqtt = patch("app.api.repositories.mqtt_service.sync_state_with_db")
+    with init, verify, mqtt, patch.object(tm, "_host_root", return_value=host):
+        result = await tm.setup_this_machine(test_db, admin_user)
+    assert test_db.get(Repository, result.repository_id) is not None

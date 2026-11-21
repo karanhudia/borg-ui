@@ -3987,6 +3987,31 @@ async def create_repository(
                 detail=_repository_init_failure_detail(init_result),
             )
 
+        if init_result.get("already_existed"):
+            # Init did not touch the existing repository, so nothing proves
+            # this passphrase opens it. Check before the row stores it.
+            verify_result = await verify_existing_repository(
+                repo_path,
+                repo_data.passphrase,
+                ssh_key_id_for_init,
+                repo_data.remote_path,
+            )
+            if not verify_result.get("success"):
+                raw_error = _borg_result_error(verify_result, for_display=False) or ""
+                error_msg = bounded_operation_diagnostic(raw_error or "Unknown error")
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        {"key": "backend.errors.repo.encryptedPassphraseIncorrect"}
+                        if "passphrase" in raw_error.lower()
+                        else {
+                            "key": "backend.errors.repo.failedToVerifyRepository",
+                            "message": error_msg,
+                            "params": {"error": error_msg},
+                        }
+                    ),
+                )
+
         (
             source_locations,
             source_connection_id,
