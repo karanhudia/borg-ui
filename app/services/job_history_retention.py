@@ -12,7 +12,10 @@ user-visible:
   log_save_policy         Applies to the database exactly as to the files:
                           log content of outcomes the policy does not keep
                           (e.g. clean successes under failed_and_warnings) is
-                          dropped at the next pass regardless of age.
+                          dropped at the next pass regardless of age. What
+                          the policy keeps is what log_policy's read side
+                          shows, so a success whose output carries a warning
+                          marker keeps its log.
 
   log_retention_days      Log *content* older than this is dropped: agent
                           job log rows are deleted, inline `logs` columns are
@@ -52,10 +55,15 @@ from app.config import settings as app_config
 from typing import Any, Dict, Iterable, Optional
 
 import structlog
-from sqlalchemy import func, or_
+from sqlalchemy import case, exists, func, or_
 from sqlalchemy.orm import Session
 
-from app.services.log_policy import DEFAULT_LOG_SAVE_POLICY, LOG_SAVE_POLICIES
+from app.services.log_policy import (
+    DEFAULT_LOG_SAVE_POLICY,
+    LOG_SAVE_POLICIES,
+    WARNING_MARKERS,
+    job_has_logs_by_policy,
+)
 
 from app.database.models import (
     AgentJob,
@@ -280,6 +288,11 @@ _OPERATION_DETAIL_LOG_COLUMNS = (
     (OperationWipeDetails, ("dry_run_output",)),
 )
 
+# The extension rows whose captured output the save policy decides on: a
+# cloud sync's `has_logs` is answered from these columns. A wipe's dry-run
+# output is part of its preview, not of its log.
+_POLICY_READ_DETAIL_MODELS = (OperationRcloneDetails,)
+
 
 def clear_operation_detail_logs(db: Session, make_filters) -> int:
     """NULL the captured output on operation extension rows whose operation
@@ -317,7 +330,7 @@ def clear_inline_job_logs(db: Session, make_filters) -> int:
     for model, log_columns in _JOB_TABLES:
         if not log_columns:
             continue
-        first = getattr(model, log_columns[0])
+        any_set = or_(*[getattr(model, column).isnot(None) for column in log_columns])
         values = {column: None for column in log_columns}
         if hasattr(model, "has_logs"):
             values["has_logs"] = False
@@ -325,7 +338,7 @@ def clear_inline_job_logs(db: Session, make_filters) -> int:
             ids = [
                 row[0]
                 for row in db.query(model.id)
-                .filter(*make_filters(model), first.isnot(None))
+                .filter(*make_filters(model), any_set)
                 .limit(CHUNK_SIZE)
             ]
             if not ids:
@@ -620,8 +633,9 @@ def mark_jobs_of_pruned_archives(
     return marked
 
 
-def _in_id_batches(query, id_column):
-    """The query's rows, read CHUNK_SIZE at a time in id order."""
+def _id_batches(query, id_column):
+    """The query's rows in id order, one list of up to CHUNK_SIZE per step.
+    The query selects the id as `id`."""
     last_id = 0
     while True:
         batch = (
@@ -632,8 +646,14 @@ def _in_id_batches(query, id_column):
         )
         if not batch:
             return
-        yield from batch
+        yield batch
         last_id = batch[-1].id
+
+
+def _in_id_batches(query, id_column):
+    """The query's rows, read CHUNK_SIZE at a time in id order."""
+    for batch in _id_batches(query, id_column):
+        yield from batch
 
 
 # A finished agent job's late log lines reach its log file as they arrive
@@ -732,19 +752,335 @@ def sweep_pruned_archive_records(
 
 
 def _policy_discarded_statuses(policy: str) -> tuple:
-    """Job statuses whose log content the save policy does not want kept.
+    """Job statuses whose log content the save policy may not want kept.
 
-    Mirrors log_policy's read-side semantics on the write side: under
-    failed_only, success and warning outcomes lose their logs; under
-    failed_and_warnings only clean successes do; all_jobs keeps everything
-    until the age windows. Failed/cancelled/unknown statuses are never
-    policy-discarded.
+    Under failed_only, success and warning outcomes are candidates; under
+    failed_and_warnings only successes are; all_jobs keeps everything until
+    the age windows. Failed/cancelled/unknown statuses are never
+    policy-discarded. Whether a candidate does lose its log is the read
+    side's answer (`_policy_shows`), so the two cannot disagree.
     """
     if policy == "failed_only":
         return ("completed", "completed_with_warnings")
     if policy == "failed_and_warnings":
         return ("completed",)
     return ()
+
+
+# The read side is asked about a job row. Which one does not matter once the
+# status and the exit code are passed along.
+_A_JOB = object()
+
+
+def _policy_shows(policy: str, status: str, output_text, exit_code=None) -> bool:
+    """Whether the read side shows a job's log: the rule the list and log
+    routes apply, asked about the text they would be given."""
+    return job_has_logs_by_policy(
+        _A_JOB, policy, output_text=output_text, status=status, exit_code=exit_code
+    )
+
+
+def _marker_in(db: Session, *columns):
+    """SQL: a warning marker one of the text columns contains, or NULL. The
+    database searches, so the pass does not load every candidate's output.
+
+    SQLite's LIKE reads a text up to its first NUL byte, and the routes that
+    serve one log read all of it. A marker behind a NUL must keep the log
+    too, so SQLite searches with instr(), which reads the whole value."""
+    if db.get_bind().dialect.name == "sqlite":
+
+        def contains(column, marker):
+            return func.instr(func.lower(column), marker) > 0
+    else:
+
+        def contains(column, marker):
+            return func.lower(column).contains(marker)
+
+    return case(
+        *(
+            (or_(*(contains(column, marker) for column in columns)), marker)
+            for marker in WARNING_MARKERS
+        )
+    )
+
+
+_LOG_FILE_BLOCK = 1024 * 1024
+
+
+def _marker_in_log_file(path: str) -> Optional[str]:
+    """A warning marker the log file contains, or None; a file that is gone
+    has none. Read in blocks, since a backup that lists its files can leave
+    a large log. Raises OSError for a file that exists and cannot be read."""
+    markers = [marker.encode() for marker in WARNING_MARKERS]
+    overlap = max(len(marker) for marker in markers) - 1
+    tail = b""
+    try:
+        with open(path, "rb") as handle:
+            while block := handle.read(_LOG_FILE_BLOCK):
+                haystack = (tail + block).lower()
+                for marker in markers:
+                    if marker in haystack:
+                        return marker.decode()
+                tail = haystack[-overlap:]
+    except FileNotFoundError:
+        return None
+    return None
+
+
+def purge_policy_agent_job_logs(db: Session, policy: str, discarded: tuple) -> int:
+    """Delete the log lines of agent jobs in a discarded status, except where
+    the read side still shows them.
+
+    The lines are shown for the job itself and, for a job that ran an
+    operation, for that operation, whose status can differ (a backup that
+    failed in a hook after its Borg run completed). A job whose lines may
+    still be arriving waits for a later pass, so the answer is given on the
+    whole transcript."""
+    has_lines = exists().where(AgentJobLog.agent_job_id == AgentJob.id)
+    settled = AgentJob.updated_at <= utc_now() - LATE_LOG_SETTLE
+    candidates = (
+        db.query(
+            AgentJob.id,
+            AgentJob.status,
+            AgentJob.error_message,
+            Operation.status.label("operation_status"),
+            Operation.error_message.label("operation_error"),
+        )
+        .outerjoin(Operation, Operation.id == AgentJob.operation_id)
+        .filter(AgentJob.status.in_(discarded), settled, has_lines)
+    )
+    total = 0
+    # A kept job still matches the filter, so the walk moves on by id.
+    for jobs in _id_batches(candidates, AgentJob.id):
+        markers = dict(
+            db.query(
+                AgentJobLog.agent_job_id,
+                func.min(_marker_in(db, AgentJobLog.message)),
+            )
+            .filter(AgentJobLog.agent_job_id.in_([job.id for job in jobs]))
+            .group_by(AgentJobLog.agent_job_id)
+            .all()
+        )
+        dropped = []
+        for job in jobs:
+            output = [job.error_message, markers.get(job.id)]
+            if _policy_shows(policy, job.status, output):
+                continue
+            if job.operation_status is not None and _policy_shows(
+                policy, job.operation_status, [*output, job.operation_error]
+            ):
+                continue
+            dropped.append(job.id)
+        if dropped:
+            # The status and `settled` again: a job whose outcome changed is
+            # no candidate any more, and a line that arrived since the answer
+            # moved its updated_at, so it waits for the next pass.
+            total += purge_agent_job_logs(
+                db,
+                (AgentJob.id.in_(dropped), AgentJob.status.in_(discarded), settled),
+            )
+    return total
+
+
+def clear_policy_inline_job_logs(db: Session, policy: str, discarded: tuple) -> int:
+    """NULL the inline log columns of jobs in a discarded status, except
+    where the read side still shows them."""
+    total = 0
+    for model, log_columns in _JOB_TABLES:
+        if not log_columns:
+            continue
+        columns = [getattr(model, column) for column in log_columns]
+        values = {column: None for column in log_columns}
+        if hasattr(model, "has_logs"):
+            values["has_logs"] = False
+        exit_code = getattr(model, "exit_code", None)
+        selected = [
+            model.id,
+            model.status,
+            model.error_message,
+            _marker_in(db, *columns).label("marker"),
+        ]
+        if exit_code is not None:
+            selected.append(exit_code)
+        candidates = db.query(*selected).filter(
+            model.status.in_(discarded),
+            or_(*[column.isnot(None) for column in columns]),
+        )
+        for jobs in _id_batches(candidates, model.id):
+            dropped = [
+                job.id
+                for job in jobs
+                if not _policy_shows(
+                    policy,
+                    job.status,
+                    [job.error_message, job.marker],
+                    exit_code=getattr(job, "exit_code", None),
+                )
+            ]
+            if not dropped:
+                continue
+            db.query(model).filter(model.id.in_(dropped)).update(
+                values, synchronize_session=False
+            )
+            db.commit()
+            total += len(dropped)
+    return total
+
+
+def _operations_receiving_log_lines(db: Session, since) -> set:
+    """The ids of operations whose agent job was touched after `since`: its
+    late log lines may still be reaching the operation's log file."""
+    ids = set()
+    recent = db.query(AgentJob.operation_id, AgentJob.payload).filter(
+        AgentJob.updated_at > since
+    )
+    for operation_id, payload in recent.all():
+        if operation_id is not None:
+            ids.add(operation_id)
+        maintenance = _agent_maintenance_job_for(db, payload)
+        if maintenance is not None:
+            ids.add(maintenance.id)
+    return ids
+
+
+def _backup_agent_output(db: Session, operation_ids: list) -> dict:
+    """What the agent job that carried each backup adds to the read side's
+    answer, by operation id: its error message and a marker from its log
+    lines (`backup_jobs_have_logs` passes both along with the operation's
+    own text), so they decide on the backup's log file too."""
+    from app.services.repository_executor import BACKUP_AGENT_JOB_TYPE
+
+    if not operation_ids:
+        return {}
+    # The newest job of a backup wins, as `get_agent_job_for_backup` picks it.
+    jobs = {
+        operation_id: (job_id, error_message)
+        for job_id, operation_id, error_message in (
+            db.query(AgentJob.id, AgentJob.operation_id, AgentJob.error_message)
+            .filter(
+                AgentJob.operation_id.in_(operation_ids),
+                AgentJob.job_type == BACKUP_AGENT_JOB_TYPE,
+            )
+            .order_by(AgentJob.id.asc())
+        )
+    }
+    markers = dict(
+        db.query(
+            AgentJobLog.agent_job_id,
+            func.min(_marker_in(db, AgentJobLog.message)),
+        )
+        .filter(AgentJobLog.agent_job_id.in_([job_id for job_id, _ in jobs.values()]))
+        .group_by(AgentJobLog.agent_job_id)
+        .all()
+    )
+    return {
+        operation_id: [error_message, markers.get(job_id)]
+        for operation_id, (job_id, error_message) in jobs.items()
+    }
+
+
+def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple) -> int:
+    """Remove the log files of operations in a discarded status, except where
+    the read side still shows them.
+
+    The routes that serve such a log read the file to decide, so the file is
+    read here too, but only for a status whose answer the text can change:
+    under failed_only no file is opened. A file that cannot be read is left
+    for a later pass: a failed read says nothing about what the log holds.
+    So is the file an agent's late log lines may still be reaching."""
+    text_decides = {
+        status: _policy_shows(policy, status, list(WARNING_MARKERS))
+        for status in discarded
+    }
+    candidates = db.query(
+        Operation.id,
+        Operation.status,
+        Operation.error_message,
+        Operation.log_file_path,
+        Operation.kind,
+        Operation.execution_mode,
+    ).filter(Operation.status.in_(discarded), Operation.log_file_path.isnot(None))
+    total = 0
+    for operations in _id_batches(candidates, Operation.id):
+        settled_at = utc_now() - LATE_LOG_SETTLE
+        agent_output = _backup_agent_output(
+            db,
+            [
+                operation.id
+                for operation in operations
+                if operation.kind == "backup" and operation.execution_mode == "agent"
+            ],
+        )
+        # Reading the files can take a while on network storage; do not hold
+        # the read transaction open meanwhile.
+        db.commit()
+        dropped = []
+        for operation in operations:
+            marker = None
+            if text_decides[operation.status]:
+                try:
+                    marker = _marker_in_log_file(operation.log_file_path)
+                except OSError:
+                    continue
+            output = [
+                operation.error_message,
+                *agent_output.get(operation.id, ()),
+                marker,
+            ]
+            if not _policy_shows(policy, operation.status, output):
+                dropped.append(operation.id)
+        if not dropped:
+            continue
+        # Asked once the files are read, with the cutoff from before: a line
+        # that arrived meanwhile touched its agent job, however long the
+        # batch took.
+        receiving = _operations_receiving_log_lines(db, settled_at)
+        dropped = [
+            operation_id for operation_id in dropped if operation_id not in receiving
+        ]
+        if dropped:
+            # The status again: an operation whose outcome changed while the
+            # batch was read is no candidate any more.
+            total += purge_operation_log_files(
+                db, (Operation.id.in_(dropped), Operation.status.in_(discarded))
+            )
+    return total
+
+
+def clear_policy_operation_detail_logs(
+    db: Session, policy: str, discarded: tuple
+) -> int:
+    """NULL the captured output on extension rows of operations in a
+    discarded status, except where the read side still shows it."""
+    total = 0
+    for model, log_columns in _OPERATION_DETAIL_LOG_COLUMNS:
+        columns = [getattr(model, column) for column in log_columns]
+        values = {column: None for column in log_columns}
+        selected = [model.operation_id.label("id"), Operation.status]
+        if model in _POLICY_READ_DETAIL_MODELS:
+            selected.append(_marker_in(db, *columns).label("marker"))
+        candidates = (
+            db.query(*selected)
+            .join(Operation, Operation.id == model.operation_id)
+            .filter(
+                Operation.status.in_(discarded),
+                or_(*[column.isnot(None) for column in columns]),
+            )
+        )
+        for rows in _id_batches(candidates, model.operation_id):
+            dropped = [
+                row.id
+                for row in rows
+                if not _policy_shows(policy, row.status, [getattr(row, "marker", None)])
+            ]
+            if not dropped:
+                continue
+            db.query(model).filter(model.operation_id.in_(dropped)).update(
+                values, synchronize_session=False
+            )
+            db.commit()
+            total += len(dropped)
+    return total
 
 
 def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dict:
@@ -790,24 +1126,16 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
         # the log files: content the policy does not want is dropped at the
         # next pass, no matter how young.
         "policy_log_rows_deleted": (
-            purge_agent_job_logs(db, (AgentJob.status.in_(discarded),))
-            if discarded
-            else 0
+            purge_policy_agent_job_logs(db, policy, discarded) if discarded else 0
         ),
         "policy_inline_logs_cleared": (
-            clear_inline_job_logs(db, lambda model: (model.status.in_(discarded),))
-            if discarded
-            else 0
+            clear_policy_inline_job_logs(db, policy, discarded) if discarded else 0
         ),
         "policy_operation_log_files_deleted": (
-            purge_operation_log_files(db, (Operation.status.in_(discarded),))
-            if discarded
-            else 0
+            purge_policy_operation_log_files(db, policy, discarded) if discarded else 0
         ),
         "policy_operation_detail_logs_cleared": (
-            clear_operation_detail_logs(
-                db, lambda model: (model.status.in_(discarded),)
-            )
+            clear_policy_operation_detail_logs(db, policy, discarded)
             if discarded
             else 0
         ),
