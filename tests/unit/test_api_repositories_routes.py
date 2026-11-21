@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
 
 from app.api import repositories as repositories_api
 from tests.utils.operations import seed_job_operation
@@ -18,6 +19,7 @@ from app.database.models import (
     Repository,
     SSHConnection,
     SystemSettings,
+    User,
     UserRepositoryPermission,
 )
 
@@ -680,14 +682,18 @@ class TestRepositoryHelperContracts:
                 side_effect=fake_run,
             ),
         ):
-            archives_result, info_result = await asyncio.gather(
-                repositories_api.list_repository_archives(
-                    repo.id, current_user=object(), db=test_db
-                ),
-                repositories_api.get_repository_info(
-                    repo.id, current_user=object(), db=test_db
-                ),
-            )
+            # A session each, as two requests have: the handlers read in
+            # threads.
+            sessions = sessionmaker(bind=test_db.get_bind())
+            with sessions() as first, sessions() as second:
+                archives_result, info_result = await asyncio.gather(
+                    repositories_api.list_repository_archives(
+                        repo.id, current_user=User(), db=first
+                    ),
+                    repositories_api.get_repository_info(
+                        repo.id, current_user=User(), db=second
+                    ),
+                )
 
         assert state["max_active"] == 1
         assert archives_result["archives"] == []
@@ -730,7 +736,7 @@ class TestRepositoryHelperContracts:
             ),
         ):
             await repositories_api.list_repository_archives(
-                repo.id, current_user=object(), db=test_db
+                repo.id, current_user=User(), db=test_db
             )
 
         assert captured["cmd"] == [
@@ -820,7 +826,7 @@ class TestRepositoryHelperContracts:
             ),
         ):
             result = await repositories_api.list_repository_archives(
-                repo.id, current_user=object(), db=test_db
+                repo.id, current_user=User(), db=test_db
             )
 
         archive = result["archives"][0]

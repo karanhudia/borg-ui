@@ -139,6 +139,17 @@ class BorgRouter:
     def __init__(self, repo):
         self.repo = repo
         self.is_v2 = is_borg2(repo)
+        self._remote_path: Optional[str] = None
+        self._remote_path_resolved = False
+
+    def remote_path(self) -> Optional[str]:
+        """The repository's effective remote path, looked up once: the lookup
+        queries the repository's session. A caller that ends its read before
+        a long Borg call asks for it first, and the call makes no query."""
+        if not self._remote_path_resolved:
+            self._remote_path = effective_repository_remote_path(self.repo)
+            self._remote_path_resolved = True
+        return self._remote_path
 
     def _refuse_agent_repository(self, operation: str) -> None:
         """Raise `ServerBorgRefused` for an agent repository: the method that
@@ -433,7 +444,7 @@ class BorgRouter:
             cmd.append("--dry-run")
         else:
             cmd.append("--stats")
-        if remote_path := effective_repository_remote_path(self.repo):
+        if remote_path := self.remote_path():
             cmd.extend(["--remote-path", remote_path])
         cmd.extend(["--glob-archives", "*", self.repo.path])
         return cmd
@@ -448,7 +459,7 @@ class BorgRouter:
         from app.core.borg import borg
 
         cmd = [borg.borg_cmd, "compact", "--progress", "--verbose"]
-        if remote_path := effective_repository_remote_path(self.repo):
+        if remote_path := self.remote_path():
             cmd.extend(["--remote-path", remote_path])
         cmd.append(self.repo.path)
         return cmd
@@ -511,7 +522,7 @@ class BorgRouter:
 
             kwargs = {
                 "passphrase": self.repo.passphrase,
-                "remote_path": effective_repository_remote_path(self.repo),
+                "remote_path": self.remote_path(),
             }
             if env is not None:
                 kwargs["env"] = env
@@ -520,7 +531,7 @@ class BorgRouter:
         from app.core.borg import borg
 
         kwargs = {
-            "remote_path": effective_repository_remote_path(self.repo),
+            "remote_path": self.remote_path(),
             "passphrase": self.repo.passphrase,
         }
         if env is not None:
@@ -577,6 +588,7 @@ class BorgRouter:
                     "archive": archive,
                     "paths": paths,
                     "destination": workdir,
+                    "remote_path": self.remote_path(),
                 }
                 if env is not None:
                     kwargs["env"] = env
@@ -586,7 +598,7 @@ class BorgRouter:
 
             kwargs = {
                 "dry_run": True,
-                "remote_path": effective_repository_remote_path(self.repo),
+                "remote_path": self.remote_path(),
                 "passphrase": self.repo.passphrase,
                 "bypass_lock": self.repo.bypass_lock,
             }
@@ -615,6 +627,7 @@ class BorgRouter:
                 "archive": archive,
                 "path": path,
                 "max_lines": max_lines,
+                "remote_path": self.remote_path(),
             }
             if browse_depth is not None:
                 kwargs["browse_depth"] = browse_depth
@@ -628,7 +641,7 @@ class BorgRouter:
             self.repo.path,
             archive,
             path,
-            remote_path=effective_repository_remote_path(self.repo),
+            remote_path=self.remote_path(),
             passphrase=self.repo.passphrase,
             max_lines=max_lines,
             bypass_lock=self.repo.bypass_lock,
@@ -650,7 +663,7 @@ class BorgRouter:
                 archive_a,
                 archive_b,
                 passphrase=self.repo.passphrase,
-                remote_path=effective_repository_remote_path(self.repo),
+                remote_path=self.remote_path(),
                 env=env,
                 timeout=timeout,
             )
@@ -660,7 +673,7 @@ class BorgRouter:
             self.repo.path,
             archive_a,
             archive_b,
-            remote_path=effective_repository_remote_path(self.repo),
+            remote_path=self.remote_path(),
             passphrase=self.repo.passphrase,
             bypass_lock=self.repo.bypass_lock,
             env=env,
@@ -679,7 +692,7 @@ class BorgRouter:
                 self.repo.path,
                 archive,
                 passphrase=self.repo.passphrase,
-                remote_path=effective_repository_remote_path(self.repo),
+                remote_path=self.remote_path(),
                 env=env,
                 timeout=timeout,
             )
@@ -688,7 +701,7 @@ class BorgRouter:
         return borg.list_archive_lines(
             self.repo.path,
             archive,
-            remote_path=effective_repository_remote_path(self.repo),
+            remote_path=self.remote_path(),
             passphrase=self.repo.passphrase,
             bypass_lock=self.repo.bypass_lock,
             env=env,
@@ -1357,7 +1370,7 @@ class BorgRouter:
             result = await borg2.list_archives(
                 self.repo.path,
                 passphrase=self.repo.passphrase,
-                remote_path=effective_repository_remote_path(self.repo),
+                remote_path=self.remote_path(),
                 bypass_lock=use_bypass_lock,
                 env=env,
             )
@@ -1371,7 +1384,7 @@ class BorgRouter:
 
             result = await borg.list_archives(
                 self.repo.path,
-                remote_path=effective_repository_remote_path(self.repo),
+                remote_path=self.remote_path(),
                 passphrase=self.repo.passphrase,
                 bypass_lock=use_bypass_lock,
                 env=env,
@@ -1413,7 +1426,7 @@ class BorgRouter:
                 path=self.repo.path,
                 passphrase=self.repo.passphrase,
                 ssh_key_id=ssh_key_id,
-                remote_path=effective_repository_remote_path(self.repo),
+                remote_path=self.remote_path(),
                 timeout=timeout,
                 bypass_lock=getattr(self.repo, "bypass_lock", False),
             )
@@ -1424,7 +1437,7 @@ class BorgRouter:
             path=self.repo.path,
             passphrase=self.repo.passphrase,
             ssh_key_id=ssh_key_id,
-            remote_path=effective_repository_remote_path(self.repo),
+            remote_path=self.remote_path(),
             timeout=timeout,
             bypass_lock=getattr(self.repo, "bypass_lock", False),
         )
@@ -1451,7 +1464,7 @@ class BorgRouter:
                 encryption=self.repo.encryption,
                 passphrase=self.repo.passphrase,
                 ssh_key_id=ssh_key_id,
-                remote_path=effective_repository_remote_path(self.repo),
+                remote_path=self.remote_path(),
                 init_timeout=init_timeout,
             )
 
@@ -1462,7 +1475,7 @@ class BorgRouter:
             encryption=self.repo.encryption,
             passphrase=self.repo.passphrase,
             ssh_key_id=ssh_key_id,
-            remote_path=effective_repository_remote_path(self.repo),
+            remote_path=self.remote_path(),
         )
 
     async def export_keyfile(self, output_path: str) -> dict:
