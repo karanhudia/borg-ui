@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 import structlog
 
-from app.database.models import AgentJob
+from app.core.agent_auth import INACTIVE_AGENT_STATUSES, agent_is_active
+from app.database.models import AgentJob, AgentMachine
 from app.services.agent_connection_manager import agent_connection_manager
 
 logger = structlog.get_logger()
@@ -89,9 +91,20 @@ async def dispatch_agent_job_if_connected(
     now = _now_utc()
     # Conditional on `queued`: a cancel that took the job off the queue after
     # the caller loaded it wins, as does another pass's claim; nothing is sent.
+    # And on an agent that may still act: a session opened before the agent
+    # was revoked, disabled or deleted stays registered until its next
+    # message, and must not be handed a job meanwhile.
     claimed = (
         db.query(AgentJob)
-        .filter(AgentJob.id == job.id, AgentJob.status == "queued")
+        .filter(
+            AgentJob.id == job.id,
+            AgentJob.status == "queued",
+            AgentJob.agent_machine_id.in_(
+                select(AgentMachine.id).where(
+                    AgentMachine.status.notin_(INACTIVE_AGENT_STATUSES)
+                )
+            ),
+        )
         .update(
             {
                 AgentJob.status: "claimed",
@@ -115,11 +128,21 @@ async def dispatch_agent_job_if_connected(
             timeout_seconds=timeout_seconds,
             wait_for_result=False,
             attempt=agent_job_attempt(job),
+            # The claim and the send are two steps, and the send may wait
+            # for the session: an agent revoked meanwhile is not sent the
+            # job either. Read when the frame is next to go out, on the
+            # connection this dispatch already holds.
+            still_wanted=lambda: agent_is_active(db, agent_machine_id),
         )
     except Exception as exc:
-        # Back on the queue, unless a cancel landed meanwhile.
+        # Back on the queue, unless a cancel landed meanwhile. Only this
+        # dispatch's own claim: the agent's newer session may have put the
+        # undelivered job back and claimed it since, and that run is not
+        # this dispatch's to give up.
         db.query(AgentJob).filter(
-            AgentJob.id == job.id, AgentJob.status == "claimed"
+            AgentJob.id == job.id,
+            AgentJob.status == "claimed",
+            AgentJob.claimed_at == now,
         ).update(
             {
                 AgentJob.status: "queued",

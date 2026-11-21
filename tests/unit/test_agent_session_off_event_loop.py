@@ -1340,6 +1340,39 @@ def test_nothing_is_sent_to_an_agent_revoked_after_its_hello(
 
 
 @pytest.mark.unit
+def test_a_job_dispatched_after_a_revocation_does_not_reach_the_open_session(
+    test_client, database
+):
+    """The session of an agent revoked since its last message is still
+    registered. A job dispatched meanwhile stays on the queue, and the
+    session's next frame is its close, not the job."""
+    from app.services.agent_job_dispatcher import dispatch_agent_job_if_connected
+
+    agent_id = _seed_agent(database)
+
+    async def dispatch(job_id: int) -> bool:
+        db = database()
+        try:
+            return await dispatch_agent_job_if_connected(db, db.get(AgentJob, job_id))
+        finally:
+            db.close()
+
+    with pytest.raises(WebSocketDisconnect) as closed:
+        with _connected(test_client) as websocket:
+            _set_columns(database, AgentMachine, agent_id, {"status": "revoked"})
+            job_id = _seed_job(database, agent_id, status="queued", claimed_at=None)
+            still_registered = agent_connection_manager.is_connected(agent_id)
+            sent = test_client.portal.call(dispatch, job_id)
+            websocket.send_json({"type": "heartbeat"})
+            _receive(websocket)
+
+    assert still_registered
+    assert sent is False
+    assert closed.value.code == 1008
+    assert _row(database, AgentJob, job_id).status == "queued"
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_a_failed_message_gives_up_its_locks_before_the_agents_lock(
     test_db, monkeypatch
