@@ -405,28 +405,104 @@ def _host_root(tmp_path):
     return host
 
 
-@pytest.mark.unit
-async def test_setup_adopts_an_unflagged_plan_left_by_a_crash(
-    test_db, admin_user, tmp_path
-):
+def _init_ok():
     from unittest.mock import AsyncMock
 
+    return patch(
+        "app.api.repositories.initialize_borg_repository",
+        new=AsyncMock(return_value={"success": True}),
+    )
+
+
+@pytest.mark.unit
+async def test_created_resources_carry_the_role_from_their_first_commit(
+    test_db, admin_user, tmp_path
+):
+    from sqlalchemy import event
+
     host = _host_root(tmp_path)
+    seen = {}
+
+    def before_flush(session, _ctx, _instances):
+        for obj in session.new:
+            if isinstance(obj, (Repository, BackupPlan)):
+                seen[type(obj).__name__] = obj.system_role
+
+    event.listen(test_db, "before_flush", before_flush)
+    try:
+        with (
+            _init_ok(),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+            patch.object(tm, "_host_root", return_value=host),
+        ):
+            await tm.setup_this_machine(test_db, admin_user)
+    finally:
+        event.remove(test_db, "before_flush", before_flush)
+    assert seen == {
+        "Repository": tm.THIS_MACHINE_ROLE,
+        "BackupPlan": tm.THIS_MACHINE_ROLE,
+    }
+
+
+@pytest.mark.unit
+async def test_setup_never_adopts_an_unrelated_repository(
+    test_db, admin_user, tmp_path
+):
+    host = _host_root(tmp_path)
+    unrelated = Repository(
+        name=tm.REPOSITORY_NAME,
+        path=str(host / tm.HOST_SNAPSHOT_DIR),
+        encryption="none",
+        repository_type="local",
+        mode="full",
+    )
+    test_db.add(unrelated)
+    test_db.commit()
     with (
-        patch(
-            "app.api.repositories.initialize_borg_repository",
-            new=AsyncMock(return_value={"success": True}),
-        ),
+        _init_ok(),
         patch("app.api.repositories.mqtt_service.sync_state_with_db"),
         patch.object(tm, "_host_root", return_value=host),
     ):
-        first = await tm.setup_this_machine(test_db, admin_user)
-        plan = test_db.get(BackupPlan, first.plan_id)
-        plan.system_role = None  # the crash: role never committed
-        test_db.commit()
-        again = await tm.setup_this_machine(test_db, admin_user)
-    assert again.plan_id == first.plan_id
-    assert test_db.get(BackupPlan, first.plan_id).system_role == tm.THIS_MACHINE_ROLE
+        with pytest.raises(tm.HTTPException):
+            await tm.setup_this_machine(test_db, admin_user)
+    test_db.rollback()
+    assert test_db.get(Repository, unrelated.id).system_role is None
+
+
+@pytest.mark.unit
+async def test_setup_never_adopts_an_unrelated_plan(test_db, admin_user, tmp_path):
+    host = _host_root(tmp_path)
+    repo = Repository(
+        name=tm.REPOSITORY_NAME,
+        path=str(host / tm.HOST_SNAPSHOT_DIR),
+        encryption="none",
+        repository_type="local",
+        mode="full",
+        system_role=tm.THIS_MACHINE_ROLE,
+        restore_check_cron_expression="0 4 * * 0",
+    )
+    test_db.add(repo)
+    test_db.flush()
+    plan = BackupPlan(
+        name=tm.PLAN_NAME, source_directories='["/srv"]', created_at=datetime.utcnow()
+    )
+    test_db.add(plan)
+    test_db.flush()
+    test_db.add(
+        BackupPlanRepository(
+            backup_plan_id=plan.id,
+            repository_id=repo.id,
+            enabled=True,
+            execution_order=1,
+            created_at=datetime.utcnow(),
+        )
+    )
+    test_db.commit()
+    with patch.object(tm, "_host_root", return_value=host):
+        with pytest.raises(tm.HTTPException):
+            await tm.setup_this_machine(test_db, admin_user)
+    test_db.rollback()
+    assert test_db.get(BackupPlan, plan.id).system_role is None
 
 
 @pytest.mark.unit
@@ -476,19 +552,40 @@ async def test_setup_reports_the_reused_repository_location(
 
 
 @pytest.mark.unit
-async def test_concurrent_setup_conflict_is_not_a_500(test_db, admin_user, tmp_path):
-    from sqlalchemy.exc import IntegrityError
+async def test_concurrent_setups_agree_on_one_repository_and_passphrase(
+    test_db, admin_user, tmp_path
+):
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from app.database.database import SessionLocal
 
     host = _host_root(tmp_path)
-    with (
-        patch.object(tm, "_host_root", return_value=host),
-        patch.object(
-            tm, "_create_repository", side_effect=IntegrityError("x", {}, Exception())
-        ),
-    ):
-        with pytest.raises(tm.HTTPException) as exc:
-            await tm.setup_this_machine(test_db, admin_user)
-    assert exc.value.status_code == 409
+
+    async def slow_init(*_args, **_kwargs):
+        await asyncio.sleep(0.05)
+        return {"success": True}
+
+    second = SessionLocal()
+    try:
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(side_effect=slow_init),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+            patch.object(tm, "_host_root", return_value=host),
+        ):
+            a, b = await asyncio.gather(
+                tm.setup_this_machine(test_db, admin_user),
+                tm.setup_this_machine(second, second.merge(admin_user)),
+            )
+    finally:
+        second.close()
+    assert (a.plan_id, a.repository_id) == (b.plan_id, b.repository_id)
+    test_db.expire_all()
+    assert test_db.query(Repository).count() == 1
+    assert test_db.query(BackupPlan).count() == 1
 
 
 @pytest.mark.unit

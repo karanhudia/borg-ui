@@ -33,7 +33,10 @@ from app.database.models import (
     User,
     UserRepositoryPermission,
 )
-from app.services.this_machine import require_system_delete_confirmed
+from app.services.this_machine import (
+    creating_system_role,
+    require_system_delete_confirmed,
+)
 from app.services.backup_plan_policy import (
     evaluate_backup_plan_access,
     raise_backup_plan_feature_error,
@@ -2013,7 +2016,9 @@ async def create_backup_plan(
             detail={"key": "backend.errors.backupPlans.nameExists"},
         )
 
-    plan = BackupPlan(created_at=datetime.utcnow())
+    plan = BackupPlan(
+        created_at=datetime.utcnow(), system_role=creating_system_role.get()
+    )
     _apply_payload(plan, payload)
     db.add(plan)
     db.flush()

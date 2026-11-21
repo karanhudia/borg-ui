@@ -6460,7 +6460,8 @@
       "thisMachine": {
         "confirmDelete": "Este plan o repositorio protege este equipo y el propio Borg UI. Confirma para eliminarlo de todos modos.",
         "adminRequired": "Solo un administrador puede cambiar lo que respalda el plan Este equipo.",
-        "setupInProgress": "La protección de este equipo ya se está configurando. Actualiza en un momento."
+        "setupInProgress": "La protección de este equipo ya se está configurando. Actualiza en un momento.",
+        "nameTaken": "Ya existe un plan o repositorio llamado \"Este equipo\", o usa la carpeta que necesita Este equipo. Cámbiale el nombre o muévelo y vuelve a intentarlo."
       }
     },
     "success": {

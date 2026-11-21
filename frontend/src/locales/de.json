@@ -6460,7 +6460,8 @@
       "thisMachine": {
         "confirmDelete": "Dieser Plan oder dieses Repository schützt diesen Rechner und Borg UI selbst. Bestätige, um es trotzdem zu löschen.",
         "adminRequired": "Nur ein Admin kann ändern, was der Plan „Dieser Rechner“ sichert.",
-        "setupInProgress": "Der Schutz für diesen Rechner wird bereits eingerichtet. Lade die Seite gleich neu."
+        "setupInProgress": "Der Schutz für diesen Rechner wird bereits eingerichtet. Lade die Seite gleich neu.",
+        "nameTaken": "Ein Plan oder Repository mit dem Namen „Dieser Rechner“ existiert bereits oder nutzt den Ordner, den Dieser Rechner braucht. Benenne ihn um oder verschiebe ihn und versuche es erneut."
       }
     },
     "success": {

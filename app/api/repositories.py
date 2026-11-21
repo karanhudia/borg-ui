@@ -95,7 +95,10 @@ from app.core.features import (
     require_feature_access,
 )
 from app.config import settings
-from app.services.this_machine import require_system_delete_confirmed
+from app.services.this_machine import (
+    creating_system_role,
+    require_system_delete_confirmed,
+)
 from app.services.mqtt_service import mqtt_service
 from app.services.process_cancel import communicate_or_kill
 from app.services.operations.wipe_facade import (
@@ -4007,6 +4010,7 @@ async def create_repository(
 
         # Create repository record
         repository = Repository(
+            system_role=creating_system_role.get(),
             name=repo_data.name,
             path=repo_path,
             encryption=repo_data.encryption,

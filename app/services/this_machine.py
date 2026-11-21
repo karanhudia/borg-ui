@@ -3,10 +3,12 @@
 Spec: docs/engineering/specs/2026-11-20-this-machine.md
 """
 
+import asyncio
 import fnmatch
 import os
 import secrets
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -20,6 +22,15 @@ from app.config import settings
 from app.database.models import BackupPlan, BackupPlanRepository, Repository, User
 
 THIS_MACHINE_ROLE = "this_machine"
+# Set by setup around its calls to the create routes, which store it on the
+# new row in the same transaction: a resource is either a system one from its
+# first commit or not one at all, so nothing is ever adopted afterwards.
+creating_system_role: ContextVar[Optional[str]] = ContextVar(
+    "creating_system_role", default=None
+)
+# ponytail: one in-process lock (gunicorn runs a single worker); a second
+# setup waits and then finds the first one's rows.
+_setup_lock = asyncio.Lock()
 PLAN_NAME = "This machine"
 REPOSITORY_NAME = "This machine (local)"
 HOST_SNAPSHOT_DIR = "var/backups/borg-ui"
@@ -248,22 +259,23 @@ def plan_sources() -> tuple[list[str], list[str], Path, bool]:
 async def _create_repository(db: Session, user: User, path: Path) -> Repository:
     from app.api.repositories import RepositoryCreate, create_repository
 
-    response = await create_repository(
-        RepositoryCreate(
-            name=REPOSITORY_NAME,
-            path=str(path),
-            borg_version=1,
-            encryption="repokey-blake2",
-            compression="lz4",
-            passphrase=secrets.token_urlsafe(32),
-        ),
-        user,
-        db,
-    )
-    repository = db.get(Repository, response["repository"]["id"])
-    repository.system_role = THIS_MACHINE_ROLE
-    db.commit()
-    return repository
+    token = creating_system_role.set(THIS_MACHINE_ROLE)
+    try:
+        response = await create_repository(
+            RepositoryCreate(
+                name=REPOSITORY_NAME,
+                path=str(path),
+                borg_version=1,
+                encryption="repokey-blake2",
+                compression="lz4",
+                passphrase=secrets.token_urlsafe(32),
+            ),
+            user,
+            db,
+        )
+    finally:
+        creating_system_role.reset(token)
+    return db.get(Repository, response["repository"]["id"])
 
 
 async def _create_plan(
@@ -279,36 +291,37 @@ async def _create_plan(
         create_backup_plan,
     )
 
-    body = await create_backup_plan(
-        BackupPlanPayload(
-            name=PLAN_NAME,
-            description="Protects this machine and Borg UI itself.",
-            source_directories=sources,
-            exclude_patterns=excludes,
-            archive_name_template="this-machine-{now}",
-            schedule_enabled=True,
-            cron_expression=SCHEDULE_CRON,
-            timezone="UTC",
-            run_prune_after=True,
-            run_compact_after=True,
-            prune_keep_hourly=24,
-            prune_keep_daily=7,
-            prune_keep_weekly=4,
-            prune_keep_monthly=6,
-            prune_keep_yearly=0,
-            repositories=[
-                BackupPlanRepositoryPayload(
-                    repository_id=repository.id, execution_order=1
-                )
-            ],
-        ),
-        user,
-        db,
-    )
-    plan = db.get(BackupPlan, body["id"])
-    plan.system_role = THIS_MACHINE_ROLE
-    db.commit()
-    return plan
+    token = creating_system_role.set(THIS_MACHINE_ROLE)
+    try:
+        body = await create_backup_plan(
+            BackupPlanPayload(
+                name=PLAN_NAME,
+                description="Protects this machine and Borg UI itself.",
+                source_directories=sources,
+                exclude_patterns=excludes,
+                archive_name_template="this-machine-{now}",
+                schedule_enabled=True,
+                cron_expression=SCHEDULE_CRON,
+                timezone="UTC",
+                run_prune_after=True,
+                run_compact_after=True,
+                prune_keep_hourly=24,
+                prune_keep_daily=7,
+                prune_keep_weekly=4,
+                prune_keep_monthly=6,
+                prune_keep_yearly=0,
+                repositories=[
+                    BackupPlanRepositoryPayload(
+                        repository_id=repository.id, execution_order=1
+                    )
+                ],
+            ),
+            user,
+            db,
+        )
+    finally:
+        creating_system_role.reset(token)
+    return db.get(BackupPlan, body["id"])
 
 
 def _linked_repository(db: Session, plan: BackupPlan) -> Optional[Repository]:
@@ -322,45 +335,6 @@ def _linked_repository(db: Session, plan: BackupPlan) -> Optional[Repository]:
         .first()
     )
     return db.get(Repository, link.repository_id) if link else None
-
-
-def _adopt_repository(db: Session, repo_path: Path) -> Optional[Repository]:
-    """A repository an earlier setup created but did not get to flag: same
-    name and the same path setup would use, nothing else."""
-    repository = (
-        db.query(Repository)
-        .filter(
-            Repository.system_role.is_(None),
-            Repository.name == REPOSITORY_NAME,
-            Repository.path == str(repo_path),
-        )
-        .first()
-    )
-    if repository is not None:
-        repository.system_role = THIS_MACHINE_ROLE
-        db.commit()
-    return repository
-
-
-def _adopt_plan(db: Session, repository: Repository) -> Optional[BackupPlan]:
-    """A plan an earlier setup created but did not get to flag: same name and
-    linked to the system repository, nothing else."""
-    plan = (
-        db.query(BackupPlan)
-        .join(
-            BackupPlanRepository, BackupPlanRepository.backup_plan_id == BackupPlan.id
-        )
-        .filter(
-            BackupPlan.system_role.is_(None),
-            BackupPlan.name == PLAN_NAME,
-            BackupPlanRepository.repository_id == repository.id,
-        )
-        .first()
-    )
-    if plan is not None:
-        plan.system_role = THIS_MACHINE_ROLE
-        db.commit()
-    return plan
 
 
 async def _ensure_restore_check(
@@ -426,10 +400,40 @@ def _ensure_link(db: Session, plan: BackupPlan, repository: Repository) -> None:
     db.commit()
 
 
+def _refuse_taken_names(db: Session, repo_path: Path, need_plan: bool) -> None:
+    """A user's own plan or repository with the name or path setup would use
+    is theirs; setup stops rather than create a clash or take it over."""
+    clash = (
+        db.query(Repository)
+        .filter(
+            Repository.system_role.is_(None),
+            (Repository.name == REPOSITORY_NAME) | (Repository.path == str(repo_path)),
+        )
+        .first()
+    )
+    if clash is None and need_plan:
+        clash = (
+            db.query(BackupPlan)
+            .filter(BackupPlan.system_role.is_(None), BackupPlan.name == PLAN_NAME)
+            .first()
+        )
+    if clash is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.thisMachine.nameTaken"},
+        )
+
+
 async def setup_this_machine(db: Session, user: User) -> SetupResult:
     """Create the "This machine" plan and repository. Safe to call again: an
-    existing setup is returned as it is, and whatever a setup that stopped
-    half way left behind is picked up and finished."""
+    existing setup is returned as it is and finished if a step is missing
+    (restore check, plan, link). Resources carry the system role from their
+    first commit, so nothing a user made is ever taken over."""
+    async with _setup_lock:
+        return await _setup(db, user)
+
+
+async def _setup(db: Session, user: User) -> SetupResult:
     sources, excludes, repo_path, _ = plan_sources()
     host_root = _host_root()
     skipped = (
@@ -439,25 +443,20 @@ async def setup_this_machine(db: Session, user: User) -> SetupResult:
     )
     try:
         plan = system_plan(db)
-        repository = (
-            system_repository(db)
-            or (plan and _linked_repository(db, plan))
-            or _adopt_repository(db, repo_path)
-            or await _create_repository(db, user, repo_path)
-        )
+        repository = system_repository(db) or (plan and _linked_repository(db, plan))
+        if repository is None:
+            _refuse_taken_names(db, repo_path, need_plan=plan is None)
+            repository = await _create_repository(db, user, repo_path)
+        elif plan is None:
+            _refuse_taken_names(db, Path(repository.path), need_plan=True)
         await _ensure_restore_check(db, user, repository)
         # Exclude the repository setup actually uses, which may be an earlier
         # one in the data volume even when the host is writable now.
         excludes = _excludes_for(host_root, repository, excludes, repo_path)
-        plan = (
-            plan
-            or _adopt_plan(db, repository)
-            or await _create_plan(db, user, repository, sources, excludes)
-        )
+        plan = plan or await _create_plan(db, user, repository, sources, excludes)
         _ensure_link(db, plan, repository)
     except IntegrityError:
-        # Another setup request won the race for the one system plan or
-        # repository.
+        # Another process won the race for the one system plan or repository.
         db.rollback()
         raise HTTPException(
             status_code=409,
