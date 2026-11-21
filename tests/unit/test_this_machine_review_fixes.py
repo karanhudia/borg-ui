@@ -651,3 +651,43 @@ async def test_setup_relinks_the_system_repository(test_db, admin_user, tmp_path
         .one()
     )
     assert link.enabled
+
+
+@pytest.mark.unit
+async def test_reused_plan_excludes_the_selected_repository(
+    test_db, admin_user, tmp_path, monkeypatch
+):
+    import json
+
+    monkeypatch.setattr(tm.settings, "data_dir", str(tmp_path / "data"))
+    used = tmp_path / "data" / "this-machine"
+    repo = Repository(
+        name=tm.REPOSITORY_NAME,
+        path=str(used),
+        encryption="none",
+        repository_type="local",
+        mode="full",
+        system_role=tm.THIS_MACHINE_ROLE,
+        restore_check_cron_expression="0 4 * * 0",
+    )
+    test_db.add(repo)
+    test_db.flush()
+    plan = BackupPlan(
+        name=tm.PLAN_NAME,
+        source_directories='["/srv"]',
+        exclude_patterns=json.dumps(["/old/repo", "*.iso"]),
+        system_role=tm.THIS_MACHINE_ROLE,
+        created_at=datetime.utcnow(),
+    )
+    test_db.add(plan)
+    test_db.commit()
+    with patch.object(tm, "_host_root", return_value=_host_root(tmp_path)):
+        await tm.setup_this_machine(test_db, admin_user)
+    test_db.expire_all()
+    excludes = json.loads(test_db.get(BackupPlan, plan.id).exclude_patterns)
+    assert {
+        "/old/repo",
+        "*.iso",
+        str(used),
+        f"**/{tm.DATA_VOLUME_SNAPSHOT_DIR}",
+    } <= set(excludes)

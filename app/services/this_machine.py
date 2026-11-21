@@ -5,6 +5,7 @@ Spec: docs/engineering/specs/2026-11-20-this-machine.md
 
 import asyncio
 import fnmatch
+import json
 import os
 import secrets
 import time
@@ -370,6 +371,21 @@ def _excludes_for(
     )
 
 
+def _ensure_repository_excluded(
+    db: Session, plan: BackupPlan, repository: Repository
+) -> None:
+    """A reused plan must not back up the repository setup selected. Only
+    adds; every existing exclude, an admin's included, stays."""
+    current = json.loads(plan.exclude_patterns) if plan.exclude_patterns else []
+    needed = [repository.path]
+    if repository_in_data_volume(repository):
+        needed.append(f"**/{DATA_VOLUME_SNAPSHOT_DIR}")
+    missing = [p for p in needed if p not in current]
+    if missing:
+        plan.exclude_patterns = json.dumps([*current, *missing])
+        db.commit()
+
+
 def _ensure_link(db: Session, plan: BackupPlan, repository: Repository) -> None:
     """The system plan must back up to the system repository."""
     link = (
@@ -453,7 +469,10 @@ async def _setup(db: Session, user: User) -> SetupResult:
         # Exclude the repository setup actually uses, which may be an earlier
         # one in the data volume even when the host is writable now.
         excludes = _excludes_for(host_root, repository, excludes, repo_path)
-        plan = plan or await _create_plan(db, user, repository, sources, excludes)
+        if plan is None:
+            plan = await _create_plan(db, user, repository, sources, excludes)
+        else:
+            _ensure_repository_excluded(db, plan, repository)
         _ensure_link(db, plan, repository)
     except IntegrityError:
         # Another process won the race for the one system plan or repository.
