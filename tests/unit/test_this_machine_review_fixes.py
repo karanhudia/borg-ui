@@ -501,3 +501,56 @@ def test_staging_is_cleared_in_lease_protected_recovery():
         main._recover_interrupted_work
     )
     assert "clear_staging_at_startup" not in inspect.getsource(main.startup_event)
+
+
+@pytest.mark.unit
+async def test_setup_excludes_the_repository_it_actually_uses(
+    test_db, admin_user, tmp_path, monkeypatch
+):
+    import json
+
+    monkeypatch.setattr(tm.settings, "data_dir", str(tmp_path / "data"))
+    used = tmp_path / "data" / "this-machine"
+    test_db.add(
+        Repository(
+            name="This machine (local)",
+            path=str(used),
+            encryption="none",
+            repository_type="local",
+            mode="full",
+            system_role=tm.THIS_MACHINE_ROLE,
+            restore_check_cron_expression="0 4 * * 0",
+        )
+    )
+    test_db.commit()
+    host = _host_root(tmp_path)
+    with patch.object(tm, "_host_root", return_value=host):
+        result = await tm.setup_this_machine(test_db, admin_user)
+    excludes = json.loads(test_db.get(BackupPlan, result.plan_id).exclude_patterns)
+    assert str(used) in excludes
+    assert f"**/{tm.DATA_VOLUME_SNAPSHOT_DIR}" in excludes
+
+
+@pytest.mark.unit
+async def test_setup_relinks_the_system_repository(test_db, admin_user, tmp_path):
+    from unittest.mock import AsyncMock
+
+    host = _host_root(tmp_path)
+    with (
+        patch(
+            "app.api.repositories.initialize_borg_repository",
+            new=AsyncMock(return_value={"success": True}),
+        ),
+        patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        patch.object(tm, "_host_root", return_value=host),
+    ):
+        first = await tm.setup_this_machine(test_db, admin_user)
+        test_db.query(BackupPlanRepository).delete()
+        test_db.commit()
+        await tm.setup_this_machine(test_db, admin_user)
+    link = (
+        test_db.query(BackupPlanRepository)
+        .filter_by(backup_plan_id=first.plan_id, repository_id=first.repository_id)
+        .one()
+    )
+    assert link.enabled

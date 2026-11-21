@@ -379,6 +379,53 @@ async def _ensure_restore_check(
     db.refresh(repository)
 
 
+def _excludes_for(
+    host_root: Optional[Path],
+    repository: Repository,
+    planned: list[str],
+    planned_repo_path: Path,
+) -> list[str]:
+    repo_path = Path(repository.path)
+    if host_root is None:
+        return [p for p in planned if p != str(planned_repo_path)] + [str(repo_path)]
+    return exclude_patterns(
+        host_root,
+        repo_path,
+        Path(settings.data_dir),
+        repository_in_data_volume(repository),
+    )
+
+
+def _ensure_link(db: Session, plan: BackupPlan, repository: Repository) -> None:
+    """The system plan must back up to the system repository."""
+    link = (
+        db.query(BackupPlanRepository)
+        .filter(
+            BackupPlanRepository.backup_plan_id == plan.id,
+            BackupPlanRepository.repository_id == repository.id,
+        )
+        .first()
+    )
+    if link is not None and link.enabled:
+        return
+    if link is None:
+        last = (
+            db.query(BackupPlanRepository.execution_order)
+            .filter(BackupPlanRepository.backup_plan_id == plan.id)
+            .order_by(BackupPlanRepository.execution_order.desc())
+            .first()
+        )
+        link = BackupPlanRepository(
+            backup_plan_id=plan.id,
+            repository_id=repository.id,
+            execution_order=(last[0] + 1) if last else 1,
+            created_at=datetime.utcnow(),
+        )
+        db.add(link)
+    link.enabled = True
+    db.commit()
+
+
 async def setup_this_machine(db: Session, user: User) -> SetupResult:
     """Create the "This machine" plan and repository. Safe to call again: an
     existing setup is returned as it is, and whatever a setup that stopped
@@ -399,11 +446,15 @@ async def setup_this_machine(db: Session, user: User) -> SetupResult:
             or await _create_repository(db, user, repo_path)
         )
         await _ensure_restore_check(db, user, repository)
+        # Exclude the repository setup actually uses, which may be an earlier
+        # one in the data volume even when the host is writable now.
+        excludes = _excludes_for(host_root, repository, excludes, repo_path)
         plan = (
             plan
             or _adopt_plan(db, repository)
             or await _create_plan(db, user, repository, sources, excludes)
         )
+        _ensure_link(db, plan, repository)
     except IntegrityError:
         # Another setup request won the race for the one system plan or
         # repository.
