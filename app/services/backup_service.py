@@ -46,6 +46,7 @@ from app.utils.fs import (
     remove_tree_without_crossing_mounts,
 )
 from app.utils.ssh_paths import resolve_sshfs_source_path
+from app.services.self_backup import read_all_env
 from app.utils.source_locations import (
     decode_source_locations,
     flatten_source_locations,
@@ -1124,8 +1125,16 @@ class BackupService:
                 cleanup_temp_key_file(key_file)
 
     def _validate_local_source_paths_exist(
-        self, source_paths: list[str], skip_paths: set[str] | None = None
+        self,
+        source_paths: list[str],
+        skip_paths: set[str] | None = None,
+        read_all: bool = False,
     ) -> None:
+        if read_all:
+            # This machine backups: the app user cannot see under root-only
+            # folders (Docker keeps /var/lib/docker at 0710), but Borg with
+            # read-all can, and reports anything truly missing as a warning.
+            return
         skip_paths = skip_paths or set()
         missing_paths = [
             source_path
@@ -1736,6 +1745,7 @@ class BackupService:
         compression_override: str = None,
         custom_flags_override: str = None,
         upload_ratelimit_kib: int = None,
+        read_all: bool = False,
     ):
         """Execute backup using borg directly for better control
 
@@ -2129,6 +2139,8 @@ class BackupService:
                 keepalive=True,
                 base_env=env,
             )
+            # This machine only: lets the image's borg wrapper read every file.
+            env.update(read_all_env(read_all))
             if temp_key_file:
                 logger.info(
                     "Using SSH key for remote repository",
@@ -2293,7 +2305,9 @@ class BackupService:
                         )
 
             self._validate_local_source_paths_exist(
-                source_paths_for_existence_check, skip_paths=snapshot_source_paths
+                source_paths_for_existence_check,
+                skip_paths=snapshot_source_paths,
+                read_all=read_all,
             )
 
             if repo_record and repo_record.id:

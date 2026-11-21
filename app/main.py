@@ -45,6 +45,7 @@ from app.api import (
     managed_machines,
     agents,
     source_discovery,
+    this_machine,
 )
 from app.api.v2 import router as v2_router
 from app.routers import config
@@ -327,6 +328,7 @@ app.include_router(config.router, prefix="/api")
 app.include_router(mounts.router)  # Mount management API
 
 app.include_router(tokens.router, prefix="/api")
+app.include_router(this_machine.router, prefix="/api")
 app.include_router(mcp_connections.router, prefix="/api")
 app.include_router(permissions.router, prefix="/api")
 app.include_router(
@@ -645,6 +647,12 @@ def _recover_interrupted_work() -> None:
     """Startup sweeps of rows a restart left behind that the runner's own
     recovery does not cover. Called by the runner once it holds its lease, so
     a process being replaced keeps its work."""
+    from app.services.self_backup import clear_staging_at_startup
+
+    # A This machine run a restart cut short leaves its database copy behind.
+    # Here, under the lease: a run's staging is written only once its backup
+    # holds a slot, so a process being replaced keeps its own.
+    clear_staging_at_startup()
     from app.database.database import SessionLocal
     from app.services.backup_plan_execution_service import (
         backup_plan_execution_service,

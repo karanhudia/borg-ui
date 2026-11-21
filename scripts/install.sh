@@ -139,6 +139,8 @@ APT_PACKAGES=(
   # archives needs. Mirrors the runtime base image's package list.
   libacl1 liblz4-1 libzstd1 libxxhash0 libfuse3-3 fuse3
   openssh-client sshfs sshpass rsync
+  # setcap, for Borg's read-all capability ("This machine").
+  libcap2-bin
 )
 
 install_packages() {
@@ -430,6 +432,11 @@ write_forwarder() {
 # service already sets this through its unit, but a hook, a cron entry or an
 # operator at a shell does not, and Borg has to work in all of those.
 export OPENSSL_armcap=0
+# This machine backups only: a copy of Borg that may read every file, used
+# when Borg UI asks for it and the installer proved the service can run it.
+if [[ "\${BORG_UI_READ_ALL:-}" == 1 && -e "${PREFIX}/read-all" && -x "${target}-read" ]]; then
+  exec "${target}-read" "\$@"
+fi
 exec ${target} "\$@"
 FORWARDER
   chmod 0755 "${PREFIX}/bin/${name}"
@@ -484,10 +491,63 @@ install_borg_binary() {
   BORG_BINARY="${dest}"
 }
 
+# "This machine" backs up files only root can read while the service stays
+# non-root: a copy of the pinned Borg 1 binary gets CAP_DAC_READ_SEARCH, and
+# the forwarder uses it only for This machine backups. Kept only if the
+# service user can run it (a capability outside the bounding set makes exec
+# fail), and recorded in a marker the app reads.
+# Every read-all copy and the marker go first, whatever happens next: a
+# service-user change, a root service or a failed probe must not leave a copy
+# another group can run.
+revoke_read_all() {
+  rm -f "${PREFIX}/read-all"
+  rm -f "${PREFIX}"/borg/*/borg-read /usr/bin/borg-read
+}
+
+grant_read_all() {
+  local binary="$1" copy="$1-read" marker="${PREFIX}/read-all"
+  revoke_read_all
+  [[ "${SERVICE_USER}" != "root" ]] || return 0
+  command -v setcap >/dev/null 2>&1 || { warn "setcap missing; Borg reads as ${SERVICE_USER} only"; return 0; }
+  # A copy, so every other Borg call keeps the service user's own access.
+  # Root-owned and runnable by the service group only: it can read any file.
+  local group
+  group="$(id -gn "${SERVICE_USER}")"
+  install -o root -g "${group}" -m 0750 "${binary}" "${copy}"
+  # Proof it reads a root-only file, not just that it runs: back the file up
+  # into a throwaway repository (Borg exits 1 on a file it cannot read).
+  local work probe
+  work="$(mktemp -d)"
+  chmod 0711 "${work}"
+  probe="${work}/root-only"
+  echo probe >"${probe}"
+  chmod 600 "${probe}"
+  install -d -o "${SERVICE_USER}" -g "${group}" -m 0700 "${work}/repo-parent"
+  if setcap cap_dac_read_search+ep "${copy}" 2>/dev/null &&
+    runuser -u "${SERVICE_USER}" -- env OPENSSL_armcap=0 \
+      BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+      BORG_BASE_DIR="${work}/repo-parent" \
+      "${copy}" init -e none "${work}/repo-parent/repo" >/dev/null 2>&1 &&
+    runuser -u "${SERVICE_USER}" -- env OPENSSL_armcap=0 \
+      BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
+      BORG_BASE_DIR="${work}/repo-parent" \
+      "${copy}" create "${work}/repo-parent/repo::probe" "${probe}" >/dev/null 2>&1; then
+    touch "${marker}"
+    log "This machine backups can read every file"
+  else
+    rm -f "${copy}"
+    warn "This machine backups read files as ${SERVICE_USER} only; root-only files are skipped"
+  fi
+  rm -rf "${work}"
+}
+
 install_borg1() {
+  # Before choosing a Borg: the package fallback below never grants read-all.
+  revoke_read_all
   if install_borg_binary 1; then
     # Borg UI resolves Borg 1 as plain "borg" on PATH.
     write_forwarder borg "${BORG_BINARY}"
+    grant_read_all "${BORG_BINARY}"
     return
   fi
 

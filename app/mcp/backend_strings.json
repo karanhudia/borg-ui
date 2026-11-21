@@ -547,6 +547,12 @@
     "storage": {
       "full": "Storage is full or its quota is exhausted. Free space and check the quota on the Borg UI database and affected storage volumes, then retry. Borg UI does not delete data to recover from this error.",
       "io": "Storage reported an input/output error. Check the affected disk, filesystem and mounts before retrying. Verify the operation state before submitting it again."
+    },
+    "thisMachine": {
+      "adminRequired": "Only an admin can change what the This machine plan backs up.",
+      "confirmDelete": "This is the plan or repository that protects this machine and Borg UI itself. Confirm to delete it anyway.",
+      "nameTaken": "A plan or repository named \"This machine\" already exists, or uses the folder This machine needs. Rename or move it, then try again.",
+      "setupInProgress": "Protection for this machine is already being set up. Refresh in a moment."
     }
   },
   "messages": {

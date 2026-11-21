@@ -95,6 +95,10 @@ from app.core.features import (
     require_feature_access,
 )
 from app.config import settings
+from app.services.this_machine import (
+    creating_system_role,
+    require_system_delete_confirmed,
+)
 from app.services.mqtt_service import mqtt_service
 from app.services.process_cancel import communicate_or_kill
 from app.services.operations.wipe_facade import (
@@ -3596,6 +3600,7 @@ def get_repositories(
             repo_payload = {
                 "id": repo.id,
                 "name": repo.name,
+                "system_role": repo.system_role,
                 "path": repo.path,
                 "encryption": repo.encryption,
                 "compression": repo.compression,
@@ -3982,6 +3987,31 @@ async def create_repository(
                 detail=_repository_init_failure_detail(init_result),
             )
 
+        if init_result.get("already_existed"):
+            # Init did not touch the existing repository, so nothing proves
+            # this passphrase opens it. Check before the row stores it.
+            verify_result = await verify_existing_repository(
+                repo_path,
+                repo_data.passphrase,
+                ssh_key_id_for_init,
+                repo_data.remote_path,
+            )
+            if not verify_result.get("success"):
+                raw_error = _borg_result_error(verify_result, for_display=False) or ""
+                error_msg = bounded_operation_diagnostic(raw_error or "Unknown error")
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        {"key": "backend.errors.repo.encryptedPassphraseIncorrect"}
+                        if "passphrase" in raw_error.lower()
+                        else {
+                            "key": "backend.errors.repo.failedToVerifyRepository",
+                            "message": error_msg,
+                            "params": {"error": error_msg},
+                        }
+                    ),
+                )
+
         (
             source_locations,
             source_connection_id,
@@ -4005,6 +4035,7 @@ async def create_repository(
 
         # Create repository record
         repository = Repository(
+            system_role=creating_system_role.get(),
             name=repo_data.name,
             path=repo_path,
             encryption=repo_data.encryption,
@@ -4853,6 +4884,7 @@ async def get_repository(
         repository_payload = {
             "id": repository.id,
             "name": repository.name,
+            "system_role": repository.system_role,
             "path": repository.path,
             "encryption": repository.encryption,
             "compression": repository.compression,
@@ -6102,6 +6134,7 @@ async def delete_repository(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    confirm_system: bool = False,
 ):
     """Delete repository (admin only)"""
     require_any_role(
@@ -6115,6 +6148,7 @@ async def delete_repository(
                 detail={"key": "backend.errors.repo.repositoryNotFound"},
             )
         _require_repository_access(db, current_user, repository, "operator")
+        require_system_delete_confirmed(repository.system_role, confirm_system)
 
         # CRITICAL: Clean up all foreign key references before deleting repository
         # Some tables don't have CASCADE delete, so we must manually handle them
@@ -6214,6 +6248,7 @@ async def permanently_delete_repository(
     request: RepositoryPermanentDeleteRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    confirm_system: bool = False,
 ):
     """Delete a local repository directory, then remove the Borg UI record."""
     require_any_role(
@@ -6227,6 +6262,7 @@ async def permanently_delete_repository(
                 detail={"key": "backend.errors.repo.repositoryNotFound"},
             )
         _require_repository_access(db, current_user, repository, "operator")
+        require_system_delete_confirmed(repository.system_role, confirm_system)
 
         if not request.understood or request.confirmation_phrase != repository.name:
             raise HTTPException(
@@ -6278,7 +6314,8 @@ async def permanently_delete_repository(
                 },
             ) from exc
 
-        await delete_repository(repo_id, current_user, db)
+        # The outer route already required confirm_system for system repositories.
+        await delete_repository(repo_id, current_user, db, confirm_system=True)
         logger.info(
             "Repository permanently deleted",
             repo_id=repo_id,

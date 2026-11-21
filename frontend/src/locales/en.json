@@ -6456,6 +6456,12 @@
         "connectionNotFound": "MCP connection not found.",
         "levelNotAvailable": "This version of Borg UI has no {{level}} tools yet, so {{level}} access cannot be chosen.",
         "betaDisabled": "MCP is an experimental feature. An administrator can turn it on under Settings > Advanced > Beta."
+      },
+      "thisMachine": {
+        "confirmDelete": "This is the plan or repository that protects this machine and Borg UI itself. Confirm to delete it anyway.",
+        "adminRequired": "Only an admin can change what the This machine plan backs up.",
+        "setupInProgress": "Protection for this machine is already being set up. Refresh in a moment.",
+        "nameTaken": "A plan or repository named \"This machine\" already exists, or uses the folder This machine needs. Rename or move it, then try again."
       }
     },
     "success": {

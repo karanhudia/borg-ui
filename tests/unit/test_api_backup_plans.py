@@ -35,6 +35,7 @@ from app.core.borg_router import BorgRouter
 from app.core.security import get_password_hash
 from app.services.backup_plan_execution_service import backup_plan_execution_service
 from app.services.notification_service import notification_service
+from app.services.this_machine import STAGING_EXCLUDE
 from app.services.operations.backup_facade import (
     SERVICE_PARAMS,
     BackupJobFacade,
@@ -3979,7 +3980,7 @@ class TestBackupPlanRoutes:
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert repository == repo.path
             assert kwargs["source_directories"] == ["/srv/project"]
-            assert kwargs["exclude_patterns_override"] == ["*.tmp"]
+            assert kwargs["exclude_patterns_override"] == ["*.tmp", STAGING_EXCLUDE]
             assert kwargs["compression_override"] == "zstd,3"
             assert kwargs["skip_hooks"] is True
             job = resolve_backup_job(db, job_id)
@@ -4075,7 +4076,7 @@ class TestBackupPlanRoutes:
 
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert kwargs["source_directories"] == ["/srv/project"]
-            assert kwargs["exclude_patterns_override"] == ["*.tmp"]
+            assert kwargs["exclude_patterns_override"] == ["*.tmp", STAGING_EXCLUDE]
             job = resolve_backup_job(db, job_id)
             job.status = "completed"
             job.completed_at = datetime.utcnow()
@@ -4200,7 +4201,10 @@ class TestBackupPlanRoutes:
             assert repository == repo.path
             assert kwargs["source_directories"] == ["/home/tester/project"]
             assert kwargs["source_ssh_connection_id"] == source_connection.id
-            assert kwargs["exclude_patterns_override"] == ["node_modules"]
+            assert kwargs["exclude_patterns_override"] == [
+                "node_modules",
+                STAGING_EXCLUDE,
+            ]
             job = resolve_backup_job(db, job_id)
             assert job.source_ssh_connection_id == source_connection.id
             assert job.backup_plan_id is not None

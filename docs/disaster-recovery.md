@@ -175,6 +175,33 @@ Use a staging path first. Restoring directly over damaged production data makes 
 
 If the repository reports a lock, do not break it until you have confirmed no Borg process is still running.
 
+## Borg UI Backs Up Itself
+
+The **This machine** backup plan protects the host Borg UI runs on, and Borg
+UI's own state with it. Every snapshot of that plan contains:
+
+| Item | What it is |
+| --- | --- |
+| `borg-ui-db.sqlite` | A consistent copy of the database, taken with SQLite's backup API. The live `borg.db`, `-wal` and `-shm` files are never backed up. |
+| `config.export` | A borgmatic-compatible export of repositories and schedules |
+| `secret-key` | The secret key in use when the snapshot was taken (`SECRET_KEY` if set, else the `.secret_key` file). It decrypts the SSH keys and script secrets in the database; a restore puts it back as `.secret_key`, or set it as `SECRET_KEY` |
+| `ssh_keys/` | The SSH keys Borg UI uses |
+| `borg_keys/` | Keyfiles of repositories that use keyfile encryption |
+| `manifest.json` | The Borg UI version and database revision that made the snapshot |
+| `rebuild/` | Package lists, cron tables, enabled services and container definitions of the host, for rebuilding it later |
+
+They are staged in `/data/self-backup/staging/` just before each run and
+removed after it. If staging fails, the run still backs up the machine's files
+and ends with a warning that Borg UI's settings were not included.
+
+Self-backup covers SQLite installs. Installs that use Postgres back up their
+database with Postgres tools.
+
+The plan and its repository, **This machine (local)**, are ordinary: add
+another repository or a cloud copy to the plan the usual way. Deleting either
+asks for an extra confirmation, because Borg UI then no longer protects the
+machine or itself.
+
 ## Rebuild Borg UI
 
 If the Borg UI host is lost but the repositories survive:

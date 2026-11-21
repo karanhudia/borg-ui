@@ -313,6 +313,36 @@ LOCAL_STORAGE_PATH=/mnt/usb-drive
 TZ=America/Chicago
 ```
 
+### Reading every file on the host
+
+To protect the whole machine, Borg needs to read files only root can read,
+such as `/etc/shadow`, other users' home folders and many container volumes.
+Borg UI keeps running as `PUID`, and only the backups of the **This machine**
+plan get that one permission. Every other plan, restore and browse keeps the
+access `PUID` has. Only admins can change what the This machine plan backs up.
+The default compose file asks for it:
+
+```yaml
+cap_add:
+  - DAC_READ_SEARCH
+```
+
+`privileged: true` already includes it. Without either, Borg UI starts as
+before and backs up what `PUID` can read; the startup log says
+`This machine backups read host files as the app user only`. With it, the log says
+`This machine backups can read every host file`. The permission lets those backups read any
+file. It does not let Borg UI write anywhere `PUID` cannot.
+
+Borg UI also prepares `/var/backups/borg-ui` on the host (through the `/`
+mount at `/local`) for the snapshots of this machine, outside its own data
+volume, so removing the volume does not take the snapshots with it.
+
+That needs the host's `/` mounted (the default `LOCAL_STORAGE_PATH`) and
+writable there. With a partial mount such as `LOCAL_STORAGE_PATH=/mnt/usb-drive`,
+or a read-only one, Borg UI keeps the snapshots in `/data/this-machine` inside
+its data volume instead, and removing the volume removes them too. Add a copy
+on another disk, a NAS or the cloud to cover that.
+
 ### Rootless Podman
 
 Rootless Podman maps container users differently from Docker. In a typical
@@ -546,6 +576,12 @@ directories, so an unprivileged default would silently skip most of the host.
 Pass `--service-user borg` for a restricted install. Borg UI will then only be
 able to back up what that user can read, which is the right trade when the host
 only backs up one application's data.
+
+With `--service-user`, the installer gives a copy of the pinned Borg 1 binary
+permission to read every file (`CAP_DAC_READ_SEARCH`), used only for This
+machine backups, and keeps it only if the service user can run it. The service
+itself stays unprivileged. Borg 2 and the distribution's `borgbackup` package
+do not get it.
 
 ### Configuration
 

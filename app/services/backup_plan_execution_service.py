@@ -8,7 +8,7 @@ import time
 from types import SimpleNamespace
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -51,6 +51,17 @@ from app.services.operations.maintenance_start import (
     failure_text,
     finish_inline_maintenance,
     start_inline_maintenance,
+)
+from app.services.self_backup import (
+    clear_staging,
+    run_self_backup_step,
+    self_backup_paths,
+    with_self_backup_paths,
+)
+from app.services.this_machine import (
+    STAGING_EXCLUDE,
+    THIS_MACHINE_ROLE,
+    compact_due,
 )
 from app.services.backup_plan_policy import (
     BORG2_FEATURE,
@@ -194,6 +205,7 @@ class PlanRunContext:
     date: str
     time_str: str
     unix_timestamp: str
+    system_role: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -684,6 +696,14 @@ async def _send_plan_required_notice(
         )
     except Exception as exc:
         logger.warning("Failed to send plan-required notice", error=str(exc))
+    finally:
+        db.close()
+
+
+def _self_backup_in_thread() -> Optional[str]:
+    db = SessionLocal()
+    try:
+        return run_self_backup_step(db)
     finally:
         db.close()
 
@@ -1659,6 +1679,9 @@ class BackupPlanExecutionService:
                     error=str(hook_exc),
                 )
             self._mark_run_failed(run_id, "; ".join(messages))
+        finally:
+            if context is not None and context.system_role == THIS_MACHINE_ROLE:
+                clear_staging(Path(settings.data_dir))
 
     async def enter_backup_slot(self, run_id: int) -> PreHookVerdict:
         """Called by the backup executor once the runner gave a backup of
@@ -1728,7 +1751,14 @@ class BackupPlanExecutionService:
                 status="failed",
                 message=source_pre_error or "Database source pre-backup script failed",
             )
-        return PreHookVerdict(warning=pre_script_error)
+        warnings = [pre_script_error] if pre_script_error else []
+        if context.system_role == THIS_MACHINE_ROLE:
+            # Copies the database and walks host files: off the event loop,
+            # with a session owned by that thread.
+            self_backup_warning = await asyncio.to_thread(_self_backup_in_thread)
+            if self_backup_warning:
+                warnings.append(self_backup_warning)
+        return PreHookVerdict(warning="; ".join(warnings) if warnings else None)
 
     async def _run_post_backup_scripts(
         self,
@@ -2174,6 +2204,7 @@ class BackupPlanExecutionService:
             run_prune_after=bool(plan.run_prune_after),
             prune_scope_to_plan=bool(plan.prune_scope_to_plan),
             run_compact_after=bool(plan.run_compact_after),
+            system_role=plan.system_role,
             run_check_after=bool(plan.run_check_after),
             run_restore_check_after=bool(plan.run_restore_check_after),
             check_max_duration=plan.check_max_duration,
@@ -2191,6 +2222,19 @@ class BackupPlanExecutionService:
             time_str=now.strftime("%H:%M:%S"),
             unix_timestamp=str(int(now.timestamp() * 1000)),
         )
+        if plan.system_role == THIS_MACHINE_ROLE:
+            directories, locations = with_self_backup_paths(
+                context.source_directories,
+                context.source_locations,
+                self_backup_paths(Path(settings.data_dir)),
+            )
+            context = replace(
+                context, source_directories=directories, source_locations=locations
+            )
+        elif STAGING_EXCLUDE not in context.exclude_patterns:
+            context = replace(
+                context, exclude_patterns=[*context.exclude_patterns, STAGING_EXCLUDE]
+            )
         repositories = []
         for link in enabled_links:
             base_upload_ratelimit_kib = (
@@ -3043,6 +3087,7 @@ class BackupPlanExecutionService:
                     "compression_override": repository_context.compression,
                     "custom_flags_override": repository_context.custom_flags,
                     "upload_ratelimit_kib": repository_context.upload_ratelimit_kib,
+                    "read_all": context.system_role == THIS_MACHINE_ROLE,
                 },
                 commit=False,
             )
@@ -3327,7 +3372,9 @@ class BackupPlanExecutionService:
                 return "cancelled"
             record_step("prune", prune_job)
 
-        if context.run_compact_after:
+        if context.run_compact_after and compact_due(
+            context.system_role, repo.last_compact, datetime.utcnow()
+        ):
             if self._is_run_cancelled(run_id):
                 return "cancelled"
             compact_job = start_inline_maintenance(

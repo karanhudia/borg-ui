@@ -191,6 +191,58 @@ else
     echo "[$(date)] Docker socket not mounted, skipping docker group setup"
 fi
 
+# "This machine": the host folder its snapshots go to, outside the Borg UI data
+# volume so removing the volume does not take the snapshots with it. The host
+# root is the first LOCAL_MOUNT_POINTS entry that looks like a Linux root (the
+# same rule the app uses); entries are comma-separated and may contain spaces.
+HOST_ROOT=""
+OLD_IFS="$IFS"
+IFS=','
+for mount in ${LOCAL_MOUNT_POINTS:-/local}; do
+    mount="$(echo "$mount" | sed 's/^ *//; s/ *$//')"
+    if [ -n "$mount" ] && [ "$mount" != "/" ] && [ -f "$mount/etc/os-release" ]; then
+        HOST_ROOT="$mount"
+        break
+    fi
+done
+IFS="$OLD_IFS"
+if [ -n "$HOST_ROOT" ]; then
+    if mkdir -p "$HOST_ROOT/var/backups/borg-ui" 2>/dev/null \
+        && chown "$PUID:$PGID" "$HOST_ROOT/var/backups/borg-ui" 2>/dev/null \
+        && chmod 700 "$HOST_ROOT/var/backups/borg-ui" 2>/dev/null; then
+        echo "[$(date)] Snapshot folder ready at $HOST_ROOT/var/backups/borg-ui"
+    else
+        echo "[$(date)] WARNING: could not prepare $HOST_ROOT/var/backups/borg-ui"
+    fi
+fi
+
+# Let This machine backups read every host file when the container may grant
+# it (compose `cap_add: DAC_READ_SEARCH`). Proven by reading, as the app user
+# through the read-all interpreter, a root-only file on the host itself
+# (/etc/shadow): a capability that only works inside the container, under a
+# remapped user namespace or a nosuid mount, does not count. A stale marker
+# from an earlier start is dropped first, because the bounding set can change
+# between starts and the borg wrapper must never pick an interpreter that
+# cannot run.
+mkdir -p /run/borg-ui
+rm -f /run/borg-ui/read-all
+if [ -x /opt/borg1-read/bin/python3 ] && [ -n "$HOST_ROOT" ] && [ -f "$HOST_ROOT/etc/shadow" ]; then
+    PROBE_FILE="$HOST_ROOT/etc/shadow"
+    read_probe() {
+        if [ "$PUID" = "0" ]; then
+            /opt/borg1-read/bin/python3 -I -c "open('$PROBE_FILE','rb').read(1)"
+        else
+            gosu borg /opt/borg1-read/bin/python3 -I -c "open('$PROBE_FILE','rb').read(1)"
+        fi
+    }
+    if read_probe 2>/dev/null; then
+        touch /run/borg-ui/read-all
+        echo "[$(date)] This machine backups can read every host file (DAC_READ_SEARCH)"
+    else
+        echo "[$(date)] This machine backups read host files as the app user only. Add cap_add: [DAC_READ_SEARCH] to protect the whole machine."
+    fi
+fi
+
 # Bring the database up to date BEFORE anything reads it -- deploy_ssh_key below
 # reads the SSH keys from it. On a first migration into an empty Postgres the
 # tables do not exist until this runs, so reading keys first fails with

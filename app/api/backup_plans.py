@@ -33,6 +33,10 @@ from app.database.models import (
     User,
     UserRepositoryPermission,
 )
+from app.services.this_machine import (
+    creating_system_role,
+    require_system_delete_confirmed,
+)
 from app.services.backup_plan_policy import (
     evaluate_backup_plan_access,
     raise_backup_plan_feature_error,
@@ -646,6 +650,7 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
     payload: dict[str, Any] = {
         "id": plan.id,
         "name": plan.name,
+        "system_role": plan.system_role,
         "description": plan.description,
         "enabled": bool(plan.enabled),
         "source_type": plan.source_type,
@@ -2011,7 +2016,9 @@ async def create_backup_plan(
             detail={"key": "backend.errors.backupPlans.nameExists"},
         )
 
-    plan = BackupPlan(created_at=datetime.utcnow())
+    plan = BackupPlan(
+        created_at=datetime.utcnow(), system_role=creating_system_role.get()
+    )
     _apply_payload(plan, payload)
     db.add(plan)
     db.flush()
@@ -2266,6 +2273,11 @@ def update_backup_plan(
 ):
     plan = _load_plan_or_404(db, plan_id)
     _require_plan_operator_access(db, current_user, plan)
+    # Its backups read every host file, so only admins choose what it covers.
+    if plan.system_role:
+        require_any_role(
+            current_user, "admin", detail_key="backend.errors.thisMachine.adminRequired"
+        )
     try:
         repositories = _validate_payload(
             db,
@@ -2308,9 +2320,11 @@ def delete_backup_plan(
     plan_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    confirm_system: bool = False,
 ):
     plan = _load_plan_or_404(db, plan_id)
     _require_plan_operator_access(db, current_user, plan)
+    require_system_delete_confirmed(plan.system_role, confirm_system)
     db.delete(plan)
     db.commit()
     logger.info(

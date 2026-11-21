@@ -137,6 +137,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     iotop-c \
     iputils-ping \
     sshpass \
+    libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # Borg was compiled in the builder stage — copy the artifacts, not the toolchain.
@@ -172,3 +173,26 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     chown -R borg:borg /app /data /backups /var/log/borg /etc/borg /home/borg/.ssh /home/borg/.cache && \
     chmod -R 755 /app /data /backups /var/log/borg /etc/borg && \
     chmod 700 /home/borg/.ssh /home/borg/.cache/borg
+
+# "This machine" backs up the whole host, including files only root can read,
+# while Borg UI itself stays non-root. A copy of the interpreter (a venv built
+# with --copies, so the capability is on its own file) may read any file; the
+# app's own python3 gets nothing. `borg` uses that copy only for This
+# machine backups (BORG_UI_READ_ALL=1, set by Borg UI for that plan alone) and
+# only when the entrypoint proved it can run: a file capability outside the container's
+# bounding set (no `cap_add: DAC_READ_SEARCH`) makes exec fail, and existing
+# compose files must keep working. Borg 2 is not given it: the system plan
+# uses Borg 1.
+# Borg's own entry script moves aside (keeping the name, so `borg --version`
+# still says "borg") and the wrapper takes its place.
+RUN python3 -m venv --copies --system-site-packages --without-pip /opt/borg1-read && \
+    setcap cap_dac_read_search+ep "$(readlink -f /opt/borg1-read/bin/python3)" && \
+    mkdir -p /usr/local/libexec/borg-ui && \
+    mv /usr/local/bin/borg /usr/local/libexec/borg-ui/borg && \
+    printf '%s\n' \
+      '#!/bin/sh' \
+      '# Borg UI: read-all interpreter for This machine backups, when the entrypoint enabled it.' \
+      'if [ "${BORG_UI_READ_ALL:-}" = 1 ] && [ -e /run/borg-ui/read-all ]; then exec /opt/borg1-read/bin/python3 -I /usr/local/libexec/borg-ui/borg "$@"; fi' \
+      'exec /usr/local/libexec/borg-ui/borg "$@"' \
+      > /usr/local/bin/borg && \
+    chmod 0755 /usr/local/bin/borg

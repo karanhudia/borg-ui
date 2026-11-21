@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type Page } from 'playwright/test'
-import { SSH, api, blockAnalytics, login } from './helpers'
+import { SSH, api, blockAnalytics, login, muteAnnouncements } from './helpers'
 
 // The per-connection SSH key flows from PR #1498, against a real backend and a real
 // sshd. The tests build on each other the way a user would, so they run in order.
@@ -26,6 +26,7 @@ function makePrivateKey(passphrase: string): string {
 
 async function openPage(page: Page) {
   await blockAnalytics(page)
+  await muteAnnouncements(page)
   await page.goto('/ssh-connections')
   await expect(page.getByRole('heading', { name: 'System SSH Key' })).toBeVisible()
 }
