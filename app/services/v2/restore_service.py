@@ -4,7 +4,7 @@ Owns Borg 2-specific restore and archive-browsing semantics so shared restore
 and browse code does not hardcode Borg 1 archive addressing.
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from app.core.borg2 import (
     borg2,
@@ -16,6 +16,16 @@ from app.core.borg_errors import RestoreRefused
 from app.database.models import Repository
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.borg_arguments import validate_operand
+
+# A caller that has the repository's effective remote path passes it; the
+# lookup queries the repository's session.
+_LOOK_UP = object()
+
+
+def _remote_path(repo: Repository, remote_path: Any) -> Optional[str]:
+    if remote_path is _LOOK_UP:
+        return effective_repository_remote_path(repo)
+    return remote_path
 
 
 class RestoreV2Service:
@@ -66,6 +76,7 @@ class RestoreV2Service:
         paths: List[str],
         destination: str,
         env: Optional[dict] = None,
+        remote_path: Any = _LOOK_UP,
     ) -> dict:
         kwargs = {
             "repository": repo.path,
@@ -74,7 +85,7 @@ class RestoreV2Service:
             "destination": destination,
             "dry_run": True,
             "passphrase": repo.passphrase,
-            "remote_path": effective_repository_remote_path(repo),
+            "remote_path": _remote_path(repo, remote_path),
             "bypass_lock": repo.bypass_lock,
         }
         if env is not None:
@@ -89,13 +100,14 @@ class RestoreV2Service:
         max_lines: int = 1_000_000,
         browse_depth: Optional[int] = None,
         env: Optional[dict] = None,
+        remote_path: Any = _LOOK_UP,
     ) -> dict:
         kwargs = {
             "repository": repo.path,
             "archive": archive,
             "path": path,
             "passphrase": repo.passphrase,
-            "remote_path": effective_repository_remote_path(repo),
+            "remote_path": _remote_path(repo, remote_path),
             "max_lines": max_lines,
             "bypass_lock": repo.bypass_lock,
         }

@@ -932,6 +932,7 @@ async def test_preview_restore_delegates_to_v2_restore_service():
         archive="a1",
         paths=["etc/hosts"],
         destination=workdir,
+        remote_path=None,
     )
     # the dry run's own temporary directory, gone once it is over
     assert existed
@@ -993,6 +994,7 @@ async def test_list_archive_contents_delegates_to_v2_restore_service():
         archive="a1",
         path="etc",
         max_lines=123,
+        remote_path=None,
     )
 
 

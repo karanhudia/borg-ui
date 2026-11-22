@@ -3,7 +3,7 @@ import concurrent.futures
 import functools
 import inspect
 
-from sqlalchemy import create_engine, event, MetaData
+from sqlalchemy import create_engine, event, inspect as sa_inspect, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import QueuePool
@@ -210,13 +210,26 @@ def end_read_keeping_loaded(db: Session, *instances) -> None:
     every loaded instance, and the next attribute read would query again.
     Taken out of the session for the rollback and added back, the instances
     keep their values, and the next commit still writes what is changed on
-    them.
+    them. An instance the session does not hold is left alone: the rollback
+    does not touch it.
     """
+    instances = [instance for instance in instances if instance in db]
     for instance in instances:
         db.expunge(instance)
     db.rollback()
     for instance in instances:
         db.add(instance)
+
+
+def end_read_loaded(db: Session, *instances) -> None:
+    """`end_read_keeping_loaded`, for instances the caller reads next where
+    it must not query (on the event loop, with no connection held): one that
+    a commit or a rollback before this has expired is loaded first, while
+    the session still may query."""
+    for instance in instances:
+        if instance in db and sa_inspect(instance).expired:
+            db.refresh(instance)
+    end_read_keeping_loaded(db, *instances)
 
 
 def ends_read_on_return(handler):
@@ -275,7 +288,7 @@ async def run_off_loop(function, *args):
         raise
 
 
-async def run_transaction_off_loop(db: Session, work, *args):
+async def run_transaction_off_loop(db: Session, work, *args, keep=()):
     """Run `work(*args)`, which uses `db`, in a thread of `run_off_loop` and
     end `db`'s transaction there, whether `work` returns or raises: a lock it
     took is never kept across a turn of the loop (on SQLite the write lock is
@@ -285,14 +298,22 @@ async def run_transaction_off_loop(db: Session, work, *args):
     plain values: what it loaded expires with the transaction, and reading it
     on the loop would query there again.
 
+    Unless the caller names it in `keep`: those instances stay loaded when
+    `work` returns, also when it left them expired (a commit, or a rollback
+    after a failed query it caught). When it raises they expire with the
+    rest: a caller must not read them on the loop then.
+
     A pool of the tests keeps its connection in its thread; there `work`
     runs here, ended the same way."""
 
     def ended():
         try:
-            return work(*args)
-        finally:
+            result = work(*args)
+            end_read_loaded(db, *keep)
+        except BaseException:
             db.rollback()
+            raise
+        return result
 
     if checkout_can_wait(db.get_bind()):
         return await run_off_loop(ended)

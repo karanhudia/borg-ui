@@ -15,7 +15,13 @@ from typing import Any, Optional
 import structlog
 
 from app.core.security import require_role_dependency
-from app.database.database import get_db
+from app.database.database import (
+    end_read_keeping_loaded,
+    end_read_loaded,
+    get_db,
+    run_off_loop,
+    run_transaction_off_loop,
+)
 from app.database.models import User, Repository, SSHConnection, SystemSettings
 from app.core.security import check_repo_access, get_current_user
 from app.core.features import require_feature
@@ -40,7 +46,12 @@ from app.services.repository_executor import (
     wait_for_agent_repository_operation_job,
 )
 from app.services.v2.repository_service import repository_v2_service
-from app.utils.borg_env import effective_repository_remote_path, repository_borg_env
+from app.utils.borg_env import (
+    build_repository_borg_env,
+    cleanup_temp_key_file,
+    effective_repository_remote_path,
+    repository_borg_env,
+)
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.borg_flags import borg_flags_validator
 from app.utils.source_locations import legacy_source_fields, normalize_source_locations
@@ -554,9 +565,16 @@ async def get_repository_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get Borg 2 repository-level information via borg2 rinfo."""
+    """Get Borg 2 repository-level information via borg2 rinfo.
 
-    async def _operation():
+    For a server repository it comes from Borg: the request holds no pooled
+    connection while it waits for its turn on the repository or for Borg,
+    and reads in threads meanwhile, never waiting for a connection on the
+    event loop."""
+    temp_key_file = None
+
+    def prepare():
+        nonlocal temp_key_file
         repo = (
             db.query(Repository)
             .filter(Repository.id == repo_id, Repository.borg_version == 2)
@@ -569,8 +587,19 @@ async def get_repository_info(
         check_repo_access(db, current_user, repo, "viewer")
 
         info_timeout = _get_info_timeout(db)
-
         if is_agent_executor(repo):
+            # As before: its jobs are queued and awaited through the session.
+            return repo, info_timeout, None
+        bypass_lock = _resolve_bypass_lock(repo, db, "bypass_lock_on_info")
+        remote_path = effective_repository_remote_path(repo)
+        env, temp_key_file = build_repository_borg_env(repo, db)
+        end_read_loaded(db, repo)
+        return repo, info_timeout, (bypass_lock, remote_path, env)
+
+    async def _operation():
+        repo, info_timeout, command = await run_off_loop(prepare)
+
+        if command is None:
             # Managed agent: run info + repo-info on the node and merge, mirroring
             # the server-side path below. Disk usage (du) is server/local-only and
             # unavailable for a remote agent repo, so it is omitted.
@@ -599,16 +628,15 @@ async def get_repository_info(
                 "borg_version": 2,
             }
 
-        bypass_lock = _resolve_bypass_lock(repo, db, "bypass_lock_on_info")
-        with repository_borg_env(repo, db) as env:
-            result = await borg2.info_repo(
-                repository=repo.path,
-                passphrase=repo.passphrase,
-                remote_path=effective_repository_remote_path(repo),
-                bypass_lock=bypass_lock,
-                timeout=info_timeout,
-                env=env,
-            )
+        bypass_lock, remote_path, env = command
+        result = await borg2.info_repo(
+            repository=repo.path,
+            passphrase=repo.passphrase,
+            remote_path=remote_path,
+            bypass_lock=bypass_lock,
+            timeout=info_timeout,
+            env=env,
+        )
         # No lock-error retry here. It used to re-run the command with
         # bypass_lock=True, which only ever meant "--bypass-lock" — a flag Borg 2
         # does not have. With that gone the retry would issue the identical
@@ -629,13 +657,12 @@ async def get_repository_info(
         # usage, and repo-info --json has cache.path only, no cache.stats like
         # borg1. Pull repository/encryption metadata from rinfo; the size is the
         # stored one (`storage` on the repository response), not a live du.
-        with repository_borg_env(repo, db) as env:
-            rinfo_result = await borg2.rinfo(
-                repository=repo.path,
-                passphrase=repo.passphrase,
-                remote_path=effective_repository_remote_path(repo),
-                env=env,
-            )
+        rinfo_result = await borg2.rinfo(
+            repository=repo.path,
+            passphrase=repo.passphrase,
+            remote_path=remote_path,
+            env=env,
+        )
         if rinfo_result["success"]:
             try:
                 rinfo_data = json.loads(rinfo_result["stdout"])
@@ -648,7 +675,9 @@ async def get_repository_info(
 
         # The card renders the stored columns; sync them from the list just
         # fetched, or the dialog shows a count the card contradicts.
-        sync_archive_stats_from_info(repo, info_data, db)
+        await run_transaction_off_loop(
+            db, sync_archive_stats_from_info, repo, info_data, db
+        )
 
         # Normalised on the way out, not at either parse site: both `info --json`
         # and `repo-info --json` carry the block, and the merge above only fires
@@ -656,7 +685,14 @@ async def get_repository_info(
         # the case where borg2 info already supplied one.
         return {"info": normalize_repo_info_encryption(info_data), "borg_version": 2}
 
-    return await run_serialized_repository_command(repo_id, _operation)
+    # The wait for the repository's turn holds no connection.
+    end_read_keeping_loaded(db, current_user)
+    try:
+        return await run_serialized_repository_command(repo_id, _operation)
+    finally:
+        # Here, not in the thread that wrote it: a caller cancelled while that
+        # thread ran never got the path.
+        cleanup_temp_key_file(temp_key_file)
 
 
 @router.get("/{repo_id}/archives")
@@ -671,9 +707,14 @@ async def list_archives(
     Served at `/archives/live` as well, so one client method reaches the
     live listing on both borg versions: on the v1 router that path is what
     the persisted archive index left free (see `app/api/archive_index.py`).
-    """
 
-    async def _operation():
+    As the repository info above: no pooled connection is held while the
+    request waits for its turn on the repository or for Borg.
+    """
+    temp_key_file = None
+
+    def prepare():
+        nonlocal temp_key_file
         repo = (
             db.query(Repository)
             .filter(Repository.id == repo_id, Repository.borg_version == 2)
@@ -693,13 +734,24 @@ async def list_archives(
         )
 
         if is_agent_executor(repo):
-            # Managed agent: list on the node (holds the credentials/backend);
-            # the returned stdout is the same borg2 repo-list --json output.
+            # As before: its job is queued and awaited through the session.
             list_timeout = (
                 system_settings.list_timeout
                 if system_settings and system_settings.list_timeout
                 else 600
             )
+            return repo, list_timeout, None
+        remote_path = effective_repository_remote_path(repo)
+        env, temp_key_file = build_repository_borg_env(repo, db)
+        end_read_loaded(db, repo)
+        return repo, None, (bypass_lock, remote_path, env)
+
+    async def _operation():
+        repo, list_timeout, command = await run_off_loop(prepare)
+
+        if command is None:
+            # Managed agent: list on the node (holds the credentials/backend);
+            # the returned stdout is the same borg2 repo-list --json output.
             agent_job = queue_agent_repository_operation_job(
                 db, repo, job_kind="repository.list_archives"
             )
@@ -708,14 +760,14 @@ async def list_archives(
                 db, agent_job.id, timeout_seconds=list_timeout
             )
         else:
-            with repository_borg_env(repo, db) as env:
-                result = await borg2.list_archives(
-                    repo.path,
-                    passphrase=repo.passphrase,
-                    remote_path=effective_repository_remote_path(repo),
-                    bypass_lock=bypass_lock,
-                    env=env,
-                )
+            bypass_lock, remote_path, env = command
+            result = await borg2.list_archives(
+                repo.path,
+                passphrase=repo.passphrase,
+                remote_path=remote_path,
+                bypass_lock=bypass_lock,
+                env=env,
+            )
         if not result.get("success", bool(result.get("stdout"))):
             raise HTTPException(
                 status_code=500,
@@ -727,12 +779,21 @@ async def list_archives(
         except json.JSONDecodeError:
             data = {}
 
-        archives = enrich_archives_with_backup_metadata(
-            data.get("archives", []), repo, db
+        # Read in a thread, which the request waits for holding no connection.
+        end_read_keeping_loaded(db, repo)
+        archives = await run_transaction_off_loop(
+            db, enrich_archives_with_backup_metadata, data.get("archives", []), repo, db
         )
         return {"archives": archives, "borg_version": 2}
 
-    return await run_serialized_repository_command(repo_id, _operation)
+    # The wait for the repository's turn holds no connection.
+    end_read_keeping_loaded(db, current_user)
+    try:
+        return await run_serialized_repository_command(repo_id, _operation)
+    finally:
+        # Here, not in the thread that wrote it: a caller cancelled while that
+        # thread ran never got the path.
+        cleanup_temp_key_file(temp_key_file)
 
 
 @router.get("/{repo_id}/stats")

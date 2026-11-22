@@ -26,7 +26,7 @@ from app.core.security import (
     get_current_user,
     require_repository_access_by_path,
 )
-from app.database.database import ends_read_on_return, get_db
+from app.database.database import end_read_loaded, ends_read_on_return, get_db
 from app.database.models import AgentMachine, Repository, User
 from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_job_dispatcher import (
@@ -76,6 +76,17 @@ def _build_repo_env(repo: Repository, db: Session):
     if remote_path := effective_repository_remote_path(repo):
         env["BORG_REMOTE_PATH"] = remote_path
     return env, temp_key_file
+
+
+def _remote_path_ending_read(repo: Repository, db: Session) -> str | None:
+    """The repository's effective remote path, with the session's read ended:
+    for a handler that runs Borg on the server next, so that its request
+    holds no pooled connection while Borg runs. `repo` stays loaded. Nothing
+    is queried through the session on the event loop afterwards: a wait for a
+    connection there would hold every request."""
+    remote_path = effective_repository_remote_path(repo)
+    end_read_loaded(db, repo)
+    return remote_path
 
 
 def _write_agent_extracted_file(result: dict, *, temp_dir: str, file_path: str) -> dict:
@@ -417,11 +428,14 @@ async def _stream_server_archive_tar(
     """Start a Borg tar export and verify its first bytes before returning 200."""
     env, temp_key_file = _build_repo_env(repo, db)
     try:
+        # Neither the wait for Borg's first bytes nor the download holds a
+        # pooled connection.
+        remote_path = _remote_path_ending_read(repo, db)
         stream = borg.export_archive_tar(
             repo.path,
             archive,
             directory_path,
-            remote_path=effective_repository_remote_path(repo),
+            remote_path=remote_path,
             passphrase=repo.passphrase,
             bypass_lock=repo.bypass_lock,
             env=env,
@@ -514,9 +528,10 @@ async def list_archives(
         else:
             env, temp_key_file = _build_repo_env(repo, db)
             try:
+                remote_path = _remote_path_ending_read(repo, db)
                 result = await borg.list_archives(
                     repo.path,
-                    remote_path=effective_repository_remote_path(repo),
+                    remote_path=remote_path,
                     passphrase=repo.passphrase,
                     bypass_lock=repo.bypass_lock,
                     env=env,
@@ -558,6 +573,9 @@ async def get_archive_info(
         validate_operand(archive_id, "archive selector")
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # A server repository's Borg environment, for both calls below: the
+    # session's read ends before the first.
+    temp_key_file = None
     try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, "viewer")
@@ -573,17 +591,15 @@ async def get_archive_info(
             )
         else:
             env, temp_key_file = _build_repo_env(repo, db)
-            try:
-                result = await borg.info_archive(
-                    repo.path,
-                    archive_id,
-                    remote_path=effective_repository_remote_path(repo),
-                    passphrase=repo.passphrase,
-                    bypass_lock=repo.bypass_lock,
-                    env=env,
-                )
-            finally:
-                cleanup_temp_key_file(temp_key_file)
+            remote_path = _remote_path_ending_read(repo, db)
+            result = await borg.info_archive(
+                repo.path,
+                archive_id,
+                remote_path=remote_path,
+                passphrase=repo.passphrase,
+                bypass_lock=repo.bypass_lock,
+                env=env,
+            )
         # An agent renders Borg's times in its own zone; the server's
         # wrapper runs under TZ=UTC.
         time_zone = agent_timezone_for_repository(db, repo) if agent else "UTC"
@@ -658,18 +674,14 @@ async def get_archive_info(
                         )
                         list_result = {"success": False}
                 else:
-                    env, temp_key_file = _build_repo_env(repo, db)
-                    try:
-                        list_result = await borg.list_archive_contents(
-                            repo.path,
-                            archive_id,
-                            remote_path=effective_repository_remote_path(repo),
-                            passphrase=repo.passphrase,
-                            bypass_lock=repo.bypass_lock,
-                            env=env,
-                        )
-                    finally:
-                        cleanup_temp_key_file(temp_key_file)
+                    list_result = await borg.list_archive_contents(
+                        repo.path,
+                        archive_id,
+                        remote_path=remote_path,
+                        passphrase=repo.passphrase,
+                        bypass_lock=repo.bypass_lock,
+                        env=env,
+                    )
                 if _read_succeeded(list_result):
                     try:
                         # Parse JSON-lines output
@@ -724,6 +736,8 @@ async def get_archive_info(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"key": "backend.errors.archives.failedGetArchiveInfo"},
         )
+    finally:
+        cleanup_temp_key_file(temp_key_file)
 
 
 @router.get("/{archive_id}/contents")
@@ -769,11 +783,12 @@ async def get_archive_contents(
         else:
             env, temp_key_file = _build_repo_env(repo, db)
             try:
+                remote_path = _remote_path_ending_read(repo, db)
                 result = await borg.list_archive_contents(
                     repo.path,
                     archive_id,
                     path,
-                    remote_path=effective_repository_remote_path(repo),
+                    remote_path=remote_path,
                     passphrase=repo.passphrase,
                     bypass_lock=repo.bypass_lock,
                     env=env,
@@ -882,13 +897,16 @@ async def download_file_from_archive(
         async def extract(temp_dir: str):
             env, temp_key_file = _build_repo_env(repo, db)
             try:
+                # Neither the extraction nor the download holds a pooled
+                # connection.
+                remote_path = _remote_path_ending_read(repo, db)
                 return await borg.extract_archive(
                     repo.path,
                     archive,
                     [file_path],
                     temp_dir,
                     dry_run=False,
-                    remote_path=effective_repository_remote_path(repo),
+                    remote_path=remote_path,
                     passphrase=repo.passphrase,
                     bypass_lock=repo.bypass_lock,
                     env=env,
