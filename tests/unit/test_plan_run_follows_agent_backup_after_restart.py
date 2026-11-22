@@ -608,3 +608,34 @@ async def test_a_follower_that_fails_leaves_the_cleanup_to_the_restart_recovery(
     assert "no database" in stored.error_message
     assert len(seen) == 1
     assert _keys(seen[0][-1]) == ["backend.errors.service.postBackupHooksAfterRestart"]
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_during_the_wait_keeps_the_repository_cancelled(test_db):
+    """A cancel of the run closes the repository at once; the backup that
+    then ends as failed does not put its status over that."""
+    run, _all = _plan_with_hooks(test_db)
+    _interrupted(test_db, run)
+    operation = _agent_backup(test_db, run.repositories[0])
+    _sweep(test_db)
+    _waited, backup_ends = _backup_ends(test_db, "failed", "borg exited with code 2")
+
+    async def wait_out(operation_id, **kwargs):
+        stored = test_db.get(BackupPlanRun, run.id)
+        if stored.status != "cancelled":
+            # what `cancel_run` records
+            stored.status = "cancelled"
+            for child in stored.repositories:
+                child.status = "cancelled"
+                child.error_message = "Cancelled"
+            test_db.commit()
+        return await backup_ends(operation_id, **kwargs)
+
+    await _follow(run, wait_out)
+
+    test_db.expire_all()
+    stored = test_db.get(BackupPlanRun, run.id)
+    child = stored.repositories[0]
+    assert (child.status, child.error_message) == ("cancelled", "Cancelled")
+    assert stored.status == "cancelled"
+    assert test_db.get(Operation, operation.id).status == "failed"

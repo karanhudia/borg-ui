@@ -600,9 +600,9 @@ def _update_children(
     *,
     repository_id: Optional[int] = None,
     from_statuses: tuple[str, ...] = ("pending",),
-) -> None:
+) -> int:
     """Move a run's repository rows on, in one statement, and only from the
-    statuses they are allowed to move from.
+    statuses they are allowed to move from. Returns how many rows moved.
 
     A cancellation can commit between a reader's look and its write: a plan
     worker that decided to skip a repository must not then overwrite the
@@ -615,7 +615,7 @@ def _update_children(
     )
     if repository_id is not None:
         q = q.filter(BackupPlanRunRepository.repository_id == repository_id)
-    q.update(values, synchronize_session=False)
+    return q.update(values, synchronize_session=False)
 
 
 def _write_bookkeeping(
@@ -3294,11 +3294,24 @@ class BackupPlanExecutionService:
             if maintenance_status == "completed_with_warnings":
                 final_status = "completed_with_warnings"
 
-        child.status = final_status
-        child.completed_at = backup_job.completed_at or datetime.utcnow()
-        child.error_message = backup_job.error_message
+        # Only while the repository is still open: a cancel of the run closes
+        # it at once (`cancel_run`), and a backup that then ends as failed
+        # must not put its status over that.
+        recorded = _update_children(
+            db,
+            run_id,
+            {
+                BackupPlanRunRepository.status: final_status,
+                BackupPlanRunRepository.completed_at: (
+                    backup_job.completed_at or datetime.utcnow()
+                ),
+                BackupPlanRunRepository.error_message: backup_job.error_message,
+            },
+            repository_id=child.repository_id,
+            from_statuses=tuple(ACTIVE_PLAN_RUN_STATUSES),
+        )
         db.commit()
-        return final_status
+        return final_status if recorded else None
 
     def follow_agent_backups_after_restart(self, run_ids: list[int]) -> None:
         """Follow, each in a task of its own, the runs the startup sweep left
