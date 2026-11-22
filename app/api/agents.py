@@ -1941,7 +1941,13 @@ def _record_session_heartbeat(
     # socket alive but never reach here, so without this an idle-but-healthy
     # agent looks stale.
     now = _now_utc()
-    if not mark_agent_online(db, agent_machine_id, now):
+    # Only the agent's current session speaks for it: a session its newer
+    # connection replaced belongs to another process, and its heartbeat says
+    # nothing about the agent once that newer session is gone too. A revoked
+    # agent is refused on either.
+    if not speaks_for_agent:
+        _require_active_agent(db, agent_machine_id)
+    elif not mark_agent_online(db, agent_machine_id, now):
         db.rollback()
         raise AgentSessionRevoked()
     db.commit()
@@ -1949,8 +1955,7 @@ def _record_session_heartbeat(
     # From agent 0.1.21 the heartbeat lists the jobs the process runs, and a
     # started job that has left the list is settled as on the REST heartbeat,
     # inside the same window, instead of by the reaper; a job on the list
-    # counts as active. Only the agent's current session speaks for it: a
-    # session its newer connection replaced belongs to another process.
+    # counts as active. Again only from the agent's current session.
     running_job_ids = _reported_running_job_ids(message)
     if running_job_ids is not None and speaks_for_agent:
         current_agent = db.get(AgentMachine, agent_machine_id)

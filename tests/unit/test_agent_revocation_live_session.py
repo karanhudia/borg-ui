@@ -25,6 +25,10 @@ from app.api.agents import (
 from app.core.agent_auth import mark_agent_online, resolve_agent_from_token
 from app.core.security import get_password_hash
 from app.database.models import AgentJob, AgentMachine
+from app.services.agent_connection_manager import (
+    AgentConnection,
+    agent_connection_manager,
+)
 
 RAW_TOKEN = "borgui_agent_" + "r" * 43
 
@@ -153,8 +157,18 @@ async def test_session_heartbeat_does_not_undo_a_revocation(test_db, inactive):
 @pytest.mark.asyncio
 async def test_session_heartbeat_keeps_an_active_agent_online(test_db):
     agent = _create_agent(test_db, status="offline")
+    # The heartbeat of the agent's current session.
+    connection = AgentConnection(
+        agent_machine_id=agent.id, agent_id=agent.agent_id, websocket=object()
+    )
+    agent_connection_manager._connections[agent.id] = connection
 
-    await _handle_agent_session_message(test_db, agent.id, {"type": "heartbeat"})
+    try:
+        await _handle_agent_session_message(
+            test_db, agent.id, {"type": "heartbeat"}, connection=connection
+        )
+    finally:
+        agent_connection_manager._connections.pop(agent.id, None)
 
     test_db.expire_all()
     current = test_db.get(AgentMachine, agent.id)

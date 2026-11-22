@@ -4,7 +4,7 @@ import asyncio
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Deque, Optional
+from typing import Any, Callable, Deque, Optional
 from uuid import uuid4
 
 from fastapi import WebSocket
@@ -58,6 +58,7 @@ class AgentConnection:
         job_id: Optional[int] = None,
         wait_for_result: bool = True,
         attempt: Optional[int] = None,
+        still_wanted: Optional[Callable[[], bool]] = None,
     ) -> dict[str, Any]:
         command_id = str(uuid4())
         frame: dict[str, Any] = {
@@ -78,6 +79,13 @@ class AgentConnection:
 
         try:
             async with self.send_lock:
+                # Asked when the frame is next to go out: the wait for the
+                # lock can be long (a client that reads slowly), and what
+                # held when the caller decided to send may not hold now.
+                if still_wanted is not None and not still_wanted():
+                    raise AgentConnectionUnavailable(
+                        "Command withdrawn before it was sent"
+                    )
                 await self.websocket.send_json(frame)
         except Exception:
             if future is not None:
@@ -195,6 +203,7 @@ class AgentConnectionManager:
         job_id: Optional[int] = None,
         wait_for_result: bool = True,
         attempt: Optional[int] = None,
+        still_wanted: Optional[Callable[[], bool]] = None,
     ) -> dict[str, Any]:
         connection = self.get(agent_machine_id)
         if connection is None:
@@ -206,6 +215,7 @@ class AgentConnectionManager:
             job_id=job_id,
             wait_for_result=wait_for_result,
             attempt=attempt,
+            still_wanted=still_wanted,
         )
 
     def resolve_command(
