@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Awaitable, Callable, Optional
 
 import structlog
+from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.borg_major import is_borg2
@@ -302,6 +303,72 @@ def _borg2_server_service(repository: Repository) -> bool:
     return is_borg2(repository) and not is_agent_executor(repository)
 
 
+def agent_runs_maintenance(db, operation: Operation) -> bool:
+    """Whether a live agent job carries this maintenance operation. On a row
+    found `running` after a server restart that is work its agent kept
+    doing."""
+    repository = (
+        db.get(Repository, operation.repository_id)
+        if operation.repository_id is not None
+        else None
+    )
+    return (
+        repository is not None
+        and _agent_executed(repository)
+        and _agent_job_for_operation(
+            db, repository, operation.id, since=operation.created_at
+        )
+        is not None
+    )
+
+
+async def _wait_on_kept_agent_job(ctx, repository: Repository) -> None:
+    """The wait `BorgRouter` makes on the agent job of a maintenance
+    operation, on the job the agent kept running through a server restart
+    (ended since or not), instead of queueing the work a second time. The
+    agent's report writes the verdict on the row, as in the first run."""
+    from app.config import settings
+    from app.database.database import SessionLocal
+    from app.database.models import SystemSettings
+    from app.services.repository_executor import (
+        TERMINAL_AGENT_STATUSES,
+        wait_for_agent_repository_operation_job,
+    )
+    from app.utils.http_detail import detail_text
+
+    db = SessionLocal()
+    try:
+        operation = db.get(Operation, ctx.operation_id)
+        agent_job = _agent_job_for_operation(
+            db,
+            repository,
+            ctx.operation_id,
+            statuses=(*_LIVE_AGENT_JOB_STATUSES, *TERMINAL_AGENT_STATUSES),
+            since=operation.created_at,
+        )
+        if agent_job is None:
+            raise RuntimeError("the operation's agent job is gone")
+        system_settings = db.query(SystemSettings).first()
+        timeout_seconds = (
+            system_settings.backup_timeout
+            if system_settings and system_settings.backup_timeout
+            else settings.backup_timeout
+        )
+        try:
+            await wait_for_agent_repository_operation_job(
+                db, agent_job.id, timeout_seconds=timeout_seconds
+            )
+        except HTTPException as exc:
+            # Also a run that ended on a lock another process holds, which
+            # the first run would be deferred for: this one is not started
+            # again (`OperationRunner.run_operation`).
+            raise RuntimeError(
+                f"agent {ctx.kind} failed: {detail_text(exc.detail)}"
+            ) from exc
+    finally:
+        db.close()
+
+
 def _agent_executed(repository: Repository) -> bool:
     from app.services.repository_executor import is_agent_executor
 
@@ -392,7 +459,16 @@ async def _run(
 
         canceller = agent_canceller
 
-    if _hands_over(ctx, repository):
+    if ctx.resumed:
+        # An agent kept the work running through a restart: the wait is on
+        # its job, and nothing is queued a second time
+        # (`OperationRunner.attach_recovered`).
+
+        async def wait_on_kept_job(router: BorgRouter, operation_id: int) -> None:
+            await _wait_on_kept_agent_job(ctx, repository)
+
+        call = wait_on_kept_job
+    elif _hands_over(ctx, repository):
         # The row is left with no start until the service claims it. A
         # service that never gets that far (a missing repository, a lock it
         # gave up on, a raise) leaves it that way, and the runner puts the
@@ -502,7 +578,7 @@ async def run_check(ctx) -> Outcome:
     )
 
 
-executors.register("check", run_check)
+executors.register("check", run_check, agent_work=agent_runs_maintenance)
 
 
 _PRUNE_DEFAULTS = {
@@ -539,7 +615,7 @@ async def run_prune(ctx) -> Outcome:
     )
 
 
-executors.register("prune", run_prune)
+executors.register("prune", run_prune, agent_work=agent_runs_maintenance)
 
 
 async def run_compact(ctx) -> Outcome:
@@ -554,7 +630,7 @@ async def run_compact(ctx) -> Outcome:
     )
 
 
-executors.register("compact", run_compact)
+executors.register("compact", run_compact, agent_work=agent_runs_maintenance)
 
 
 async def run_delete_archive(ctx) -> Outcome:
@@ -580,7 +656,9 @@ async def run_delete_archive(ctx) -> Outcome:
     )
 
 
-executors.register("delete_archive", run_delete_archive)
+executors.register(
+    "delete_archive", run_delete_archive, agent_work=agent_runs_maintenance
+)
 
 
 async def run_restore_check(ctx) -> Outcome:

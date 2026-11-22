@@ -270,6 +270,26 @@ process left behind. For a local check or compact, Borg UI attempts to break
 the repository lock; for a remote repository it does not, because the remote
 Borg process may still be running.
 
+Work a managed agent runs is not the server's to stop. A backup, check, prune,
+compact or archive deletion whose agent job is live goes on through a restart:
+on shutdown the runner asks no cancel of it and leaves its operation
+`running`, and recovery keeps such an operation and waits on the same agent
+job again, so what the agent reports is recorded the way it would have been
+without the restart (a backup's post-backup hooks and follow-ups included).
+Nothing is queued a second time, and a run taken up again is never put back
+on the queue. An operation whose agent job is no longer live is failed like
+the rest.
+
+The agent's report can reach a process before that process has recovered (it
+serves while another still holds the runner lease). The report then ends the
+operation by itself. Recovery finds such a backup, a successful one by the
+missing `result` the runner writes last, and a task finishes it: the warning
+its pre-backup hooks left, the repository's post-backup hooks, the result. A
+backup that failed is taken up for the post-backup hooks that undo what a
+pre-backup hook did. Post-backup hooks of which one already left a record are
+not run again. A plan run still follows such a backup (its maintenance, the
+repository's status) as it follows one that is still running.
+
 Two sweeps run beside it, for state that is not an operation:
 
 - a backup left in a `running_prune`, `running_compact` or `running_check`
@@ -277,7 +297,11 @@ Two sweeps run beside it, for state that is not an operation:
   `prune_failed`, `compact_failed` or `check_failed`, unless its child
   operation is genuinely still running
 - a backup plan run left `pending` or `running` is finalised from the states
-  of its children
+  of its children. A run with a backup its agent is still running stays
+  active until that backup ended: the backup is seen through as in the run
+  itself, the plan's post-backup scripts hear the result the run came to, and
+  the run is finalised then. Its repositories that had not started are not
+  started after the restart.
 
 One mirror case is handled before recovery runs: an initial cloud mirror sync
 (trigger `import`) left `running` by a restart is put back to `queued` rather

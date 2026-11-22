@@ -1320,6 +1320,15 @@ def get_agent_job_for_backup(db: Session, backup_job: Any) -> Optional[AgentJob]
     )
 
 
+def agent_runs_backup(db: Session, backup_job: Any) -> bool:
+    """Whether a live agent job carries this backup. On a row found
+    `running` after a server restart that is a backup its agent kept
+    running; no other dispatch of a backup finds one, since a backup's task
+    ends only after its agent job did."""
+    agent_job = get_agent_job_for_backup(db, backup_job)
+    return agent_job is not None and agent_job.status in ACTIVE_AGENT_STATUSES
+
+
 # A job moves queued -> claimed -> running -> terminal, so two lost races are
 # the most a live job can cost; the bound only guards against a pathological
 # writer flipping the row back and forth.

@@ -285,6 +285,7 @@ class TestV2BackupRoutes:
             kind="prune",
             params=dict(op.params or {}),
             cancelled=lambda: False,
+            resumed=False,
             log=lambda line: None,
         )
         fake_router = AsyncMock()
@@ -374,6 +375,7 @@ class TestV2BackupRoutes:
             kind="compact",
             params=dict(op.params or {}),
             cancelled=lambda: False,
+            resumed=False,
             log=lambda line: None,
         )
         fake_router = AsyncMock()
@@ -499,6 +501,7 @@ class TestV2BackupRoutes:
             kind="check",
             params=dict(op.params or {}),
             cancelled=lambda: False,
+            resumed=False,
             log=lambda line: None,
         )
         fake_router = AsyncMock()

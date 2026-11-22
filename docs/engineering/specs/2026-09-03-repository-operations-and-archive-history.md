@@ -566,6 +566,12 @@ On startup, before the runner starts:
   `failed` with `error_message = "interrupted by restart"`. Local
   repositories get the existing lock-break attempt; remote ones do not, as
   documented in `job-system.md`.
+- `running` operations whose work a managed agent is doing (a live agent
+  job carries them: backup, check, prune, compact, delete archive): leave
+  them and start a task that waits on that agent job again. The agent went
+  on without the server; its report goes through the terminal write, and
+  nothing is queued a second time. A shutdown leaves these operations
+  `running` for this instead of requesting their cancellation (7.7).
 - `running` index operations: use the same recovery budget as the runtime
   sweep of abandoned tasks. Each retry increments `params.requeues`; an
   operation is requeued at most three times, with backoff based on the larger
@@ -584,6 +590,10 @@ via `ctx.cancelled()`; Borg executors also terminate the child process, as
 the existing cancel paths do. Dependants become `skipped`. A cancel that
 arrives while the admission is refusing the operation wins over the
 deferral (7.1 step 5): the row ends `cancelled` instead of being requeued.
+
+A shutdown requests cancellation of every running operation except those a
+managed agent is running: their tasks end without a terminal write and the
+next process waits on the agent job again (7.6).
 
 If the terminal database write fails, the runner retains an accepted cancel
 request. The runtime sweep completes that cancellation after the database

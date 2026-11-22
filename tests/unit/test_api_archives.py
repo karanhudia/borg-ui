@@ -140,6 +140,7 @@ class TestArchivesResourceValidation:
             kind="delete_archive",
             params=dict(op.params or {}),
             cancelled=lambda: False,
+            resumed=False,
             log=lambda line: None,
         )
         fake_router = Mock(delete_archive=AsyncMock())
@@ -201,6 +202,7 @@ class TestArchivesResourceValidation:
             kind="delete_archive",
             params=dict(op.params or {}),
             cancelled=lambda: False,
+            resumed=False,
             log=lambda line: None,
         )
         fake_router = Mock(delete_archive=AsyncMock())

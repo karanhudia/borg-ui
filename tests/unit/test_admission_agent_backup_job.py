@@ -14,6 +14,7 @@ from app.services.job_admission import (
     ensure_repository_admission,
 )
 from app.services.operations.backup_facade import admission_ignore_for
+from app.services.operations.executors import load_default_executors
 from app.services.operations.runner import OperationRunner
 
 
@@ -108,10 +109,12 @@ def test_a_backup_is_refused_after_a_restart_while_the_agent_still_runs_the_last
         db_session, operation_status="running", agent_job_status="running"
     )
 
+    load_default_executors()
     OperationRunner().recover_on_startup(db_session)
     db_session.refresh(operation)
     db_session.refresh(agent_job)
-    assert operation.status == "failed"
+    # the agent goes on, and so does the record of its backup
+    assert operation.status == "running"
     assert agent_job.status == "running"
 
     with pytest.raises(HTTPException) as exc:

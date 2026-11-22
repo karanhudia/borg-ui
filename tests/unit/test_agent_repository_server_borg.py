@@ -322,6 +322,7 @@ class TestBackupExecutor:
             repository_id=repo.id,
             params=dict(operation.params),
             cancelled=lambda: False,
+            resumed=False,
         )
 
         async def agent_backup(ctx, job, repository, params):
@@ -385,6 +386,7 @@ class TestBackupExecutor:
             repository_id=repo.id,
             params=dict(operation.params),
             cancelled=lambda: False,
+            resumed=False,
         )
         with (
             patch.object(

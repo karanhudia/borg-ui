@@ -54,6 +54,7 @@ class FakeContext:
         self.params = dict(operation.params or {})
         self.lines = []
         self._cancelled = False
+        self.resumed = False
 
     def cancelled(self):
         return self._cancelled
