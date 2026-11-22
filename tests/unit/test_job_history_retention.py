@@ -339,6 +339,16 @@ def test_policy_failed_only_also_drops_warning_logs(db):
 POLICY = "failed_and_warnings"
 
 
+@pytest.fixture(autouse=True)
+def _no_operation_at_work(monkeypatch):
+    """The runner is one per process: what another test file left in it
+    is not at work here."""
+    from app.services.operations.runner import operation_runner
+
+    monkeypatch.setattr(operation_runner, "running_tasks", {})
+    monkeypatch.setattr(operation_runner, "unrecorded_outcomes", {})
+
+
 def _agent_log_lines(db, job):
     return [
         row.message
@@ -659,9 +669,18 @@ def _purge_policy_agent_lines(db):
     return deleted
 
 
-def _backup_fails_before_the_purge_scenario(db, tmp_path, monkeypatch):
-    """A post-backup hook can fail a backup after the pass has decided on the
-    lines of its agent job. The failed backup shows them, so they stay."""
+# What makes a backup show its log after the pass has read its row: a hook
+# that fails it, or an error message with a marker on a row that stays
+# `completed`.
+_BACKUP_CHANGES = [
+    ("status", "failed"),
+    ("error_message", "Warning: snapshot changed"),
+]
+
+
+def _backup_changes_before_the_purge_scenario(db, tmp_path, monkeypatch, column, value):
+    """A backup can change after the pass has decided on the lines of its
+    agent job. The changed backup shows them, so they stay."""
     from app.services import job_history_retention
     from app.services.operations.backup_facade import (
         BackupJobFacade,
@@ -671,15 +690,13 @@ def _backup_fails_before_the_purge_scenario(db, tmp_path, monkeypatch):
     op, job = _backup_with_settled_agent_lines(db, tmp_path)
     purge = job_history_retention.purge_agent_job_logs
 
-    def the_backup_fails_then_purge(*args, **kwargs):
-        db.query(Operation).filter(Operation.id == op.id).update(
-            {Operation.status: "failed"}
-        )
+    def the_backup_changes_then_purge(*args, **kwargs):
+        db.query(Operation).filter(Operation.id == op.id).update({column: value})
         db.commit()
         return purge(*args, **kwargs)
 
     monkeypatch.setattr(
-        job_history_retention, "purge_agent_job_logs", the_backup_fails_then_purge
+        job_history_retention, "purge_agent_job_logs", the_backup_changes_then_purge
     )
 
     assert _purge_policy_agent_lines(db) == 0
@@ -704,43 +721,45 @@ def _on_agent_line_delete(db, action):
     return _before_statement(db, "DELETE FROM AGENT_JOB_LOGS", action)
 
 
-def _backup_fails_as_the_delete_starts_scenario(db, tmp_path):
+def _backup_changes_as_the_delete_starts_scenario(db, tmp_path, column, value):
     """The same change, later still: after the pass's last query and before
     the statement that deletes. The statement asks for itself."""
     op, job = _backup_with_settled_agent_lines(db, tmp_path)
     op_id = op.id
-    failed = []
+    changed = []
 
-    def the_backup_fails(conn):
+    def the_backup_changes(conn):
         conn.execute(
-            text("UPDATE operations SET status = 'failed' WHERE id = :id"),
-            {"id": op_id},
+            text(f"UPDATE operations SET {column} = :value WHERE id = :id"),
+            {"value": value, "id": op_id},
         )
-        failed.append(op_id)
+        changed.append(op_id)
 
-    stop = _on_agent_line_delete(db, the_backup_fails)
+    stop = _on_agent_line_delete(db, the_backup_changes)
     try:
         assert _purge_policy_agent_lines(db) == 0
     finally:
         stop()
 
-    assert failed == [op_id]
-    assert op.status == "failed"
+    assert changed == [op_id]
+    assert getattr(op, column) == value
     assert len(_agent_log_lines(db, job)) == 2
 
 
 @pytest.mark.unit
-def test_policy_leaves_agent_lines_whose_backup_failed_before_the_purge(
-    db, tmp_path, monkeypatch
+@pytest.mark.parametrize("column, value", _BACKUP_CHANGES)
+def test_policy_leaves_agent_lines_whose_backup_changed_before_the_purge(
+    db, tmp_path, monkeypatch, column, value
 ):
-    _backup_fails_before_the_purge_scenario(db, tmp_path, monkeypatch)
+    _backup_changes_before_the_purge_scenario(db, tmp_path, monkeypatch, column, value)
 
 
 @pytest.mark.unit
-def test_policy_leaves_agent_lines_whose_backup_failed_as_the_delete_starts(
-    db, tmp_path
+@pytest.mark.parametrize("column, value", _BACKUP_CHANGES)
+def test_policy_leaves_agent_lines_whose_backup_changed_as_the_delete_starts(
+    db, tmp_path, column, value
 ):
-    _backup_fails_as_the_delete_starts_scenario(db, tmp_path)
+    _backup_changes_as_the_delete_starts_scenario(db, tmp_path, column, value)
 
 
 @pytest.mark.unit
@@ -775,6 +794,77 @@ def test_policy_leaves_a_log_file_whose_operation_failed_as_its_path_is_cleared(
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("outcome", ["failed", "completed"])
+def test_policy_waits_for_a_backup_whose_executor_is_still_at_work(
+    db, tmp_path, monkeypatch, outcome
+):
+    """An agent backup reads `completed` while its post-backup hooks run, and
+    the runner still has its task. Its logs wait for the outcome: a hook that
+    fails makes the backup failed, and the failed backup shows them."""
+    import asyncio
+
+    from app.services.operations.runner import operation_runner
+
+    settings = _settings(db, log_save_policy=POLICY)
+    op, job = _backup_with_settled_agent_lines(db, tmp_path)
+    log = Path(op.log_file_path)
+    loop = asyncio.new_event_loop()
+    try:
+        task = loop.create_future()
+        monkeypatch.setattr(operation_runner, "running_tasks", {op.id: task})
+
+        during = run_retention(db, settings)
+        db.expire_all()
+
+        assert during["policy_log_rows_deleted"] == 0
+        assert during["policy_operation_log_files_deleted"] == 0
+        assert len(_agent_log_lines(db, job)) == 2 and log.exists()
+
+        # the hooks are through, and the executor has committed its outcome
+        op.status = outcome
+        db.commit()
+        task.set_result(None)
+
+        after = run_retention(db, settings)
+        db.expire_all()
+    finally:
+        loop.close()
+
+    kept = outcome == "failed"
+    assert after["policy_log_rows_deleted"] == (0 if kept else 2)
+    assert after["policy_operation_log_files_deleted"] == (0 if kept else 1)
+    assert len(_agent_log_lines(db, job)) == (2 if kept else 0)
+    assert log.exists() is kept
+
+
+@pytest.mark.unit
+def test_policy_waits_for_an_outcome_the_runner_has_not_recorded_yet(
+    db, tmp_path, monkeypatch
+):
+    """A task can end before its terminal write reaches the row (a locked
+    database). The runner keeps the outcome and writes it on a later tick;
+    until then the row is not the last word."""
+    from app.services.operations.runner import operation_runner
+
+    settings = _settings(db, log_save_policy=POLICY)
+    op, job = _backup_with_settled_agent_lines(db, tmp_path)
+    log = Path(op.log_file_path)
+    monkeypatch.setattr(operation_runner, "unrecorded_outcomes", {op.id: object()})
+
+    results = run_retention(db, settings)
+
+    assert results["policy_log_rows_deleted"] == 0
+    assert results["policy_operation_log_files_deleted"] == 0
+    assert len(_agent_log_lines(db, job)) == 2 and log.exists()
+
+    monkeypatch.setattr(operation_runner, "unrecorded_outcomes", {})
+    results = run_retention(db, settings)
+
+    assert results["policy_log_rows_deleted"] == 2
+    assert results["policy_operation_log_files_deleted"] == 1
+
+
+@pytest.mark.unit
 def test_policy_drops_the_agent_lines_of_a_backup_that_stayed_completed(db, tmp_path):
     op, job = _backup_with_settled_agent_lines(db, tmp_path)
 
@@ -786,8 +876,9 @@ def test_policy_drops_the_agent_lines_of_a_backup_that_stayed_completed(db, tmp_
 @pytest.mark.unit
 def test_policy_failed_only_decides_without_the_output(db, tmp_path, monkeypatch):
     """Under failed_only the read side never looks at the text, so a marker
-    keeps nothing and no log file is opened to look for one. An exit code
-    still counts as a failure there, whatever the status says."""
+    keeps nothing, no log file is opened to look for one and no agent log
+    line is searched. An exit code still counts as a failure there, whatever
+    the status says."""
     from app.api.activity import _activity_job_has_logs
     from app.services import job_history_retention
 
@@ -797,6 +888,17 @@ def test_policy_failed_only_decides_without_the_output(db, tmp_path, monkeypatch
         "_marker_in_log_file",
         lambda path: pytest.fail(f"opened {path}"),
     )
+    marker_in = job_history_retention._marker_in
+
+    def marker_in_anything_but_agent_lines(db, *columns):
+        assert AgentJobLog.message not in columns
+        return marker_in(db, *columns)
+
+    monkeypatch.setattr(
+        job_history_retention, "_marker_in", marker_in_anything_but_agent_lines
+    )
+    job = _agent_job(db, _machine(db), "completed", age_days=1, log_lines=1)
+    _agent_log_line(db, job, 1, "warning: slow link")
     op, log = _operation_with_log(db, tmp_path, "check", "warning: 1 orphan")
     noisy = _hook_execution(db, stdout="warning: snapshot is 3 days old")
     nonzero = _hook_execution(db, stdout="partial", exit_code=3)
@@ -812,6 +914,7 @@ def test_policy_failed_only_decides_without_the_output(db, tmp_path, monkeypatch
     db.expire_all()
 
     assert op.log_file_path is None and not log.exists()
+    assert _agent_log_lines(db, job) == []
     assert noisy.stdout is None
     assert nonzero.stdout == "partial"
 
@@ -969,8 +1072,10 @@ def test_policy_leaves_a_log_file_a_line_reached_while_it_was_read(
         updated_at=utc_now() - timedelta(days=1),
     )
     read_file = job_history_retention._marker_in_log_file
+    read = []
 
     def read_then_a_line_arrives(path):
+        read.append(path)
         marker = read_file(path)
         db.query(AgentJob).filter(AgentJob.id == job.id).update(
             {AgentJob.updated_at: utc_now()}
@@ -984,6 +1089,7 @@ def test_policy_leaves_a_log_file_a_line_reached_while_it_was_read(
 
     results = run_retention(db, settings)
 
+    assert read == [str(log)]
     assert results["policy_operation_log_files_deleted"] == 0
     assert log.exists()
 
@@ -2646,15 +2752,19 @@ class TestPolicyKeepsShownLogsOnPostgres:
     def test_detail_output(self, pg):
         _detail_output_scenario(pg)
 
-    def test_agent_lines_of_a_backup_that_failed_before_the_purge(
-        self, pg, tmp_path, monkeypatch
+    @pytest.mark.parametrize("column, value", _BACKUP_CHANGES)
+    def test_agent_lines_of_a_backup_that_changed_before_the_purge(
+        self, pg, tmp_path, monkeypatch, column, value
     ):
-        _backup_fails_before_the_purge_scenario(pg, tmp_path, monkeypatch)
+        _backup_changes_before_the_purge_scenario(
+            pg, tmp_path, monkeypatch, column, value
+        )
 
-    def test_agent_lines_of_a_backup_that_failed_as_the_delete_starts(
-        self, pg, tmp_path
+    @pytest.mark.parametrize("column, value", _BACKUP_CHANGES)
+    def test_agent_lines_of_a_backup_that_changed_as_the_delete_starts(
+        self, pg, tmp_path, column, value
     ):
-        _backup_fails_as_the_delete_starts_scenario(pg, tmp_path)
+        _backup_changes_as_the_delete_starts_scenario(pg, tmp_path, column, value)
 
     def test_a_backup_cannot_change_while_its_agent_lines_are_deleted(
         self, pg, tmp_path

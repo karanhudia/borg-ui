@@ -833,6 +833,20 @@ def _policy_reads_text(policy: str, status: str) -> bool:
 _NOT_READ = object()
 
 
+def _operations_with_open_outcome() -> set:
+    """The ids of operations whose row may not show their outcome yet. An
+    agent backup reads `completed` while its post-backup hooks run, and a
+    hook that fails makes it `failed` after all: its logs are not the
+    policy's to drop before that is known.
+
+    Asked after a batch's rows are read: an operation the runner does not
+    name then has its outcome committed, and the delete, which asks for the
+    status again, sees it."""
+    from app.services.operations.runner import operation_runner
+
+    return operation_runner.operations_with_open_outcome()
+
+
 def _marker_in(db: Session, *columns):
     """SQL: a warning marker one of the text columns contains, or NULL. The
     database searches, so the pass does not load every candidate's output.
@@ -888,7 +902,7 @@ def purge_policy_agent_job_logs(db: Session, policy: str, discarded: tuple) -> i
     operation, for that operation, whose status can differ (a backup that
     failed in a hook after its Borg run completed). A job whose lines may
     still be arriving waits for a later pass, so the answer is given on the
-    whole transcript.
+    whole transcript. So does a job whose operation's outcome is still open.
 
     The answer can go stale before the delete: a line arrives, or a hook
     fails the backup. The delete therefore repeats what the answer was given
@@ -908,21 +922,28 @@ def purge_policy_agent_job_logs(db: Session, policy: str, discarded: tuple) -> i
         .outerjoin(Operation, Operation.id == AgentJob.operation_id)
         .filter(AgentJob.status.in_(discarded), settled, has_lines)
     )
+    # Under failed_only no text changes an answer, and no line is searched.
+    reads_text = any(_policy_reads_text(policy, status) for status in discarded)
     total = 0
     # A kept job still matches the filter, so the walk moves on by id.
     for jobs in _id_batches(candidates, AgentJob.id):
-        markers = dict(
-            db.query(
-                AgentJobLog.agent_job_id,
-                func.min(_marker_in(db, AgentJobLog.message)),
+        markers = {}
+        if reads_text:
+            markers = dict(
+                db.query(
+                    AgentJobLog.agent_job_id,
+                    func.min(_marker_in(db, AgentJobLog.message)),
+                )
+                .filter(AgentJobLog.agent_job_id.in_([job.id for job in jobs]))
+                .group_by(AgentJobLog.agent_job_id)
+                .all()
             )
-            .filter(AgentJobLog.agent_job_id.in_([job.id for job in jobs]))
-            .group_by(AgentJobLog.agent_job_id)
-            .all()
-        )
+        open_outcome = _operations_with_open_outcome()
         # The dropped jobs, by what the answer read of their operation.
         dropped: dict = {}
         for job in jobs:
+            if job.operation_id in open_outcome:
+                continue
             output = [job.error_message, markers.get(job.id)]
             if _policy_shows(policy, job.status, output):
                 continue
@@ -1068,7 +1089,8 @@ def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple)
     read here too, but only for a status whose answer the text can change:
     under failed_only no file is opened. A file that cannot be read is left
     for a later pass: a failed read says nothing about what the log holds.
-    So is the file an agent's late log lines may still be reaching."""
+    So is the file an agent's late log lines may still be reaching, and the
+    file of an operation whose outcome is still open."""
     text_decides = {status: _policy_reads_text(policy, status) for status in discarded}
     candidates = db.query(
         Operation.id,
@@ -1112,9 +1134,10 @@ def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple)
         # Asked once the files are read, with the cutoff from before: a line
         # that arrived meanwhile touched its agent job, however long the
         # batch took.
-        receiving = _operations_receiving_log_lines(db, settled_at)
+        waiting = _operations_receiving_log_lines(db, settled_at)
+        waiting |= _operations_with_open_outcome()
         dropped = [
-            operation_id for operation_id in dropped if operation_id not in receiving
+            operation_id for operation_id in dropped if operation_id not in waiting
         ]
         if dropped:
             # The status again: an operation whose outcome changed while the
