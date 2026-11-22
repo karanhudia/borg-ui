@@ -33,6 +33,7 @@ from sqlalchemy.pool import NullPool, QueuePool
 
 import app.api.schedule as schedule_api
 import app.services.backup_plan_execution_service as plan_service
+import app.services.check_scheduler as check_scheduler
 import app.services.restore_check_scheduler as restore_check_scheduler
 import app.services.schedule_availability as schedule_availability
 from app.database.database import Base, register_utc_session_timezone
@@ -1153,12 +1154,12 @@ async def test_two_passes_at_once_dispatch_a_schedule_once(
     dispatches: list[int] = []
     real = schedule_api._dispatch_due_scheduled_job
 
-    def held_first(db, job, now, launches=None):
+    def held_first(db, job, now, launches=None, **kwargs):
         dispatches.append(job.id)
         if len(dispatches) == 1:
             first_held.set()
             assert go_on.wait(HOLD_SECONDS)
-        return real(db, job, now, launches)
+        return real(db, job, now, launches, **kwargs)
 
     monkeypatch.setattr(schedule_api, "_dispatch_due_scheduled_job", held_first)
     _both_passes_read_first(monkeypatch)
@@ -1311,9 +1312,9 @@ async def test_a_refusal_is_not_recorded_for_a_plan_moved_meanwhile(
     later = datetime(2999, 1, 1)
     real = plan_service.BackupPlanExecutionService._start_scheduled_run
 
-    async def start(self, db, plan, now):
+    async def start(self, db, plan, now, **kwargs):
         try:
-            return await real(self, db, plan, now)
+            return await real(self, db, plan, now, **kwargs)
         except ValueError:
             with database.side.connect() as connection:
                 connection.execute(
@@ -1376,7 +1377,9 @@ async def test_a_failed_dispatch_leaves_a_later_dispatch_alone(
         monkeypatch.setattr(
             schedule_api,
             "_dispatch_due_job_by_id",
-            lambda db, job_id, now, launches: dispatched_elsewhere(db, None, now),
+            lambda db, job_id, now, launches, probed=None: dispatched_elsewhere(
+                db, None, now
+            ),
         )
         await schedule_api.dispatch_due_scheduled_backups(db, datetime.utcnow())
         await asyncio.sleep(0)
@@ -1454,12 +1457,12 @@ async def test_two_passes_at_once_keep_to_the_scheduled_backup_limit(
     dispatches: list[int] = []
     real = schedule_api._dispatch_due_scheduled_job
 
-    def held_first(db, job, now, launches=None):
+    def held_first(db, job, now, launches=None, **kwargs):
         dispatches.append(job.id)
         if len(dispatches) == 1:
             first_held.set()
             assert go_on.wait(HOLD_SECONDS)
-        return real(db, job, now, launches)
+        return real(db, job, now, launches, **kwargs)
 
     monkeypatch.setattr(schedule_api, "_dispatch_due_scheduled_job", held_first)
     _both_passes_read_first(monkeypatch)
@@ -1724,6 +1727,15 @@ async def test_a_failed_notification_preparation_ends_its_read_in_its_thread(
         assert database.engine.pool.checkedout() == 0
 
 
+def _first_lock_of_a_check_start(kind: str) -> tuple:
+    """The scheduler's module and the first lock its start of one check takes:
+    an edit made right before it lands between the select and the start (on
+    SQLite, the capacity lock of the checks is the database's write lock)."""
+    if kind == "check":
+        return check_scheduler, "lock_backup_capacity_scope"
+    return restore_check_scheduler, "lock_repository_scope"
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize("kind", ["check", "restore_check"])
 @pytest.mark.parametrize("change", ["switched-off", "moved"])
@@ -1734,8 +1746,6 @@ async def test_a_check_schedule_changed_after_the_select_is_left_alone(
     repository's lock. A request (on the loop, beside the pass's thread) may
     switch the schedule off or move it in between: the start reads the row
     again under the lock, queues nothing, and leaves the new values."""
-    import app.services.check_scheduler as check_scheduler
-
     _settings(database)
     now = datetime.utcnow()
     columns = (
@@ -1760,19 +1770,19 @@ async def test_a_check_schedule_changed_after_the_select_is_left_alone(
         if change == "switched-off"
         else f"UPDATE repositories SET next_scheduled_{prefix}check = :later WHERE id = :id"
     )
-    module = check_scheduler if kind == "check" else restore_check_scheduler
-    real = module.lock_repository_scope
+    module, first_lock = _first_lock_of_a_check_start(kind)
+    real = getattr(module, first_lock)
     edited: list[bool] = []
 
-    def edit_then_lock(db, repository):
+    def edit_then_lock(db, *args):
         if not edited:
             with database.side.connect() as connection:
                 connection.execute(text(edit), {"id": repository_id, "later": later})
                 connection.commit()
             edited.append(True)
-        return real(db, repository)
+        return real(db, *args)
 
-    monkeypatch.setattr(module, "lock_repository_scope", edit_then_lock)
+    monkeypatch.setattr(module, first_lock, edit_then_lock)
 
     await _one_pass(monkeypatch)
 
@@ -1794,8 +1804,6 @@ async def test_a_skipped_and_a_deleted_repository_leave_the_next_one_due(
     """Three repositories are selected. The first is switched off before
     its lock (its start rolls back), the second is deleted meanwhile; the
     third is still started."""
-    import app.services.check_scheduler as check_scheduler
-
     _settings(database)
     now = datetime.utcnow()
     columns = (
@@ -1817,11 +1825,11 @@ async def test_a_skipped_and_a_deleted_repository_leave_the_next_one_due(
         *(_repository(name, **columns) for name in ("first", "second", "third")),
     )
     prefix = "" if kind == "check" else "restore_"
-    module = check_scheduler if kind == "check" else restore_check_scheduler
-    real = module.lock_repository_scope
+    module, first_lock = _first_lock_of_a_check_start(kind)
+    real = getattr(module, first_lock)
     edited: list[bool] = []
 
-    def edit_then_lock(db, repository):
+    def edit_then_lock(db, *args):
         if not edited:
             with database.side.connect() as connection:
                 connection.execute(
@@ -1836,9 +1844,9 @@ async def test_a_skipped_and_a_deleted_repository_leave_the_next_one_due(
                 )
                 connection.commit()
             edited.append(True)
-        return real(db, repository)
+        return real(db, *args)
 
-    monkeypatch.setattr(module, "lock_repository_scope", edit_then_lock)
+    monkeypatch.setattr(module, first_lock, edit_then_lock)
 
     await _one_pass(monkeypatch)
 
@@ -1872,3 +1880,575 @@ async def test_a_notification_whose_commit_fails_leaves_the_session_usable(
         assert not db.in_transaction()
         assert database.engine.pool.checkedout() == 0
         await prepare(db, False)  # delivery of the second one is skipped
+
+
+# --- edits and a second scheduler beside the pass -------------------------------
+
+
+def _check_columns(kind: str, now: datetime) -> dict:
+    if kind == "check":
+        return {
+            "check_cron_expression": "0 3 * * *",
+            "check_schedule_enabled": True,
+            "next_scheduled_check": now - PAST,
+        }
+    return {
+        "restore_check_cron_expression": "0 4 * * *",
+        "restore_check_schedule_enabled": True,
+        "restore_check_paths": json.dumps(["/etc/hostname"]),
+        "next_scheduled_restore_check": now - PAST,
+    }
+
+
+# --- the check and its next run in one commit ------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("kind", ["check", "restore_check"])
+async def test_a_check_schedule_edited_while_its_check_is_queued_keeps_the_edit(
+    database, monkeypatch, kind
+):
+    """The pass queues the check, then writes the schedule's next run. A
+    request that moves the schedule in between waits for the pass, and its
+    next run is not overwritten."""
+    _settings(database)
+    [repository_id] = _seed(
+        database, _repository("checked", **_check_columns(kind, datetime.utcnow()))
+    )
+    prefix = "" if kind == "check" else "restore_"
+    module = check_scheduler if kind == "check" else restore_check_scheduler
+    real = module.start_maintenance
+    later = datetime(2999, 1, 1)
+    edited = threading.Event()
+    editors: list[threading.Thread] = []
+
+    def edit() -> None:
+        with database() as session:
+            session.execute(
+                text(
+                    f"UPDATE repositories SET next_scheduled_{prefix}check = :later "
+                    "WHERE id = :id"
+                ),
+                {"later": later, "id": repository_id},
+            )
+            session.commit()
+        edited.set()
+
+    def start_then_edit(db, repository, *args, **kwargs):
+        operation = real(db, repository, *args, **kwargs)
+        editor = threading.Thread(target=edit)
+        editor.start()
+        editors.append(editor)
+        # a request beside the pass gets a second to land its edit before
+        # the pass writes the next run
+        edited.wait(1)
+        return operation
+
+    monkeypatch.setattr(module, "start_maintenance", start_then_edit)
+
+    await _one_pass(monkeypatch)
+    for editor in editors:
+        await asyncio.to_thread(editor.join, HOLD_SECONDS)
+
+    assert edited.is_set()
+    assert _operations(database) == {(kind, repository_id)}
+    with database() as session:
+        repository = session.get(Repository, repository_id)
+        assert getattr(repository, f"next_scheduled_{prefix}check") == later
+
+
+# --- check capacity across two passes ---------------------------------------
+
+
+@pytest.mark.unit
+async def test_two_check_passes_at_once_keep_to_the_scheduled_check_limit(
+    database, monkeypatch
+):
+    """One check slot is free and two repositories are due. Both passes
+    count one free slot before either starts a check."""
+    _seed(
+        database,
+        SystemSettings(
+            max_concurrent_scheduled_backups=10, max_concurrent_scheduled_checks=1
+        ),
+    )
+    now = datetime.utcnow()
+    _seed(
+        database,
+        *(_repository(name, **_check_columns("check", now)) for name in ("a", "b")),
+    )
+    both_counted = threading.Barrier(2, timeout=HOLD_SECONDS)
+    counted: set[int] = set()
+    real = check_scheduler.count_active_scheduled_check_jobs
+
+    def count(db, at):
+        active = real(db, at)
+        if id(db) not in counted:
+            counted.add(id(db))
+            both_counted.wait()
+        return active
+
+    monkeypatch.setattr(check_scheduler, "count_active_scheduled_check_jobs", count)
+    with database() as one, database() as two:
+        await asyncio.wait_for(
+            asyncio.gather(
+                check_scheduler.run_due_scheduled_checks(one, now),
+                check_scheduler.run_due_scheduled_checks(two, now),
+            ),
+            HOLD_SECONDS * 4,
+        )
+
+    assert len(_operations(database)) == 1
+
+
+# --- a probe's result and the sources it probed -----------------------------
+
+
+def _ssh_connections(db) -> tuple[int, int]:
+    up, down = _seed(
+        db,
+        SSHConnection(host="up.invalid", username="u", port=22),
+        SSHConnection(host="down.invalid", username="u", port=22),
+    )
+    return up, down
+
+
+@pytest.mark.unit
+async def test_a_schedule_whose_repositories_change_while_probed_starts_nothing_unprobed(
+    database, monkeypatch, launches
+):
+    """The schedule's repository is probed and reachable. Meanwhile it is
+    replaced by one whose source is down: nothing starts on the old probe."""
+    _settings(database)
+    up, down = _ssh_connections(database)
+    probed, swapped_in = _seed(
+        database,
+        _repository("probed", source_ssh_connection_id=up),
+        _repository("swapped-in", source_ssh_connection_id=down),
+    )
+    job_id = _availability_job(database, probed)
+    swapped: list[bool] = []
+
+    def probe(address) -> bool:
+        if not swapped:
+            with database.side.connect() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE scheduled_job_repositories SET repository_id = :new "
+                        "WHERE scheduled_job_id = :job"
+                    ),
+                    {"new": swapped_in, "job": job_id},
+                )
+                connection.commit()
+            swapped.append(True)
+        return address.host == "up.invalid"
+
+    monkeypatch.setattr(schedule_availability, "_ssh_reachable", probe)
+    with database() as db:
+        await schedule_api.dispatch_due_scheduled_backups(db, datetime.utcnow())
+    await asyncio.sleep(0)
+
+    assert swapped == [True]
+    assert launches == []
+
+
+@pytest.mark.unit
+@pytest.mark.skipif(not POSTGRES_URL, reason="BORG_TEST_POSTGRES_URL is not set")
+async def test_a_schedule_whose_repository_moves_during_its_admission_starts_nothing(
+    launches, monkeypatch
+):
+    """PostgreSQL. The schedule's repository is probed and reachable. An
+    edit moving it to a source that is down holds the repository's row when
+    the dispatch reaches its admission, and commits after: the admission
+    waits for it, and nothing starts on the old probe."""
+    with _postgres_engines() as (engine, side):
+        database = Database("postgresql", engine, side)
+        monkeypatch.setattr(schedule_api, "SessionLocal", database.sessions)
+        _settings(database)
+        up, down = _ssh_connections(database)
+        [repository_id] = _seed(
+            database, _repository("probed", source_ssh_connection_id=up)
+        )
+        _availability_job(database, repository_id)
+        editing = threading.Event()
+        editors: list[threading.Thread] = []
+
+        def edit() -> None:
+            with side.connect() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE repositories SET source_ssh_connection_id = :down "
+                        "WHERE id = :id"
+                    ),
+                    {"down": down, "id": repository_id},
+                )
+                editing.set()
+                threading.Event().wait(0.5)  # the dispatch reaches its lock
+                connection.commit()
+
+        real = schedule_api.ensure_repository_admission
+
+        def admission(db, repository, *args, **kwargs):
+            if not editors:
+                editor = threading.Thread(target=edit)
+                editor.start()
+                editors.append(editor)
+                assert editing.wait(HOLD_SECONDS)
+            return real(db, repository, *args, **kwargs)
+
+        monkeypatch.setattr(
+            schedule_availability,
+            "_ssh_reachable",
+            lambda address: address.host == "up.invalid",
+        )
+        monkeypatch.setattr(schedule_api, "ensure_repository_admission", admission)
+        with database() as db:
+            await schedule_api.dispatch_due_scheduled_backups(db, datetime.utcnow())
+        await asyncio.sleep(0)
+        for editor in editors:
+            await asyncio.to_thread(editor.join, HOLD_SECONDS)
+
+    assert len(editors) == 1
+    assert launches == []
+
+
+@pytest.mark.unit
+@pytest.mark.skipif(not POSTGRES_URL, reason="BORG_TEST_POSTGRES_URL is not set")
+async def test_a_scheduled_backup_records_the_source_committed_during_its_admission(
+    launches, monkeypatch
+):
+    """PostgreSQL. An edit giving the repository another source connection
+    holds the repository's row when the dispatch reaches its admission, and
+    commits after: the queued backup records the new connection."""
+    with _postgres_engines() as (engine, side):
+        database = Database("postgresql", engine, side)
+        monkeypatch.setattr(schedule_api, "SessionLocal", database.sessions)
+        _settings(database)
+        old, new = _seed(
+            database,
+            SSHConnection(host="source.invalid", username="u", port=22),
+            SSHConnection(host="source.invalid", username="u", port=22),
+        )
+        [repository_id] = _seed(
+            database, _repository("edited", source_ssh_connection_id=old)
+        )
+        _seed(
+            database,
+            ScheduledJob(
+                name="single schedule",
+                cron_expression="0 2 * * *",
+                enabled=True,
+                repository_id=repository_id,
+                next_run=datetime.utcnow() - PAST,
+            ),
+        )
+        editing = threading.Event()
+        editors: list[threading.Thread] = []
+
+        def edit() -> None:
+            with side.connect() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE repositories SET source_ssh_connection_id = :new "
+                        "WHERE id = :id"
+                    ),
+                    {"new": new, "id": repository_id},
+                )
+                editing.set()
+                threading.Event().wait(0.5)  # the dispatch reaches its lock
+                connection.commit()
+
+        real = schedule_api.ensure_repository_admission
+
+        def admission(db, repository, *args, **kwargs):
+            if not editors:
+                editor = threading.Thread(target=edit)
+                editor.start()
+                editors.append(editor)
+                assert editing.wait(HOLD_SECONDS)
+            return real(db, repository, *args, **kwargs)
+
+        monkeypatch.setattr(schedule_api, "ensure_repository_admission", admission)
+        with database() as db:
+            await schedule_api.dispatch_due_scheduled_backups(db, datetime.utcnow())
+        await asyncio.sleep(0)
+        for editor in editors:
+            await asyncio.to_thread(editor.join, HOLD_SECONDS)
+        with database() as session:
+            from app.services.operations.backup_facade import BackupJobFacade
+
+            [operation] = session.query(Operation).all()
+            recorded = BackupJobFacade(session, operation).source_ssh_connection_id
+
+    assert len(editors) == 1
+    assert recorded == new
+
+
+@pytest.mark.unit
+async def test_a_plan_whose_source_changes_while_probed_starts_no_run(
+    database, monkeypatch, launches
+):
+    """The plan's source is probed and reachable. Meanwhile the plan is moved
+    to a source that is down: no run starts on the old probe."""
+    _settings(database)
+    up, down = _ssh_connections(database)
+    [repository_id] = _seed(database, _repository("planned"))
+    plan_id = _plan(
+        database,
+        repository_id,
+        name="availability plan",
+        cron_expression=None,
+        schedule_mode="availability",
+        source_type="remote",
+        source_ssh_connection_id=up,
+    )
+    moved: list[bool] = []
+
+    def probe(address) -> bool:
+        if not moved:
+            with database.side.connect() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE backup_plans SET source_ssh_connection_id = :down "
+                        "WHERE id = :plan"
+                    ),
+                    {"down": down, "plan": plan_id},
+                )
+                connection.commit()
+            moved.append(True)
+        return address.host == "up.invalid"
+
+    monkeypatch.setattr(schedule_availability, "_ssh_reachable", probe)
+    with database() as db:
+        await backup_plan_execution_service.dispatch_due_runs(db, datetime.utcnow())
+    await asyncio.sleep(0)
+
+    assert moved == [True]
+    assert [launch for launch in launches if launch[0] == "plan"] == []
+
+
+# --- a schedule's minimum interval at dispatch ------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("during", ["probe", "admission"])
+async def test_a_schedule_whose_backup_succeeds_meanwhile_waits_its_interval(
+    database, monkeypatch, launches, during
+):
+    """The minimum interval after the last success has passed when the pass
+    screens the schedule. A backup of it (a run-now) succeeds while its
+    source is probed, or while the dispatch waits for the repository's
+    admission: the scheduled one does not start right after it."""
+    if during == "admission" and database.kind == "sqlite":
+        pytest.skip("the dispatch holds SQLite's write lock: nothing lands")
+    _settings(database)
+    up, _down = _ssh_connections(database)
+    [repository_id] = _seed(
+        database, _repository("available", source_ssh_connection_id=up)
+    )
+    job_id = _availability_job(database, repository_id, min_success_interval_minutes=60)
+    succeeded: list[bool] = []
+
+    def succeed() -> None:
+        if not succeeded:
+            _recent_success(database, repository_id, scheduled_job_id=job_id)
+            succeeded.append(True)
+
+    def probe(address) -> bool:
+        if during == "probe":
+            succeed()
+        return True
+
+    real = schedule_api.ensure_repository_admission
+
+    def admission(db, repository, *args, **kwargs):
+        if during == "admission":
+            succeed()
+        return real(db, repository, *args, **kwargs)
+
+    monkeypatch.setattr(schedule_availability, "_ssh_reachable", probe)
+    monkeypatch.setattr(schedule_api, "ensure_repository_admission", admission)
+    with database() as db:
+        await schedule_api.dispatch_due_scheduled_backups(db, datetime.utcnow())
+    await asyncio.sleep(0)
+
+    assert succeeded == [True]
+    assert launches == []
+
+
+# --- the report window ------------------------------------------------------
+
+
+@pytest.mark.unit
+async def test_a_report_is_sent_once_by_two_overlapping_schedulers(
+    database, monkeypatch
+):
+    """A second scheduler looks at the report while the first one is sending
+    it (a slow endpoint): it finds the report not due, and sends nothing."""
+    from app.services import backup_monitoring_service as monitoring
+
+    _settings(database, backup_reports_enabled=True, backup_reports_frequency="daily")
+    sent: list[str] = []
+    second: list[dict] = []
+
+    async def send(db, *args, **kwargs) -> None:
+        sent.append("report")
+        if len(sent) == 1:
+            with database() as other:
+                second.append(
+                    await monitoring.send_backup_report_now(
+                        other, datetime.utcnow(), force=False
+                    )
+                )
+
+    monkeypatch.setattr(NotificationService, "send_backup_report", send)
+    with database() as db:
+        first = await monitoring.send_backup_report_now(
+            db, datetime.utcnow(), force=False
+        )
+
+    assert first["sent"] is True
+    assert sent == ["report"]
+    assert second == [{"sent": False, "reason": "not_due", "repository_count": 0}]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("ends", ["fails", "stopped"])
+async def test_a_report_that_is_not_sent_is_tried_again(database, monkeypatch, ends):
+    """The report's window is recorded before it is sent. When the send
+    fails, or the scheduler is stopped (cancelled) before the report went
+    out, the window counts as not sent, and the next pass tries again."""
+    from app.services import backup_monitoring_service as monitoring
+
+    _settings(database, backup_reports_enabled=True, backup_reports_frequency="daily")
+    sent: list[str] = []
+
+    async def fails(db, *args, **kwargs) -> None:
+        # a failed statement in the session's transaction, as a send that
+        # hits a timeout leaves it: aborted, on PostgreSQL
+        def failing_statement() -> None:
+            db.execute(text("SELECT * FROM no_such_table"))
+
+        await asyncio.to_thread(failing_statement)
+
+    async def stopped(db, *args, **kwargs) -> None:
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(
+        NotificationService,
+        "send_backup_report",
+        fails if ends == "fails" else stopped,
+    )
+    with database() as db:
+        with pytest.raises(BaseException):
+            await monitoring.send_backup_report_now(db, datetime.utcnow(), force=False)
+    with database() as session:
+        assert session.query(SystemSettings).one().backup_reports_last_sent_at is None
+
+    async def send(db, *args, **kwargs) -> None:
+        sent.append("report")
+
+    monkeypatch.setattr(NotificationService, "send_backup_report", send)
+    with database() as db:
+        result = await monitoring.send_backup_report_now(
+            db, datetime.utcnow(), force=False
+        )
+
+    assert result["sent"] is True
+    assert sent == ["report"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("kind", ["check", "restore_check"])
+async def test_a_scheduled_check_wakes_the_runner_once_it_is_committed(
+    database, monkeypatch, kind
+):
+    """The check is queued in the pass's transaction, without a commit of
+    its own: the pass wakes the runner after its commit, when the runner can
+    find the check."""
+    _settings(database)
+    [repository_id] = _seed(
+        database, _repository("checked", **_check_columns(kind, datetime.utcnow()))
+    )
+    module = check_scheduler if kind == "check" else restore_check_scheduler
+    seen: list[set] = []
+    monkeypatch.setattr(
+        module, "wake_runner", lambda: seen.append(_operations(database))
+    )
+
+    await _one_pass(monkeypatch)
+
+    assert seen == [{(kind, repository_id)}]
+
+
+@pytest.mark.unit
+async def test_a_report_sent_by_hand_keeps_a_later_claimed_window(
+    database, monkeypatch
+):
+    """A report sent by hand finishes after a scheduler has claimed a later
+    window: the window is not moved back, and is not sent again."""
+    from app.services import backup_monitoring_service as monitoring
+
+    claimed_at = datetime.utcnow()
+    _settings(
+        database,
+        backup_reports_enabled=True,
+        backup_reports_frequency="daily",
+        backup_reports_last_sent_at=claimed_at,
+    )
+
+    async def send(db, *args, **kwargs) -> None:
+        pass
+
+    monkeypatch.setattr(NotificationService, "send_backup_report", send)
+    with database() as db:
+        result = await monitoring.send_backup_report_now(
+            db, claimed_at - timedelta(minutes=1), force=True
+        )
+
+    assert result["sent"] is True
+    with database() as session:
+        settings = session.query(SystemSettings).one()
+        assert settings.backup_reports_last_sent_at >= claimed_at
+
+
+@pytest.mark.unit
+async def test_a_report_sent_by_hand_serves_a_window_whose_scheduled_send_fails(
+    database, monkeypatch
+):
+    """A report sent by hand starts before a scheduler claims the window and
+    finishes while the scheduler sends; then the scheduler's send fails. The
+    window was served by the report sent by hand: it is not sent again."""
+    from app.services import backup_monitoring_service as monitoring
+
+    _settings(database, backup_reports_enabled=True, backup_reports_frequency="daily")
+    claimed_at = datetime.utcnow()
+    sent: list[str] = []
+
+    async def by_hand(db, *args, **kwargs) -> None:
+        sent.append("by hand")
+
+    async def scheduled_fails(db, *args, **kwargs) -> None:
+        monkeypatch.setattr(NotificationService, "send_backup_report", by_hand)
+        with database() as other:
+            await monitoring.send_backup_report_now(
+                other, claimed_at - timedelta(minutes=1), force=True
+            )
+        raise RuntimeError("the endpoint is down")
+
+    monkeypatch.setattr(NotificationService, "send_backup_report", scheduled_fails)
+    with database() as db:
+        with pytest.raises(RuntimeError):
+            await monitoring.send_backup_report_now(db, claimed_at, force=False)
+
+    async def again(db, *args, **kwargs) -> None:
+        sent.append("again")
+
+    monkeypatch.setattr(NotificationService, "send_backup_report", again)
+    with database() as db:
+        result = await monitoring.send_backup_report_now(
+            db, datetime.utcnow(), force=False
+        )
+
+    assert result == {"sent": False, "reason": "not_due", "repository_count": 0}
+    assert sent == ["by hand"]

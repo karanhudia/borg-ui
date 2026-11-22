@@ -26,6 +26,10 @@ MAX_MIN_SUCCESS_INTERVAL_MINUTES = 365 * 24 * 60
 class AvailabilityDecision:
     available: bool
     reason: str | None = None
+    # The sources the decision is about, as `repository_probe_targets` and
+    # `location_probe_targets` give them: a start compares them with the
+    # sources it would use by then, which may have changed during the probe.
+    targets: tuple = ()
 
 
 def validate_availability_intervals(
@@ -70,8 +74,17 @@ def _ssh_reachable(connection: SSHAddress) -> bool:
 # takes seconds, and the session would hold its pooled connection meanwhile.
 
 
+# The rows are read with `populate_existing`: a caller comparing the targets
+# within a transaction that loaded them before (under a lock it took since)
+# must see what is committed now, not what its session loaded.
+
+
 def _ssh_address(db: Session, connection_id) -> SSHAddress | None:
-    connection = db.get(SSHConnection, int(connection_id)) if connection_id else None
+    connection = (
+        db.get(SSHConnection, int(connection_id), populate_existing=True)
+        if connection_id
+        else None
+    )
     if connection is None:
         return None
     return SSHAddress(connection.host, connection.port)
@@ -80,7 +93,7 @@ def _ssh_address(db: Session, connection_id) -> SSHAddress | None:
 def _repository_probes(db: Session, repository_ids: list[int]) -> list[tuple]:
     probes = []
     for repository_id in repository_ids:
-        repository = db.get(Repository, repository_id)
+        repository = db.get(Repository, repository_id, populate_existing=True)
         if repository is None:
             continue  # deleted since it was selected: nothing to probe
         if repository.agent_machine_id is not None:
@@ -121,15 +134,59 @@ def _location_probes(db: Session, locations: list[dict]) -> list[tuple]:
     return probes
 
 
+def _targets(probes: list[tuple]) -> tuple:
+    return tuple((kind, target) for kind, target, _reason in probes)
+
+
+def repository_probe_targets(db: Session, repository_ids: Iterable[int]) -> tuple:
+    """What `repositories_available` probes for these repositories, read now
+    in the caller's transaction."""
+    return _targets(_repository_probes(db, list(repository_ids)))
+
+
+def _with_fallback(
+    locations: Iterable[dict],
+    fallback_source_type: str,
+    fallback_ssh_connection_id: int | None,
+) -> list[dict]:
+    locations = list(locations)
+    if locations:
+        return locations
+    return [
+        {
+            "source_type": fallback_source_type,
+            "source_ssh_connection_id": fallback_ssh_connection_id,
+        }
+    ]
+
+
+def location_probe_targets(
+    db: Session,
+    locations: Iterable[dict],
+    *,
+    fallback_source_type: str = "local",
+    fallback_ssh_connection_id: int | None = None,
+) -> tuple:
+    """What `source_locations_available` probes for these locations, read
+    now in the caller's transaction."""
+    return _targets(
+        _location_probes(
+            db,
+            _with_fallback(locations, fallback_source_type, fallback_ssh_connection_id),
+        )
+    )
+
+
 async def _probes_available(probes: list[tuple]) -> AvailabilityDecision:
     """The first unavailable source decides, in the order given."""
+    targets = _targets(probes)
     for kind, target, reason in probes:
         if kind == "agent":
             if target is None or not agent_connection_manager.is_connected(int(target)):
-                return AvailabilityDecision(False, reason)
+                return AvailabilityDecision(False, reason, targets)
         elif target is None or not await asyncio.to_thread(_ssh_reachable, target):
-            return AvailabilityDecision(False, reason)
-    return AvailabilityDecision(True)
+            return AvailabilityDecision(False, reason, targets)
+    return AvailabilityDecision(True, targets=targets)
 
 
 async def repositories_available(
@@ -152,13 +209,8 @@ async def source_locations_available(
     fallback_ssh_connection_id: int | None = None,
 ) -> AvailabilityDecision:
     """Check plan source locations, falling back to the plan's legacy source fields."""
-    locations = list(locations)
-    if not locations:
-        locations = [
-            {
-                "source_type": fallback_source_type,
-                "source_ssh_connection_id": fallback_ssh_connection_id,
-            }
-        ]
+    locations = _with_fallback(
+        locations, fallback_source_type, fallback_ssh_connection_id
+    )
     probes = await run_transaction_off_loop(db, _location_probes, db, locations)
     return await _probes_available(probes)

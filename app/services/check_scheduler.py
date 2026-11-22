@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.database.database import run_transaction_off_loop
 from app.database.models import Operation, Repository, SystemSettings
-from app.services.job_admission import lock_repository_scope
+from app.services.job_admission import (
+    lock_backup_capacity_scope,
+    lock_repository_scope,
+)
+from app.services.operations.enqueue import wake_runner
 from app.services.operations.maintenance_start import start_maintenance
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -125,6 +129,17 @@ def _start_due_scheduled_checks(db: Session, now: datetime) -> None:
             repo = db.get(Repository, repo_id)
             if repo is None:
                 continue
+            # Counted again under the capacity lock, held to the commit: a
+            # second pass (a process being replaced runs one until it is
+            # stopped) may have started a check since this one counted.
+            lock_backup_capacity_scope(db)
+            if count_active_scheduled_check_jobs(db, now) >= max_scheduled_checks:
+                db.rollback()
+                logger.info(
+                    "Scheduled check capacity reached",
+                    limit=max_scheduled_checks,
+                )
+                break
             # Decided on the row under the repository's lock: the schedule
             # may have been switched off or moved since it was selected (the
             # pass runs in a thread, beside the requests that edit it).
@@ -149,6 +164,9 @@ def _start_due_scheduled_checks(db: Session, now: datetime) -> None:
                 },
                 user_id=None,
                 duplicate_error_key="backend.errors.repo.checkAlreadyRunning",
+                # committed below with the next run, under the repository's
+                # lock: an edit of the schedule waits for both
+                commit=False,
             )
 
             logger.info(
@@ -178,6 +196,7 @@ def _start_due_scheduled_checks(db: Session, now: datetime) -> None:
                 repo.next_scheduled_check = None
 
             db.commit()
+            wake_runner()  # the queued check is committed only now
 
             logger.info(
                 "Updated check schedule",

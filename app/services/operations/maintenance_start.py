@@ -56,7 +56,11 @@ def start_maintenance(
     duplicate_error_key: str,
     scheduled_job_id: Optional[int] = None,
     backup_plan_run_id: Optional[int] = None,
+    commit: bool = True,
 ) -> Operation:
+    """Queue the maintenance operation. With `commit=False` the row is only
+    flushed: the caller commits it together with its own writes, keeps the
+    repository's lock until then, and wakes the runner after its commit."""
     if kind not in MAINTENANCE_KINDS:
         raise ValueError(f"Not a maintenance kind: {kind!r}")
     # Two starts of one kind decide one after the other: the second finds the
@@ -76,6 +80,7 @@ def start_maintenance(
         triggered_by_user_id=user_id,
         scheduled_job_id=scheduled_job_id,
         backup_plan_run_id=backup_plan_run_id,
+        commit=commit,
     )
 
 
