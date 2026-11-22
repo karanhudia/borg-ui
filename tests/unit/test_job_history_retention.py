@@ -338,6 +338,14 @@ def test_policy_failed_only_also_drops_warning_logs(db):
 
 POLICY = "failed_and_warnings"
 
+# What makes a backup show its log after the pass has read its row: a hook
+# that fails it, or an error message with a marker on a row that stays
+# `completed`.
+_BACKUP_CHANGES = [
+    ("status", "failed"),
+    ("error_message", "Warning: snapshot changed"),
+]
+
 
 @pytest.fixture(autouse=True)
 def _no_operation_at_work(monkeypatch):
@@ -615,8 +623,9 @@ def test_policy_keeps_a_backup_log_file_its_agent_log_lines_show(db, tmp_path):
 
 
 @pytest.mark.unit
-def test_policy_leaves_a_log_file_whose_operation_failed_while_it_was_read(
-    db, tmp_path, monkeypatch
+@pytest.mark.parametrize("column, value", _BACKUP_CHANGES)
+def test_policy_leaves_a_log_file_whose_operation_changed_while_it_was_read(
+    db, tmp_path, monkeypatch, column, value
 ):
     from app.services import job_history_retention
 
@@ -624,16 +633,14 @@ def test_policy_leaves_a_log_file_whose_operation_failed_while_it_was_read(
     op, log = _operation_with_log(db, tmp_path, "backup", "Archive name: a")
     read_file = job_history_retention._marker_in_log_file
 
-    def read_then_the_operation_fails(path):
+    def read_then_the_operation_changes(path):
         marker = read_file(path)
-        db.query(Operation).filter(Operation.id == op.id).update(
-            {Operation.status: "failed"}
-        )
+        db.query(Operation).filter(Operation.id == op.id).update({column: value})
         db.commit()
         return marker
 
     monkeypatch.setattr(
-        job_history_retention, "_marker_in_log_file", read_then_the_operation_fails
+        job_history_retention, "_marker_in_log_file", read_then_the_operation_changes
     )
 
     results = run_retention(db, settings)
@@ -667,15 +674,6 @@ def _purge_policy_agent_lines(db):
     )
     db.expire_all()
     return deleted
-
-
-# What makes a backup show its log after the pass has read its row: a hook
-# that fails it, or an error message with a marker on a row that stays
-# `completed`.
-_BACKUP_CHANGES = [
-    ("status", "failed"),
-    ("error_message", "Warning: snapshot changed"),
-]
 
 
 def _backup_changes_before_the_purge_scenario(db, tmp_path, monkeypatch, column, value):
@@ -763,23 +761,24 @@ def test_policy_leaves_agent_lines_whose_backup_changed_as_the_delete_starts(
 
 
 @pytest.mark.unit
-def test_policy_leaves_a_log_file_whose_operation_failed_as_its_path_is_cleared(
-    db, tmp_path
+@pytest.mark.parametrize("column, value", _BACKUP_CHANGES)
+def test_policy_leaves_a_log_file_whose_operation_changed_as_its_path_is_cleared(
+    db, tmp_path, column, value
 ):
     settings = _settings(db, log_save_policy=POLICY)
     op, log = _operation_with_log(db, tmp_path, "backup", "Archive name: a")
     op_id = op.id
-    failed = []
+    changed = []
 
-    def the_backup_fails(conn):
+    def the_backup_changes(conn):
         conn.execute(
-            text("UPDATE operations SET status = 'failed' WHERE id = :id"),
-            {"id": op_id},
+            text(f"UPDATE operations SET {column} = :value WHERE id = :id"),
+            {"value": value, "id": op_id},
         )
-        failed.append(op_id)
+        changed.append(op_id)
 
     stop = _before_statement(
-        db, "UPDATE OPERATIONS SET LOG_FILE_PATH", the_backup_fails
+        db, "UPDATE OPERATIONS SET LOG_FILE_PATH", the_backup_changes
     )
     try:
         results = run_retention(db, settings)
@@ -787,9 +786,9 @@ def test_policy_leaves_a_log_file_whose_operation_failed_as_its_path_is_cleared(
         stop()
     db.expire_all()
 
-    assert failed == [op_id]
+    assert changed == [op_id]
     assert results["policy_operation_log_files_deleted"] == 0
-    assert op.status == "failed"
+    assert getattr(op, column) == value
     assert op.log_file_path == str(log) and log.exists()
 
 
@@ -897,8 +896,9 @@ def test_policy_failed_only_decides_without_the_output(db, tmp_path, monkeypatch
     monkeypatch.setattr(
         job_history_retention, "_marker_in", marker_in_anything_but_agent_lines
     )
-    job = _agent_job(db, _machine(db), "completed", age_days=1, log_lines=1)
-    _agent_log_line(db, job, 1, "warning: slow link")
+    backup, job = _backup_with_settled_agent_lines(db, tmp_path)
+    backup_log = Path(backup.log_file_path)
+    _agent_log_line(db, job, 2, "warning: slow link")
     op, log = _operation_with_log(db, tmp_path, "check", "warning: 1 orphan")
     noisy = _hook_execution(db, stdout="warning: snapshot is 3 days old")
     nonzero = _hook_execution(db, stdout="partial", exit_code=3)
@@ -914,6 +914,7 @@ def test_policy_failed_only_decides_without_the_output(db, tmp_path, monkeypatch
     db.expire_all()
 
     assert op.log_file_path is None and not log.exists()
+    assert backup.log_file_path is None and not backup_log.exists()
     assert _agent_log_lines(db, job) == []
     assert noisy.stdout is None
     assert nonzero.stdout == "partial"

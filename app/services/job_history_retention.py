@@ -1103,14 +1103,17 @@ def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple)
     total = 0
     for operations in _id_batches(candidates, Operation.id):
         settled_at = utc_now() - LATE_LOG_SETTLE
-        agent_output = _backup_agent_output(
-            db,
-            [
-                operation.id
-                for operation in operations
-                if operation.kind == "backup" and operation.execution_mode == "agent"
-            ],
-        )
+        agent_output = {}
+        if any(text_decides[operation.status] for operation in operations):
+            agent_output = _backup_agent_output(
+                db,
+                [
+                    operation.id
+                    for operation in operations
+                    if operation.kind == "backup"
+                    and operation.execution_mode == "agent"
+                ],
+            )
         # Reading the files can take a while on network storage; do not hold
         # the read transaction open meanwhile.
         db.commit()
@@ -1128,7 +1131,7 @@ def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple)
                 marker,
             ]
             if not _policy_shows(policy, operation.status, output):
-                dropped.append(operation.id)
+                dropped.append(operation)
         if not dropped:
             continue
         # Asked once the files are read, with the cutoff from before: a line
@@ -1136,15 +1139,26 @@ def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple)
         # batch took.
         waiting = _operations_receiving_log_lines(db, settled_at)
         waiting |= _operations_with_open_outcome()
-        dropped = [
-            operation_id for operation_id in dropped if operation_id not in waiting
-        ]
-        if dropped:
-            # The status again: an operation whose outcome changed while the
-            # batch was read is no candidate any more.
-            total += purge_operation_log_files(
-                db, (Operation.id.in_(dropped), Operation.status.in_(discarded))
+        # The dropped operations, by what the answer read of them.
+        as_read: dict = {}
+        for operation in dropped:
+            if operation.id in waiting:
+                continue
+            error_message = _NOT_READ
+            if text_decides[operation.status]:
+                error_message = operation.error_message
+            as_read.setdefault((operation.status, error_message), []).append(
+                operation.id
             )
+        for (status, error_message), ids in as_read.items():
+            # What the answer read, again: an operation that changed while
+            # the batch was read is left for the next pass.
+            filters = [Operation.id.in_(ids), Operation.status == status]
+            if error_message is not _NOT_READ:
+                filters.append(
+                    Operation.error_message.is_not_distinct_from(error_message)
+                )
+            total += purge_operation_log_files(db, filters)
     return total
 
 
