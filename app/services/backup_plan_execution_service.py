@@ -3274,10 +3274,7 @@ class BackupPlanExecutionService:
 
         if final_status in SUCCESS_BACKUP_STATUSES:
             if self._is_run_cancelled(run_id):
-                child.status = "cancelled"
-                child.completed_at = datetime.utcnow()
-                child.error_message = CANCELLED_MESSAGE
-                db.commit()
+                self._close_repository_as_cancelled(db, run_id, child)
                 return None
 
             maintenance_status = (
@@ -3286,10 +3283,7 @@ class BackupPlanExecutionService:
                 else None
             )
             if maintenance_status == "cancelled":
-                child.status = "cancelled"
-                child.completed_at = datetime.utcnow()
-                child.error_message = CANCELLED_MESSAGE
-                db.commit()
+                self._close_repository_as_cancelled(db, run_id, child)
                 return None
             if maintenance_status == "completed_with_warnings":
                 final_status = "completed_with_warnings"
@@ -3312,6 +3306,26 @@ class BackupPlanExecutionService:
         )
         db.commit()
         return final_status if recorded else None
+
+    @staticmethod
+    def _close_repository_as_cancelled(
+        db: Session, run_id: int, child: BackupPlanRunRepository
+    ) -> None:
+        """Record a repository of a cancelled run as cancelled, unless the
+        cancel has closed its row already: that row keeps what the cancel
+        wrote, its time included."""
+        _update_children(
+            db,
+            run_id,
+            {
+                BackupPlanRunRepository.status: "cancelled",
+                BackupPlanRunRepository.completed_at: datetime.utcnow(),
+                BackupPlanRunRepository.error_message: CANCELLED_MESSAGE,
+            },
+            repository_id=child.repository_id,
+            from_statuses=tuple(ACTIVE_PLAN_RUN_STATUSES),
+        )
+        db.commit()
 
     def follow_agent_backups_after_restart(self, run_ids: list[int]) -> None:
         """Follow, each in a task of its own, the runs the startup sweep left

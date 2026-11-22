@@ -639,3 +639,68 @@ async def test_a_cancel_during_the_wait_keeps_the_repository_cancelled(test_db):
     assert (child.status, child.error_message) == ("cancelled", "Cancelled")
     assert stored.status == "cancelled"
     assert test_db.get(Operation, operation.id).status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_during_a_backup_that_succeeds_keeps_what_it_recorded(
+    test_db,
+):
+    """The backup still completes on its agent; the repository stays as the
+    cancel of the run closed it, its time included, and no maintenance
+    follows."""
+    run, _all = _plan_with_hooks(test_db)
+    _interrupted(test_db, run)
+    _agent_backup(test_db, run.repositories[0])
+    _sweep(test_db)
+    cancelled_at = datetime(2026, 1, 1, 12, 0, 0)
+    _waited, backup_ends = _backup_ends(test_db, "completed")
+    maintenance = AsyncMock(return_value=None)
+
+    async def wait_out(operation_id, **kwargs):
+        stored = test_db.get(BackupPlanRun, run.id)
+        if stored.status != "cancelled":
+            # what `cancel_run` records
+            stored.status = "cancelled"
+            for child in stored.repositories:
+                child.status = "cancelled"
+                child.completed_at = cancelled_at
+                child.error_message = "Cancelled"
+            test_db.commit()
+        return await backup_ends(operation_id, **kwargs)
+
+    await _follow(
+        run,
+        wait_out,
+        None,
+        patch.object(backup_plan_execution_service, "_run_maintenance", maintenance),
+    )
+
+    maintenance.assert_not_awaited()
+    test_db.expire_all()
+    child = test_db.get(BackupPlanRun, run.id).repositories[0]
+    assert (child.status, child.error_message) == ("cancelled", "Cancelled")
+    assert child.completed_at == cancelled_at
+
+
+@pytest.mark.asyncio
+async def test_a_run_cancelled_after_its_backup_closes_the_open_repository(test_db):
+    """The run is cancelled while the repository's row is still open: the
+    follower closes it as cancelled, as the run itself does."""
+    run, _all = _plan_with_hooks(test_db)
+    _interrupted(test_db, run)
+    _agent_backup(test_db, run.repositories[0])
+    _sweep(test_db)
+    _waited, backup_ends = _backup_ends(test_db, "completed")
+
+    async def wait_out(operation_id, **kwargs):
+        stored = test_db.get(BackupPlanRun, run.id)
+        stored.status = "cancelled"
+        test_db.commit()
+        return await backup_ends(operation_id, **kwargs)
+
+    await _follow(run, wait_out)
+
+    test_db.expire_all()
+    child = test_db.get(BackupPlanRun, run.id).repositories[0]
+    assert child.status == "cancelled"
+    assert child.completed_at is not None
