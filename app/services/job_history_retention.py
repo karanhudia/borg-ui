@@ -55,7 +55,7 @@ from app.config import settings as app_config
 from typing import Any, Dict, Iterable, Optional
 
 import structlog
-from sqlalchemy import case, exists, func, or_
+from sqlalchemy import case, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.services.log_policy import (
@@ -258,24 +258,63 @@ def _delete_chunked(db: Session, model, filters) -> int:
         total += len(ids)
 
 
-def purge_agent_job_logs(db: Session, filters) -> int:
-    """Delete agent_job_logs rows of jobs matching the given AgentJob filters."""
+def _hold(db: Session, model, ids) -> list:
+    """Lock the given rows against a change until the commit; returns the
+    ids of the rows now held.
+
+    A row another session is writing is left out, not waited for: whatever
+    read it gets its answer on the next pass, and the pass never waits on a
+    lock while it holds others. SQLite has one writer at a time and no row
+    locks; there every row is returned.
+    """
+    return [
+        row[0]
+        for row in db.query(model.id)
+        .filter(model.id.in_(ids))
+        .order_by(model.id)
+        .with_for_update(read=True, skip_locked=True)
+    ]
+
+
+def purge_agent_job_logs(
+    db: Session, filters, hold_jobs=None, hold_operations=None
+) -> int:
+    """Delete agent_job_logs rows of jobs matching the given AgentJob filters.
+
+    One statement finds a chunk and deletes it, so the filters hold for the
+    rows that go: nothing another session commits comes between the two.
+
+    On PostgreSQL a statement reads the rows as they were when it began, and
+    a change committed while it runs goes unseen. Filters that an answer
+    given earlier depends on therefore name the rows they read, the jobs in
+    `hold_jobs` and their operations in `hold_operations`: each chunk holds
+    those rows as they are until its commit, and deletes for them only.
+    """
     total = 0
     while True:
-        ids = [
-            row[0]
-            for row in db.query(AgentJobLog.id)
+        held = []
+        if hold_jobs is not None:
+            held.append(AgentJob.id.in_(_hold(db, AgentJob, hold_jobs)))
+        if hold_operations is not None:
+            held.append(
+                AgentJob.operation_id.in_(_hold(db, Operation, hold_operations))
+            )
+        chunk = (
+            select(AgentJobLog.id)
             .join(AgentJob, AgentJobLog.agent_job_id == AgentJob.id)
-            .filter(*filters)
+            .where(*filters, *held)
             .limit(CHUNK_SIZE)
-        ]
-        if not ids:
-            return total
-        db.query(AgentJobLog).filter(AgentJobLog.id.in_(ids)).delete(
-            synchronize_session=False
+            .correlate(None)
+        )
+        deleted = (
+            db.query(AgentJobLog)
+            .filter(AgentJobLog.id.in_(chunk))
+            .delete(synchronize_session=False)
         )
         db.commit()
-        total += len(ids)
+        if not deleted:
+            return total
+        total += deleted
 
 
 # The spec 6.2 extension rows that hold captured output. Their age is their
@@ -375,8 +414,12 @@ def purge_operation_log_files(db: Session, filters) -> int:
         if not rows:
             return total
         ids = [row[0] for row in rows]
-        db.query(Operation).filter(Operation.id.in_(ids)).update(
-            {"log_file_path": None}, synchronize_session=False
+        # The filters again, in the statement that clears: an operation that
+        # changed since the select keeps its path, and so its file below.
+        cleared = (
+            db.query(Operation)
+            .filter(Operation.id.in_(ids), *filters)
+            .update({"log_file_path": None}, synchronize_session=False)
         )
         db.commit()
         # Unlinked only once the column is cleared, so a failed commit never
@@ -396,7 +439,7 @@ def purge_operation_log_files(db: Session, filters) -> int:
                 Path(path).unlink(missing_ok=True)
             except OSError:
                 pass
-        total += len(rows)
+        total += cleared
 
 
 def sweep_orphaned_log_files(db: Session, cutoff) -> int:
@@ -780,6 +823,16 @@ def _policy_shows(policy: str, status: str, output_text, exit_code=None) -> bool
     )
 
 
+def _policy_reads_text(policy: str, status: str) -> bool:
+    """Whether the text can change the read side's answer for a status that
+    alone does not show the log."""
+    return _policy_shows(policy, status, list(WARNING_MARKERS))
+
+
+# In place of a text the read side's answer did not depend on.
+_NOT_READ = object()
+
+
 def _marker_in(db: Session, *columns):
     """SQL: a warning marker one of the text columns contains, or NULL. The
     database searches, so the pass does not load every candidate's output.
@@ -835,7 +888,12 @@ def purge_policy_agent_job_logs(db: Session, policy: str, discarded: tuple) -> i
     operation, for that operation, whose status can differ (a backup that
     failed in a hook after its Borg run completed). A job whose lines may
     still be arriving waits for a later pass, so the answer is given on the
-    whole transcript."""
+    whole transcript.
+
+    The answer can go stale before the delete: a line arrives, or a hook
+    fails the backup. The delete therefore repeats what the answer was given
+    on, holds the rows it read meanwhile, and leaves a job that no longer
+    matches to the next pass."""
     has_lines = exists().where(AgentJobLog.agent_job_id == AgentJob.id)
     settled = AgentJob.updated_at <= utc_now() - LATE_LOG_SETTLE
     candidates = (
@@ -843,6 +901,7 @@ def purge_policy_agent_job_logs(db: Session, policy: str, discarded: tuple) -> i
             AgentJob.id,
             AgentJob.status,
             AgentJob.error_message,
+            AgentJob.operation_id,
             Operation.status.label("operation_status"),
             Operation.error_message.label("operation_error"),
         )
@@ -861,23 +920,45 @@ def purge_policy_agent_job_logs(db: Session, policy: str, discarded: tuple) -> i
             .group_by(AgentJobLog.agent_job_id)
             .all()
         )
-        dropped = []
+        # The dropped jobs, by what the answer read of their operation.
+        dropped: dict = {}
         for job in jobs:
             output = [job.error_message, markers.get(job.id)]
             if _policy_shows(policy, job.status, output):
                 continue
-            if job.operation_status is not None and _policy_shows(
-                policy, job.operation_status, [*output, job.operation_error]
-            ):
-                continue
-            dropped.append(job.id)
-        if dropped:
+            operation = None
+            if job.operation_status is not None:
+                if _policy_shows(
+                    policy, job.operation_status, [*output, job.operation_error]
+                ):
+                    continue
+                operation = (job.operation_status, _NOT_READ)
+                if _policy_reads_text(policy, job.operation_status):
+                    operation = (job.operation_status, job.operation_error)
+            dropped.setdefault(operation, []).append(job)
+        for operation, group in dropped.items():
             # The status and `settled` again: a job whose outcome changed is
             # no candidate any more, and a line that arrived since the answer
             # moved its updated_at, so it waits for the next pass.
+            filters = [AgentJob.status.in_(discarded), settled]
+            operation_ids = None
+            if operation is not None:
+                status, error_message = operation
+                as_read = [
+                    Operation.id == AgentJob.operation_id,
+                    Operation.status == status,
+                ]
+                if error_message is not _NOT_READ:
+                    as_read.append(
+                        Operation.error_message.is_not_distinct_from(error_message)
+                    )
+                filters.append(exists().where(*as_read))
+                operation_ids = [job.operation_id for job in group]
             total += purge_agent_job_logs(
                 db,
-                (AgentJob.id.in_(dropped), AgentJob.status.in_(discarded), settled),
+                filters,
+                hold_jobs=[job.id for job in group],
+                hold_operations=operation_ids,
             )
     return total
 
@@ -988,10 +1069,7 @@ def purge_policy_operation_log_files(db: Session, policy: str, discarded: tuple)
     under failed_only no file is opened. A file that cannot be read is left
     for a later pass: a failed read says nothing about what the log holds.
     So is the file an agent's late log lines may still be reaching."""
-    text_decides = {
-        status: _policy_shows(policy, status, list(WARNING_MARKERS))
-        for status in discarded
-    }
+    text_decides = {status: _policy_reads_text(policy, status) for status in discarded}
     candidates = db.query(
         Operation.id,
         Operation.status,

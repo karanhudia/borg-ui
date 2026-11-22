@@ -633,6 +633,156 @@ def test_policy_leaves_a_log_file_whose_operation_failed_while_it_was_read(
     assert op.log_file_path == str(log) and log.exists()
 
 
+def _backup_with_settled_agent_lines(db, tmp_path):
+    """A completed backup an agent ran, and its agent job with two clean log
+    lines. The job finished a day ago."""
+    op, _ = _operation_with_log(db, tmp_path, "backup", "Archive name: a")
+    op.execution_mode = "agent"
+    job = _agent_job(db, _machine(db), "completed", age_days=1, log_lines=2)
+    job.operation_id = op.id
+    db.commit()
+    db.query(AgentJob).update({AgentJob.updated_at: job.created_at})
+    db.commit()
+    return op, job
+
+
+def _purge_policy_agent_lines(db):
+    from app.services.job_history_retention import (
+        _policy_discarded_statuses,
+        purge_policy_agent_job_logs,
+    )
+
+    deleted = purge_policy_agent_job_logs(
+        db, POLICY, _policy_discarded_statuses(POLICY)
+    )
+    db.expire_all()
+    return deleted
+
+
+def _backup_fails_before_the_purge_scenario(db, tmp_path, monkeypatch):
+    """A post-backup hook can fail a backup after the pass has decided on the
+    lines of its agent job. The failed backup shows them, so they stay."""
+    from app.services import job_history_retention
+    from app.services.operations.backup_facade import (
+        BackupJobFacade,
+        backup_job_has_logs,
+    )
+
+    op, job = _backup_with_settled_agent_lines(db, tmp_path)
+    purge = job_history_retention.purge_agent_job_logs
+
+    def the_backup_fails_then_purge(*args, **kwargs):
+        db.query(Operation).filter(Operation.id == op.id).update(
+            {Operation.status: "failed"}
+        )
+        db.commit()
+        return purge(*args, **kwargs)
+
+    monkeypatch.setattr(
+        job_history_retention, "purge_agent_job_logs", the_backup_fails_then_purge
+    )
+
+    assert _purge_policy_agent_lines(db) == 0
+    assert len(_agent_log_lines(db, job)) == 2
+    assert backup_job_has_logs(db, BackupJobFacade(db, op), log_save_policy=POLICY)
+
+
+def _before_statement(db, start, action):
+    """Call `action(connection)` right before each statement that begins
+    with `start`; returns the function that stops doing so."""
+    engine = db.get_bind()
+
+    def before(conn, cursor, statement, parameters, context, executemany):
+        if " ".join(statement.split()).upper().startswith(start):
+            action(conn)
+
+    event.listen(engine, "before_cursor_execute", before)
+    return lambda: event.remove(engine, "before_cursor_execute", before)
+
+
+def _on_agent_line_delete(db, action):
+    return _before_statement(db, "DELETE FROM AGENT_JOB_LOGS", action)
+
+
+def _backup_fails_as_the_delete_starts_scenario(db, tmp_path):
+    """The same change, later still: after the pass's last query and before
+    the statement that deletes. The statement asks for itself."""
+    op, job = _backup_with_settled_agent_lines(db, tmp_path)
+    op_id = op.id
+    failed = []
+
+    def the_backup_fails(conn):
+        conn.execute(
+            text("UPDATE operations SET status = 'failed' WHERE id = :id"),
+            {"id": op_id},
+        )
+        failed.append(op_id)
+
+    stop = _on_agent_line_delete(db, the_backup_fails)
+    try:
+        assert _purge_policy_agent_lines(db) == 0
+    finally:
+        stop()
+
+    assert failed == [op_id]
+    assert op.status == "failed"
+    assert len(_agent_log_lines(db, job)) == 2
+
+
+@pytest.mark.unit
+def test_policy_leaves_agent_lines_whose_backup_failed_before_the_purge(
+    db, tmp_path, monkeypatch
+):
+    _backup_fails_before_the_purge_scenario(db, tmp_path, monkeypatch)
+
+
+@pytest.mark.unit
+def test_policy_leaves_agent_lines_whose_backup_failed_as_the_delete_starts(
+    db, tmp_path
+):
+    _backup_fails_as_the_delete_starts_scenario(db, tmp_path)
+
+
+@pytest.mark.unit
+def test_policy_leaves_a_log_file_whose_operation_failed_as_its_path_is_cleared(
+    db, tmp_path
+):
+    settings = _settings(db, log_save_policy=POLICY)
+    op, log = _operation_with_log(db, tmp_path, "backup", "Archive name: a")
+    op_id = op.id
+    failed = []
+
+    def the_backup_fails(conn):
+        conn.execute(
+            text("UPDATE operations SET status = 'failed' WHERE id = :id"),
+            {"id": op_id},
+        )
+        failed.append(op_id)
+
+    stop = _before_statement(
+        db, "UPDATE OPERATIONS SET LOG_FILE_PATH", the_backup_fails
+    )
+    try:
+        results = run_retention(db, settings)
+    finally:
+        stop()
+    db.expire_all()
+
+    assert failed == [op_id]
+    assert results["policy_operation_log_files_deleted"] == 0
+    assert op.status == "failed"
+    assert op.log_file_path == str(log) and log.exists()
+
+
+@pytest.mark.unit
+def test_policy_drops_the_agent_lines_of_a_backup_that_stayed_completed(db, tmp_path):
+    op, job = _backup_with_settled_agent_lines(db, tmp_path)
+
+    assert _purge_policy_agent_lines(db) == 2
+    assert _agent_log_lines(db, job) == []
+    assert op.status == "completed"
+
+
 @pytest.mark.unit
 def test_policy_failed_only_decides_without_the_output(db, tmp_path, monkeypatch):
     """Under failed_only the read side never looks at the text, so a marker
@@ -2470,7 +2620,8 @@ class TestConsumedResultsOnPostgres:
 class TestPolicyKeepsShownLogsOnPostgres:
     """The policy phase lets the database search the output for a marker
     (lower, LIKE, CASE, min over text). SQLite is covered above; this holds
-    the PostgreSQL side of the same scenarios."""
+    the PostgreSQL side of the same scenarios, and the row lock that only
+    PostgreSQL needs."""
 
     @pytest.fixture()
     def pg(self):
@@ -2494,6 +2645,80 @@ class TestPolicyKeepsShownLogsOnPostgres:
 
     def test_detail_output(self, pg):
         _detail_output_scenario(pg)
+
+    def test_agent_lines_of_a_backup_that_failed_before_the_purge(
+        self, pg, tmp_path, monkeypatch
+    ):
+        _backup_fails_before_the_purge_scenario(pg, tmp_path, monkeypatch)
+
+    def test_agent_lines_of_a_backup_that_failed_as_the_delete_starts(
+        self, pg, tmp_path
+    ):
+        _backup_fails_as_the_delete_starts_scenario(pg, tmp_path)
+
+    def test_a_backup_cannot_change_while_its_agent_lines_are_deleted(
+        self, pg, tmp_path
+    ):
+        """A statement reads the rows as they were when it began, so another
+        session could fail the backup while the delete runs. The pass holds
+        the operation's row until its commit: the other session waits."""
+        from sqlalchemy.exc import OperationalError
+
+        lock_not_available = "55P03"
+        op, job = _backup_with_settled_agent_lines(pg, tmp_path)
+        op_id = op.id
+        engine = pg.get_bind()
+        tried, refused = [], []
+
+        def another_session_fails_the_backup(_conn):
+            tried.append(op_id)
+            with engine.connect() as other:
+                other.execute(text("SET lock_timeout = '200ms'"))
+                try:
+                    other.execute(
+                        text("UPDATE operations SET status = 'failed' WHERE id = :id"),
+                        {"id": op_id},
+                    )
+                    other.commit()
+                except OperationalError as exc:
+                    if exc.orig.sqlstate != lock_not_available:
+                        raise
+                    refused.append(op_id)
+
+        stop = _on_agent_line_delete(pg, another_session_fails_the_backup)
+        try:
+            assert _purge_policy_agent_lines(pg) == 2
+        finally:
+            stop()
+
+        # at each delete statement of the pass, also the one that finds
+        # nothing left
+        assert tried and refused == tried
+        assert op.status == "completed"
+        assert _agent_log_lines(pg, job) == []
+
+    @pytest.mark.parametrize("table", ["operations", "agent_jobs"])
+    def test_agent_lines_stay_while_another_session_writes_what_the_answer_read(
+        self, pg, tmp_path, table
+    ):
+        """A hook's outcome or a late line that is being written, and not
+        yet committed: the pass does not wait for it and leaves the lines
+        to the next pass."""
+        op, job = _backup_with_settled_agent_lines(pg, tmp_path)
+        row_id = {"operations": op.id, "agent_jobs": job.id}[table]
+        with pg.get_bind().connect() as other:
+            other.execute(
+                text(f"UPDATE {table} SET status = status WHERE id = :id"),
+                {"id": row_id},
+            )
+            # In the transaction the pass starts in, so it holds for its
+            # connection: a pass that waited after all fails, not hangs.
+            pg.execute(text("SET lock_timeout = '2s'"))
+            assert _purge_policy_agent_lines(pg) == 0
+            other.rollback()
+
+        assert len(_agent_log_lines(pg, job)) == 2
+        assert _purge_policy_agent_lines(pg) == 2
 
 
 def _committed_state_at_unlink(tmp_path, purge):
