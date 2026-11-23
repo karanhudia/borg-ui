@@ -364,6 +364,17 @@ def _payload_from_repository(
         max_parallel_repositories=1,
         failure_behavior="continue",
         schedule_enabled=schedule_enabled,
+        # An availability-triggered automation has no cron expression: the
+        # plan takes over its trigger, or it would need a cron to be valid.
+        schedule_mode=schedule.schedule_mode if schedule else "cron",
+        availability_check_interval_minutes=(
+            schedule.availability_check_interval_minutes
+            if schedule
+            else DEFAULT_AVAILABILITY_CHECK_INTERVAL_MINUTES
+        ),
+        min_success_interval_minutes=(
+            schedule.min_success_interval_minutes if schedule else 0
+        ),
         cron_expression=schedule.cron_expression
         if schedule_enabled and schedule
         else None,

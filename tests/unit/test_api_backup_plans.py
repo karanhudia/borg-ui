@@ -1935,6 +1935,7 @@ class TestBackupPlanRoutes:
         assert body["copied_schedule_id"] == schedule.id
         assert body["repository_schedule_disabled"] is True
         assert plan["schedule_enabled"] is True
+        assert plan["schedule_mode"] == "cron"
         assert plan["cron_expression"] == "0 2 * * *"
         assert plan["archive_name_template"] == "{job_name}-{repo_name}-{now}"
         assert plan["run_prune_after"] is True
@@ -1949,6 +1950,124 @@ class TestBackupPlanRoutes:
         assert repo.source_directories is None
         assert repo.exclude_patterns is None
         assert repo.source_ssh_connection_id is None
+
+    def test_create_plan_from_repository_copies_availability_trigger(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Laptop",
+            "/repos/laptop",
+            source_directories=json.dumps(["/srv/project"]),
+        )
+        schedule = ScheduledJob(
+            name="Laptop when online",
+            cron_expression=None,
+            schedule_mode="availability",
+            availability_check_interval_minutes=15,
+            min_success_interval_minutes=720,
+            timezone="UTC",
+            repository_id=repo.id,
+            enabled=True,
+            next_run=datetime.utcnow(),
+        )
+        test_db.add(schedule)
+        test_db.commit()
+        test_db.refresh(schedule)
+
+        response = test_client.post(
+            f"/api/backup-plans/from-repository/{repo.id}",
+            json={"copy_schedule": True, "disable_repository_schedule": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201, response.text
+        body = response.json()
+        plan = body["backup_plan"]
+        assert body["copied_schedule_id"] == schedule.id
+        assert body["repository_schedule_disabled"] is True
+        assert plan["schedule_enabled"] is True
+        assert plan["schedule_mode"] == "availability"
+        assert plan["availability_check_interval_minutes"] == 15
+        assert plan["min_success_interval_minutes"] == 720
+        assert plan["cron_expression"] is None
+        stored = test_db.query(BackupPlan).filter_by(id=plan["id"]).one()
+        assert stored.next_run is not None
+
+    def test_create_plan_from_repository_keeps_trigger_of_disabled_automation(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Laptop",
+            "/repos/laptop",
+            source_directories=json.dumps(["/srv/project"]),
+        )
+        schedule = ScheduledJob(
+            name="Laptop when online",
+            cron_expression=None,
+            schedule_mode="availability",
+            availability_check_interval_minutes=15,
+            min_success_interval_minutes=720,
+            timezone="UTC",
+            repository_id=repo.id,
+            enabled=False,
+        )
+        test_db.add(schedule)
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup-plans/from-repository/{repo.id}",
+            json={"copy_schedule": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201, response.text
+        plan = response.json()["backup_plan"]
+        assert plan["schedule_enabled"] is False
+        assert plan["schedule_mode"] == "availability"
+        assert plan["availability_check_interval_minutes"] == 15
+        assert plan["min_success_interval_minutes"] == 720
+        stored = test_db.query(BackupPlan).filter_by(id=plan["id"]).one()
+        assert stored.next_run is None
+
+    def test_create_plan_from_repository_without_schedule_copy_stays_cron(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Laptop",
+            "/repos/laptop",
+            source_directories=json.dumps(["/srv/project"]),
+        )
+        test_db.add(
+            ScheduledJob(
+                name="Laptop when online",
+                cron_expression=None,
+                schedule_mode="availability",
+                availability_check_interval_minutes=15,
+                min_success_interval_minutes=720,
+                timezone="UTC",
+                repository_id=repo.id,
+                enabled=True,
+            )
+        )
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup-plans/from-repository/{repo.id}",
+            json={"copy_schedule": False},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201, response.text
+        body = response.json()
+        plan = body["backup_plan"]
+        assert body["copied_schedule_id"] is None
+        assert plan["schedule_enabled"] is False
+        assert plan["schedule_mode"] == "cron"
+        assert plan["availability_check_interval_minutes"] == 30
+        assert plan["min_success_interval_minutes"] == 0
 
     def test_create_plan_from_repository_reads_legacy_string_script_parameters(
         self, test_client: TestClient, admin_headers, test_db
