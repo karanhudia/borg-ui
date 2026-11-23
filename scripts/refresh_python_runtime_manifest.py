@@ -31,11 +31,12 @@ MANIFEST = REPO_ROOT / "app" / "api" / "python_runtimes.json"
 
 RELEASES_API = (
     "https://api.github.com/repos/astral-sh/python-build-standalone/releases"
-    "?per_page=30&page={page}"
+    "?per_page=10&page={page}"
 )
-# Releases are listed newest first; a pinned minor still built a year ago is
-# a few pages back.
-MAX_PAGES = 10
+# Each release carries about a thousand assets, and the API times out (HTTP
+# 504) on pages of 30 of them, so pages stay small. Releases are listed newest
+# first; a pinned minor still built a year ago is a few pages back.
+MAX_PAGES = 30
 
 # The relocatable "install_only" archives for macOS. The build tag (a date)
 # follows the CPython version after a plus sign; the archive unpacks to a

@@ -1,20 +1,20 @@
 {
-  "current": "3.12.14+20260924",
+  "current": "3.12.16+20261110",
   "runtimes": {
-    "3.12.14+20260924": [
+    "3.12.16+20261110": [
       {
         "platform": "darwin",
         "arch": "aarch64",
-        "asset": "cpython-3.12.14+20260924-aarch64-apple-darwin-install_only.tar.gz",
-        "sha256": "9763f43db2481a6af36af82ec40302aab7a73632f880129d07a6e81aec846277",
-        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260924/cpython-3.12.14%2B20260924-aarch64-apple-darwin-install_only.tar.gz"
+        "asset": "cpython-3.12.16+20261110-aarch64-apple-darwin-install_only.tar.gz",
+        "sha256": "e956e60bc9465d577ef8062059aa05cd3a2665b4b8678a2ed24e432368330b8f",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-aarch64-apple-darwin-install_only.tar.gz"
       },
       {
         "platform": "darwin",
         "arch": "x86_64",
-        "asset": "cpython-3.12.14+20260924-x86_64-apple-darwin-install_only.tar.gz",
-        "sha256": "0d6a4a299908123f00bc844df737603f047ff9eba14fda6cad83f3cf3cb3a2af",
-        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260924/cpython-3.12.14%2B20260924-x86_64-apple-darwin-install_only.tar.gz"
+        "asset": "cpython-3.12.16+20261110-x86_64-apple-darwin-install_only.tar.gz",
+        "sha256": "83f2922437e6d546d0fcdb8c11f150a8e52787e8d9ea8651b1974e20908eb1bc",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-x86_64-apple-darwin-install_only.tar.gz"
       }
     ]
   }
