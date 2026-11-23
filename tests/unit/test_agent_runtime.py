@@ -2611,10 +2611,11 @@ def test_repository_operation_payload_builds_agent_local_commands():
 
 
 @pytest.mark.unit
-def test_borg1_prune_dry_run_leaves_out_stats():
+def test_borg1_prune_dry_run_leaves_out_stats(monkeypatch):
     """Borg 1 answers --stats with --dry-run by a WARNING ("Ignoring --stats"),
     which marks every dry run as warned; the server-side prune leaves --stats
     out for a dry run, and so does the agent."""
+    monkeypatch.delenv("BORG_LOCK_WAIT", raising=False)
 
     def prune_command(borg_version, dry_run):
         return RepositoryOperationPayload.from_job_payload(
