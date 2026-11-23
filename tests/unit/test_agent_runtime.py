@@ -2611,6 +2611,55 @@ def test_repository_operation_payload_builds_agent_local_commands():
 
 
 @pytest.mark.unit
+def test_borg1_prune_dry_run_leaves_out_stats():
+    """Borg 1 answers --stats with --dry-run by a WARNING ("Ignoring --stats"),
+    which marks every dry run as warned; the server-side prune leaves --stats
+    out for a dry run, and so does the agent."""
+
+    def prune_command(borg_version, dry_run):
+        return RepositoryOperationPayload.from_job_payload(
+            {
+                "job_kind": "repository.prune",
+                "repository": {"path": "/agent/repo", "borg_version": borg_version},
+                "operation": {"keep_daily": 7, "dry_run": dry_run},
+            }
+        ).build_command()
+
+    assert prune_command(1, dry_run=True) == [
+        "borg",
+        "--lock-wait",
+        "180",
+        "prune",
+        "--list",
+        "--progress",
+        "--show-rc",
+        "--log-json",
+        "--keep-daily",
+        "7",
+        "--dry-run",
+        "/agent/repo",
+    ]
+    assert prune_command(1, dry_run=False) == [
+        "borg",
+        "--lock-wait",
+        "180",
+        "prune",
+        "--list",
+        "--progress",
+        "--stats",
+        "--show-rc",
+        "--log-json",
+        "--keep-daily",
+        "7",
+        "/agent/repo",
+    ]
+    for dry_run in (True, False):
+        borg2_cmd = prune_command(2, dry_run=dry_run)
+        assert "--stats" not in borg2_cmd
+        assert ("--dry-run" in borg2_cmd) is dry_run
+
+
+@pytest.mark.unit
 def test_repository_archive_contents_payload_builds_agent_list_command():
     payload = RepositoryOperationPayload.from_job_payload(
         {
