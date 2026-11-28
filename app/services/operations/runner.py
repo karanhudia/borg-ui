@@ -39,7 +39,12 @@ from app.services.operations.events import (
 )
 from app.services.operations.followups import enqueue_followups
 from app.services.operations.lanes import can_start
-from app.services.operations.vocab import INDEX_KINDS, SUCCESS_STATUSES, is_exclusive
+from app.services.operations.vocab import (
+    INDEX_KINDS,
+    SUCCESS_STATUSES,
+    TERMINAL_STATUSES,
+    is_exclusive,
+)
 from app.utils.process_utils import is_process_alive
 
 logger = structlog.get_logger()
@@ -183,10 +188,21 @@ class OperationContext:
     """What an executor gets: the row's identity, a session, progress, logs,
     and a cancellation check."""
 
-    def __init__(self, runner: "OperationRunner", db: Session, operation: Operation):
+    def __init__(
+        self,
+        runner: "OperationRunner",
+        db: Session,
+        operation: Operation,
+        *,
+        resumed: bool = False,
+    ):
         self._runner = runner
         self.db = db
         self.operation = operation
+        # An agent kept this operation's work running through a server
+        # restart (`OperationRunner.attach_recovered`): the executor waits
+        # on the agent job there is and starts nothing a second time.
+        self.resumed = resumed
         self.operation_id = operation.id
         self.repository_id = operation.repository_id
         self.kind = operation.kind
@@ -274,6 +290,8 @@ class OperationRunner:
         *,
         session_factory=None,
         registry=None,
+        agent_work=None,
+        owed_work=None,
         poll_interval: float = 5.0,
         deferral_delay: float = DEFERRAL_DELAY_SECONDS,
         lease_seconds: float = LEASE_SECONDS,
@@ -282,6 +300,15 @@ class OperationRunner:
         self._registry = (
             registry if registry is not None else executor_registry.REGISTRY
         )
+        # The checks of the default registry's kinds, unless given: another
+        # registry's executors are not the ones they describe.
+        default_registry = self._registry is executor_registry.REGISTRY
+        if agent_work is None:
+            agent_work = executor_registry.AGENT_WORK if default_registry else {}
+        if owed_work is None:
+            owed_work = executor_registry.OWED_WORK if default_registry else {}
+        self._agent_work = agent_work
+        self._owed_work = owed_work
         self._poll_interval = poll_interval
         self._deferral_delay = deferral_delay
         self._lease_seconds = lease_seconds
@@ -301,6 +328,12 @@ class OperationRunner:
         self._stopped = False
         self.running_tasks: dict[int, asyncio.Task] = {}
         self.cancel_requested: set[int] = set()
+        # Operations whose task a shutdown ended while an agent was doing
+        # their work, their rows left `running` (`drain`).
+        self._detached: set[int] = set()
+        # The rows recovery kept because an agent does their work, as the
+        # claim `run_operation` takes; `attach_recovered` starts their tasks.
+        self._recovered_agent_work: list[dict] = []
         # Outcomes of this runner's own tasks whose terminal commit failed,
         # by operation id; the tick writes them (`record_unrecorded_outcomes`).
         self.unrecorded_outcomes: dict[int, _UnrecordedOutcome] = {}
@@ -378,6 +411,16 @@ class OperationRunner:
         `OperationContext.cancelled()` instead of a raw task cancellation.
         Call `stop()` first so no new tasks start while draining.
 
+        An operation whose work an agent is doing (a live agent job
+        carries it) is not asked to cancel: the agent goes on without this
+        process, and a cancel would only reach it through the next one,
+        which would then stop the work for a restart. Its task is ended
+        where it waits on the job, its row stays `running` and its agent
+        job as it is, and the next process's recovery waits on the job
+        again. Not one with a cancel already accepted: that request lives
+        in this process until its watcher has passed it on, so the
+        operation is cancelled like the rest.
+
         A dispatched entry is normally a real `asyncio.Task`, but a test that
         patches `asyncio.create_task` around a request can catch this
         runner's own `tick()` dispatching newly enqueued work on the same
@@ -389,8 +432,18 @@ class OperationRunner:
         if not tasks:
             self._release_lease_if_idle()
             return
+        # Before the first await: a task marked here is still waiting on
+        # the agent job when the cancellation reaches it.
+        for operation_id in self._left_to_agents():
+            task = self.running_tasks.get(operation_id)
+            if operation_id in self.cancel_requested:
+                continue
+            if asyncio.isfuture(task):
+                self._detached.add(operation_id)
+                task.cancel()
         for operation_id in list(self.running_tasks):
-            await self.request_cancel(operation_id)
+            if operation_id not in self._detached:
+                await self.request_cancel(operation_id)
         try:
             await asyncio.wait_for(
                 asyncio.gather(*tasks, return_exceptions=True), timeout=timeout
@@ -435,6 +488,7 @@ class OperationRunner:
         # the next process-lifetime's `drain()` crashes trying to `gather()`
         # it (`TypeError: ... a coroutine or an awaitable is required`).
         self.running_tasks = {}
+        self._detached = set()
         # Same reasoning: those rows belong to a previous lifetime's database
         # session, and `recover_on_startup` owns rows left running across one.
         self.unrecorded_outcomes = {}
@@ -460,6 +514,7 @@ class OperationRunner:
                     if not recovered:
                         self._recover(before_recovery)
                         recovered = True
+                        self.attach_recovered()
                     try:
                         await self.tick()
                     except Exception as exc:  # keep the loop alive
@@ -971,19 +1026,28 @@ class OperationRunner:
         repository_id: Optional[int] = None,
         run_id: Optional[str] = None,
         claimed_at: Optional[datetime] = None,
+        resumed: bool = False,
     ) -> None:
         """`kind`, `repository_id`, `run_id` and `claimed_at` are the tick's
         claim: the row is `running` because of this task from here on, even
         when its first read below fails, so the outcome bookkeeping in
-        `finally` does not depend on that read."""
+        `finally` does not depend on that read.
+
+        `resumed` is a row recovery kept for the agent that does its work.
+        The agent's report may end the row before this task first reads it,
+        and leaves the rest to the task it found waiting: so this one goes
+        on from a row that already reads terminal too."""
         db: Session = self._session()
         ctx: Optional[OperationContext] = None
         deferred = False
+        detached = False
         terminal_committed = False
         terminal: Optional[_UnrecordedOutcome] = None
         try:
             op = db.get(Operation, operation_id)
-            if op is None or op.status != "running":
+            if op is None or not (
+                op.status == "running" or (resumed and op.status in TERMINAL_STATUSES)
+            ):
                 kind = None  # not this task's row
                 return
             kind = op.kind
@@ -997,13 +1061,18 @@ class OperationRunner:
             # place in the history and its duration.
             claimed_at = op.started_at
             executor = self._get_executor(op.kind)
-            ctx = OperationContext(self, db, op)
+            ctx = OperationContext(self, db, op, resumed=resumed)
             outcome: Optional[Outcome]
             busy_error: Optional[str] = None
             failure: Optional[Exception] = None
             try:
                 outcome = await executor(ctx)
             except asyncio.CancelledError:
+                if operation_id in self._detached:
+                    # Left to its agent by a shutdown (`drain`): the row
+                    # stays `running` for the next process's recovery.
+                    detached = True
+                    raise
                 op.status = "cancelled"
                 if op.started_at is None:
                     op.started_at = claimed_at
@@ -1014,7 +1083,11 @@ class OperationRunner:
                 await broadcast_operation_updated(op, db)
                 raise
             except Exception as exc:
-                if repository_busy(exc):
+                # A resumed run is never put back on the queue: its work
+                # was started before the restart, by a caller whose
+                # arguments are not all on the row (an inline dry run),
+                # and a second dispatch would start it from the row alone.
+                if repository_busy(exc) and not resumed:
                     busy_error = "\n".join((str(exc), *getattr(exc, "__notes__", ())))
                     # a cancel that arrived while the operation was being
                     # refused wins: requeueing would drop the request in
@@ -1114,6 +1187,7 @@ class OperationRunner:
                 and kind not in INDEX_KINDS
                 and not terminal_committed
                 and not deferred
+                and not detached
             ):
                 # The row stays `running` with no task behind it; the tick
                 # writes what this task reached, or a failure when it ended
@@ -1137,6 +1211,7 @@ class OperationRunner:
             # failed; only a committed terminal state consumes it.
             if terminal_committed:
                 self.cancel_requested.discard(operation_id)
+            self._detached.discard(operation_id)
             if not deferred:
                 self.wake()
 
@@ -1234,6 +1309,7 @@ class OperationRunner:
 
     def recover_on_startup(self, db: Session) -> dict:
         counts = {"requeued": 0, "failed": 0, "kept": 0}
+        self._recovered_agent_work = []
         for op in db.query(Operation).filter(Operation.status == "running").all():
             if op.kind in INDEX_KINDS:
                 self._recover_index_row(op)
@@ -1242,14 +1318,46 @@ class OperationRunner:
                 op.process_pid, int(op.process_start_time or 0)
             ):
                 counts["kept"] += 1
-            else:
-                op.status = "failed"
-                # after the lines a startup sweep wrote first, such as a
-                # backup's post-backup hooks still to run (#1429)
-                op.error_message = "\n".join(
-                    filter(None, ["interrupted by restart", op.error_message])
+            elif self._agent_does_the_work(db, op):
+                # The agent went on through the restart, and its report
+                # ends the row as it would have: kept, and waited on again
+                # (`attach_recovered`).
+                counts["kept"] += 1
+                self._recovered_agent_work.append(
+                    {
+                        "operation_id": op.id,
+                        "kind": op.kind,
+                        "repository_id": op.repository_id,
+                        "run_id": op.run_id,
+                        "claimed_at": op.started_at,
+                    }
                 )
-                op.completed_at = utc_now()
+            else:
+                # Only while the row still runs: an agent's report can end
+                # it between this pass's read and here, and what it
+                # recorded stays.
+                failed = (
+                    db.query(Operation)
+                    .filter(Operation.id == op.id, Operation.status == "running")
+                    .update(
+                        {
+                            Operation.status: "failed",
+                            # after the lines a startup sweep wrote first,
+                            # such as a backup's post-backup hooks still to
+                            # run (#1429)
+                            Operation.error_message: "\n".join(
+                                filter(
+                                    None, ["interrupted by restart", op.error_message]
+                                )
+                            ),
+                            Operation.completed_at: utc_now(),
+                        },
+                        synchronize_session=False,
+                    )
+                )
+                db.expire(op, ["status", "error_message", "completed_at"])
+                if not failed:
+                    continue
                 counts["failed"] += 1
                 # Spec 7.6: a local repository gets the lock-break attempt the
                 # per-table sweep used to make; a remote one does not, because
@@ -1258,7 +1366,92 @@ class OperationRunner:
                     self._recover_repository_lock(db, op)
         db.commit()
         logger.info("Operations recovery completed", **counts)
+        self._recover_owed_work(db)
         return counts
+
+    def _recover_owed_work(self, db: Session) -> None:
+        """Rows the agent's report ended while no task waited on it: it
+        reached a process that had not recovered yet (one that serves while
+        another still holds the lease, or waits out a dead holder's). The
+        report then closes the row by itself, and what the executor does
+        after the agent's verdict is still owed. A resumed task does it."""
+        listed = {claim["operation_id"] for claim in self._recovered_agent_work}
+        for kind, find in self._owed_work.items():
+            try:
+                owed = find(db)
+            except Exception as exc:
+                db.rollback()
+                logger.warning(
+                    "Could not look for work still owed after a restart",
+                    kind=kind,
+                    error=str(exc),
+                )
+                continue
+            for op in owed:
+                if op.id in listed:
+                    continue
+                listed.add(op.id)
+                self._recovered_agent_work.append(
+                    {
+                        "operation_id": op.id,
+                        "kind": op.kind,
+                        "repository_id": op.repository_id,
+                        "run_id": op.run_id,
+                        "claimed_at": op.started_at,
+                    }
+                )
+        # the lookups' read is over before the tasks start
+        db.rollback()
+
+    def _agent_does_the_work(self, db: Session, op: Operation) -> bool:
+        check = self._agent_work.get(op.kind)
+        return check is not None and check(db, op)
+
+    def _left_to_agents(self) -> list[int]:
+        """The running operations of this runner whose work an agent is
+        doing right now; none when that cannot be read: they are then asked
+        to cancel like the rest."""
+        if not self._agent_work or not self.running_tasks:
+            return []
+        db = self._session()
+        try:
+            rows = (
+                db.query(Operation)
+                .filter(
+                    Operation.id.in_(list(self.running_tasks)),
+                    Operation.status == "running",
+                )
+                .all()
+            )
+            return [op.id for op in rows if self._agent_does_the_work(db, op)]
+        except Exception as exc:
+            db.rollback()
+            logger.warning(
+                "Could not tell which operations their agents run", error=str(exc)
+            )
+            return []
+        finally:
+            db.close()
+
+    def attach_recovered(self) -> int:
+        """Start a task again for each row recovery kept because an agent
+        does its work. The executor finds the live agent job and waits on
+        it instead of starting the work a second time, and what the agent
+        reports goes through the terminal write like any other outcome. A
+        row the agent's report ended meanwhile is left as that wrote it."""
+        attached = 0
+        while self._recovered_agent_work:
+            claim = self._recovered_agent_work.pop(0)
+            operation_id = claim.pop("operation_id")
+            if operation_id in self.running_tasks:
+                continue
+            self.running_tasks[operation_id] = asyncio.create_task(
+                self.run_operation(operation_id, resumed=True, **claim)
+            )
+            attached += 1
+        if attached:
+            logger.info("Waiting again on operations their agents run", count=attached)
+        return attached
 
 
 operation_runner = OperationRunner()

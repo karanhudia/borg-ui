@@ -508,6 +508,8 @@ def test_returning_agent_keeps_its_backup(db_session, monkeypatch):
 
 
 class _Ctx:
+    resumed = False
+
     def __init__(self, db, operation):
         self.db = db
         self.operation_id = operation.id

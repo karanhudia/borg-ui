@@ -59,6 +59,8 @@ from app.services.job_admission import (
 )
 from app.services.repository_executor import (
     EXECUTOR_AGENT,
+    TERMINAL_AGENT_STATUSES,
+    agent_runs_backup,
     cancel_agent_backup_job,
     get_agent_job_for_backup,
     is_agent_executor,
@@ -118,19 +120,29 @@ def _enqueue_post_create_chain(ctx, operation: Operation) -> None:
 
 
 async def _queue_and_wait_agent_backup(ctx, job, repository, params) -> None:
-    # Raises the admission's 409 while the repository is busy, which the
-    # runner turns into a deferral (spec 7.1 step 5).
-    agent_job = queue_agent_backup_job(
-        ctx.db,
-        job,
-        repository,
-        **{
-            AGENT_PARAMS[key]: params[key]
-            for key in AGENT_PARAMS
-            if params.get(key) is not None
-        },
-    )
+    if ctx.resumed:
+        # The job the agent kept running through the restart, ended since
+        # or not: never a second one.
+        agent_job = get_agent_job_for_backup(ctx.db, job)
+        if agent_job is None:
+            raise RuntimeError("the backup's agent job is gone")
+    else:
+        # Raises the admission's 409 while the repository is busy, which the
+        # runner turns into a deferral (spec 7.1 step 5).
+        agent_job = queue_agent_backup_job(
+            ctx.db,
+            job,
+            repository,
+            **{
+                AGENT_PARAMS[key]: params[key]
+                for key in AGENT_PARAMS
+                if params.get(key) is not None
+            },
+        )
     ctx.db.commit()
+    # The backup is the agent's from here on: a server shutdown leaves it
+    # running, and the next process waits on the same job again
+    # (`OperationRunner.drain`, `attach_recovered`).
     await dispatch_agent_job_best_effort(
         ctx.db,
         agent_job,
@@ -199,6 +211,98 @@ def _pre_hooks_ran(db, operation_id: int) -> bool:
     )
 
 
+def _post_hooks_started(db, operation_id: int) -> bool:
+    return (
+        db.query(ScriptExecution.id)
+        .filter(
+            ScriptExecution.operation_id == operation_id,
+            ScriptExecution.hook_type == "post-backup",
+        )
+        .first()
+        is not None
+    )
+
+
+def _recorded_pre_hook_warnings(db, operation_id: int) -> list[str]:
+    """What the pre-backup hooks of a backup left to say before a server
+    restart: the messages of those that ended with a warning, or failed
+    without stopping the backup. The backup went on to the agent, so each
+    was one it could go on after."""
+    return [
+        message
+        for (message,) in db.query(ScriptExecution.error_message)
+        .filter(
+            ScriptExecution.operation_id == operation_id,
+            ScriptExecution.hook_type == "pre-backup",
+            ScriptExecution.status.in_(("warning", "failed")),
+            ScriptExecution.error_message.isnot(None),
+        )
+        .order_by(ScriptExecution.id)
+    ]
+
+
+def _post_hook_result(status: Optional[str]) -> str:
+    """What a backup's post-backup hooks hear for the status it ended with."""
+    return {
+        "completed": "success",
+        "completed_with_warnings": "warning",
+        # skipped after a pre-backup hook ran (#1331): the hooks hear what
+        # they hear after a skipping pre-backup hook
+        "skipped": SKIPPED,
+    }.get(status or "", "failure")
+
+
+def unfinished_agent_backups(db) -> list[Operation]:
+    """Agent backups whose row has ended although the task that sees a
+    backup through never did: the agent's report reached a process whose
+    runner had not recovered yet, and closed the row by itself. Looked at
+    are each repository's latest backup that started, ended by its agent
+    job:
+
+    - a successful one without the `result` the runner writes last. Its
+      task still owes it all it does after the agent's verdict: the warning
+      its pre-backup hooks or unrunnable scripts make of it, the
+      post-backup hooks, the result;
+    - any other one whose pre-backup hook ran while post-backup hooks due
+      for the way it ended did not: a service that hook stopped is started
+      again by them.
+
+    Not a backup one of whose post-backup hooks left a record: which of
+    them still had to run when the restart came is not known, and none is
+    run a second time, as for the server's hooks (#1429)."""
+    from app.utils.process_utils import _latest_started_backups
+
+    unfinished = []
+    for operation in _latest_started_backups(db).filter(
+        Operation.status.in_(tuple(_TERMINAL))
+    ):
+        params = operation.params or {}
+        if "legacy_id" in params:
+            # copied from the legacy table: it never had a result
+            continue
+        agent_job = get_agent_job_for_backup(db, operation)
+        if agent_job is None or agent_job.status not in TERMINAL_AGENT_STATUSES:
+            continue
+        if _post_hooks_started(db, operation.id):
+            continue
+        repository = db.get(Repository, operation.repository_id)
+        if repository is None or not is_agent_executor(repository):
+            continue
+        if operation.status in ("completed", "completed_with_warnings"):
+            if operation.result is None:
+                unfinished.append(operation)
+            continue
+        if (
+            not params.get("skip_hooks")
+            and _pre_hooks_ran(db, operation.id)
+            and agent_hooks(
+                db, repository, "post-backup", _post_hook_result(operation.status)
+            )
+        ):
+            unfinished.append(operation)
+    return unfinished
+
+
 async def _run_agent_backup(ctx, job, repository, params) -> None:
     """An agent backup with the repository's own hooks around it (#1386).
 
@@ -218,9 +322,15 @@ async def _run_agent_backup(ctx, job, repository, params) -> None:
 
     unrunnable = unrunnable_repository_scripts(db, repository)
     live_job = get_agent_job_for_backup(db, job)
-    resuming = live_job is not None and live_job.status in ACTIVE_AGENT_STATUSES
+    resuming = ctx.resumed or (
+        live_job is not None and live_job.status in ACTIVE_AGENT_STATUSES
+    )
     warnings: list[str] = []
     pre_ran = False
+    if resuming:
+        # the pre-backup hooks ran before the restart; what they left to
+        # say still counts
+        warnings.extend(_recorded_pre_hook_warnings(db, ctx.operation_id))
     if not resuming:
         # A busy repository defers before any hook ran, not after.
         ensure_repository_admission(
@@ -302,13 +412,7 @@ async def _run_agent_backup(ctx, job, repository, params) -> None:
         # agent is back.
         return
     status = "cancelled" if ctx.cancelled() else job.status
-    backup_result = {
-        "completed": "success",
-        "completed_with_warnings": "warning",
-        # skipped after a pre-backup hook ran (#1331): the hooks hear what
-        # they hear after a skipping pre-backup hook
-        "skipped": SKIPPED,
-    }.get(status, "failure")
+    backup_result = _post_hook_result(status)
     if backup_result == "success" and (unrunnable or warnings):
         # the backup ends with a warning, and its post-backup hooks hear so,
         # as they do after the server's rclone mirror warns
@@ -385,7 +489,7 @@ def _backup_executor(ctx, job, repository) -> str:
     an agent (or back) while the backup waited has its Borg on the other
     side now. A backup resumed after a restart whose agent job is still live
     stays with that job."""
-    if is_agent_executor(repository):
+    if ctx.resumed or is_agent_executor(repository):
         return EXECUTOR_AGENT
     if ctx.params.get("executor") == EXECUTOR_AGENT:
         live_job = get_agent_job_for_backup(ctx.db, job)
@@ -479,7 +583,9 @@ async def run_backup(ctx) -> Outcome:
 
     params = ctx.params
     operation = ctx.db.get(Operation, ctx.operation_id)
-    if operation.backup_plan_run_id is not None:
+    # A backup the agent kept running through a restart entered its plan's
+    # slot before it: the plan's pre-backup scripts are not run again.
+    if operation.backup_plan_run_id is not None and not ctx.resumed:
         stood_down = await _enter_plan_slot(ctx)
         if stood_down is not None:
             return stood_down
@@ -552,4 +658,9 @@ async def run_backup(ctx) -> Outcome:
     return Outcome(status="failed", error_message=job.error_message)
 
 
-executors.register("backup", run_backup)
+executors.register(
+    "backup",
+    run_backup,
+    agent_work=agent_runs_backup,
+    owed_work=unfinished_agent_backups,
+)

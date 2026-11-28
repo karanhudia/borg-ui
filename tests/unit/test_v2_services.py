@@ -1107,6 +1107,8 @@ class _RunnerContext:
     """The slice of OperationContext the maintenance executor uses, for a row
     the runner has already claimed."""
 
+    resumed = False
+
     def __init__(self, db, operation):
         self.db = db
         self.operation = operation

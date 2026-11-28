@@ -99,10 +99,13 @@ from app.services.restore_check_service import restore_check_service
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.utils.process_utils import (
+    CONTAINER_RESTARTED_DURING_BACKUP,
     POST_BACKUP_HOOK_MARKERS,
     POST_BACKUP_HOOKS_AFTER_CANCEL,
     POST_BACKUP_HOOKS_AFTER_RESTART,
     PRE_BACKUP_SCRIPT_HOOK_TYPES,
+    _mark_post_backup_scripts_unsettled,
+    _post_backup_scripts_after_restart,
     _post_backup_scripts_still_pending,
     pre_backup_scripts_started,
 )
@@ -597,9 +600,9 @@ def _update_children(
     *,
     repository_id: Optional[int] = None,
     from_statuses: tuple[str, ...] = ("pending",),
-) -> None:
+) -> int:
     """Move a run's repository rows on, in one statement, and only from the
-    statuses they are allowed to move from.
+    statuses they are allowed to move from. Returns how many rows moved.
 
     A cancellation can commit between a reader's look and its write: a plan
     worker that decided to skip a repository must not then overwrite the
@@ -612,7 +615,7 @@ def _update_children(
     )
     if repository_id is not None:
         q = q.filter(BackupPlanRunRepository.repository_id == repository_id)
-    q.update(values, synchronize_session=False)
+    return q.update(values, synchronize_session=False)
 
 
 def _write_bookkeeping(
@@ -1886,21 +1889,7 @@ class BackupPlanExecutionService:
                 # cancelled the queued ones, the runner's recovery failed the
                 # running ones), but an agent backup the restart failed, or an
                 # agent's pre-backup hook, may still run on its agent.
-                from app.services.backup_service import backup_service
-
-                for operation_id in self._run_backup_operation_ids(run_id):
-                    await wait_out_backup_operation(operation_id)
-                    # and its repository's post-backup hooks first (#1429)
-                    await backup_service.wait_for_post_hooks_after_restart(
-                        operation_id=operation_id
-                    )
-                    await self._wait_for_agent_job_to_end(
-                        partial(_backup_agent_job, operation_id=operation_id)
-                    )
-                for agent_job_id in self._pre_backup_agent_job_ids(run_id):
-                    await self._wait_for_agent_job_to_end(
-                        partial(_agent_job, agent_job_id=agent_job_id)
-                    )
+                await self._wait_for_the_runs_work_to_end(run_id)
                 logger.info(
                     "Running backup plan post-backup scripts after the restart",
                     run_id=run_id,
@@ -1916,6 +1905,27 @@ class BackupPlanExecutionService:
             )
             warnings = [str(exc)]
         await self._settle_post_hooks_after_restart(run_id, context, warnings)
+
+    async def _wait_for_the_runs_work_to_end(self, run_id: int) -> None:
+        """Until nothing of a run the restart interrupted is at work any
+        more: its backup operations, their repositories' post-backup hooks
+        a restart left to run (#1429), and the agent jobs of its backups and
+        of its pre-backup hooks. The plan's post-backup scripts undo what
+        its pre-backup scripts did, and must not run under any of them."""
+        from app.services.backup_service import backup_service
+
+        for operation_id in self._run_backup_operation_ids(run_id):
+            await wait_out_backup_operation(operation_id)
+            await backup_service.wait_for_post_hooks_after_restart(
+                operation_id=operation_id
+            )
+            await self._wait_for_agent_job_to_end(
+                partial(_backup_agent_job, operation_id=operation_id)
+            )
+        for agent_job_id in self._pre_backup_agent_job_ids(run_id):
+            await self._wait_for_agent_job_to_end(
+                partial(_agent_job, agent_job_id=agent_job_id)
+            )
 
     def _restart_context(self, run_id: int) -> Optional[PlanRunContext]:
         db = SessionLocal()
@@ -3173,41 +3183,12 @@ class BackupPlanExecutionService:
             db.commit()
             wake_runner()
 
-            # A failed read of the operation is waited out, not taken for a
-            # failed backup; the run id names the plan in every line logged
-            # while waiting.
-            with structlog.contextvars.bound_contextvars(run_id=run_id):
-                final_status = await wait_out_backup_operation(
-                    operation_id,
-                    is_cancelled=lambda: self._is_run_cancelled(run_id),
-                )
-            refresh_backup_job(db, backup_job)
-
-            if final_status in SUCCESS_BACKUP_STATUSES:
-                if self._is_run_cancelled(run_id):
-                    child.status = "cancelled"
-                    child.completed_at = datetime.utcnow()
-                    child.error_message = CANCELLED_MESSAGE
-                    db.commit()
-                    return "cancelled"
-
-                maintenance_status = await self._run_maintenance(
-                    db, backup_job, repo, context, run_id
-                )
-                if maintenance_status == "cancelled":
-                    child.status = "cancelled"
-                    child.completed_at = datetime.utcnow()
-                    child.error_message = CANCELLED_MESSAGE
-                    db.commit()
-                    return "cancelled"
-                if maintenance_status == "completed_with_warnings":
-                    final_status = "completed_with_warnings"
-
-            child.status = final_status
-            child.completed_at = backup_job.completed_at or datetime.utcnow()
-            child.error_message = backup_job.error_message
+            final_status = await self._see_repository_backup_through(
+                db, run_id, context, child, repo, backup_job, operation_id
+            )
+            if final_status is None:
+                return "cancelled"
             error_message = child.error_message
-            db.commit()
             if gate is not None and gate.stood_down():
                 # This backup got the slot the pre-backup scripts ran in, and
                 # stood down with them; the run decides for the rest, not
@@ -3264,6 +3245,300 @@ class BackupPlanExecutionService:
             return "failed"
         finally:
             db.close()
+
+    async def _see_repository_backup_through(
+        self,
+        db: Session,
+        run_id: int,
+        context: Optional[PlanRunContext],
+        child: BackupPlanRunRepository,
+        repo: Repository,
+        backup_job,
+        operation_id: int,
+    ) -> Optional[str]:
+        """Wait for a repository's backup operation, run the plan's
+        maintenance after a success, and record the repository's status on
+        the run, which is returned; None when a cancel of the run closed
+        the repository instead. Also the way a backup is followed that its
+        agent kept running through a server restart; without `context` (the
+        plan is gone) no maintenance runs."""
+        # A failed read of the operation is waited out, not taken for a
+        # failed backup; the run id names the plan in every line logged
+        # while waiting.
+        with structlog.contextvars.bound_contextvars(run_id=run_id):
+            final_status = await wait_out_backup_operation(
+                operation_id,
+                is_cancelled=lambda: self._is_run_cancelled(run_id),
+            )
+        refresh_backup_job(db, backup_job)
+
+        if final_status in SUCCESS_BACKUP_STATUSES:
+            if self._is_run_cancelled(run_id):
+                self._close_repository_as_cancelled(db, run_id, child)
+                return None
+
+            maintenance_status = (
+                await self._run_maintenance(db, backup_job, repo, context, run_id)
+                if context is not None
+                else None
+            )
+            if maintenance_status == "cancelled":
+                self._close_repository_as_cancelled(db, run_id, child)
+                return None
+            if maintenance_status == "completed_with_warnings":
+                final_status = "completed_with_warnings"
+
+        # Only while the repository is still open: a cancel of the run closes
+        # it at once (`cancel_run`), and a backup that then ends as failed
+        # must not put its status over that.
+        recorded = _update_children(
+            db,
+            run_id,
+            {
+                BackupPlanRunRepository.status: final_status,
+                BackupPlanRunRepository.completed_at: (
+                    backup_job.completed_at or datetime.utcnow()
+                ),
+                BackupPlanRunRepository.error_message: backup_job.error_message,
+            },
+            repository_id=child.repository_id,
+            from_statuses=tuple(ACTIVE_PLAN_RUN_STATUSES),
+        )
+        db.commit()
+        return final_status if recorded else None
+
+    @staticmethod
+    def _close_repository_as_cancelled(
+        db: Session, run_id: int, child: BackupPlanRunRepository
+    ) -> None:
+        """Record a repository of a cancelled run as cancelled, unless the
+        cancel has closed its row already: that row keeps what the cancel
+        wrote, its time included."""
+        _update_children(
+            db,
+            run_id,
+            {
+                BackupPlanRunRepository.status: "cancelled",
+                BackupPlanRunRepository.completed_at: datetime.utcnow(),
+                BackupPlanRunRepository.error_message: CANCELLED_MESSAGE,
+            },
+            repository_id=child.repository_id,
+            from_statuses=tuple(ACTIVE_PLAN_RUN_STATUSES),
+        )
+        db.commit()
+
+    def follow_agent_backups_after_restart(self, run_ids: list[int]) -> None:
+        """Follow, each in a task of its own, the runs the startup sweep left
+        active because an agent kept one of their backups running through
+        the restart. A run is live while it is followed."""
+        waiting = list(run_ids)
+        try:
+            while waiting:
+                run_id = waiting.pop(0)
+                self._launch(run_id, self._follow_agent_backups_after_restart(run_id))
+        finally:
+            # held for a launch that did not come
+            self.live_run_ids.difference_update(waiting)
+
+    async def _follow_agent_backups_after_restart(self, run_id: int) -> None:
+        """What is left of a run the restart interrupted while an agent was
+        running one of its backups: each of those backups is seen through as
+        in the run itself, then the plan's post-backup scripts run with the
+        result the run came to, and the run is finished. Its repositories
+        that had not started stay interrupted; they are not started here."""
+        context: Optional[PlanRunContext] = None
+        warnings: list[str] = []
+        post_scripts_reached = False
+        try:
+            context = self._restart_context(run_id)
+            # The verdict of the pre-backup scripts went with the process;
+            # a warning one of them left is on its execution.
+            run_warnings = self._pre_backup_warnings(run_id)
+            results = await asyncio.gather(
+                *(
+                    self._follow_agent_backup_after_restart(run_id, context, child_id)
+                    for child_id in self._active_repository_ids(run_id)
+                ),
+                return_exceptions=True,
+            )
+            for result in results:
+                if isinstance(result, BaseException):
+                    logger.error(
+                        "Could not follow a backup plan repository after the restart",
+                        run_id=run_id,
+                        error=str(result),
+                    )
+            # Also a backup whose repository a cancel of the run closed
+            # meanwhile: its agent may still be stopping it.
+            await self._wait_for_the_runs_work_to_end(run_id)
+            db = SessionLocal()
+            try:
+                post_scripts = _post_backup_scripts_after_restart(db, run_id)
+            finally:
+                db.close()
+            # A backup of the run had its slot, so the run itself would run
+            # its post-backup scripts now, with or without pre-backup ones.
+            # Not the ones a restart interrupted: which of them still had to
+            # run is unknown.
+            post_scripts_reached = True
+            if post_scripts != "interrupted":
+                if context is not None:
+                    backup_result = (
+                        "failure"
+                        if self._is_run_cancelled(run_id)
+                        else self._plan_backup_result(run_id)
+                    )
+                    warnings = await self._run_post_backup_scripts(
+                        run_id, context, backup_result
+                    )
+                    await self._report_cleanup_of_cancelled_run(
+                        run_id, context, warnings
+                    )
+                elif post_scripts == "pending":
+                    warnings = ["Backup plan no longer exists"]
+            run_warnings.extend(warnings)
+            self._finalize_run(
+                run_id,
+                warning_message="; ".join(run_warnings) if run_warnings else None,
+            )
+            self._record_restart_on_followed_run(run_id, post_scripts)
+            db = SessionLocal()
+            try:
+                status = self._run_status(db, run_id)
+            finally:
+                db.close()
+            if warnings and status in {"failed", "partial"}:
+                # `_finalize_run` keeps a warning only on a run that
+                # completed: what the pre-backup scripts stopped may still
+                # be stopped, and the run says so as after any restart.
+                await self._settle_post_hooks_after_restart(run_id, context, warnings)
+        except Exception as exc:
+            logger.error(
+                "Backup plan run could not be followed after the restart",
+                run_id=run_id,
+                error=str(exc),
+            )
+            self._mark_run_failed(run_id, str(exc))
+            if not post_scripts_reached:
+                await self._leave_post_scripts_to_restart_recovery(run_id)
+
+    async def _leave_post_scripts_to_restart_recovery(self, run_id: int) -> None:
+        """A followed run that failed before its post-backup scripts: what
+        its pre-backup scripts stopped is still stopped. The run says so,
+        which is how a later restart finds it again, and the recovery of
+        post-backup scripts after a restart takes it from here (it waits for
+        the run's work and runs them with the failure result)."""
+        pending = False
+
+        def work(db: Session) -> None:
+            nonlocal pending
+            run = db.get(BackupPlanRun, run_id)
+            if run is None or run.status in ACTIVE_PLAN_RUN_STATUSES:
+                return
+            if _post_backup_scripts_after_restart(db, run_id) != "pending":
+                return
+            _mark_post_backup_scripts_unsettled(run)
+            pending = True
+
+        try:
+            _write_bookkeeping(work)
+        except Exception as exc:
+            logger.error(
+                "Could not record the post-backup scripts still to run",
+                run_id=run_id,
+                error=str(exc),
+            )
+            return
+        if pending:
+            await self._run_post_hooks_after_restart(run_id)
+
+    @staticmethod
+    def _pre_backup_warnings(run_id: int) -> list[str]:
+        """What the run's pre-backup scripts left to say: the messages of
+        those that ended with a warning (an agent script's exit code 1) or
+        failed without stopping the run, from the executions that recorded
+        them. A backup of the run went on, so each was one it could go on
+        after."""
+        db = SessionLocal()
+        try:
+            return [
+                message
+                for (message,) in db.query(ScriptExecution.error_message)
+                .filter(
+                    ScriptExecution.backup_plan_run_id == run_id,
+                    ScriptExecution.hook_type.in_(PRE_BACKUP_SCRIPT_HOOK_TYPES),
+                    ScriptExecution.status.in_(("warning", "failed")),
+                    ScriptExecution.error_message.isnot(None),
+                )
+                .order_by(ScriptExecution.id)
+            ]
+        finally:
+            db.close()
+
+    @staticmethod
+    def _active_repository_ids(run_id: int) -> list[int]:
+        db = SessionLocal()
+        try:
+            return [
+                child_id
+                for (child_id,) in db.query(BackupPlanRunRepository.id).filter(
+                    BackupPlanRunRepository.backup_plan_run_id == run_id,
+                    BackupPlanRunRepository.status.in_(tuple(ACTIVE_PLAN_RUN_STATUSES)),
+                    BackupPlanRunRepository.backup_operation_id.isnot(None),
+                )
+            ]
+        finally:
+            db.close()
+
+    async def _follow_agent_backup_after_restart(
+        self, run_id: int, context: Optional[PlanRunContext], child_id: int
+    ) -> None:
+        db = SessionLocal()
+        try:
+            child = db.get(BackupPlanRunRepository, child_id)
+            repo = db.get(Repository, child.repository_id) if child else None
+            backup_job = (
+                resolve_backup_job(db, child.backup_operation_id) if child else None
+            )
+            if child is None or repo is None or backup_job is None:
+                return
+            repository_id = repo.id
+            operation_id = child.backup_operation_id
+            # End the read, as the commit before this wait in
+            # `_execute_repository` does: the session holds no pooled
+            # connection while the backup runs.
+            db.rollback()
+            try:
+                await self._see_repository_backup_through(
+                    db, run_id, context, child, repo, backup_job, operation_id
+                )
+            except Exception as exc:
+                db.rollback()
+                self._mark_repository_failed(run_id, repository_id, failure_text(exc))
+                raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def _record_restart_on_followed_run(
+        run_id: int, post_scripts: Optional[str]
+    ) -> None:
+        """Say on a followed run what the restart cost it: the repositories
+        it never started, and post-backup scripts the restart interrupted."""
+
+        def work(db: Session) -> None:
+            run = db.get(BackupPlanRun, run_id)
+            if run is None or run.status == "cancelled":
+                return
+            if not run.error_message and any(
+                child.error_message == CONTAINER_RESTARTED_DURING_BACKUP
+                for child in run.repositories
+            ):
+                run.error_message = CONTAINER_RESTARTED_DURING_BACKUP
+            if post_scripts == "interrupted":
+                _mark_post_backup_scripts_unsettled(run)
+
+        _write_bookkeeping(work)
 
     async def _run_inline_maintenance(
         self,

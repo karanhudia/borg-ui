@@ -59,6 +59,7 @@ class TestRepositoryApiDispatch:
             kind="check",
             params=dict(op.params or {}),
             cancelled=lambda: False,
+            resumed=False,
             log=lambda line: None,
         )
         with patch(
@@ -146,6 +147,7 @@ class TestRepositoryApiDispatch:
             kind="compact",
             params=dict(op.params or {}),
             cancelled=lambda: False,
+            resumed=False,
             log=lambda line: None,
         )
         fake_router = Mock(compact=AsyncMock())
@@ -287,6 +289,7 @@ class TestRepositoryApiDispatch:
             kind="prune",
             params=dict(op.params or {}),
             cancelled=lambda: False,
+            resumed=False,
             log=lambda line: None,
         )
         fake_router = Mock(prune=AsyncMock())

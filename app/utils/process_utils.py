@@ -395,15 +395,55 @@ def _cancel_queued_run_operations(
     )
 
 
+def _agent_kept_backup_running(db: Session, child: BackupPlanRunRepository) -> bool:
+    """Whether the repository's backup is one its agent kept running through
+    the restart, so that the repository's part of the run is not over.
+
+    Either it still runs: the runner's recovery keeps that operation and
+    waits on the agent job again. Or the agent's report has ended it since,
+    in a process that had not recovered yet, with no task behind it: the
+    row then carries the agent's verdict but not the `result` the runner
+    writes last, and the run has not seen it through (its maintenance, the
+    repository's status). A backup that has its result ended before the
+    restart; what the restart interrupted then was the run's maintenance."""
+    from app.services.job_admission import ACTIVE_AGENT_STATUSES
+    from app.services.repository_executor import (
+        TERMINAL_AGENT_STATUSES,
+        get_agent_job_for_backup,
+    )
+
+    if child.backup_operation_id is None:
+        return False
+    operation = db.get(Operation, child.backup_operation_id)
+    if operation is None:
+        return False
+    agent_job = get_agent_job_for_backup(db, operation)
+    if agent_job is None:
+        return False
+    if operation.status == "running":
+        return agent_job.status in ACTIVE_AGENT_STATUSES
+    return (
+        operation.status != "queued"
+        and operation.result is None
+        and agent_job.status in TERMINAL_AGENT_STATUSES
+    )
+
+
 def _normalize_interrupted_backup_plan_runs(
     db: Session,
     now: datetime,
     interrupted_runs: Optional[list[BackupPlanRun]] = None,
     pending_post_hooks: Optional[list[int]] = None,
+    agent_backups_running: Optional[list[int]] = None,
 ) -> int:
     """Finish active backup plan run rows that cannot resume after a restart,
     with the operations they queued and never started. The runs whose
-    post-backup scripts are still to run are added to `pending_post_hooks`."""
+    post-backup scripts are still to run are added to `pending_post_hooks`.
+
+    A run with a backup its agent kept running is not finished here when the
+    caller takes `agent_backups_running`: it is added to that list and stays
+    active until those backups ended, with only the repositories that were
+    not running on an agent failed."""
     if interrupted_runs is None:
         interrupted_runs = (
             db.query(BackupPlanRun)
@@ -412,11 +452,32 @@ def _normalize_interrupted_backup_plan_runs(
         )
 
     for run in interrupted_runs:
+        kept = (
+            [
+                child.id
+                for child in run.repositories
+                if child.status in ACTIVE_PLAN_RUN_STATUSES
+                and _agent_kept_backup_running(db, child)
+            ]
+            if agent_backups_running is not None
+            else []
+        )
         for child in run.repositories:
-            if child.status in ACTIVE_PLAN_RUN_STATUSES:
+            if child.status in ACTIVE_PLAN_RUN_STATUSES and child.id not in kept:
                 _fail_backup_plan_child_after_restart(
                     child, now, CONTAINER_RESTARTED_DURING_BACKUP
                 )
+        if kept:
+            cancelled_operations = _cancel_queued_run_operations(db, run, now)
+            agent_backups_running.append(run.id)
+            logger.info(
+                "Backup plan run left open after restart for its agent backups",
+                backup_plan_run_id=run.id,
+                backup_plan_id=run.backup_plan_id,
+                agent_backups=len(kept),
+                cancelled_operations=cancelled_operations,
+            )
+            continue
 
         _finalize_interrupted_backup_plan_run(
             run, now, CONTAINER_RESTARTED_DURING_BACKUP
@@ -898,6 +959,7 @@ def cleanup_orphaned_jobs(
     live_plan_run_ids: Collection[int] = (),
     *,
     hold_for_post_hooks: Optional[Callable[[list[int]], None]] = None,
+    agent_backups_running: Optional[list[int]] = None,
 ) -> list[int]:
     """Normalise what a restart leaves behind that the operations runner's
     own recovery (spec 7.6) does not cover: backup rows still in a running
@@ -909,6 +971,9 @@ def cleanup_orphaned_jobs(
     `hold_for_post_hooks` gets them before this returns, and before the
     commit that shows the interrupted ones finished, to keep their plans busy
     until those scripts are launched.
+    `agent_backups_running`, when given, receives the runs left active
+    because an agent kept one of their backups running; they are held the
+    same way, for the caller to follow those backups to their end.
     """
     logger.info("Checking for orphaned jobs...")
 
@@ -939,7 +1004,7 @@ def cleanup_orphaned_jobs(
         return pending_post_hooks
 
     normalized_plan_runs = _normalize_interrupted_backup_plan_runs(
-        db, now, active_backup_plan_runs, pending_post_hooks
+        db, now, active_backup_plan_runs, pending_post_hooks, agent_backups_running
     )
     if normalized_plan_runs:
         logger.info(
@@ -950,7 +1015,7 @@ def cleanup_orphaned_jobs(
     # A start in a worker thread may read between this commit and the launch
     # of the post-backup scripts.
     if hold_for_post_hooks is not None:
-        hold_for_post_hooks(pending_post_hooks)
+        hold_for_post_hooks(pending_post_hooks + (agent_backups_running or []))
     db.commit()
     logger.info("Orphaned job cleanup completed")
     return pending_post_hooks

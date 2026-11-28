@@ -3141,3 +3141,299 @@ async def test_server_archive_lock_exhaustion_retains_diagnostics(
     assert "owner_liveness" in row.error_message
     assert lock.exists()
     assert (lock / "old-container.123-0").exists()
+
+
+def _runner_with_agents(session_factory, registry, agent_kinds):
+    return OperationRunner(
+        session_factory=session_factory,
+        registry=registry,
+        agent_work={kind: lambda db, op: True for kind in agent_kinds},
+        poll_interval=0.01,
+        deferral_delay=0.0,
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_drain_leaves_an_operation_its_agent_runs(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """A shutdown asks the operations this process runs to cancel, and
+    leaves the one an agent is running as it is: no cancel request, no
+    terminal write, nothing kept to record later."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    other = Repository(name="o", path="/tmp/o", encryption="none", compression="lz4")
+    db.add(other)
+    db.commit()
+    started = asyncio.Event()
+
+    async def on_the_agent(ctx):
+        started.set()
+        await asyncio.Event().wait()
+
+    async def on_the_server(ctx):
+        while not ctx.cancelled():
+            await asyncio.sleep(0.01)
+        return Outcome()
+
+    registry["check"] = on_the_agent
+    registry["compact"] = on_the_server
+    runner = _runner_with_agents(session_factory, registry, ["check"])
+    agents = enqueue(db, "check", repository_id=repo.id)
+    servers = enqueue(db, "compact", repository_id=other.id)
+    assert await runner.tick() == 2
+    await started.wait()
+
+    runner.stop()
+    await asyncio.wait_for(runner.drain(timeout=20.0), timeout=5.0)
+
+    db.expire_all()
+    assert db.get(Operation, agents.id).status == "running"
+    assert db.get(Operation, agents.id).completed_at is None
+    assert db.get(Operation, servers.id).status == "cancelled"
+    assert not runner.running_tasks
+    assert not runner.unrecorded_outcomes
+    assert not runner.cancel_requested
+    assert not runner._drain_timed_out
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recovery_runs_an_operation_its_agent_kept_running_as_resumed(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    seen = []
+
+    async def check(ctx):
+        seen.append(ctx.resumed)
+        return Outcome(result={"logs": False})
+
+    registry["check"] = check
+    kept = enqueue(db, "check", repository_id=repo.id)
+    kept.status = "running"
+    kept.started_at = datetime(2026, 9, 1)
+    lost = enqueue(db, "compact", repository_id=repo.id)
+    lost.status = "running"
+    db.commit()
+    runner = _runner_with_agents(session_factory, registry, ["check"])
+
+    counts = runner.recover_on_startup(db)
+    assert counts == {"requeued": 0, "failed": 1, "kept": 1}
+    assert runner.attach_recovered() == 1
+    assert runner.attach_recovered() == 0
+    await asyncio.gather(*list(runner.running_tasks.values()))
+
+    db.expire_all()
+    assert seen == [True]
+    row = db.get(Operation, kept.id)
+    assert (row.status, row.result) == ("completed", {"logs": False})
+    assert row.started_at == datetime(2026, 9, 1)
+    assert db.get(Operation, lost.id).status == "failed"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_resumed_task_goes_on_from_a_row_the_agents_report_ended(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """The agent's report can end the row between recovery and the task's
+    first read. It leaves the rest to the task it finds waiting, so that
+    task must not take the row for someone else's."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    ran = []
+
+    async def check(ctx):
+        ran.append(ctx.operation_id)
+        return Outcome(result={"logs": True})
+
+    async def ok(ctx):
+        return Outcome()
+
+    registry["check"] = check
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    kept = enqueue(db, "check", repository_id=repo.id)
+    kept.status = "running"
+    db.commit()
+    runner = _runner_with_agents(session_factory, registry, ["check"])
+    runner.recover_on_startup(db)
+    runner.attach_recovered()
+    aside = session_factory()
+    row = aside.get(Operation, kept.id)
+    row.status = "completed"
+    row.completed_at = utc_now()
+    aside.commit()
+    aside.close()
+
+    await asyncio.gather(*list(runner.running_tasks.values()))
+
+    db.expire_all()
+    assert ran == [kept.id]
+    row = db.get(Operation, kept.id)
+    assert (row.status, row.result) == ("completed", {"logs": True})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_task_of_the_tick_still_leaves_a_row_it_finds_ended(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    ran = []
+
+    async def check(ctx):
+        ran.append(ctx.operation_id)
+        return Outcome()
+
+    registry["check"] = check
+    op = enqueue(db, "check", repository_id=repo.id)
+    op.status = "completed"
+    db.commit()
+    runner = _runner_with_agents(session_factory, registry, ["check"])
+
+    await runner.run_operation(op.id)
+
+    assert ran == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_drain_cancels_an_agent_operation_whose_cancel_was_accepted(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """An accepted cancel lives in this process until the executor's watcher
+    has passed it on to the agent. Leaving the operation to its agent at
+    that moment would lose the request: it is cancelled like the rest."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    started = asyncio.Event()
+
+    async def check(ctx):
+        started.set()
+        while not ctx.cancelled():
+            await asyncio.sleep(0.01)
+        return Outcome()
+
+    registry["check"] = check
+    runner = _runner_with_agents(session_factory, registry, ["check"])
+    op = enqueue(db, "check", repository_id=repo.id)
+    assert await runner.tick() == 1
+    await started.wait()
+    runner.cancel_requested.add(op.id)
+
+    runner.stop()
+    await asyncio.wait_for(runner.drain(timeout=20.0), timeout=5.0)
+
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "cancelled"
+    assert not runner.cancel_requested
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_resumed_run_is_never_put_back_on_the_queue(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """A refusal that defers a first run fails a resumed one. Its work was
+    started before the restart, and a second dispatch would start it from
+    the row alone, which need not hold what it was started with."""
+    from fastapi import HTTPException
+
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+
+    async def prune(ctx):
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.jobs.repositoryOperationActive"},
+        )
+
+    registry["prune"] = prune
+    op = enqueue(db, "prune", repository_id=repo.id)
+    op.status = "running"
+    db.commit()
+    runner = _runner_with_agents(session_factory, registry, ["prune"])
+    runner.recover_on_startup(db)
+    runner.attach_recovered()
+    await asyncio.gather(*list(runner.running_tasks.values()))
+
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert row.status == "failed"
+    assert "deferrals" not in (row.params or {})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recovery_resumes_an_ended_row_whose_executor_still_owes_work(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """What a kind registers as owed after the agent's report ended a row
+    with no task behind it is done by a resumed task, on the ended row."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    seen = []
+
+    async def backup(ctx):
+        seen.append((ctx.operation_id, ctx.resumed))
+        return Outcome(result={"owed": "done"})
+
+    async def ok(ctx):
+        return Outcome()
+
+    registry["backup"] = backup
+    registry["stats"] = ok
+    registry["archive_sync"] = ok
+    ended = enqueue(db, "backup", repository_id=repo.id)
+    ended.status = "completed"
+    ended.completed_at = utc_now()
+    db.commit()
+    runner = OperationRunner(
+        session_factory=session_factory,
+        registry=registry,
+        owed_work={"backup": lambda db_: [db_.get(Operation, ended.id)]},
+        poll_interval=0.01,
+        deferral_delay=0.0,
+    )
+
+    assert runner.recover_on_startup(db) == {"requeued": 0, "failed": 0, "kept": 0}
+    assert runner.attach_recovered() == 1
+    await asyncio.gather(*list(runner.running_tasks.values()))
+
+    db.expire_all()
+    assert seen == [(ended.id, True)]
+    assert db.get(Operation, ended.id).result == {"owed": "done"}
+
+
+@pytest.mark.unit
+def test_recovery_keeps_an_outcome_reported_while_it_ran(
+    db, repo, session_factory, registry, monkeypatch, tmp_path
+):
+    """An agent's report can end a row between recovery's read of it and
+    the write that would fail it: the row keeps what the report recorded."""
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    op = enqueue(db, "check", repository_id=repo.id)
+    op.status = "running"
+    db.commit()
+
+    def reported_meanwhile(db_, operation):
+        aside = session_factory()
+        row = aside.get(Operation, operation.id)
+        row.status = "completed"
+        row.completed_at = utc_now()
+        aside.commit()
+        aside.close()
+        return False  # the agent job is over
+
+    runner = OperationRunner(
+        session_factory=session_factory,
+        registry=registry,
+        agent_work={"check": reported_meanwhile},
+        poll_interval=0.01,
+        deferral_delay=0.0,
+    )
+
+    counts = runner.recover_on_startup(db)
+
+    assert counts == {"requeued": 0, "failed": 0, "kept": 0}
+    db.expire_all()
+    row = db.get(Operation, op.id)
+    assert (row.status, row.error_message) == ("completed", None)
