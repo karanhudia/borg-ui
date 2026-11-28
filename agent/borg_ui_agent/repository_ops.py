@@ -586,11 +586,14 @@ class RepositoryOperationPayload:
                     "--log-json",
                 ]
             else:
+                # Borg 1 rejects --stats with --dry-run ("Ignoring --stats"
+                # at WARNING level), so a dry run leaves it out, as the
+                # server-side prune does.
                 cmd = [
                     *self._base_borg1("prune"),
                     "--list",
                     "--progress",
-                    "--stats",
+                    *([] if dry_run else ["--stats"]),
                     "--show-rc",
                     "--log-json",
                 ]
