@@ -811,17 +811,30 @@ class OperationRunner:
         op.progress_total = None
         op.progress_message = None
 
-    def _lanes_held(self, db: Session) -> set[int]:
-        """The repositories whose exclusive operation still has its task
-        here, whatever its row says: an executor can work on after its row
-        reads terminal (an agent backup's post-backup hooks, which the agent
-        transport ends the row before, #1386), and no other exclusive
-        operation starts under it."""
-        ids = [
+    def operations_at_work(self) -> set[int]:
+        """The operations that still have their task here, whatever their
+        row says: an executor can work on after its row reads terminal (an
+        agent backup's post-backup hooks, which the agent transport ends the
+        row before, #1386), and can still change the outcome. Safe to call
+        from another thread."""
+        return {
             operation_id
-            for operation_id, task in self.running_tasks.items()
+            for operation_id, task in list(self.running_tasks.items())
             if not (asyncio.isfuture(task) and task.done())
-        ]
+        }
+
+    def operations_with_open_outcome(self) -> set[int]:
+        """The operations whose row may not show their outcome yet: those at
+        work, and those whose task ended before its terminal write reached
+        the row (`unrecorded_outcomes`). Safe to call from another thread."""
+        at_work = self.operations_at_work()
+        return at_work | set(self.unrecorded_outcomes)
+
+    def _lanes_held(self, db: Session) -> set[int]:
+        """The repositories whose exclusive operation is still at work
+        (`operations_at_work`): no other exclusive operation starts under
+        it."""
+        ids = self.operations_at_work()
         if not ids:
             return set()
         rows = (
@@ -1095,7 +1108,6 @@ class OperationRunner:
             if ctx is not None:
                 ctx.close()
             db.close()
-            self.running_tasks.pop(operation_id, None)
             if (
                 kind is not None
                 and run_id is not None
@@ -1118,6 +1130,9 @@ class OperationRunner:
                     completed_at=utc_now(),
                     fallback=True,
                 )
+            # Dropped only now: `operations_with_open_outcome` never finds
+            # the operation in neither place.
+            self.running_tasks.pop(operation_id, None)
             # Recovery needs the accepted request if the terminal write
             # failed; only a committed terminal state consumes it.
             if terminal_committed:

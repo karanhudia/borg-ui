@@ -648,6 +648,38 @@ async def test_a_backup_whose_terminal_commit_fails_does_not_stay_running(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_an_unrecorded_outcome_is_named_before_its_task_is_dropped(
+    db, repo, runner, registry, monkeypatch
+):
+    """Job history retention asks from another thread which operations have
+    an open outcome. One whose terminal write failed must never be in
+    neither place: not at work any more, and not yet unrecorded."""
+    failing = _failing_commits(monkeypatch)
+
+    async def backup(ctx):
+        # the next commit is the runner's terminal write
+        failing["commits"] = 1
+        return Outcome()
+
+    registry["backup"] = backup
+    named_at_drop = []
+
+    class Tasks(dict):
+        def pop(self, operation_id, *default):
+            named_at_drop.append(operation_id in runner.unrecorded_outcomes)
+            return super().pop(operation_id, *default)
+
+    runner.running_tasks = Tasks()
+    op = enqueue(db, "backup", repository_id=repo.id)
+    assert runner.operations_with_open_outcome() == set()
+    await _drain(runner, rounds=1)
+
+    assert named_at_drop == [True]
+    assert op.id not in runner.running_tasks
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_an_unrecorded_outcome_keeps_its_result_and_enqueues_the_followups(
     db, repo, runner, registry, monkeypatch
 ):
