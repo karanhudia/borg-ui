@@ -176,7 +176,7 @@ class TestArchiveInfoIntegration:
     def test_get_archive_info_nonexistent_archive(
         self, test_client: TestClient, admin_headers, db_borg_repo
     ):
-        """Test getting info for non-existent archive returns 500"""
+        """A missing archive is 404 (dashboard 5cb5aa55c3749b6b)"""
         repo, repo_path, test_data_path = db_borg_repo
 
         response = test_client.get(
@@ -184,8 +184,8 @@ class TestArchiveInfoIntegration:
             headers=admin_headers,
         )
 
-        # Borg returns error when archive doesn't exist
-        assert response.status_code == 500
+        # Borg exits 31 ("Archive ... does not exist"), classified as 404
+        assert response.status_code == 404
         assert "Failed to get archive info" in response.json()["detail"]
 
     def test_get_archive_info_real_archive_by_id(
