@@ -257,7 +257,7 @@ def _cors_headers(request: Request) -> MutableHeaders:
     origin = request.headers.get("origin")
     if origin:
         headers.update(_cors.simple_headers)
-        if (_cors.allow_all_origins and _cors.allow_credentials) or (
+        if (_cors.allow_all_origins and CORS_OPTIONS["allow_credentials"]) or (
             not _cors.allow_all_origins and _cors.is_allowed_origin(origin=origin)
         ):
             _cors.allow_explicit_origin(headers, origin)

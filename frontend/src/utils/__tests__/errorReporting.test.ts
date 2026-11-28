@@ -420,6 +420,13 @@ describe('global handlers', () => {
         'insertBefore@[native code]\n@webkit-masked-url://hidden/:7100:42\nfulfilled@webkit-masked-url://hidden/:6801:62'
       )
     )
+    // A script name with parentheses, named and unnamed frames.
+    rejection(
+      fromStack(
+        'paren',
+        'Error: paren\n    at injected (chrome-extension://a/content(1).js:1:2)\n    at chrome-extension://a/content(1).js:3:4'
+      )
+    )
     rejection(fromStack('x', 'f@moz-extension://a/b.js:1:2'))
     rejection(fromStack('x', 'f@safari-web-extension://a/b.js:1:2'))
     // Firefox for iOS injects scripts that call its own __firefox__ object

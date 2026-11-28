@@ -293,7 +293,9 @@ const frameLocations = (stack: string): string[] => {
       .filter((line) => /^\s*at\s/.test(line))
       .map((line) => {
         const frame = line.trim().slice(3).trim()
-        return /\(([^()]*)\)$/.exec(frame)?.[1] ?? frame
+        // `fn (loc)`: from the first ` (` to the final `)`, so a location
+        // may itself contain parentheses (`content(1).js`).
+        return /^\S[^(]*? \((.*)\)$/.exec(frame)?.[1] ?? frame
       })
   }
   return lines.map((line) => {
