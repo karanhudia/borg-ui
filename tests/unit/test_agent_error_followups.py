@@ -155,6 +155,22 @@ async def test_only_evidenced_init_conflicts_return_409(
     assert job.result["return_code"] == code
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kind,status", [("repository.init", 409), ("repository.info", 502)]
+)
+async def test_init_onto_an_occupied_path_is_a_conflict(test_db, machine, kind, status):
+    # Something that is not a repository is already at the path; the user
+    # picks another one (dashboard fd8a3e653ad160f1, 7508f730f74c75da).
+    job = failed_job(
+        test_db, machine, kind=kind, code=19, tail="There is already something at /."
+    )
+    with pytest.raises(HTTPException) as caught:
+        await wait_for_agent_repository_operation_job(test_db, job.id)
+    assert caught.value.status_code == status
+    assert "There is already something at /." in caught.value.detail["params"]["reason"]
+
+
 TRACEBACK = """Local Exception
 Traceback (most recent call last):
   File "borg/archiver.py", line 1, in main

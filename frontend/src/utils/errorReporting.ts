@@ -277,6 +277,23 @@ const sameOrigin = (url: string): boolean => {
   }
 }
 
+// Browser extension code: its script URLs (Safari masks them as
+// webkit-masked-url://hidden/), or Firefox for iOS's injected __firefox__ helpers.
+const EXTENSION_FRAME = /(?:chrome|moz|safari|safari-web)-extension:\/\/|webkit-masked-url:\/\//
+
+const fromExtension = (error: unknown): boolean => {
+  try {
+    const e = error as { message?: unknown; stack?: unknown } | null
+    if (typeof e?.message === 'string' && /\b__firefox__\b/.test(e.message)) return true
+    const stack = typeof e?.stack === 'string' ? e.stack : ''
+    // Only when none of its frames is ours: our code calling into an
+    // extension's patched API is still our error to see.
+    return EXTENSION_FRAME.test(stack) && topFrame(stack) === ''
+  } catch {
+    return false
+  }
+}
+
 let installed = false
 
 /** Report uncaught errors and unhandled rejections. Idempotent. */
@@ -303,10 +320,12 @@ export const installGlobalErrorHandlers = (): void => {
     )
       return
     if (event.filename && !sameOrigin(event.filename)) return
+    if (fromExtension(event.error ?? { message: event.message })) return
     reportError(event.error ?? event.message, { kind: 'uncaught' })
   })
   window.addEventListener('unhandledrejection', (event) => {
     if (isCancelled(event.reason)) return
+    if (fromExtension(event.reason)) return
     // Setup errors can reject before the response interceptor is installed.
     if (axios.isAxiosError(event.reason)) {
       trackApiError(event.reason)

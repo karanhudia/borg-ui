@@ -540,7 +540,7 @@ async def list_archives(
                 cleanup_temp_key_file(temp_key_file)
         if not _read_succeeded(result):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=repository_failure_status(result),
                 detail=f"Failed to list archives: {result.get('stderr', '')}",
             )
 
@@ -605,7 +605,7 @@ async def get_archive_info(
         time_zone = agent_timezone_for_repository(db, repo) if agent else "UTC"
         if not _read_succeeded(result):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=repository_failure_status(result),
                 detail=f"Failed to get archive info: {result.get('stderr', '')}",
             )
 

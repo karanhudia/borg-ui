@@ -1065,9 +1065,14 @@ async def wait_for_agent_repository_operation_job(
                     }
                 )
             )
+            # A conflict counts for init alone: something else already at the
+            # path (dashboard fd8a3e653ad160f1); elsewhere it stays a 502.
+            if refusal == 409 and payload.get("job_kind") != "repository.init":
+                refusal = None
             raise HTTPException(
-                # 422 only: a conflict is inferred for init alone (above)
-                status_code=refusal if refusal == 422 else status.HTTP_502_BAD_GATEWAY,
+                status_code=refusal
+                if refusal in (409, 422)
+                else status.HTTP_502_BAD_GATEWAY,
                 detail=agent_operation_failed_detail(
                     message, lock_contention=lock_contention
                 ),

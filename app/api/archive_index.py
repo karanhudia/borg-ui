@@ -498,6 +498,14 @@ async def prune_preview(
             user_id=current_user.id,
             run_id=str(body.preview_run_id) if body.preview_run_id else None,
         )
+    except HTTPException as exc:
+        from app.services.operations.runner import repository_busy
+
+        # The agent's Borg run waited on a lock another process holds: 423, as
+        # below. The admission's own 409 passes through unchanged.
+        if exc.status_code == 502 and repository_busy(exc):
+            raise HTTPException(status_code=423, detail=exc.detail) from exc
+        raise
     except service.DryRunFailed as exc:
         # A lock another process holds is 423 (dashboard 0a89530469ffaa5d);
         # any other failed dry run is Borg's, so 502.

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import ClientDisconnect
 import structlog
 import os
 from dotenv import load_dotenv
@@ -232,8 +234,16 @@ def _request_component(request: Request) -> str:
     return f"{request.method} {route.path if route else 'unmatched'}"
 
 
+def _request_id(request: Request) -> str | None:
+    return getattr(request.state, "request_id", None)
+
+
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception):
+    # The browser went away while sending the body (dashboard 075e674ac80b9e42):
+    # nobody is left to answer and nothing failed here.
+    if isinstance(exc, ClientDisconnect):
+        return Response(status_code=499)
     recovery = storage_response(exc)
     status_code, detail = recovery or (500, "Internal Server Error")
     report_exception(
@@ -242,8 +252,11 @@ async def unhandled_error_handler(request: Request, exc: Exception):
         component=_request_component(request),
         status=status_code,
         error_key=detail.get("key") if isinstance(detail, dict) else None,
+        request_id=_request_id(request),
     )
-    return JSONResponse({"detail": detail}, status_code=status_code)
+    # Outside the request middleware: carry the request ID here too.
+    headers = {"X-Request-ID": rid} if (rid := _request_id(request)) else None
+    return JSONResponse({"detail": detail}, status_code=status_code, headers=headers)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -263,6 +276,7 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException):
             component=_request_component(request),
             status=status_code,
             error_key=detail.get("key"),
+            request_id=_request_id(request),
         )
         if recovery:
             return JSONResponse({"detail": detail}, status_code=status_code)
@@ -822,6 +836,9 @@ async def catch_all(full_path: str):
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log all requests (except static assets and SSE streams)"""
+    # Every response from Borg UI itself carries an ID its error reports share
+    # (see report_exception); a proxy's own error page does not.
+    request.state.request_id = uuid.uuid4().hex
     # Skip logging for static assets and SSE streams to reduce noise
     skip_paths = ["/assets/", "/static/", "/api/events/stream"]
     should_log = not any(request.url.path.startswith(path) for path in skip_paths)
@@ -835,6 +852,7 @@ async def log_requests(request: Request, call_next):
         )
 
     response = await call_next(request)
+    response.headers["X-Request-ID"] = request.state.request_id
 
     if should_log:
         # Log errors and warnings with more detail

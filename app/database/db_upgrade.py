@@ -870,6 +870,14 @@ if __name__ == "__main__":
         log.error("%s", exc)
         sys.exit(1)
     except Exception as exc:
+        from app.core.storage_errors import storage_failure
+
+        if storage_failure(exc) == "unavailable":
+            log.error(
+                "Cannot open the database file. Check that its folder exists and "
+                "is writable by the container user (PUID/PGID), and that the "
+                "mount is not read-only."
+            )
         # a reporter failure must never mask the migration's own exception
         try:
             from app.services.error_reporter import flush, report_exception

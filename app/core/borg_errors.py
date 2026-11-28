@@ -219,6 +219,8 @@ def repository_failure_status(result: dict) -> int:
         # Wrapped as "Borg mount failed: Repository /r does not exist."
         # (dashboard bea738bcdf5f61ae).
         or _re.search(r"(?:^|: )repository .+ does not exist\.?$", line.strip())
+        # The requested path is not in the archive (dashboard 59a11c4953c3d968).
+        or _re.fullmatch(r"include pattern .+ never matched\.?", line.strip())
         for line in reason.splitlines()
     ):
         # The archive or repository is gone, e.g. pruned while the page was
@@ -246,6 +248,18 @@ def repository_failure_status(result: dict) -> int:
         or ("isadirectoryerror" in reason and "/keys/" in reason)
         # The SSH host has no Borg (dashboard 859daa3dfb3863ec).
         or _REMOTE_BORG_MISSING.search(reason)
+        # Borg's hint when the SSH session ends before Borg answers: the login
+        # failed, the host has no Borg, or sudo wants a password (dashboard
+        # 859daa3dfb3863ec, 57bd7fbe751230b4).
+        or "connection closed by remote host. is borg working on the server?" in reason
+        # A Borg 2 client against a Borg 1 `borg serve` (9f7ae2ffcc6e056f).
+        or "is borg 2 installed there" in reason
+        # An HTTPS repository whose certificate is not trusted (819f083ab2752dd3).
+        or "certificate verify failed" in reason
+        # A reverse proxy in front of the server refused the agent's job
+        # report as too large: its body size limit (dashboard 443342e89638a798).
+        or "the server refused the agent's report" in reason
+        and "failed with http 413" in reason
         or "permission denied" in reason
         # A read-only mount is the host's configuration, not a Borg UI fault.
         or "[errno 30] read-only file system" in reason
@@ -267,7 +281,9 @@ def repository_failure_status(result: dict) -> int:
         # Borg 1's legacy exit code 2 cannot distinguish an occupied target.
         # This exact message is emitted by PathAlreadyExists (borg 1.4.3).
         or any(
-            _re.fullmatch(r"there is already something at .+\.", line.strip())
+            # An agent prefixes it: "repository.init exited with code 19: "
+            # (dashboard fd8a3e653ad160f1).
+            _re.search(r"(?:^|: )there is already something at .+\.$", line.strip())
             for line in reason.splitlines()
         )
     ):

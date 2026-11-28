@@ -372,6 +372,11 @@ _SSH_REFUSAL_MARKERS = (
     "received message too long",
     # Wrong host or port (06c87184963eec1e).
     "connection refused",
+    # The host cannot be reached or named (7a5765b1868588e1).
+    "no route to host",
+    "connection timed out",
+    "network is unreachable",
+    "could not resolve hostname",
 )
 # OpenSSH's login refusal lists whatever methods the server offers, e.g.
 # "(publickey)", "(password)" or "(publickey,password,keyboard-interactive)".

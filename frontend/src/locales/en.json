@@ -5911,7 +5911,9 @@
     "errors": {
       "storage": {
         "full": "Storage is full or its quota is exhausted. Free space and check the quota on the Borg UI database and affected storage volumes, then retry. Borg UI does not delete data to recover from this error.",
-        "io": "Storage reported an input/output error. Check the affected disk, filesystem and mounts before retrying. Verify the operation state before submitting it again."
+        "io": "Storage reported an input/output error. Check the affected disk, filesystem and mounts before retrying. Verify the operation state before submitting it again.",
+        "corrupt": "The Borg UI database file is damaged. Restore it from a backup, or check the disk it lives on.",
+        "unavailable": "The Borg UI database file cannot be opened. Check that its folder exists, is writable by the container user and is not mounted read-only."
       },
       "auth": {
         "cannotDeleteSelf": "Cannot delete yourself",
@@ -5941,6 +5943,7 @@
         "passkeyAlreadyRegistered": "This passkey is already registered",
         "passkeyNotFound": "Passkey not found",
         "oidcNotConfigured": "Single sign-on is not configured",
+        "oidcProviderUnavailable": "The single sign-on provider could not be reached. Try again, or check its address in the single sign-on settings.",
         "oidcAuthenticationCancelled": "Single sign-on login was cancelled or denied by the identity provider",
         "oidcAuthenticationFailed": "Single sign-on login failed",
         "oidcIdTokenInvalid": "The identity provider returned an invalid sign-in token",

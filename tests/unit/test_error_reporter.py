@@ -464,6 +464,47 @@ def _test_route(path, endpoint):
         app.router.routes.remove(route)
 
 
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_request_id_links_the_response_to_its_report(test_db, sent, wrapped):
+    # A frontend 5xx with no backend report of the same ID came from a proxy
+    # (dashboard f4cbf4e8733165ec).
+    def boom():
+        try:
+            raise RuntimeError("kaboom")
+        except RuntimeError:
+            if wrapped:
+                raise HTTPException(500, detail="wrapper")
+            raise
+
+    def fine():
+        return {"ok": True}
+
+    with _test_route("/api/__boom", boom) as client:
+        response = client.get("/api/__boom")
+    with _test_route("/api/__fine", fine) as client:
+        ok = client.get("/api/__fine")
+    request_id = response.headers["x-request-id"]
+    assert len(request_id) == 32
+    assert len(ok.headers["x-request-id"]) == 32
+    assert ok.headers["x-request-id"] != request_id
+    flush()
+    assert sent[0]["props"]["request_id"] == request_id
+
+
+def test_client_disconnect_is_not_reported(test_db, sent):
+    # The browser left while sending the body (dashboard 075e674ac80b9e42).
+    from starlette.requests import ClientDisconnect
+
+    def gone():
+        raise ClientDisconnect()
+
+    with _test_route("/api/__gone", gone) as client:
+        response = client.get("/api/__gone")
+    assert response.status_code == 499
+    flush()
+    assert sent == []
+
+
 def test_unhandled_request_reports_and_returns_500(test_db, sent):
     def boom():
         raise RuntimeError("kaboom")
@@ -490,6 +531,19 @@ def test_unhandled_request_reports_and_returns_500(test_db, sent):
         ),
         (OSError(errno.EDQUOT, "Disk quota exceeded", "/private/path"), 507, "full"),
         (OSError(errno.EIO, "Input/output error", "/private/path"), 503, "io"),
+        # A damaged database file (dashboard c14412ebe3f63d01, 69fb9849b38044e3).
+        (
+            OperationalError(
+                "SELECT secret FROM private_table",
+                {},
+                sqlite3.DatabaseError("database disk image is malformed"),
+            ),
+            503,
+            "corrupt",
+        ),
+        (sqlite3.DatabaseError("file is not a database"), 503, "corrupt"),
+        # SQLite cannot open the file (dashboard 9fc002dd6de5a4bb).
+        (sqlite3.OperationalError("unable to open database file"), 503, "unavailable"),
         (
             OperationalError(
                 "UPDATE private_table SET token='secret'",

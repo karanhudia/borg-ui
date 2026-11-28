@@ -296,6 +296,7 @@ def _report(
     stack: Optional[str] = None,
     status: Optional[int] = None,
     error_key: Optional[str] = None,
+    request_id: Optional[str] = None,
 ) -> None:
     if not settings.error_reporting_enabled:
         return
@@ -327,6 +328,10 @@ def _report(
         )
         if match:
             props["error_key"] = match.group(1)
+    # The X-Request-ID the response carried, so a frontend 5xx report can be
+    # matched to this one; a 5xx with no backend match came from a proxy.
+    if isinstance(request_id, str) and re.fullmatch(r"[0-9a-f]{32}", request_id):
+        props["request_id"] = request_id
     props["handled"] = handled
     props["count"] = count
     if len(json.dumps(props, separators=(",", ":"))) > PROPS_LIMIT:
@@ -374,6 +379,7 @@ def report_exception(
     component: Optional[str] = None,
     status: Optional[int] = None,
     error_key: Optional[str] = None,
+    request_id: Optional[str] = None,
 ) -> None:
     try:
         type_ = _type_name(exc)
@@ -398,6 +404,7 @@ def report_exception(
             status=status,
             error_key=error_key
             or (f"backend.errors.storage.{failure}" if failure else None),
+            request_id=request_id,
         )
     except Exception:
         pass

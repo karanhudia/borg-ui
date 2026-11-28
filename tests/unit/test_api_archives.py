@@ -345,6 +345,34 @@ class TestArchivesSshEnvironment:
         assert "BORG_RSH" in info_kwargs["env"]
         assert "BORG_RSH" in contents_kwargs["env"]
 
+    @pytest.mark.parametrize(
+        "stderr,expected",
+        [
+            # Pruned while the page was open (dashboard 5cb5aa55c3749b6b).
+            ("Archive 29435c4a does not exist\n", 404),
+            ("unexplained failure", 500),
+        ],
+    )
+    def test_archive_info_failure_is_classified(
+        self, test_client: TestClient, admin_headers, test_db, stderr, expected
+    ):
+        repo = Repository(name="Local", path="/tmp/info-repo", repository_type="local")
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch(
+            "app.api.archives.borg.info_archive",
+            new=AsyncMock(
+                return_value={"success": False, "return_code": 2, "stderr": stderr}
+            ),
+        ):
+            response = test_client.get(
+                f"/api/archives/a1/info?repository={repo.path}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == expected
+
     def test_get_archive_info_nonexistent_repository_returns_404(
         self, test_client: TestClient, admin_headers
     ):
