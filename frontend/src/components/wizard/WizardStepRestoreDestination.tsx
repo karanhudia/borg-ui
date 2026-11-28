@@ -35,6 +35,7 @@ interface SSHConnection {
   username: string
   port: number
   ssh_key_id: number
+  ssh_key_name?: string | null
   default_path?: string
   mount_point?: string
   status: string
@@ -361,6 +362,7 @@ export default function WizardStepRestoreDestination({
                             color: 'text.secondary',
                           }}
                         >
+                          {conn.ssh_key_name && `${conn.ssh_key_name} • `}
                           {t('wizard.restoreDestination.port', { port: conn.port })}
                           {conn.mount_point && ` • ${conn.mount_point}`}
                         </Typography>

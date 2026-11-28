@@ -80,6 +80,7 @@ interface SSHConnection {
   username: string
   port: number
   ssh_key_id: number
+  ssh_key_name?: string | null
   default_path?: string
   mount_point?: string
   status: string

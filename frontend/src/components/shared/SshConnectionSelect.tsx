@@ -8,6 +8,8 @@ export interface SshConnectionSummary {
   username: string
   port: number
   ssh_key_id?: number
+  /** Name of the connection's SSH key: tells apart connections to one user@host. */
+  ssh_key_name?: string | null
   default_path?: string | null
   mount_point?: string | null
   status: string
@@ -89,5 +91,5 @@ function StatusDot() {
 
 function formatSecondary(conn: SshConnectionSummary): string {
   const detail = conn.mount_point || conn.default_path
-  return detail ? `Port ${conn.port} • ${detail}` : `Port ${conn.port}`
+  return [conn.ssh_key_name, `Port ${conn.port}`, detail].filter(Boolean).join(' • ')
 }
