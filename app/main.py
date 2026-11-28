@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.datastructures import MutableHeaders
 from starlette.requests import ClientDisconnect
 import structlog
 import os
@@ -238,6 +239,31 @@ def _request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
 
 
+CORS_OPTIONS = {
+    "allow_origins": settings.cors_origins,
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+    # A frontend on another allowed origin reads it for its error reports.
+    "expose_headers": ["X-Request-ID"],
+}
+# The same policy, applied by hand where the middleware does not run.
+_cors = CORSMiddleware(app=None, **CORS_OPTIONS)
+
+
+def _cors_headers(request: Request) -> MutableHeaders:
+    """The headers CORSMiddleware adds to a simple response, as it adds them."""
+    headers = MutableHeaders()
+    origin = request.headers.get("origin")
+    if origin:
+        headers.update(_cors.simple_headers)
+        if (_cors.allow_all_origins and _cors.allow_credentials) or (
+            not _cors.allow_all_origins and _cors.is_allowed_origin(origin=origin)
+        ):
+            _cors.allow_explicit_origin(headers, origin)
+    return headers
+
+
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception):
     # The browser went away while sending the body (dashboard 075e674ac80b9e42):
@@ -254,8 +280,11 @@ async def unhandled_error_handler(request: Request, exc: Exception):
         error_key=detail.get("key") if isinstance(detail, dict) else None,
         request_id=_request_id(request),
     )
-    # Outside the request middleware: carry the request ID here too.
-    headers = {"X-Request-ID": rid} if (rid := _request_id(request)) else None
+    # Starlette answers this handler from ServerErrorMiddleware, outside the
+    # request and CORS middleware: add what they would have.
+    headers = _cors_headers(request)
+    if rid := _request_id(request):
+        headers["X-Request-ID"] = rid
     return JSONResponse({"detail": detail}, status_code=status_code, headers=headers)
 
 
@@ -287,15 +316,7 @@ if BASE_PATH:
     app.add_middleware(BasePathMiddleware, base_path=BASE_PATH)
 
 # Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    # A frontend on another allowed origin reads it for its error reports.
-    expose_headers=["X-Request-ID"],
-)
+app.add_middleware(CORSMiddleware, **CORS_OPTIONS)
 
 # Mount static files for frontend (only if directories exist)
 if os.path.exists("app/static/assets"):

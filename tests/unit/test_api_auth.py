@@ -2910,6 +2910,11 @@ class TestAuthRateLimiting:
         # The page reads the query, so it goes ahead of a fragment.
         ("https://h/login#help", "https://h/login?oidc_error=k#help"),
         ("https://h/login?a=1#x?y", "https://h/login?a=1&oidc_error=k#x?y"),
+        # An earlier error is replaced: the page reads the first one.
+        (
+            "https://h/login?oidc_error=old&a=1#help",
+            "https://h/login?a=1&oidc_error=k#help",
+        ),
     ],
 )
 def test_oidc_redirect_params_go_before_the_fragment(return_to, expected):

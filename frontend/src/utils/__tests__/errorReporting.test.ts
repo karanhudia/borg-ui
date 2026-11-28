@@ -447,7 +447,20 @@ describe('global handlers', () => {
         stack: 'Error: x\n    at run (<anonymous>:1:2)\n    at y (chrome-extension://a/b.js:1:2)',
       })
     )
-    expect(sent).toHaveBeenCalledTimes(2)
+    // Frames V8, Firefox and Safari write without a usable location.
+    rejection(
+      Object.assign(new Error('unknown'), {
+        stack:
+          'Error: unknown\n    at run (unknown location)\n    at y (chrome-extension://a/b.js:1:2)',
+      })
+    )
+    rejection(
+      Object.assign(new Error('bare'), {
+        stack: 'global code\nf@safari-web-extension://a/b.js:1:2',
+      })
+    )
+    rejection(Object.assign(new Error('header'), { stack: 'Error: header' }))
+    expect(sent).toHaveBeenCalledTimes(5)
   })
 
   it('reports an error that passes through an extension but starts in our code', () => {

@@ -987,13 +987,32 @@ def test_operation_refusal_wrapped_for_background_runs_is_handled(sent, status_c
     assert sent[0]["props"]["handled"] is True
 
 
-def test_request_id_is_readable_cross_origin(test_db):
-    # An allowed cross-origin frontend can read the ID for its reports.
-    def fine():
+@pytest.mark.parametrize("fails", [False, True])
+def test_request_id_is_readable_cross_origin(test_db, sent, fails):
+    # An allowed cross-origin frontend can read the ID for its reports, also
+    # on an unhandled 500, which Starlette answers outside CORSMiddleware.
+    origin = "http://localhost:7879"
+
+    def endpoint():
+        if fails:
+            raise RuntimeError("kaboom")
         return {"ok": True}
 
-    with _test_route("/api/__fine", fine) as client:
-        response = client.get(
-            "/api/__fine", headers={"Origin": "http://localhost:7879"}
-        )
-    assert "x-request-id" in response.headers["access-control-expose-headers"].lower()
+    with _test_route("/api/__cors", endpoint) as client:
+        response = client.get("/api/__cors", headers={"Origin": origin})
+    assert response.status_code == (500 if fails else 200)
+    assert response.headers["access-control-allow-origin"] == origin
+    assert response.headers["access-control-allow-credentials"] == "true"
+    exposed = response.headers["access-control-expose-headers"].lower()
+    assert "x-request-id" in exposed
+    assert len(response.headers["x-request-id"]) == 32
+
+
+def test_disallowed_origin_gets_no_allow_origin_on_500(test_db, sent):
+    def boom():
+        raise RuntimeError("kaboom")
+
+    with _test_route("/api/__cors", boom) as client:
+        response = client.get("/api/__cors", headers={"Origin": "https://evil.test"})
+    assert response.status_code == 500
+    assert "access-control-allow-origin" not in response.headers
