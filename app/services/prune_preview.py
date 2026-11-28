@@ -783,7 +783,11 @@ async def build_preview(
     """Spec 4.4 steps 1 to 5 in order. Raises DryRunFailed when Borg's dry
     run did not complete, with the log attached. `run_id` groups the dry runs
     of one visit to the preview page under one run in the timeline."""
-    r = await run_candidate(db, repository, retention, user_id=user_id, run_id=run_id)
+    # The page asks while it waits: a repository another operation holds is
+    # refused as such, not failed as the dry run (dashboard 5a6e5296c7b67809).
+    r = await run_candidate(
+        db, repository, retention, user_id=user_id, run_id=run_id, raise_busy=True
+    )
     return assemble_preview(
         db,
         repository,

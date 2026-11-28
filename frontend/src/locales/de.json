@@ -5911,7 +5911,9 @@
     "errors": {
       "storage": {
         "full": "Der Speicher ist voll oder das Kontingent ist ausgeschöpft. Schaffen Sie freien Speicher und prüfen Sie das Kontingent des Borg-UI-Datenbankvolumes und der betroffenen Speicher. Versuchen Sie es danach erneut. Borg UI löscht keine Daten, um diesen Fehler zu beheben.",
-        "io": "Der Speicher hat einen Ein-/Ausgabefehler gemeldet. Prüfen Sie Datenträger, Dateisystem und Einbindungen vor einem erneuten Versuch. Prüfen Sie den Vorgangsstatus, bevor Sie ihn erneut starten."
+        "io": "Der Speicher hat einen Ein-/Ausgabefehler gemeldet. Prüfen Sie Datenträger, Dateisystem und Einbindungen vor einem erneuten Versuch. Prüfen Sie den Vorgangsstatus, bevor Sie ihn erneut starten.",
+        "corrupt": "Die Borg-UI-Datenbankdatei ist beschädigt. Stelle sie aus einem Backup wieder her oder prüfe den Datenträger, auf dem sie liegt.",
+        "unavailable": "Die Borg-UI-Datenbankdatei kann nicht geöffnet werden. Prüfe, ob ihr Ordner existiert, für den Container-Benutzer beschreibbar ist und nicht schreibgeschützt eingebunden ist."
       },
       "auth": {
         "cannotDeleteSelf": "Sie können sich nicht selbst löschen",
@@ -5941,6 +5943,7 @@
         "passkeyAlreadyRegistered": "Dieser Passkey ist bereits registriert",
         "passkeyNotFound": "Passkey nicht gefunden",
         "oidcNotConfigured": "Single Sign-on ist nicht konfiguriert",
+        "oidcProviderUnavailable": "Der Single-Sign-on-Anbieter ist nicht erreichbar. Versuche es erneut oder prüfe seine Adresse in den Single-Sign-on-Einstellungen.",
         "oidcAuthenticationCancelled": "Die Single-Sign-on-Anmeldung wurde vom Identitätsanbieter abgebrochen oder verweigert",
         "oidcAuthenticationFailed": "Die Single-Sign-on-Anmeldung ist fehlgeschlagen",
         "oidcIdTokenInvalid": "Der Identitätsanbieter hat ein ungültiges Anmelde-Token zurückgegeben",

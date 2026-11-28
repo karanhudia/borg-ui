@@ -134,6 +134,68 @@ from fastapi import HTTPException
             {"stderr": "Remote: Data integrity error: Invalid segment magic"},
             422,
         ),
+        # Borg's own hint when the SSH session ends before Borg answers: the
+        # login failed, the host has no Borg, or sudo wants a password
+        # (dashboard 859daa3dfb3863ec, 57bd7fbe751230b4, 2.4.10).
+        (
+            {
+                "error": "Connection closed by remote host. "
+                "Is borg working on the server?"
+            },
+            422,
+        ),
+        (
+            {
+                "error": "Remote: sudo: a password is required\nConnection closed "
+                "by remote host. Is borg working on the server?"
+            },
+            422,
+        ),
+        # A Borg 2 client against a Borg 1 `borg serve` (9f7ae2ffcc6e056f).
+        (
+            {
+                "error": "borg serve: error: ambiguous option: --rest could match "
+                "--restrict-to-path, --restrict-to-repository\nIs borg 2 "
+                "installed there (see BORG_REMOTE_PATH)? For a borg 1.x "
+                "repository, use --from-borg1."
+            },
+            422,
+        ),
+        # An HTTPS repository whose certificate is not trusted (819f083ab2752dd3).
+        (
+            {
+                "error": "SSLError(SSLCertVerificationError(1, '[SSL: "
+                "CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+                "self-signed certificate (_ssl.c:1011)'))"
+            },
+            422,
+        ),
+        # A proxy's body limit refused the agent's report (443342e89638a798).
+        (
+            {
+                "stderr": "The server refused the agent's report: POST "
+                "/api/agents/jobs/6945/complete failed with HTTP 413: <html>"
+                "<title>413 Request Entity Too Large</title></html>"
+            },
+            422,
+        ),
+        # The requested path is not in the archive (59a11c4953c3d968, 2.4.10).
+        (
+            {
+                "return_code": 1,
+                "stderr": "Include pattern 'cases/34f8/manifest.json' never matched.\n",
+            },
+            404,
+        ),
+        # An agent's init where something else occupies the path, behind the
+        # job's own prefix (fd8a3e653ad160f1).
+        (
+            {
+                "stderr": "repository.init exited with code 19: "
+                "There is already something at /."
+            },
+            409,
+        ),
         # A stored --log-json line, as prune preview passes it on.
         (
             {

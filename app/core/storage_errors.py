@@ -5,13 +5,28 @@ import re
 import sqlite3
 from typing import Literal
 
-StorageFailure = Literal["full", "io"]
+StorageFailure = Literal["full", "io", "corrupt", "unavailable"]
 
 _FULL = re.compile(
     r"database or disk is full|\[Errno (?:28|122)\] (?:No space left on device|Disk quota exceeded)",
     re.IGNORECASE,
 )
 _IO = re.compile(r"\[Errno 5\] Input/output error", re.IGNORECASE)
+# The database file is damaged, or the path holds something that is not one
+# (dashboard c14412ebe3f63d01, 69fb9849b38044e3).
+_CORRUPT = re.compile(
+    r"database disk image is malformed|file is not a database", re.IGNORECASE
+)
+# SQLite cannot open or create the file: a missing or unwritable folder, a
+# read-only mount (dashboard 9fc002dd6de5a4bb, 7eb1bfd0374046e6).
+_UNAVAILABLE = re.compile(r"unable to open database file", re.IGNORECASE)
+_SQLITE_CODES: dict[int, StorageFailure] = {
+    sqlite3.SQLITE_FULL: "full",
+    sqlite3.SQLITE_IOERR: "io",
+    sqlite3.SQLITE_CORRUPT: "corrupt",
+    sqlite3.SQLITE_NOTADB: "corrupt",
+    sqlite3.SQLITE_CANTOPEN: "unavailable",
+}
 
 
 def storage_failure(error: BaseException | str) -> StorageFailure | None:
@@ -36,10 +51,8 @@ def storage_failure(error: BaseException | str) -> StorageFailure | None:
                 return "io"
         if isinstance(current, sqlite3.Error):
             code = getattr(current, "sqlite_errorcode", 0) or 0
-            if code & 0xFF == sqlite3.SQLITE_FULL:
-                return "full"
-            if code & 0xFF == sqlite3.SQLITE_IOERR:
-                return "io"
+            if code & 0xFF in _SQLITE_CODES:
+                return _SQLITE_CODES[code & 0xFF]
         original = getattr(current, "orig", None)
         cause = None
         if isinstance(current, BaseException):
@@ -56,6 +69,10 @@ def storage_failure(error: BaseException | str) -> StorageFailure | None:
                 return "full"
             if _IO.search(text):
                 return "io"
+            if _CORRUPT.search(text):
+                return "corrupt"
+            if _UNAVAILABLE.search(text):
+                return "unavailable"
         pending.extend(e for e in (cause, original) if isinstance(e, BaseException))
     return None
 

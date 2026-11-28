@@ -277,6 +277,53 @@ const sameOrigin = (url: string): boolean => {
   }
 }
 
+// Browser extension code: its script URLs (Safari masks them as
+// webkit-masked-url://hidden/), or Firefox for iOS's injected __firefox__ helpers.
+const EXTENSION_URL = /^(?:(?:chrome|moz|safari|safari-web)-extension|webkit-masked-url):\/\//
+
+const NATIVE_LOCATIONS = new Set(['native', '[native code]'])
+
+// The location of each stack frame, '' where a frame names none. V8 frames
+// are `at fn (loc)` or `at loc` after a message header; Firefox and Safari
+// list only frames, `fn@loc`, or a bare name such as `global code`.
+const frameLocations = (stack: string): string[] => {
+  const lines = stack.split('\n').filter((line) => line.trim() !== '')
+  if (lines.some((line) => /^\s*at\s/.test(line))) {
+    return lines
+      .filter((line) => /^\s*at\s/.test(line))
+      .map((line) => {
+        const frame = line.trim().slice(3).trim()
+        // `fn (loc)`: from the first ` (` to the final `)`, so a location
+        // may itself contain parentheses (`content(1).js`).
+        return /^\S[^(]*? \((.*)\)$/.exec(frame)?.[1] ?? frame
+      })
+  }
+  return lines.map((line) => {
+    const at = line.indexOf('@')
+    return at === -1 ? '' : line.slice(at + 1).trim()
+  })
+}
+
+const fromExtension = (error: unknown): boolean => {
+  try {
+    const e = error as { message?: unknown; stack?: unknown } | null
+    if (typeof e?.message === 'string' && /\b__firefox__\b/.test(e.message)) return true
+    const stack = typeof e?.stack === 'string' ? e.stack : ''
+    // Only when every frame is an extension's or the browser's own native
+    // code: our code, an <anonymous> or `unknown location` frame, a frame
+    // with no location, or a URL in the message alone stays reportable.
+    let extension = false
+    for (const location of frameLocations(stack)) {
+      if (NATIVE_LOCATIONS.has(location)) continue
+      if (!EXTENSION_URL.test(location)) return false
+      extension = true
+    }
+    return extension
+  } catch {
+    return false
+  }
+}
+
 let installed = false
 
 /** Report uncaught errors and unhandled rejections. Idempotent. */
@@ -303,10 +350,12 @@ export const installGlobalErrorHandlers = (): void => {
     )
       return
     if (event.filename && !sameOrigin(event.filename)) return
+    if (fromExtension(event.error ?? { message: event.message })) return
     reportError(event.error ?? event.message, { kind: 'uncaught' })
   })
   window.addEventListener('unhandledrejection', (event) => {
     if (isCancelled(event.reason)) return
+    if (fromExtension(event.reason)) return
     // Setup errors can reject before the response interceptor is installed.
     if (axios.isAxiosError(event.reason)) {
       trackApiError(event.reason)

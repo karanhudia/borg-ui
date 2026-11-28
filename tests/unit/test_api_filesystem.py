@@ -1464,6 +1464,20 @@ class TestSshLoginRelativeRetryBoundaries:
             422,
         ),
         ("Connection closed by 10.0.0.87 port 3000\nConnection closed", 422),
+        # The host cannot be reached or named (dashboard 7a5765b1868588e1).
+        (
+            "ssh: connect to host grid port 22: No route to host\nConnection closed",
+            422,
+        ),
+        ("ssh: connect to host h port 22: Connection timed out", 422),
+        ("ssh: connect to host h port 22: Network is unreachable", 422),
+        ("ssh: Could not resolve hostname grid: Name or service not known", 422),
+        # The same words in a missing remote path are not a transport failure.
+        (
+            'remote readdir("/backups/connection timed out"): No such file or directory',
+            404,
+        ),
+        ('remote readdir("/no route to host"): Failure', 500),
         ('remote readdir("/x"): Permission denied', 500),
         ('remote readdir("/x"): Failure', 500),
         # A remote path that is not there, in sftp's own words, is a 404 ...

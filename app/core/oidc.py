@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from urllib.parse import quote, urlencode, urlparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse
 import base64
 import hashlib
 import secrets
@@ -506,11 +506,20 @@ def normalize_oidc_identity(
     }
 
 
+def append_redirect_params(return_to: str, params: dict[str, str]) -> str:
+    """Set query parameters ahead of any #fragment, where the page reads them,
+    replacing ones of the same name (the page reads the first)."""
+    url, hash_mark, fragment = return_to.partition("#")
+    base, _, query = url.partition("?")
+    kept = [
+        (k, v) for k, v in parse_qsl(query, keep_blank_values=True) if k not in params
+    ]
+    return f"{base}?{urlencode([*kept, *params.items()])}{hash_mark}{fragment}"
+
+
 def encode_oidc_error_redirect(return_to: str, *, error_key: str) -> str:
-    separator = "&" if "?" in return_to else "?"
-    return f"{return_to}{separator}{urlencode({'oidc_error': error_key})}"
+    return append_redirect_params(return_to, {"oidc_error": error_key})
 
 
 def encode_oidc_complete_redirect(return_to: str) -> str:
-    separator = "&" if "?" in return_to else "?"
-    return f"{return_to}{separator}{urlencode({'oidc': 'complete'})}"
+    return append_redirect_params(return_to, {"oidc": "complete"})

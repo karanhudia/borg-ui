@@ -3,9 +3,10 @@ import base64
 import functools
 from datetime import timedelta, datetime, timezone
 import hmac
+import httpx
 import json
 from typing import Any, Optional
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlparse
 import weakref
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -35,6 +36,7 @@ from app.core.auth_rate_limits import (
     record_auth_failure,
 )
 from app.core.oidc import (
+    append_redirect_params,
     build_authorization_url,
     build_end_session_url,
     build_external_base_url,
@@ -712,11 +714,6 @@ def _is_same_origin_request(request: Request) -> bool:
     )
 
 
-def _append_redirect_params(return_to: str, params: dict[str, str]) -> str:
-    separator = "&" if "?" in return_to else "?"
-    return f"{return_to}{separator}{urlencode(params)}"
-
-
 def _consume_oidc_login_state(
     db: Session, *, state_id: str, nonce: str
 ) -> Optional[OidcLoginState]:
@@ -1203,6 +1200,9 @@ def _provision_oidc_user(
     return user
 
 
+OIDC_PROVIDER_UNAVAILABLE = "backend.errors.auth.oidcProviderUnavailable"
+
+
 async def _create_oidc_authorization_url(
     request: Request,
     db: Session,
@@ -1219,11 +1219,20 @@ async def _create_oidc_authorization_url(
         )
 
     _prune_expired_oidc_artifacts(db)
-    provider = await discover_oidc_configuration(
-        request,
-        settings_row,
-        decrypt_secret(settings_row.oidc_client_secret_encrypted),
-    )
+    try:
+        provider = await discover_oidc_configuration(
+            request,
+            settings_row,
+            decrypt_secret(settings_row.oidc_client_secret_encrypted),
+        )
+    except httpx.HTTPError as exc:
+        # The identity provider did not answer or refused discovery: its
+        # address or availability, not a Borg UI fault (dashboard d4bc7dbf7cd21568).
+        logger.warning("OIDC discovery failed", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"key": OIDC_PROVIDER_UNAVAILABLE},
+        ) from exc
     nonce = generate_oidc_nonce()
     state_id = generate_oidc_state_id()
     code_verifier = generate_pkce_code_verifier()
@@ -1253,13 +1262,25 @@ async def _begin_oidc_flow(
     flow: str,
     user_id: Optional[int] = None,
 ) -> RedirectResponse:
-    authorization_url = await _create_oidc_authorization_url(
-        request,
-        db,
-        return_to=return_to,
-        flow=flow,
-        user_id=user_id,
-    )
+    try:
+        authorization_url = await _create_oidc_authorization_url(
+            request,
+            db,
+            return_to=return_to,
+            flow=flow,
+            user_id=user_id,
+        )
+    except HTTPException as exc:
+        # A browser navigation: send it back to the page with the reason.
+        if exc.detail != {"key": OIDC_PROVIDER_UNAVAILABLE}:
+            raise
+        return RedirectResponse(
+            encode_oidc_error_redirect(
+                resolve_post_login_url(request, return_to),
+                error_key=OIDC_PROVIDER_UNAVAILABLE,
+            ),
+            status_code=status.HTTP_302_FOUND,
+        )
     return RedirectResponse(
         authorization_url,
         status_code=status.HTTP_302_FOUND,
@@ -1439,7 +1460,7 @@ async def complete_oidc_login(
                 actor_user_id=linked_user.id,
             )
             return RedirectResponse(
-                _append_redirect_params(return_to, {"oidc_link": "complete"}),
+                append_redirect_params(return_to, {"oidc_link": "complete"}),
                 status_code=status.HTTP_302_FOUND,
             )
         _record_auth_event(

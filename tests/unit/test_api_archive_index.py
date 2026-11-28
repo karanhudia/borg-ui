@@ -2326,6 +2326,47 @@ class TestPrunePreview:
         assert lost.call_args.kwargs["deleted_ids"] == {a1.id, a2.id}
         assert list(lost.call_args.args[2]) == ["nas"]
 
+    @pytest.mark.parametrize(
+        "status_code,detail,expected",
+        [
+            # Another operation holds the repository (dashboard 5a6e5296c7b67809).
+            (
+                409,
+                {"key": "backend.errors.jobs.repositoryOperationActive"},
+                409,
+            ),
+            # The agent's Borg run waited on a lock another process holds.
+            (
+                502,
+                {
+                    "key": "backend.errors.agents.repositoryOperationFailedWithReason",
+                    "lock_contention": True,
+                },
+                423,
+            ),
+        ],
+    )
+    def test_busy_repository_is_not_a_server_error(
+        self, test_client, test_db, admin_headers, status_code, detail, expected
+    ):
+        from fastapi import HTTPException
+
+        repo = _repo(test_db)
+        seen: dict = {}
+
+        async def busy(db, repository, retention, **kwargs):
+            seen.update(kwargs)
+            raise HTTPException(status_code=status_code, detail=detail)
+
+        with patch.object(pp, "run_prune_dry_run", new=busy):
+            r = test_client.post(
+                f"/api/repositories/{repo.id}/prune/preview",
+                json={"keep_daily": 1},
+                headers=admin_headers,
+            )
+        assert seen["raise_busy"] is True
+        assert r.status_code == expected
+
     def test_no_keep_rule_is_400(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
         r = test_client.post(

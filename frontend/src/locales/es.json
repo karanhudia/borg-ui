@@ -5911,7 +5911,9 @@
     "errors": {
       "storage": {
         "full": "El almacenamiento está lleno o se ha agotado su cuota. Libere espacio y compruebe la cuota del volumen de la base de datos de Borg UI y del almacenamiento afectado antes de reintentar. Borg UI no elimina datos para recuperarse de este error.",
-        "io": "El almacenamiento ha informado de un error de entrada/salida. Compruebe el disco, el sistema de archivos y los montajes antes de reintentar. Verifique el estado de la operación antes de volver a enviarla."
+        "io": "El almacenamiento ha informado de un error de entrada/salida. Compruebe el disco, el sistema de archivos y los montajes antes de reintentar. Verifique el estado de la operación antes de volver a enviarla.",
+        "corrupt": "El archivo de base de datos de Borg UI está dañado. Restáuralo desde una copia de seguridad o revisa el disco en el que se encuentra.",
+        "unavailable": "No se puede abrir el archivo de base de datos de Borg UI. Comprueba que su carpeta existe, que el usuario del contenedor puede escribir en ella y que no está montada como solo lectura."
       },
       "auth": {
         "cannotDeleteSelf": "No puedes eliminarte a ti mismo",
@@ -5941,6 +5943,7 @@
         "passkeyAlreadyRegistered": "Esta passkey ya está registrada",
         "passkeyNotFound": "Passkey no encontrada",
         "oidcNotConfigured": "El inicio de sesión único no está configurado",
+        "oidcProviderUnavailable": "No se pudo contactar con el proveedor de inicio de sesión único. Inténtalo de nuevo o revisa su dirección en la configuración de inicio de sesión único.",
         "oidcAuthenticationCancelled": "El inicio de sesión único fue cancelado o denegado por el proveedor de identidad",
         "oidcAuthenticationFailed": "El inicio de sesión único falló",
         "oidcIdTokenInvalid": "El proveedor de identidad devolvió un token de inicio de sesión no válido",

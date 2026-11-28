@@ -121,9 +121,9 @@ def main() -> int:
             f"/api/archives/does-not-exist/info",
             params={"repository": repo_path},
         )
-        if missing_archive_response.status_code != 500:
+        if missing_archive_response.status_code != 404:
             raise SmokeFailure(
-                f"Missing archive info should return 500 from Borg-backed endpoint, got {missing_archive_response.status_code}"
+                f"Missing archive info should return 404 from Borg-backed endpoint, got {missing_archive_response.status_code}"
             )
 
         client.log("Permissions and failure smoke passed")

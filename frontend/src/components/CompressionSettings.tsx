@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Box,
   Typography,
@@ -45,11 +45,19 @@ export default function CompressionSettings({
   const [obfuscate, setObfuscate] = useState(parsed.obfuscate)
   const obfuscateError = !isValidObfuscateLevel(obfuscate)
 
-  // Update parent when any value changes
+  // The latest value and handler, read when the fields change: a parent may
+  // pass a new handler every render, and depending on it re-ran this effect,
+  // reported the same value and re-rendered forever (dashboard 72d26541f29ad0a2).
+  const latest = useRef({ value, onChange })
+  useEffect(() => {
+    latest.current = { value, onChange }
+  })
+
+  // Report the fields to the parent when they change and differ from its value
   useEffect(() => {
     const newCompression = buildCompressionString(algorithm, level, autoDetect, obfuscate)
-    onChange(newCompression)
-  }, [algorithm, level, autoDetect, obfuscate, onChange])
+    if (newCompression !== latest.current.value) latest.current.onChange(newCompression)
+  }, [algorithm, level, autoDetect, obfuscate])
 
   // Sync with external changes
   useEffect(() => {

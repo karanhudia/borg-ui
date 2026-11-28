@@ -1866,6 +1866,47 @@ class TestOidcAuthentication:
         assert login_state.user_id == admin.id
         assert login_state.return_to == "http://testserver/settings/account"
 
+    def test_oidc_unreachable_provider_is_not_a_server_error(
+        self, test_client: TestClient, test_db, admin_headers, monkeypatch
+    ):
+        # The identity provider does not answer (dashboard d4bc7dbf7cd21568).
+        import httpx
+
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        async def unreachable(*args, **kwargs):
+            raise httpx.ConnectTimeout("timed out")
+
+        monkeypatch.setattr("app.api.auth.discover_oidc_configuration", unreachable)
+
+        login = test_client.get(
+            "/api/auth/oidc/login?return_to=/login", follow_redirects=False
+        )
+        assert login.status_code == 302
+        assert (
+            "oidc_error=backend.errors.auth.oidcProviderUnavailable"
+            in login.headers["location"]
+        )
+
+        link = test_client.post(
+            "/api/auth/oidc/link",
+            headers=admin_headers,
+            json={"return_to": "http://testserver/settings/account"},
+        )
+        assert link.status_code == 502
+        assert (
+            link.json()["detail"]["key"]
+            == "backend.errors.auth.oidcProviderUnavailable"
+        )
+
     def test_oidc_link_callback_links_user_without_exchange_grant(
         self, test_client: TestClient, test_db, admin_user, monkeypatch
     ):
@@ -2859,3 +2900,24 @@ class TestAuthRateLimiting:
             data={"username": "rate-limit-reset-user", "password": "wrong-password"},
         )
         assert another_failed.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "return_to,expected",
+    [
+        ("https://h/login", "https://h/login?oidc_error=k"),
+        ("https://h/login?a=1", "https://h/login?a=1&oidc_error=k"),
+        # The page reads the query, so it goes ahead of a fragment.
+        ("https://h/login#help", "https://h/login?oidc_error=k#help"),
+        ("https://h/login?a=1#x?y", "https://h/login?a=1&oidc_error=k#x?y"),
+        # An earlier error is replaced: the page reads the first one.
+        (
+            "https://h/login?oidc_error=old&a=1#help",
+            "https://h/login?a=1&oidc_error=k#help",
+        ),
+    ],
+)
+def test_oidc_redirect_params_go_before_the_fragment(return_to, expected):
+    from app.core.oidc import encode_oidc_error_redirect
+
+    assert encode_oidc_error_redirect(return_to, error_key="k") == expected

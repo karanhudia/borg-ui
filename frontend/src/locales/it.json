@@ -5911,7 +5911,9 @@
     "errors": {
       "storage": {
         "full": "Lo spazio di archiviazione è pieno o la quota è esaurita. Liberare spazio e controllare la quota dei volumi del database di Borg UI e dell’archiviazione interessata, quindi riprovare. Borg UI non elimina dati per risolvere questo errore.",
-        "io": "L’archiviazione ha segnalato un errore di input/output. Controllare disco, filesystem e montaggi prima di riprovare. Verificare lo stato dell’operazione prima di inviarla nuovamente."
+        "io": "L’archiviazione ha segnalato un errore di input/output. Controllare disco, filesystem e montaggi prima di riprovare. Verificare lo stato dell’operazione prima di inviarla nuovamente.",
+        "corrupt": "Il file del database di Borg UI è danneggiato. Ripristinalo da un backup o controlla il disco su cui si trova.",
+        "unavailable": "Impossibile aprire il file del database di Borg UI. Verifica che la sua cartella esista, sia scrivibile dall'utente del container e non sia montata in sola lettura."
       },
       "auth": {
         "cannotDeleteSelf": "Non puoi eliminare te stesso",
@@ -5941,6 +5943,7 @@
         "passkeyAlreadyRegistered": "Questa passkey è già registrata",
         "passkeyNotFound": "Passkey non trovata",
         "oidcNotConfigured": "Il single sign-on non è configurato",
+        "oidcProviderUnavailable": "Impossibile raggiungere il provider di single sign-on. Riprova o controlla il suo indirizzo nelle impostazioni del single sign-on.",
         "oidcAuthenticationCancelled": "L'accesso single sign-on è stato annullato o rifiutato dal provider di identità",
         "oidcAuthenticationFailed": "L'accesso single sign-on non è riuscito",
         "oidcIdTokenInvalid": "Il provider di identità ha restituito un token di accesso non valido",

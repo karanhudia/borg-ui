@@ -86,6 +86,7 @@
       "oidcNotConfigured": "Single sign-on is not configured",
       "oidcNotLinked": "This account is not linked to single sign-on",
       "oidcPendingApproval": "Your single sign-on account is waiting for administrator approval",
+      "oidcProviderUnavailable": "The single sign-on provider could not be reached. Try again, or check its address in the single sign-on settings.",
       "oidcSubjectClaimMissing": "Single sign-on did not provide a usable subject claim",
       "oidcTemplateUserNotFound": "The configured single sign-on template user was not found",
       "oidcUserAccessDenied": "Your single sign-on account is not allowed to access Borg UI",
@@ -545,8 +546,10 @@
       "systemKeyAlreadyExists": "System SSH key already exists"
     },
     "storage": {
+      "corrupt": "The Borg UI database file is damaged. Restore it from a backup, or check the disk it lives on.",
       "full": "Storage is full or its quota is exhausted. Free space and check the quota on the Borg UI database and affected storage volumes, then retry. Borg UI does not delete data to recover from this error.",
-      "io": "Storage reported an input/output error. Check the affected disk, filesystem and mounts before retrying. Verify the operation state before submitting it again."
+      "io": "Storage reported an input/output error. Check the affected disk, filesystem and mounts before retrying. Verify the operation state before submitting it again.",
+      "unavailable": "The Borg UI database file cannot be opened. Check that its folder exists, is writable by the container user and is not mounted read-only."
     },
     "thisMachine": {
       "adminRequired": "Only an admin can change what the This machine plan backs up.",

@@ -395,6 +395,92 @@ describe('global handlers', () => {
     expect(sent).not.toHaveBeenCalled()
   })
 
+  it('ignores errors thrown from browser extension code', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    const fromStack = (message: string, stack: string) =>
+      Object.assign(new Error(message), { stack })
+    // Wallet and page-helper extensions (dashboard 1d9abf2ba0e6f219, 86cb9a7ae17487e5).
+    rejection(
+      fromStack(
+        'Failed to connect to MetaMask',
+        'i: Failed to connect to MetaMask\n    at Object.connect (chrome-extension://nkbi/scripts/inpage.js:9:6166)'
+      )
+    )
+    rejection(
+      fromStack(
+        "Cannot read properties of undefined (reading 'M_ID')",
+        'TypeError: x\n    at h (chrome-extension://eppi/executors/200.js:1:761)'
+      )
+    )
+    // Safari masks extension script URLs (dashboard 66475b0e36062aed).
+    rejection(
+      fromStack(
+        'The object can not be found here.',
+        'insertBefore@[native code]\n@webkit-masked-url://hidden/:7100:42\nfulfilled@webkit-masked-url://hidden/:6801:62'
+      )
+    )
+    // A script name with parentheses, named and unnamed frames.
+    rejection(
+      fromStack(
+        'paren',
+        'Error: paren\n    at injected (chrome-extension://a/content(1).js:1:2)\n    at chrome-extension://a/content(1).js:3:4'
+      )
+    )
+    rejection(fromStack('x', 'f@moz-extension://a/b.js:1:2'))
+    rejection(fromStack('x', 'f@safari-web-extension://a/b.js:1:2'))
+    // Firefox for iOS injects scripts that call its own __firefox__ object
+    // (dashboard 2b1984b715770004, 88998c642f8fb7e1).
+    window.dispatchEvent(
+      new ErrorEvent('error', {
+        message: "ReferenceError: Can't find variable: __firefox__",
+        filename: `${window.location.origin}/backup/`,
+        error: new ReferenceError("Can't find variable: __firefox__"),
+      })
+    )
+    expect(sent).not.toHaveBeenCalled()
+  })
+
+  it('keeps an extension URL that appears only in the message, or unknown frames', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    rejection(
+      Object.assign(new Error('Cannot load chrome-extension://abc/resource'), {
+        stack: 'Error: Cannot load chrome-extension://abc/resource\n    at run (<anonymous>:1:2)',
+      })
+    )
+    rejection(
+      Object.assign(new Error('x'), {
+        stack: 'Error: x\n    at run (<anonymous>:1:2)\n    at y (chrome-extension://a/b.js:1:2)',
+      })
+    )
+    // Frames V8, Firefox and Safari write without a usable location.
+    rejection(
+      Object.assign(new Error('unknown'), {
+        stack:
+          'Error: unknown\n    at run (unknown location)\n    at y (chrome-extension://a/b.js:1:2)',
+      })
+    )
+    rejection(
+      Object.assign(new Error('bare'), {
+        stack: 'global code\nf@safari-web-extension://a/b.js:1:2',
+      })
+    )
+    rejection(Object.assign(new Error('header'), { stack: 'Error: header' }))
+    expect(sent).toHaveBeenCalledTimes(5)
+  })
+
+  it('reports an error that passes through an extension but starts in our code', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    rejection(
+      Object.assign(new Error('ours'), {
+        stack: `Error: ours\n    at run (${window.location.origin}/assets/index.js:1:2)\n    at x (chrome-extension://a/b.js:1:2)`,
+      })
+    )
+    expect(sent).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores a look-alike host and an unparsable filename', () => {
     const sent = spyOnEnqueue()
     installGlobalErrorHandlers()

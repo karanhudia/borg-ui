@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import CompressionSettings from '../CompressionSettings'
 
 describe('CompressionSettings', () => {
@@ -161,6 +162,58 @@ describe('CompressionSettings', () => {
       await waitFor(() => {
         expect(mockOnChange).toHaveBeenCalled()
       })
+    })
+  })
+
+  describe('Parent state sync', () => {
+    // A parent that passes a new handler each render and always stores a new
+    // object (the backup plan wizard) must not re-render forever: that loop
+    // ended in React error #185 (dashboard 72d26541f29ad0a2).
+    function Parent({ initial, spy }: { initial: string; spy: (v: string) => void }) {
+      const [state, setState] = useState({ compression: initial })
+      return (
+        <>
+          <CompressionSettings
+            value={state.compression}
+            onChange={(compression) => {
+              spy(compression)
+              setState((prev) => ({ ...prev, compression }))
+            }}
+          />
+          <button type="button" onClick={() => setState({ compression: 'zstd,9' })}>
+            load
+          </button>
+          <output>{state.compression}</output>
+        </>
+      )
+    }
+
+    it('settles instead of reporting the same value on every render', async () => {
+      const spy = vi.fn()
+      render(<Parent initial="lz4" spy={spy} />)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(spy).not.toHaveBeenCalled()
+    })
+
+    it('reports a non-canonical value once, in its canonical form', async () => {
+      const spy = vi.fn()
+      render(<Parent initial="auto" spy={spy} />)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(spy.mock.calls).toEqual([['auto,lz4']])
+    })
+
+    it('keeps a value the parent loads and reports user edits', async () => {
+      const spy = vi.fn()
+      render(<Parent initial="lz4" spy={spy} />)
+      fireEvent.click(screen.getByRole('button', { name: 'load' }))
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('zstd,9'))
+      expect(spy).not.toHaveBeenCalled()
+
+      fireEvent.change(screen.getByPlaceholderText('1-22 (default: 3)'), {
+        target: { value: '5' },
+      })
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('zstd,5'))
+      expect(spy.mock.calls).toEqual([['zstd,5']])
     })
   })
 

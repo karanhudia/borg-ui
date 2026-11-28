@@ -44,9 +44,18 @@ runs:
         BROWSERS_PATH: ${{ inputs.browsers-path }}
       run: |
         if [ -n "$BROWSERS_PATH" ]; then export PLAYWRIGHT_BROWSERS_PATH="$BROWSERS_PATH"; fi
-        if [ "$CACHE_HIT" = true ] && sudo dpkg -i ~/playwright-debs/*.deb; then
+        # --auto-deconfigure: a cached set can upgrade a package the image
+        # already has (libasound2-data 1.2.15.3-1ubuntu1.2 Breaks the image's
+        # libasound2t64 << that version); dpkg needs it to replace both.
+        if [ "$CACHE_HIT" = true ] &&
+          sudo dpkg -i --auto-deconfigure ~/playwright-debs/*.deb; then
           npx playwright install chromium
           exit 0
+        fi
+        # A failed dpkg -i can leave packages half-installed, and apt then
+        # refuses every install, the fallback below included.
+        if [ "$CACHE_HIT" = true ]; then
+          sudo apt-get -f install -y || true
         fi
         # Cache only what this install downloaded: a job may have fetched
         # other packages (E2E installs borgbackup) under the same key.
