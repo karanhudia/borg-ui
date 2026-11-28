@@ -6,7 +6,7 @@ import hmac
 import httpx
 import json
 from typing import Any, Optional
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlparse
 import weakref
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -36,6 +36,7 @@ from app.core.auth_rate_limits import (
     record_auth_failure,
 )
 from app.core.oidc import (
+    append_redirect_params,
     build_authorization_url,
     build_end_session_url,
     build_external_base_url,
@@ -711,11 +712,6 @@ def _is_same_origin_request(request: Request) -> bool:
         hmac.compare_digest(received_origin_bytes, expected_origin.encode("utf-8"))
         for expected_origin in _same_origin_candidates(request)
     )
-
-
-def _append_redirect_params(return_to: str, params: dict[str, str]) -> str:
-    separator = "&" if "?" in return_to else "?"
-    return f"{return_to}{separator}{urlencode(params)}"
 
 
 def _consume_oidc_login_state(
@@ -1464,7 +1460,7 @@ async def complete_oidc_login(
                 actor_user_id=linked_user.id,
             )
             return RedirectResponse(
-                _append_redirect_params(return_to, {"oidc_link": "complete"}),
+                append_redirect_params(return_to, {"oidc_link": "complete"}),
                 status_code=status.HTTP_302_FOUND,
             )
         _record_auth_event(

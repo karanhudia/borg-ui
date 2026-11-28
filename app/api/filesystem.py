@@ -372,11 +372,6 @@ _SSH_REFUSAL_MARKERS = (
     "received message too long",
     # Wrong host or port (06c87184963eec1e).
     "connection refused",
-    # The host cannot be reached or named (7a5765b1868588e1).
-    "no route to host",
-    "connection timed out",
-    "network is unreachable",
-    "could not resolve hostname",
 )
 # OpenSSH's login refusal lists whatever methods the server offers, e.g.
 # "(publickey)", "(password)" or "(publickey,password,keyboard-interactive)".
@@ -388,10 +383,22 @@ _SSH_AUTH_REFUSAL = re.compile(
 )
 
 
+# The host cannot be reached or named, in OpenSSH's own words only: a remote
+# path may contain the same phrase (dashboard 7a5765b1868588e1).
+_SSH_UNREACHABLE = re.compile(
+    r"^ssh: (?:connect to host \S+ port \d+: "
+    r"(?:no route to host|connection timed out|network is unreachable)"
+    r"|could not resolve hostname )",
+    re.MULTILINE,
+)
+
+
 def _ssh_failure_status(error_msg: str | None) -> int:
     lowered = (error_msg or "").lower()
-    if _SSH_AUTH_REFUSAL.search(lowered) or any(
-        m in lowered for m in _SSH_REFUSAL_MARKERS
+    if (
+        _SSH_AUTH_REFUSAL.search(lowered)
+        or _SSH_UNREACHABLE.search(lowered)
+        or any(m in lowered for m in _SSH_REFUSAL_MARKERS)
     ):
         return 422
     # A remote path that is not there (a typed path, or a remembered one since

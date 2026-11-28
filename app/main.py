@@ -293,6 +293,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # A frontend on another allowed origin reads it for its error reports.
+    expose_headers=["X-Request-ID"],
 )
 
 # Mount static files for frontend (only if directories exist)

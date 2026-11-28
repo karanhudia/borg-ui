@@ -506,11 +506,16 @@ def normalize_oidc_identity(
     }
 
 
+def append_redirect_params(return_to: str, params: dict[str, str]) -> str:
+    """Add query parameters ahead of any #fragment, where the page reads them."""
+    url, hash_mark, fragment = return_to.partition("#")
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}{urlencode(params)}{hash_mark}{fragment}"
+
+
 def encode_oidc_error_redirect(return_to: str, *, error_key: str) -> str:
-    separator = "&" if "?" in return_to else "?"
-    return f"{return_to}{separator}{urlencode({'oidc_error': error_key})}"
+    return append_redirect_params(return_to, {"oidc_error": error_key})
 
 
 def encode_oidc_complete_redirect(return_to: str) -> str:
-    separator = "&" if "?" in return_to else "?"
-    return f"{return_to}{separator}{urlencode({'oidc': 'complete'})}"
+    return append_redirect_params(return_to, {"oidc": "complete"})

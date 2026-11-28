@@ -985,3 +985,15 @@ def test_operation_refusal_wrapped_for_background_runs_is_handled(sent, status_c
     flush()
 
     assert sent[0]["props"]["handled"] is True
+
+
+def test_request_id_is_readable_cross_origin(test_db):
+    # An allowed cross-origin frontend can read the ID for its reports.
+    def fine():
+        return {"ok": True}
+
+    with _test_route("/api/__fine", fine) as client:
+        response = client.get(
+            "/api/__fine", headers={"Origin": "http://localhost:7879"}
+        )
+    assert "x-request-id" in response.headers["access-control-expose-headers"].lower()

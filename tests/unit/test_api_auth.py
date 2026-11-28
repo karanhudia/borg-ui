@@ -2900,3 +2900,19 @@ class TestAuthRateLimiting:
             data={"username": "rate-limit-reset-user", "password": "wrong-password"},
         )
         assert another_failed.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "return_to,expected",
+    [
+        ("https://h/login", "https://h/login?oidc_error=k"),
+        ("https://h/login?a=1", "https://h/login?a=1&oidc_error=k"),
+        # The page reads the query, so it goes ahead of a fragment.
+        ("https://h/login#help", "https://h/login?oidc_error=k#help"),
+        ("https://h/login?a=1#x?y", "https://h/login?a=1&oidc_error=k#x?y"),
+    ],
+)
+def test_oidc_redirect_params_go_before_the_fragment(return_to, expected):
+    from app.core.oidc import encode_oidc_error_redirect
+
+    assert encode_oidc_error_redirect(return_to, error_key="k") == expected

@@ -1472,6 +1472,12 @@ class TestSshLoginRelativeRetryBoundaries:
         ("ssh: connect to host h port 22: Connection timed out", 422),
         ("ssh: connect to host h port 22: Network is unreachable", 422),
         ("ssh: Could not resolve hostname grid: Name or service not known", 422),
+        # The same words in a missing remote path are not a transport failure.
+        (
+            'remote readdir("/backups/connection timed out"): No such file or directory',
+            404,
+        ),
+        ('remote readdir("/no route to host"): Failure', 500),
         ('remote readdir("/x"): Permission denied', 500),
         ('remote readdir("/x"): Failure', 500),
         # A remote path that is not there, in sftp's own words, is a 404 ...

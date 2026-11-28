@@ -279,16 +279,31 @@ const sameOrigin = (url: string): boolean => {
 
 // Browser extension code: its script URLs (Safari masks them as
 // webkit-masked-url://hidden/), or Firefox for iOS's injected __firefox__ helpers.
-const EXTENSION_FRAME = /(?:chrome|moz|safari|safari-web)-extension:\/\/|webkit-masked-url:\/\//
+const EXTENSION_URL = /^(?:(?:chrome|moz|safari|safari-web)-extension|webkit-masked-url):\/\//
+
+// A stack line's frame location: Chrome `at fn (loc)` or `at loc`, Firefox and
+// Safari `fn@loc`. Other lines (the message header) have none.
+const frameLocation = (line: string): string | null =>
+  /^\s*at\s+(?:.*?\()?([^()\s]+)\)?\s*$/.exec(line)?.[1] ??
+  /^[^@\s]*@(\S+)\s*$/.exec(line)?.[1] ??
+  null
 
 const fromExtension = (error: unknown): boolean => {
   try {
     const e = error as { message?: unknown; stack?: unknown } | null
     if (typeof e?.message === 'string' && /\b__firefox__\b/.test(e.message)) return true
     const stack = typeof e?.stack === 'string' ? e.stack : ''
-    // Only when none of its frames is ours: our code calling into an
-    // extension's patched API is still our error to see.
-    return EXTENSION_FRAME.test(stack) && topFrame(stack) === ''
+    // Only when every frame that has a location is an extension's: our code,
+    // an <anonymous> frame or a URL that only appears in the message stays
+    // reportable. Native frames are the browser's own API and say nothing.
+    let extension = false
+    for (const line of stack.split('\n')) {
+      const location = frameLocation(line)
+      if (location === null || location === '[native code]' || location === 'native') continue
+      if (!EXTENSION_URL.test(location)) return false
+      extension = true
+    }
+    return extension
   } catch {
     return false
   }

@@ -434,6 +434,22 @@ describe('global handlers', () => {
     expect(sent).not.toHaveBeenCalled()
   })
 
+  it('keeps an extension URL that appears only in the message, or unknown frames', () => {
+    const sent = spyOnEnqueue()
+    installGlobalErrorHandlers()
+    rejection(
+      Object.assign(new Error('Cannot load chrome-extension://abc/resource'), {
+        stack: 'Error: Cannot load chrome-extension://abc/resource\n    at run (<anonymous>:1:2)',
+      })
+    )
+    rejection(
+      Object.assign(new Error('x'), {
+        stack: 'Error: x\n    at run (<anonymous>:1:2)\n    at y (chrome-extension://a/b.js:1:2)',
+      })
+    )
+    expect(sent).toHaveBeenCalledTimes(2)
+  })
+
   it('reports an error that passes through an extension but starts in our code', () => {
     const sent = spyOnEnqueue()
     installGlobalErrorHandlers()
