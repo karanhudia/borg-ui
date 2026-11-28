@@ -1,6 +1,6 @@
 # Borg UI Vault, closed beta
 
-Status: design, awaiting owner approval
+Status: parked 2026-11-28: 0 waitlist signups, Hetzner Storage Box and BorgBase undercut it, do not build from this.
 Date: 2026-11-11
 Owner: Karan Hudia
 Repos touched: `borg-ui` (the app), `borg-ui-license-platform` (Worker, storefront, admin, and the new storage node)

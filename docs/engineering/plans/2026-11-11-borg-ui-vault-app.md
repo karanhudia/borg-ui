@@ -1,5 +1,7 @@
 # Borg UI Vault App Implementation Plan
 
+Status: parked 2026-11-28: 0 waitlist signups, Hetzner Storage Box and BorgBase undercut it, do not build from this.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Inside Borg UI, show a Vault card to installs whose licence owns a Vault, connect it in one dialog (no hostname, username or key to copy), and show usage, payment state and space release.
